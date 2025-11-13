@@ -10,8 +10,8 @@ config_version=5
 
 [application]
 
-config/name="Wizard Battle Arena"
-run/main_scene="res://scenes/main_menu.tscn"
+config/name="Space Battle"
+run/main_scene="res://scenes/space_battle.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://icon.svg"
 
@@ -21,9 +21,7 @@ ClassRegistry="*res://scripts/core/autoload/class_registry_autoload.gd"
 GameLogger="*res://scripts/core/autoload/game_logger_autoload.gd"
 SignalMonitor="*res://scripts/core/autoload/signal_monitor_autoload.gd"
 VisualBridgeAutoload="*res://scripts/core/autoload/visual_bridge_autoload.gd"
-TacticalMap="*res://scripts/core/ai/tactical_influence_map.gd"
 BattleEventLoggerAutoload="*res://scripts/core/autoload/battle_event_logger_autoload.gd"
-GameSettings="*res://scripts/autoload/game_settings.gd"
 
 [debug]
 

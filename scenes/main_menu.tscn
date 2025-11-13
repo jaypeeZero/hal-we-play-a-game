@@ -36,7 +36,7 @@ size_flags_vertical = 2
 
 [node name="Title" type="Label" parent="HBoxContainer/MenuSide/Container"]
 layout_mode = 2
-text = "Wizard Battle Arena"
+text = "Space Battle"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="HBoxContainer/MenuSide/Container"]
@@ -46,14 +46,6 @@ size_flags_vertical = 3
 [node name="NewGameButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
 layout_mode = 2
 text = "New Game"
-
-[node name="BrowseMedallionsButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
-layout_mode = 2
-text = "Browse Medallions"
-
-[node name="CustomizeSatchelButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
-layout_mode = 2
-text = "Customize Satchel"
 
 [node name="SettingsButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
 layout_mode = 2
@@ -87,60 +79,8 @@ theme_override_constants/separation = 16
 [node name="Title" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
-text = "How To Play"
+text = "Space Battle"
 horizontal_alignment = 1
-
-[node name="Player1Section" type="VBoxContainer" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Player1Title" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/Player1Section"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Player 1 (Blue, left side)"
-
-[node name="Movement" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/Player1Section"]
-layout_mode = 2
-text = "Movement: W/A/S/D"
-
-[node name="Spells" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/Player1Section"]
-layout_mode = 2
-text = "Spells:
-  Q: Lightning Bolt (30 mana, 50 damage)
-  E: Fireball (40 mana, 35 damage)"
-
-[node name="Creatures" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/Player1Section"]
-layout_mode = 2
-text = "Creatures:
-  Z: Olophant (200 HP, slow, 30 damage)
-  X: Rat Swarm (30 HP, fast, 10 damage)
-  C: Bear (100 HP, medium, 20 damage)"
-
-[node name="Player2Section" type="VBoxContainer" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Player2Title" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/Player2Section"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "Player 2 (Red, right side)"
-
-[node name="Movement" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/Player2Section"]
-layout_mode = 2
-text = "Movement: I/J/K/L"
-
-[node name="Spells" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/Player2Section"]
-layout_mode = 2
-text = "Spells:
-  U: Lightning Bolt (30 mana, 50 damage)
-  O: Fireball (40 mana, 35 damage)"
-
-[node name="Creatures" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/Player2Section"]
-layout_mode = 2
-text = "Creatures:
-  ,: Olophant (200 HP, slow, 30 damage)
-  .: Rat Swarm (30 HP, fast, 10 damage)
-  M: Bear (100 HP, medium, 20 damage)"
 
 [node name="GameplaySection" type="VBoxContainer" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent"]
 layout_mode = 2
@@ -149,18 +89,18 @@ theme_override_constants/separation = 8
 [node name="GameplayTitle" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/GameplaySection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "Gameplay"
+text = "About"
 
 [node name="Rules" type="Label" parent="HBoxContainer/HowToPlaySide/Panel/ScrollContainer/HowToPlayContent/GameplaySection"]
 layout_mode = 2
-text = "• Start with 0 mana (regenerates 10/sec, max 100)
-• Each player has 100 HP
-• Spells fire toward the opponent
-• Creatures auto-attack the enemy player
-• First to 0 HP loses"
+text = "A tactical space combat simulator featuring ship-to-ship combat with realistic damage and weapon systems.
+
+• Ships have armor, shields, and multiple weapon hardpoints
+• Weapons have different ranges, damage, and firing rates
+• Ships use velocity-based physics
+• Tactical positioning and weapon selection matter
+• Watch the battle unfold!"
 
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/NewGameButton" to="." method="_on_new_game_pressed"]
-[connection signal="pressed" from="HBoxContainer/MenuSide/Container/BrowseMedallionsButton" to="." method="_on_browse_medallions_pressed"]
-[connection signal="pressed" from="HBoxContainer/MenuSide/Container/CustomizeSatchelButton" to="." method="_on_customize_satchel_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/QuitButton" to="." method="_on_quit_pressed"]
