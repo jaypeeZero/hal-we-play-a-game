@@ -1,215 +1,340 @@
 class_name WeaponSystem
 extends RefCounted
 
-## Pure functional weapon system
-## Handles weapon firing, cooldowns, targeting, and accuracy calculations
+## Pure functional weapon system - IMMUTABLE DATA
+## Every function returns new data, never mutates input
+## Following functional programming principles:
+## - Functions are deterministic
+## - No side effects
+## - Data is immutable
+## - Declarative composition
 
-## Human reaction time range (in seconds)
-const MIN_REACTION_TIME = 0.1  # 100ms - very fast
-const MAX_REACTION_TIME = 0.3  # 300ms - average
+const MIN_REACTION_TIME = 0.1
+const MAX_REACTION_TIME = 0.3
 
-## Update all weapons on a ship and return firing commands
-## Returns Array of fire command Dictionaries
-static func update_weapons(ship_data: Dictionary, targets: Array, delta: float) -> Array:
-	if ship_data.status == "disabled" or ship_data.status == "destroyed":
-		return []
+# ============================================================================
+# MAIN API - Returns new ship_data with updated weapons
+# ============================================================================
 
-	var fire_commands = []
+## Update weapons and return {ship_data: Dictionary, fire_commands: Array}
+static func update_weapons(ship_data: Dictionary, targets: Array, delta: float) -> Dictionary:
+	if is_ship_disabled(ship_data):
+		return create_update_result(ship_data, [])
 
-	# Update cooldowns
-	for weapon in ship_data.weapons:
-		weapon.cooldown_remaining = max(0.0, weapon.cooldown_remaining - delta)
+	var updated_weapons = update_all_weapon_cooldowns(ship_data.weapons, delta)
+	var valid_targets = get_valid_targets(targets, ship_data.team)
+	var firing_result = process_weapon_firing(ship_data, updated_weapons, valid_targets)
 
-	# Try to fire at targets
-	for weapon in ship_data.weapons:
-		if weapon.cooldown_remaining > 0.0:
-			continue
+	return create_update_result(
+		create_ship_with_weapons(ship_data, firing_result.weapons),
+		firing_result.commands
+	)
 
-		# Find best target for this weapon
-		var target = find_best_target(ship_data, weapon, targets)
-		if target == null:
-			continue
+# ============================================================================
+# COMPOSITION - High Level Logic
+# ============================================================================
 
-		# Check if can fire at target
-		if not can_fire_at_target(ship_data, weapon, target):
-			continue
+static func process_weapon_firing(ship_data: Dictionary, weapons: Array, targets: Array) -> Dictionary:
+	var results = weapons.map(func(weapon): return try_fire_weapon(ship_data, weapon, targets))
+	return combine_firing_results(results)
 
-		# Calculate firing solution
-		var fire_command = create_fire_command(ship_data, weapon, target)
-		if fire_command:
-			fire_commands.append(fire_command)
+static func try_fire_weapon(ship_data: Dictionary, weapon: Dictionary, targets: Array) -> Dictionary:
+	if not is_weapon_ready(weapon):
+		return create_no_fire_result(weapon)
 
-			# Set weapon cooldown
-			weapon.cooldown_remaining = 1.0 / weapon.stats.rate_of_fire
+	if targets.is_empty():
+		return create_no_fire_result(weapon)
 
-	return fire_commands
+	var best_target = find_best_target_for_weapon(ship_data, weapon, targets)
 
-## Find the best target for a weapon
-static func find_best_target(ship_data: Dictionary, weapon: Dictionary, targets: Array) -> Dictionary:
-	var best_target = null
-	var best_priority = -INF
+	if best_target.is_empty():
+		return create_no_fire_result(weapon)
 
-	for target in targets:
-		# Skip allies
-		if target.team == ship_data.team:
-			continue
+	if not can_fire_at_target(ship_data, weapon, best_target):
+		return create_no_fire_result(weapon)
 
-		# Skip destroyed targets
-		if target.status == "destroyed":
-			continue
+	return create_fire_result(
+		set_weapon_cooldown(weapon, calculate_cooldown_time(weapon)),
+		create_fire_command(ship_data, weapon, best_target)
+	)
 
-		# Calculate priority (closer = higher priority)
-		var distance = ship_data.position.distance_to(target.position)
+static func combine_firing_results(results: Array) -> Dictionary:
+	var weapons = results.map(func(r): return r.weapon)
+	var commands = results.filter(func(r): return r.has("command")).map(func(r): return r.command)
+	return {weapons = weapons, commands = commands}
 
-		# Out of range
-		if distance > weapon.stats.range:
-			continue
+# ============================================================================
+# RESULT CONSTRUCTORS
+# ============================================================================
 
-		# Calculate priority based on distance and target type
-		var priority = 1000.0 - distance
+static func create_update_result(ship_data: Dictionary, commands: Array) -> Dictionary:
+	return {ship_data = ship_data, fire_commands = commands}
 
-		# Prioritize smaller ships (easier to destroy)
-		match target.type:
-			"fighter":
-				priority += 100
-			"corvette":
-				priority += 50
-			"capital":
-				priority += 25
+static func create_no_fire_result(weapon: Dictionary) -> Dictionary:
+	return {weapon = weapon}
 
-		if priority > best_priority:
-			best_priority = priority
-			best_target = target
+static func create_fire_result(weapon: Dictionary, command: Dictionary) -> Dictionary:
+	return {weapon = weapon, command = command}
 
-	return best_target
+static func create_ship_with_weapons(ship_data: Dictionary, weapons: Array) -> Dictionary:
+	var new_ship = ship_data.duplicate(true)
+	new_ship.weapons = weapons
+	return new_ship
 
-## Check if a weapon can fire at a target (range and arc checks)
+# ============================================================================
+# SHIP STATE PREDICATES
+# ============================================================================
+
+static func is_ship_disabled(ship_data: Dictionary) -> bool:
+	return ship_data.status in ["disabled", "destroyed"]
+
+# ============================================================================
+# WEAPON STATE - Immutable Updates
+# ============================================================================
+
+static func is_weapon_ready(weapon: Dictionary) -> bool:
+	return weapon.cooldown_remaining <= 0.0
+
+static func calculate_cooldown_time(weapon: Dictionary) -> float:
+	return 1.0 / weapon.stats.rate_of_fire
+
+static func set_weapon_cooldown(weapon: Dictionary, cooldown: float) -> Dictionary:
+	return merge_dict(weapon, {cooldown_remaining = cooldown})
+
+static func update_all_weapon_cooldowns(weapons: Array, delta: float) -> Array:
+	return weapons.map(func(w): return update_weapon_cooldown(w, delta))
+
+static func update_weapon_cooldown(weapon: Dictionary, delta: float) -> Dictionary:
+	return set_weapon_cooldown(weapon, max(0.0, weapon.cooldown_remaining - delta))
+
+# ============================================================================
+# TARGET FILTERING - Declarative Composition
+# ============================================================================
+
+static func get_valid_targets(targets: Array, own_team: int) -> Array:
+	return targets \
+		.filter(func(t): return not is_ally(t, own_team)) \
+		.filter(func(t): return not is_destroyed(t))
+
+static func is_ally(target: Dictionary, own_team: int) -> bool:
+	return target.team == own_team
+
+static func is_destroyed(target: Dictionary) -> bool:
+	return target.status == "destroyed"
+
+static func filter_targets_in_range(targets: Array, position: Vector2, range: float) -> Array:
+	return targets.filter(func(t): return is_in_range(position, t.position, range))
+
+static func is_in_range(from: Vector2, to: Vector2, range: float) -> bool:
+	return calculate_distance(from, to) <= range
+
+static func calculate_distance(from: Vector2, to: Vector2) -> float:
+	return from.distance_to(to)
+
+# ============================================================================
+# TARGET SELECTION - Pure Priority Calculation
+# ============================================================================
+
+static func find_best_target_for_weapon(ship_data: Dictionary, weapon: Dictionary, targets: Array) -> Dictionary:
+	return filter_targets_in_range(targets, ship_data.position, weapon.stats.range) \
+		.map(func(t): return add_priority(t, ship_data.position)) \
+		.reduce(select_higher_priority, {})
+
+static func add_priority(target: Dictionary, ship_pos: Vector2) -> Dictionary:
+	return merge_dict(target, {_priority = calculate_priority(target, ship_pos)})
+
+static func calculate_priority(target: Dictionary, ship_pos: Vector2) -> float:
+	return calculate_distance_priority(ship_pos, target.position) + \
+	       calculate_type_priority(target.type)
+
+static func calculate_distance_priority(from: Vector2, to: Vector2) -> float:
+	return 1000.0 - calculate_distance(from, to)
+
+static func calculate_type_priority(ship_type: String) -> float:
+	var priorities = {
+		"fighter": 100.0,
+		"corvette": 50.0,
+		"capital": 25.0
+	}
+	return priorities.get(ship_type, 0.0)
+
+static func select_higher_priority(best: Dictionary, current: Dictionary) -> Dictionary:
+	if best.is_empty():
+		return current
+	return current if get_priority(current) > get_priority(best) else best
+
+static func get_priority(target: Dictionary) -> float:
+	return target.get("_priority", -INF)
+
+# ============================================================================
+# FIRING ARC VALIDATION
+# ============================================================================
+
 static func can_fire_at_target(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> bool:
-	# Distance check
-	var distance = ship_data.position.distance_to(target.position)
-	if distance > weapon.stats.range:
-		return false
+	return is_in_range(ship_data.position, target.position, weapon.stats.range) and \
+	       is_in_firing_arc(ship_data, weapon, target)
 
-	# Angle check (is target in weapon's firing arc?)
-	var to_target = (target.position - ship_data.position).normalized()
-	var target_angle = to_target.angle()
+static func is_in_firing_arc(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> bool:
+	var relative_angle = calculate_relative_angle_to_target(ship_data, weapon, target)
+	return is_angle_in_arc(relative_angle, weapon.arc.min, weapon.arc.max)
 
-	# Weapon's world angle
-	var weapon_world_angle = ship_data.rotation + weapon.facing
+static func calculate_relative_angle_to_target(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> float:
+	var to_target = calculate_direction_to_target(ship_data.position, target.position)
+	var target_angle = calculate_angle_from_direction(to_target)
+	var weapon_angle = calculate_weapon_world_angle(ship_data.rotation, weapon.facing)
+	return normalize_angle_degrees(rad_to_deg(target_angle - weapon_angle))
 
-	# Relative angle to weapon facing
-	var relative_angle = target_angle - weapon_world_angle
+static func calculate_direction_to_target(from: Vector2, to: Vector2) -> Vector2:
+	return (to - from).normalized()
 
-	# Normalize to -PI to PI
-	while relative_angle > PI:
-		relative_angle -= TAU
-	while relative_angle < -PI:
-		relative_angle += TAU
+static func calculate_angle_from_direction(direction: Vector2) -> float:
+	return direction.angle()
 
-	# Convert to degrees
-	var relative_angle_deg = rad_to_deg(relative_angle)
+static func calculate_weapon_world_angle(ship_rotation: float, weapon_facing: float) -> float:
+	return ship_rotation + weapon_facing
 
-	# Check if in arc
-	if relative_angle_deg < weapon.arc.min or relative_angle_deg > weapon.arc.max:
-		return false
+static func normalize_angle_degrees(angle_deg: float) -> float:
+	var normalized = fmod(angle_deg, 360.0)
+	if normalized > 180.0:
+		normalized -= 360.0
+	if normalized < -180.0:
+		normalized += 360.0
+	return normalized
 
-	return true
+static func is_angle_in_arc(angle_deg: float, arc_min: float, arc_max: float) -> bool:
+	return angle_deg >= arc_min and angle_deg <= arc_max
 
-## Create a fire command for a weapon
+# ============================================================================
+# FIRE COMMAND CREATION
+# ============================================================================
+
 static func create_fire_command(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> Dictionary:
-	# Calculate lead position (predict where target will be)
-	var lead_position = calculate_lead_position(ship_data, weapon, target)
-
-	# Apply modifiers from ship damage
-	var power_modifier = get_power_modifier(ship_data)
-	var accuracy_modifier = get_accuracy_modifier(ship_data)
-
-	# Calculate final accuracy
-	var final_accuracy = weapon.stats.accuracy * accuracy_modifier
-
-	# Add human reaction time delay
-	var reaction_delay = randf_range(MIN_REACTION_TIME, MAX_REACTION_TIME)
-
-	# Weapon world position
-	var weapon_world_pos = ship_data.position + weapon.position_offset.rotated(ship_data.rotation)
-
-	# Calculate direction with accuracy spread
-	var perfect_direction = (lead_position - weapon_world_pos).normalized()
-	var spread_angle = (1.0 - final_accuracy) * PI / 6.0  # Up to 30 degrees spread at 0 accuracy
-	var spread = randf_range(-spread_angle, spread_angle)
-	var actual_direction = perfect_direction.rotated(spread)
+	var lead_pos = calculate_lead_position(ship_data, weapon, target)
+	var weapon_pos = calculate_weapon_world_position(ship_data, weapon)
+	var direction = calculate_firing_direction(weapon_pos, lead_pos, ship_data, weapon)
 
 	return {
-		"type": "fire_projectile",
-		"ship_id": ship_data.ship_id,
-		"weapon_id": weapon.weapon_id,
-		"spawn_position": weapon_world_pos,
-		"direction": actual_direction,
-		"velocity": actual_direction * weapon.stats.projectile_speed,
-		"damage": int(weapon.stats.damage * power_modifier),
-		"speed": weapon.stats.projectile_speed,
-		"target_id": target.ship_id,
-		"delay": reaction_delay,
-		"accuracy": final_accuracy
+		type = "fire_projectile",
+		ship_id = ship_data.ship_id,
+		weapon_id = weapon.weapon_id,
+		spawn_position = weapon_pos,
+		direction = direction,
+		velocity = calculate_projectile_velocity(direction, weapon.stats.projectile_speed),
+		damage = calculate_final_damage(weapon.stats.damage, ship_data),
+		speed = weapon.stats.projectile_speed,
+		target_id = target.ship_id,
+		delay = generate_reaction_delay(),
+		accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data)
 	}
 
-## Calculate lead position for moving target
+static func calculate_weapon_world_position(ship_data: Dictionary, weapon: Dictionary) -> Vector2:
+	return ship_data.position + weapon.position_offset.rotated(ship_data.rotation)
+
 static func calculate_lead_position(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> Vector2:
 	if not target.has("velocity"):
 		return target.position
 
-	var weapon_world_pos = ship_data.position + weapon.position_offset.rotated(ship_data.rotation)
-	var distance = weapon_world_pos.distance_to(target.position)
-	var time_to_impact = distance / weapon.stats.projectile_speed
+	var weapon_pos = calculate_weapon_world_position(ship_data, weapon)
+	var time_to_impact = calculate_time_to_impact(weapon_pos, target.position, weapon.stats.projectile_speed)
+	return predict_target_position(target.position, target.velocity, time_to_impact)
 
-	# Predict where target will be
-	return target.position + (target.velocity * time_to_impact)
+static func calculate_time_to_impact(from: Vector2, to: Vector2, projectile_speed: float) -> float:
+	return calculate_distance(from, to) / projectile_speed
 
-## Get power modifier from ship damage (power core status)
+static func predict_target_position(current_pos: Vector2, velocity: Vector2, time: float) -> Vector2:
+	return current_pos + (velocity * time)
+
+static func calculate_firing_direction(weapon_pos: Vector2, target_pos: Vector2, ship_data: Dictionary, weapon: Dictionary) -> Vector2:
+	var perfect_direction = calculate_direction_to_target(weapon_pos, target_pos)
+	var accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data)
+	return apply_accuracy_spread(perfect_direction, accuracy)
+
+static func apply_accuracy_spread(direction: Vector2, accuracy: float) -> Vector2:
+	var spread_angle = calculate_spread_angle(accuracy)
+	var random_spread = generate_random_spread(spread_angle)
+	return direction.rotated(random_spread)
+
+static func calculate_spread_angle(accuracy: float) -> float:
+	return (1.0 - accuracy) * PI / 6.0  # Up to 30 degrees at 0 accuracy
+
+static func generate_random_spread(max_spread: float) -> float:
+	return randf_range(-max_spread, max_spread)
+
+static func generate_reaction_delay() -> float:
+	return randf_range(MIN_REACTION_TIME, MAX_REACTION_TIME)
+
+static func calculate_projectile_velocity(direction: Vector2, speed: float) -> Vector2:
+	return direction * speed
+
+# ============================================================================
+# DAMAGE MODIFIERS - Find, don't mutate
+# ============================================================================
+
+static func calculate_final_damage(base_damage: int, ship_data: Dictionary) -> int:
+	return int(base_damage * get_power_modifier(ship_data))
+
+static func calculate_final_accuracy(base_accuracy: float, ship_data: Dictionary) -> float:
+	return base_accuracy * get_accuracy_modifier(ship_data)
+
 static func get_power_modifier(ship_data: Dictionary) -> float:
-	for internal in ship_data.internals:
-		if internal.type == "power":
-			if internal.status == "destroyed":
-				return 0.0  # No power, no weapons
-			elif internal.status == "damaged":
-				if internal.effect_on_ship.on_damaged.has("weapon_power"):
-					return internal.effect_on_ship.on_damaged.weapon_power
-	return 1.0
+	var power_core = find_component_by_type(ship_data.internals, "power")
+	return get_component_power_modifier(power_core)
 
-## Get accuracy modifier from ship damage (bridge/control status)
 static func get_accuracy_modifier(ship_data: Dictionary) -> float:
-	for internal in ship_data.internals:
-		if internal.type == "control":
-			if internal.status == "destroyed":
-				return 0.3  # Heavily reduced accuracy
-			elif internal.status == "damaged":
-				if internal.effect_on_ship.on_damaged.has("accuracy"):
-					return internal.effect_on_ship.on_damaged.accuracy
-	return 1.0
+	var control = find_component_by_type(ship_data.internals, "control")
+	return get_component_accuracy_modifier(control)
 
-## Calculate hit probability for debugging/UI
-static func calculate_hit_probability(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> float:
-	var base_accuracy = weapon.stats.accuracy
-	var accuracy_mod = get_accuracy_modifier(ship_data)
+static func find_component_by_type(internals: Array, component_type: String) -> Dictionary:
+	return internals.filter(func(c): return c.type == component_type).reduce(func(a, b): return b, {})
 
-	# Distance penalty
-	var distance = ship_data.position.distance_to(target.position)
-	var range_factor = 1.0 - (distance / weapon.stats.range) * 0.3  # Up to 30% penalty at max range
+static func get_component_power_modifier(component: Dictionary) -> float:
+	if component.is_empty():
+		return 1.0
+	match component.status:
+		"destroyed": return 0.0
+		"damaged": return component.effect_on_ship.on_damaged.get("weapon_power", 1.0)
+		_: return 1.0
 
-	# Target velocity penalty (harder to hit fast targets)
-	var velocity_factor = 1.0
-	if target.has("velocity"):
-		var target_speed = target.velocity.length()
-		velocity_factor = 1.0 - min(target_speed / 300.0, 0.5)  # Up to 50% penalty
+static func get_component_accuracy_modifier(component: Dictionary) -> float:
+	if component.is_empty():
+		return 1.0
+	match component.status:
+		"destroyed": return 0.3
+		"damaged": return component.effect_on_ship.on_damaged.get("accuracy", 1.0)
+		_: return 1.0
 
-	return base_accuracy * accuracy_mod * range_factor * velocity_factor
+# ============================================================================
+# UTILITY - Immutable Dictionary Operations
+# ============================================================================
 
-## Get all weapons that can currently fire at a target
+static func merge_dict(base: Dictionary, override: Dictionary) -> Dictionary:
+	var result = base.duplicate(true)
+	for key in override:
+		result[key] = override[key]
+	return result
+
+# ============================================================================
+# PUBLIC QUERY FUNCTIONS
+# ============================================================================
+
 static func get_fireable_weapons(ship_data: Dictionary, target: Dictionary) -> Array:
-	var fireable = []
+	return ship_data.weapons.filter(
+		func(w): return is_weapon_ready(w) and can_fire_at_target(ship_data, w, target)
+	)
 
-	for weapon in ship_data.weapons:
-		if weapon.cooldown_remaining <= 0.0 and can_fire_at_target(ship_data, weapon, target):
-			fireable.append(weapon)
+static func calculate_hit_probability(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> float:
+	var base = weapon.stats.accuracy
+	var accuracy_mod = get_accuracy_modifier(ship_data)
+	var range_factor = calculate_range_factor(ship_data.position, target.position, weapon.stats.range)
+	var velocity_factor = calculate_velocity_factor(target)
+	return base * accuracy_mod * range_factor * velocity_factor
 
-	return fireable
+static func calculate_range_factor(from: Vector2, to: Vector2, max_range: float) -> float:
+	var distance = calculate_distance(from, to)
+	return 1.0 - (distance / max_range) * 0.3  # Up to 30% penalty
+
+static func calculate_velocity_factor(target: Dictionary) -> float:
+	if not target.has("velocity"):
+		return 1.0
+	var speed = target.velocity.length()
+	return 1.0 - min(speed / 300.0, 0.5)  # Up to 50% penalty

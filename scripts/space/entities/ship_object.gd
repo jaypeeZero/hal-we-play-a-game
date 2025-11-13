@@ -90,16 +90,19 @@ func _process(delta: float) -> void:
 	# Emit state for renderer
 	_emit_state_changed()
 
-## Update weapons and fire if possible
+## Update weapons and fire if possible (IMMUTABLE - replaces ship_data)
 func _update_weapons(delta: float) -> void:
 	if _potential_targets.is_empty():
 		return
 
-	# Use WeaponSystem to get fire commands
-	var fire_commands = WeaponSystem.update_weapons(ship_data, _potential_targets, delta)
+	# Use WeaponSystem (immutable) - returns new ship_data + fire commands
+	var result = WeaponSystem.update_weapons(ship_data, _potential_targets, delta)
 
-	for fire_command in fire_commands:
-		# Emit signal so orchestrator can spawn projectile
+	# Replace ship data with updated version (immutable pattern)
+	ship_data = result.ship_data
+
+	# Emit fire commands
+	for fire_command in result.fire_commands:
 		weapon_fired.emit(fire_command.weapon_id, fire_command)
 
 ## Basic movement AI (will be improved later)
@@ -170,13 +173,17 @@ func _on_area_entered(area: Area2D) -> void:
 	var damage = projectile.damage
 	var hit_position = area.global_position
 
-	# Resolve damage using DamageResolver
-	var hit_result = DamageResolver.resolve_hit(
+	# Resolve damage using DamageResolver (IMMUTABLE - returns new ship_data)
+	var damage_result = DamageResolver.resolve_hit(
 		ship_data,
 		hit_position,
 		damage,
 		projectile.global_position.angle_to_point(hit_position)
 	)
+
+	# Replace ship data with updated version (immutable pattern)
+	ship_data = damage_result.ship_data
+	var hit_result = damage_result.hit_result
 
 	# Emit signals based on hit result
 	ship_hit.emit(hit_result)
@@ -188,9 +195,8 @@ func _on_area_entered(area: Area2D) -> void:
 		if internal.new_status == "destroyed":
 			component_destroyed.emit(internal.component_id)
 
-	# Check if ship is destroyed
+	# Check if ship is destroyed (ship_data already updated with destroyed status)
 	if DamageResolver.is_ship_destroyed(ship_data):
-		ship_data.status = "destroyed"
 		ship_destroyed.emit()
 		_handle_destruction()
 
@@ -266,16 +272,18 @@ func get_ship_data() -> Dictionary:
 
 ## Take direct damage (for testing or special cases)
 func take_damage(amount: int, hit_position: Vector2) -> void:
-	var hit_result = DamageResolver.resolve_hit(
+	var damage_result = DamageResolver.resolve_hit(
 		ship_data,
 		hit_position,
 		amount,
 		0.0
 	)
 
-	ship_hit.emit(hit_result)
+	# Replace ship data with updated version (immutable pattern)
+	ship_data = damage_result.ship_data
+
+	ship_hit.emit(damage_result.hit_result)
 
 	if DamageResolver.is_ship_destroyed(ship_data):
-		ship_data.status = "destroyed"
 		ship_destroyed.emit()
 		_handle_destruction()
