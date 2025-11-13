@@ -19,8 +19,8 @@ static func get_ship_template(ship_type: String) -> Dictionary:
 			push_error("Unknown ship type: " + ship_type)
 			return {}
 
-## Create a ship instance from template
-static func create_ship_instance(ship_type: String, team: int, position: Vector2) -> Dictionary:
+## Create a ship instance from template with crew
+static func create_ship_instance(ship_type: String, team: int, position: Vector2, create_crew: bool = false, crew_skill: float = 0.5) -> Dictionary:
 	var template = get_ship_template(ship_type)
 	if template.is_empty():
 		return {}
@@ -35,7 +35,38 @@ static func create_ship_instance(ship_type: String, team: int, position: Vector2
 	instance.angular_velocity = 0.0
 	instance.status = "operational"
 
+	# Create crew for ship if requested
+	if create_crew:
+		var crew = create_crew_for_ship(instance, crew_skill)
+		instance.crew = crew
+
 	return instance
+
+## Create crew for ship based on type
+static func create_crew_for_ship(ship_data: Dictionary, skill_level: float = 0.5) -> Array:
+	match ship_data.type:
+		"fighter":
+			# Solo pilot for fighters
+			var crew = CrewData.create_solo_fighter_crew(skill_level)
+			for member in crew:
+				member.assigned_to = ship_data.ship_id
+			return crew
+		"corvette":
+			# Captain, pilot, and gunners for corvette
+			var weapon_count = ship_data.weapons.size()
+			var crew = CrewData.create_ship_crew(weapon_count, skill_level)
+			for member in crew:
+				member.assigned_to = ship_data.ship_id
+			return crew
+		"capital":
+			# Full crew for capital ships
+			var weapon_count = ship_data.weapons.size()
+			var crew = CrewData.create_ship_crew(weapon_count, skill_level)
+			for member in crew:
+				member.assigned_to = ship_data.ship_id
+			return crew
+		_:
+			return []
 
 ## Validate ship data structure
 static func validate_ship_data(data: Dictionary) -> bool:
