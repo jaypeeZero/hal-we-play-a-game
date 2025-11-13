@@ -19,8 +19,11 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 	if target.is_empty():
 		return apply_space_drift(ship_data, delta)
 
+	# Get nearby ships for collision avoidance
+	var nearby_ships = get_nearby_friendly_ships(ship_data, targets)
+
 	# Calculate pilot intentions based on target and current state
-	var pilot_control = calculate_pilot_control(ship_data, target)
+	var pilot_control = calculate_pilot_control(ship_data, target, nearby_ships)
 
 	return apply_space_physics(ship_data, pilot_control, delta)
 
@@ -68,54 +71,156 @@ static func select_nearest(nearest: Dictionary, current: Dictionary) -> Dictiona
 static func get_distance(ship: Dictionary) -> float:
 	return ship.get("_distance", INF)
 
+## Get nearby friendly ships for collision avoidance
+static func get_nearby_friendly_ships(ship_data: Dictionary, all_ships: Array) -> Array:
+	var collision_awareness_range = 200.0  # Pilots watch for collisions within this range
+	return all_ships \
+		.filter(func(s): return s != null) \
+		.filter(func(s): return s.ship_id != ship_data.ship_id) \
+		.filter(func(s): return s.team == ship_data.team) \
+		.filter(func(s): return s.status != "destroyed") \
+		.filter(func(s): return ship_data.position.distance_to(s.position) < collision_awareness_range)
+
 # ============================================================================
 # PILOT CONTROL CALCULATION
 # ============================================================================
 
 ## Calculate what the pilot wants to do based on target and current state
-static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary, nearby_ships: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 	var direction_to_target = to_target.normalized()
 
-	# Determine if we need to brake (going too fast toward target)
-	var velocity_toward_target = ship_data.velocity.dot(direction_to_target)
-	var closing_speed = velocity_toward_target
+	# Determine engagement range based on ship type (naval-style combat)
+	var engagement_range = get_engagement_range(ship_data)
+	var min_safe_distance = engagement_range * 0.7  # Don't get too close
+	var max_engagement_distance = engagement_range * 1.3  # Don't get too far
 
-	# Calculate optimal approach speed based on distance
-	# Closer targets = slower approach
-	var desired_approach_speed = min(ship_data.stats.max_speed * 0.7, distance * 0.3)
+	# Check for collision threats
+	var avoidance_vector = calculate_collision_avoidance(ship_data, nearby_ships)
+	var has_collision_threat = avoidance_vector.length() > 0.1
 
-	var should_brake = closing_speed > desired_approach_speed and distance < 500.0
-	var should_thrust = not should_brake
-
-	# Decide what heading to face
+	# Determine desired position relative to target
+	var desired_position: Vector2
 	var desired_heading: float
+	var should_thrust: bool
+	var is_braking: bool
 
-	if should_brake:
+	if distance < min_safe_distance:
+		# Too close! Back off while keeping target in arc
+		desired_position = calculate_retreat_position(ship_data, target, engagement_range)
+		is_braking = true
+		should_thrust = false
+	elif distance > max_engagement_distance:
+		# Too far, close distance
+		desired_position = calculate_approach_position(ship_data, target, engagement_range)
+		is_braking = false
+		should_thrust = true
+	else:
+		# At good range - maintain position and orbit/strafe
+		desired_position = calculate_combat_orbit_position(ship_data, target, engagement_range)
+		# Only thrust if we're drifting away or need to maintain position
+		var velocity_toward_desired = ship_data.velocity.dot((desired_position - ship_data.position).normalized())
+		should_thrust = velocity_toward_desired < ship_data.stats.max_speed * 0.3
+		is_braking = false
+
+	# Apply collision avoidance if needed
+	if has_collision_threat:
+		desired_position += avoidance_vector * 100.0  # Add avoidance offset
+
+	# Calculate heading and movement
+	var to_desired = desired_position - ship_data.position
+	var velocity_toward_target = ship_data.velocity.dot(direction_to_target)
+
+	# Determine heading based on what we're doing
+	if is_braking and ship_data.velocity.length() > 10.0:
 		# Point opposite to velocity to brake
+		desired_heading = ship_data.velocity.angle() + PI
+	elif has_collision_threat and distance > min_safe_distance:
+		# Point toward avoidance direction
+		desired_heading = to_desired.angle()
+		should_thrust = true
+	else:
+		# Point toward desired position for maneuvering
+		if to_desired.length() > 10.0:
+			desired_heading = to_desired.angle()
+		else:
+			# At desired position, face the target
+			desired_heading = to_target.angle()
+
+	# Check if we're going too fast toward target
+	var closing_speed = velocity_toward_target
+	var safe_approach_speed = min(ship_data.stats.max_speed * 0.5, (distance - min_safe_distance) * 0.4)
+
+	if closing_speed > safe_approach_speed and distance < engagement_range:
+		is_braking = true
+		should_thrust = false
 		if ship_data.velocity.length() > 10.0:
 			desired_heading = ship_data.velocity.angle() + PI
-		else:
-			# If nearly stopped, point at target
-			desired_heading = to_target.angle()
-	else:
-		# Point toward target for intercept
-		# Lead the target slightly based on current velocity
-		var intercept_point = calculate_intercept_point(ship_data, target)
-		desired_heading = (intercept_point - ship_data.position).angle()
 
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": should_thrust,
-		"is_braking": should_brake
+		"is_braking": is_braking,
+		"engagement_range": engagement_range,
+		"current_distance": distance
 	}
 
-## Calculate where to aim to intercept target (basic lead calculation)
-static func calculate_intercept_point(ship_data: Dictionary, target: Dictionary) -> Vector2:
-	# For now, just aim at target position
-	# Future: predict target movement and lead the shot
-	return target.position
+## Get engagement range based on ship type (naval-style combat distances)
+static func get_engagement_range(ship_data: Dictionary) -> float:
+	match ship_data.type:
+		"fighter":
+			return 250.0  # Fighters engage at closer range
+		"corvette":
+			return 350.0  # Corvettes at medium range
+		"capital":
+			return 500.0  # Capital ships engage from far away
+		_:
+			return 300.0  # Default
+
+## Calculate collision avoidance vector from nearby ships
+static func calculate_collision_avoidance(ship_data: Dictionary, nearby_ships: Array) -> Vector2:
+	if nearby_ships.is_empty():
+		return Vector2.ZERO
+
+	var avoidance = Vector2.ZERO
+	for other_ship in nearby_ships:
+		var to_other = other_ship.position - ship_data.position
+		var distance = to_other.length()
+
+		# Stronger avoidance the closer they are
+		var danger_distance = 150.0
+		if distance < danger_distance and distance > 0.1:
+			var avoidance_strength = (danger_distance - distance) / danger_distance
+			# Point away from the other ship
+			avoidance -= to_other.normalized() * avoidance_strength
+
+	return avoidance.normalized() if avoidance.length() > 0.1 else Vector2.ZERO
+
+## Calculate position to retreat to when too close
+static func calculate_retreat_position(ship_data: Dictionary, target: Dictionary, engagement_range: float) -> Vector2:
+	# Back away from target to engagement range
+	var away_from_target = (ship_data.position - target.position).normalized()
+	return target.position + away_from_target * engagement_range
+
+## Calculate position to approach when too far
+static func calculate_approach_position(ship_data: Dictionary, target: Dictionary, engagement_range: float) -> Vector2:
+	# Move toward target to engagement range
+	var toward_target = (target.position - ship_data.position).normalized()
+	return target.position - toward_target * engagement_range
+
+## Calculate orbital combat position (circle strafe around target)
+static func calculate_combat_orbit_position(ship_data: Dictionary, target: Dictionary, engagement_range: float) -> Vector2:
+	# Calculate a position that orbits around the target
+	var to_ship = ship_data.position - target.position
+	var current_angle = to_ship.angle()
+
+	# Orbit clockwise (could be randomized per ship for variety)
+	var orbit_speed = 0.5  # radians per second worth of orbit
+	var desired_angle = current_angle + orbit_speed
+
+	# Position at engagement range, offset by orbit angle
+	return target.position + Vector2(cos(desired_angle), sin(desired_angle)) * engagement_range
 
 # ============================================================================
 # SPACE PHYSICS MOVEMENT
@@ -165,13 +270,13 @@ static func apply_space_drift(ship_data: Dictionary, delta: float) -> Dictionary
 		position = new_position
 	})
 
-## Disabled ships slowly lose velocity (damage/venting atmosphere)
+## Disabled/destroyed ships drift forever at constant velocity (Newton's first law)
 static func apply_disabled_drift(ship_data: Dictionary, delta: float) -> Dictionary:
-	var new_velocity = ship_data.velocity * 0.98  # Slow decay for disabled ships
-	var new_position = ship_data.position + new_velocity * delta
+	# Dead ships keep drifting - no decay, this is space!
+	var new_position = ship_data.position + ship_data.velocity * delta
 	return merge_dict(ship_data, {
-		velocity = new_velocity,
 		position = new_position
+		# velocity and rotation unchanged - they drift forever
 	})
 
 ## Rotate toward desired heading at turn_rate speed
