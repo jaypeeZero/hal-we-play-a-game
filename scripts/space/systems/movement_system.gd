@@ -2,7 +2,8 @@ class_name MovementSystem
 extends RefCounted
 
 ## Pure functional movement system - IMMUTABLE DATA
-## Processes ship movement and basic AI behaviors
+## Processes ship movement with realistic space physics
+## Ships have momentum, thrust-based acceleration, and decoupled rotation
 ## Following functional programming principles
 
 # ============================================================================
@@ -12,13 +13,16 @@ extends RefCounted
 ## Update ship movement - returns new ship_data Dictionary
 static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: float) -> Dictionary:
 	if is_ship_disabled(ship_data):
-		return apply_drift(ship_data, delta)
+		return apply_disabled_drift(ship_data, delta)
 
 	var target = find_nearest_enemy(ship_data, targets)
 	if target.is_empty():
-		return apply_drift(ship_data, delta)
+		return apply_space_drift(ship_data, delta)
 
-	return apply_seek_behavior(ship_data, target, delta)
+	# Calculate pilot intentions based on target and current state
+	var pilot_control = calculate_pilot_control(ship_data, target)
+
+	return apply_space_physics(ship_data, pilot_control, delta)
 
 ## Update all ships - returns new Array of ship_data
 static func update_all_ships(ships: Array, delta: float) -> Array:
@@ -65,51 +69,126 @@ static func get_distance(ship: Dictionary) -> float:
 	return ship.get("_distance", INF)
 
 # ============================================================================
-# MOVEMENT BEHAVIORS
+# PILOT CONTROL CALCULATION
 # ============================================================================
 
-static func apply_drift(ship_data: Dictionary, delta: float) -> Dictionary:
-	var new_velocity = ship_data.velocity * 0.95
+## Calculate what the pilot wants to do based on target and current state
+static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+	var direction_to_target = to_target.normalized()
+
+	# Determine if we need to brake (going too fast toward target)
+	var velocity_toward_target = ship_data.velocity.dot(direction_to_target)
+	var closing_speed = velocity_toward_target
+
+	# Calculate optimal approach speed based on distance
+	# Closer targets = slower approach
+	var desired_approach_speed = min(ship_data.stats.max_speed * 0.7, distance * 0.3)
+
+	var should_brake = closing_speed > desired_approach_speed and distance < 500.0
+	var should_thrust = not should_brake
+
+	# Decide what heading to face
+	var desired_heading: float
+
+	if should_brake:
+		# Point opposite to velocity to brake
+		if ship_data.velocity.length() > 10.0:
+			desired_heading = ship_data.velocity.angle() + PI
+		else:
+			# If nearly stopped, point at target
+			desired_heading = to_target.angle()
+	else:
+		# Point toward target for intercept
+		# Lead the target slightly based on current velocity
+		var intercept_point = calculate_intercept_point(ship_data, target)
+		desired_heading = (intercept_point - ship_data.position).angle()
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": should_brake
+	}
+
+## Calculate where to aim to intercept target (basic lead calculation)
+static func calculate_intercept_point(ship_data: Dictionary, target: Dictionary) -> Vector2:
+	# For now, just aim at target position
+	# Future: predict target movement and lead the shot
+	return target.position
+
+# ============================================================================
+# SPACE PHYSICS MOVEMENT
+# ============================================================================
+
+## Apply realistic space physics - ships drift, thrust provides acceleration
+static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary, delta: float) -> Dictionary:
+	# Rotate ship toward desired heading
+	var new_rotation = rotate_toward_heading(
+		ship_data.rotation,
+		pilot_control.desired_heading,
+		ship_data.stats.turn_rate,
+		delta
+	)
+
+	# Apply thrust if pilot wants to thrust and ship is facing roughly the right direction
+	var heading_error = angle_difference(new_rotation, pilot_control.desired_heading)
+	var thrust_efficiency = 1.0 if abs(heading_error) < 0.5 else max(0.0, 1.0 - abs(heading_error) / PI)
+
+	var thrust_vector = Vector2.ZERO
+	if pilot_control.thrust_active and thrust_efficiency > 0.1:
+		# Apply thrust in the direction ship is facing
+		var thrust_direction = Vector2(cos(new_rotation), sin(new_rotation))
+		thrust_vector = thrust_direction * ship_data.stats.acceleration * thrust_efficiency * delta
+
+	# Update velocity with thrust (no drag in space!)
+	var new_velocity = ship_data.velocity + thrust_vector
+
+	# Clamp to max speed (engine limitation)
+	if new_velocity.length() > ship_data.stats.max_speed:
+		new_velocity = new_velocity.normalized() * ship_data.stats.max_speed
+
+	# Update position based on velocity
+	var new_position = ship_data.position + new_velocity * delta
+
+	return merge_dict(ship_data, {
+		velocity = new_velocity,
+		position = new_position,
+		rotation = new_rotation,
+		_pilot_state = pilot_control  # Store for debugging/visualization
+	})
+
+## Ships in space maintain velocity (Newton's first law)
+static func apply_space_drift(ship_data: Dictionary, delta: float) -> Dictionary:
+	var new_position = ship_data.position + ship_data.velocity * delta
+	return merge_dict(ship_data, {
+		position = new_position
+	})
+
+## Disabled ships slowly lose velocity (damage/venting atmosphere)
+static func apply_disabled_drift(ship_data: Dictionary, delta: float) -> Dictionary:
+	var new_velocity = ship_data.velocity * 0.98  # Slow decay for disabled ships
 	var new_position = ship_data.position + new_velocity * delta
 	return merge_dict(ship_data, {
 		velocity = new_velocity,
 		position = new_position
 	})
 
-static func apply_seek_behavior(ship_data: Dictionary, target: Dictionary, delta: float) -> Dictionary:
-	var to_target = (target.position - ship_data.position).normalized()
-	var desired_velocity = to_target * ship_data.stats.max_speed
+## Rotate toward desired heading at turn_rate speed
+static func rotate_toward_heading(current_rotation: float, target_rotation: float, turn_rate: float, delta: float) -> float:
+	# Smooth rotation using lerp_angle for shortest path
+	var rotation_speed = clamp(turn_rate * delta, 0.0, 1.0)
+	return lerp_angle(current_rotation, target_rotation, rotation_speed)
 
-	var steering = calculate_steering(ship_data.velocity, desired_velocity, ship_data.stats.acceleration, delta)
-	var new_velocity = clamp_velocity(ship_data.velocity + steering, ship_data.stats.max_speed)
-	var new_position = ship_data.position + new_velocity * delta
-	var new_rotation = calculate_rotation_toward_velocity(ship_data.rotation, new_velocity, ship_data.stats.turn_rate, delta)
-
-	return merge_dict(ship_data, {
-		velocity = new_velocity,
-		position = new_position,
-		rotation = new_rotation
-	})
-
-static func calculate_steering(current_velocity: Vector2, desired_velocity: Vector2, acceleration: float, delta: float) -> Vector2:
-	var steering = desired_velocity - current_velocity
-	var max_force = acceleration * delta
-
-	if steering.length() > max_force:
-		return steering.normalized() * max_force
-	return steering
-
-static func clamp_velocity(velocity: Vector2, max_speed: float) -> Vector2:
-	if velocity.length() > max_speed:
-		return velocity.normalized() * max_speed
-	return velocity
-
-static func calculate_rotation_toward_velocity(current_rotation: float, velocity: Vector2, turn_rate: float, delta: float) -> float:
-	if velocity.length() < 0.1:
-		return current_rotation
-
-	var target_rotation = velocity.angle()
-	return lerp_angle(current_rotation, target_rotation, turn_rate * delta)
+## Calculate the signed difference between two angles
+static func angle_difference(angle1: float, angle2: float) -> float:
+	var diff = angle2 - angle1
+	# Normalize to -PI to PI range
+	while diff > PI:
+		diff -= TAU
+	while diff < -PI:
+		diff += TAU
+	return diff
 
 # ============================================================================
 # UTILITY
