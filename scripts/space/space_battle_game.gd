@@ -5,6 +5,15 @@ extends Node2D
 ## Systems process data, entities are minimal wrappers for physics
 ## Data flows: ships[] -> Systems -> updated ships[] -> sync entities
 
+# Preload system classes
+const MovementSystem = preload("res://scripts/space/systems/movement_system.gd")
+const ProjectileSystem = preload("res://scripts/space/systems/projectile_system.gd")
+const CollisionSystem = preload("res://scripts/space/systems/collision_system.gd")
+
+# Preload entity classes
+const ShipEntity = preload("res://scripts/space/entities/ship_entity.gd")
+const ProjectileEntity = preload("res://scripts/space/entities/projectile_entity.gd")
+
 signal game_started()
 signal game_ended(winner: int)
 signal ship_spawned(ship_id: String)
