@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="MovementTraits" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/movement/movement_traits.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+walk_speed = 40.0
+trot_speed = 80.0
+run_speed = 150.0
+gallop_speed = 180.0
+walk_acceleration = 200.0
+run_acceleration = 500.0
+walk_turn_multiplier = 1.0
+run_turn_multiplier = 0.9
+locomotion_type = "hopper"
+hop_distance = 15.0
+hop_duration = 0.2
+pause_between_hops_min = 0.3
+pause_between_hops_max = 0.7
+base_turn_rate = 8.0
+min_turn_radius = 0.0
+max_acceleration = 500.0
+max_deceleration = 600.0
+inertia = 0.5
+obstacle_detection_distance = 40.0
+avoidance_reaction_time = 0.1
+can_dodge = true
+dodge_angle = 1.0472

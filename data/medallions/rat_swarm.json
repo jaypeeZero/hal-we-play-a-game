@@ -1,0 +1,18 @@
+{
+  "id": "rat_swarm",
+  "name": "Rat Swarm",
+  "icon": "🐀",
+  "visual_emoji": "🐀",
+  "description": "Unleash a swarm of rats.",
+  "category": "creature",
+  "mana_cost": 20.0,
+  "casting_range": 220.0,
+
+  "spell_class": "SummonCreatureSpell",
+  "entity_class": "RatUnit",
+
+  "properties": {
+    "creature_type": "rat_swarm",
+    "spawn_count": 5
+  }
+}

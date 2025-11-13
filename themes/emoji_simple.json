@@ -1,0 +1,146 @@
+{
+  "theme_name": "emoji_simple",
+  "theme_version": "1.0.0",
+  "renderer_type": "label",
+
+  "entities": {
+    "wizard_player": {
+      "renderer_type": "label",
+      "emoji": "🧙🏽‍♂️",
+      "font_size": 32,
+      "bounds": [48, 48],
+      "size": 1.0
+    },
+
+    "creature_olophant": {
+      "renderer_type": "label",
+      "emoji": "🐘",
+      "font_size": 56,
+      "bounds": [72, 72],
+      "size": 1.75
+    },
+
+    "creature_rat_swarm": {
+      "renderer_type": "label",
+      "emoji": "🐀",
+      "font_size": 32,
+      "bounds": [48, 48],
+      "size": 1.0
+    },
+
+    "creature_wolf_pack": {
+      "renderer_type": "label",
+      "emoji": "🐺",
+      "font_size": 40,
+      "bounds": [56, 56],
+      "size": 1.25
+    },
+
+    "creature_wolf": {
+      "renderer_type": "label",
+      "emoji": "🐺",
+      "font_size": 40,
+      "bounds": [56, 56],
+      "size": 1.25
+    },
+
+    "creature_charging_knight": {
+      "renderer_type": "label",
+      "emoji": "🤺",
+      "font_size": 40,
+      "bounds": [56, 56],
+      "size": 1.25
+    },
+
+    "creature_bear": {
+      "renderer_type": "label",
+      "emoji": "🐻",
+      "font_size": 48,
+      "bounds": [64, 64],
+      "size": 1.5
+    },
+
+    "creature_generic": {
+      "renderer_type": "label",
+      "emoji": "❓",
+      "font_size": 32,
+      "bounds": [48, 48],
+      "size": 1.0
+    },
+
+    "creature_test_creature": {
+      "renderer_type": "label",
+      "emoji": "🧪",
+      "font_size": 32,
+      "bounds": [48, 48],
+      "size": 1.0
+    },
+
+    "projectile_fireball": {
+      "renderer_type": "label",
+      "emoji": "🔥",
+      "font_size": 16,
+      "bounds": [20, 20],
+      "size": 0.5
+    },
+
+    "effect_lightning": {
+      "renderer_type": "label",
+      "emoji": "⚡",
+      "font_size": 24,
+      "bounds": [32, 32],
+      "size": 0.75
+    },
+
+    "terrain_tree_evergreen": {
+      "renderer_type": "label",
+      "emoji": "🌲",
+      "font_size": 40,
+      "bounds": [48, 48],
+      "size": 1.25,
+      "collision_radius_override": 15.0
+    },
+
+    "terrain_tree_deciduous": {
+      "renderer_type": "label",
+      "emoji": "🌳",
+      "font_size": 40,
+      "bounds": [48, 48],
+      "size": 1.25,
+      "collision_radius_override": 15.0
+    },
+
+    "terrain_chasm": {
+      "renderer_type": "shape",
+      "shape": {
+        "type": "circle",
+        "radius": 30.0,
+        "color": "#1a1a1a"
+      },
+      "bounds": [60, 60],
+      "size": 1.0,
+      "collision_radius_override": 30.0
+    },
+
+    "terrain_boulder": {
+      "renderer_type": "label",
+      "emoji": "🪨",
+      "font_size": 32,
+      "bounds": [48, 48],
+      "size": 1.0,
+      "collision_radius_override": 20.0
+    }
+  },
+
+  "ui_icons": {
+    "fireball": "🔥",
+    "olophant": "🐘",
+    "rat_swarm": "🐀",
+    "lightning_bolt": "⚡",
+    "wall_of_trees": "🌲",
+    "wolf_pack": "🐺",
+    "charging_knight": "🤺",
+    "bear": "🐻",
+    "chasm": "🕳️"
+  }
+}

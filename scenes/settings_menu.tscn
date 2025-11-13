@@ -1,0 +1,207 @@
+[gd_scene load_steps=2 format=3 uid="uid://c8qr3kmv6kp1r"]
+
+[ext_resource type="Script" path="res://scripts/ui/menus/settings_menu.gd" id="1_settings_menu"]
+
+[node name="SettingsMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_settings_menu")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.15, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="HeaderBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+text = "Settings"
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Back"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SettingsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 20
+
+[node name="AudioSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="AudioHeader" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "AUDIO"
+
+[node name="MasterVolumeContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="MasterLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/MasterVolumeContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Master Volume"
+
+[node name="MasterSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/MasterVolumeContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+value = 1.0
+
+[node name="MasterValue" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/MasterVolumeContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "100%"
+
+[node name="MusicVolumeContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="MusicLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/MusicVolumeContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Music Volume"
+
+[node name="MusicSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/MusicVolumeContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+value = 0.7
+
+[node name="MusicValue" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/MusicVolumeContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "70%"
+
+[node name="SfxVolumeContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="SfxLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/SfxVolumeContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "SFX Volume"
+
+[node name="SfxSlider" type="HSlider" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/SfxVolumeContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="SfxValue" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/AudioSection/SfxVolumeContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "80%"
+
+[node name="Separator1" type="HSeparator" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer"]
+layout_mode = 2
+
+[node name="DisplaySection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="DisplayHeader" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DisplaySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "DISPLAY"
+
+[node name="FullscreenContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DisplaySection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="FullscreenLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DisplaySection/FullscreenContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Fullscreen"
+
+[node name="FullscreenToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DisplaySection/FullscreenContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ResolutionContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DisplaySection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="ResolutionLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DisplaySection/ResolutionContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Resolution"
+
+[node name="ResolutionDropdown" type="OptionButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DisplaySection/ResolutionContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Separator2" type="HSeparator" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer"]
+layout_mode = 2
+
+[node name="GameplaySection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="GameplayHeader" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/GameplaySection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "GAMEPLAY"
+
+[node name="DebugModeContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/GameplaySection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="DebugModeLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/GameplaySection/DebugModeContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Debug Mode"
+
+[node name="DebugModeToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/GameplaySection/DebugModeContainer"]
+unique_name_in_owner = true
+layout_mode = 2

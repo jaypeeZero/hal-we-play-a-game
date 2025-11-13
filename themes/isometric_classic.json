@@ -1,0 +1,96 @@
+{
+  "theme_name": "isometric_classic",
+  "theme_version": "1.0.0",
+  "renderer_type": "sprite_2d",
+
+  "entities": {
+    "wizard_player": {
+      "renderer_type": "sprite_2d",
+      "sprite_sheet": "res://assets/sprites/wizard.png",
+      "frame_size": [64, 64],
+      "sprite_offset": [0, -16],
+      "size": 1.0,
+
+      "shadow": {
+        "enabled": true,
+        "texture": "res://assets/sprites/shadow_oval.png",
+        "scale": [1.0, 0.5],
+        "opacity": 0.3
+      },
+
+      "animations": {
+        "idle": {
+          "frames": [0, 1],
+          "fps": 2,
+          "loop": true
+        },
+        "walk": {
+          "frames": [2, 3, 4, 5, 6, 7],
+          "fps": 12,
+          "loop": true
+        },
+        "cast": {
+          "frames": [8, 9, 10, 11],
+          "fps": 10,
+          "loop": false
+        },
+        "damaged": {
+          "frames": [0],
+          "fps": 1,
+          "loop": false
+        },
+        "death": {
+          "frames": [12, 13, 14, 15, 16],
+          "fps": 8,
+          "loop": false
+        }
+      }
+    },
+
+    "creature_olophant": {
+      "renderer_type": "sprite_2d",
+      "sprite_sheet": "res://assets/sprites/elephant.png",
+      "frame_size": [64, 80],
+      "sprite_offset": [0, -24],
+      "size": 1.75,
+
+      "shadow": {
+        "enabled": true,
+        "texture": "res://assets/sprites/shadow_oval.png",
+        "scale": [1.5, 0.7],
+        "opacity": 0.3
+      },
+
+      "animations": {
+        "idle": {"frames": [0, 1], "fps": 2, "loop": true},
+        "walk": {"frames": [2, 3, 4, 5, 6, 7, 8, 9], "fps": 12, "loop": true},
+        "attack": {"frames": [10, 11, 12, 13], "fps": 10, "loop": false},
+        "death": {"frames": [14, 15, 16, 17, 18, 19], "fps": 8, "loop": false}
+      }
+    },
+
+    "projectile_fireball": {
+      "renderer_type": "sprite_2d",
+      "sprite_sheet": "res://assets/sprites/fireball.png",
+      "frame_size": [16, 16],
+      "sprite_offset": [0, 0],
+      "size": 0.5,
+
+      "animations": {
+        "idle": {"frames": [0, 1, 2, 3], "fps": 10, "loop": true},
+        "explode": {"frames": [4, 5, 6, 7, 8], "fps": 12, "loop": false}
+      }
+    }
+  },
+
+  "ui_icons": {
+    "fireball": "res://assets/ui/icons/fireball.png",
+    "olophant": "res://assets/ui/icons/olophant.png",
+    "rat_swarm": "res://assets/ui/icons/rat.png",
+    "lightning_bolt": "res://assets/ui/icons/lightning.png"
+  },
+
+  "common_assets": {
+    "shadow_oval": "res://assets/sprites/shadow_oval.png"
+  }
+}

@@ -1,0 +1,80 @@
+[gd_scene load_steps=2 format=3 uid="uid://cq8yh5m2jxp0w"]
+
+[ext_resource type="Script" path="res://scripts/ui/menus/pause_menu.gd" id="1_pause_menu"]
+
+[node name="PauseMenu" type="CanvasLayer"]
+process_mode = 3
+script = ExtResource("1_pause_menu")
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Overlay" type="ColorRect" parent="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="MarginContainer" type="MarginContainer" parent="Control"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 320.0
+offset_bottom = 200.0
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 0
+
+[node name="PanelContainer" type="PanelContainer" parent="Control/MarginContainer"]
+layout_mode = 2
+
+[node name="InnerMargin" type="MarginContainer" parent="Control/MarginContainer/PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 15
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Control/MarginContainer/PanelContainer/InnerMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer"]
+layout_mode = 2
+text = "PAUSED"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="ResumeButton" type="Button" parent="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer"]
+layout_mode = 2
+text = "Resume"
+
+[node name="RestartButton" type="Button" parent="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer"]
+layout_mode = 2
+text = "Restart Match"
+
+[node name="SettingsButton" type="Button" parent="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer"]
+layout_mode = 2
+text = "Settings"
+
+[node name="MainMenuButton" type="Button" parent="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer"]
+layout_mode = 2
+text = "Main Menu"
+
+[connection signal="pressed" from="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
+[connection signal="pressed" from="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer/RestartButton" to="." method="_on_restart_pressed"]
+[connection signal="pressed" from="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
+[connection signal="pressed" from="Control/MarginContainer/PanelContainer/InnerMargin/VBoxContainer/MainMenuButton" to="." method="_on_main_menu_pressed"]
