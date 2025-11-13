@@ -115,12 +115,15 @@ func _process(delta: float) -> void:
 func _process_weapons(delta: float) -> Array:
 	var all_fire_commands = []
 
-	for ship in _ships:
+	for i in range(_ships.size()):
+		var ship = _ships[i]
+		if ship == null:
+			continue
 		if ship.status in ["disabled", "destroyed"]:
 			continue
 
 		var result = WeaponSystem.update_weapons(ship, _ships, delta)
-		_ships[_ships.find(ship)] = result.ship_data  # Update ship with new weapon cooldowns
+		_ships[i] = result.ship_data  # Update ship with new weapon cooldowns
 		all_fire_commands.append_array(result.fire_commands)
 
 	return all_fire_commands
@@ -165,6 +168,8 @@ func _cleanup_destroyed_ships() -> void:
 	var destroyed_ships = []
 
 	for ship in _ships:
+		if ship == null:
+			continue
 		if DamageResolver.is_ship_destroyed(ship):
 			destroyed_ships.append(ship)
 
@@ -199,6 +204,8 @@ func _remove_projectile(projectile_id: String) -> void:
 func _sync_all_entities() -> void:
 	# Sync ships
 	for ship in _ships:
+		if ship == null:
+			continue
 		if _ship_entities.has(ship.ship_id):
 			var entity = _ship_entities[ship.ship_id]
 			entity.sync_transform(ship)
@@ -206,6 +213,8 @@ func _sync_all_entities() -> void:
 
 	# Sync projectiles
 	for projectile in _projectiles:
+		if projectile == null:
+			continue
 		if _projectile_entities.has(projectile.projectile_id):
 			var entity = _projectile_entities[projectile.projectile_id]
 			entity.sync_transform(projectile)
@@ -275,7 +284,7 @@ func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
 
 	# Create entity
 	var entity = ShipEntity.new()
-	entity.initialize(ship_data.ship_id, team, ship_data.stats.size)
+	entity.initialize(ship_data.ship_id, team, ship_data.stats.size, ship_type)
 	add_child(entity)
 	_ship_entities[ship_data.ship_id] = entity
 
@@ -302,6 +311,8 @@ func _check_win_condition() -> void:
 	var enemy_ships = 0
 
 	for ship in _ships:
+		if ship == null:
+			continue
 		if ship.status == "destroyed":
 			continue
 

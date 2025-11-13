@@ -22,7 +22,9 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 
 ## Update all ships - returns new Array of ship_data
 static func update_all_ships(ships: Array, delta: float) -> Array:
-	return ships.map(func(ship): return update_ship_movement(ship, ships, delta))
+	return ships \
+		.filter(func(ship): return ship != null) \
+		.map(func(ship): return update_ship_movement(ship, ships, delta))
 
 # ============================================================================
 # SHIP STATE PREDICATES
@@ -46,6 +48,7 @@ static func find_nearest_enemy(ship_data: Dictionary, all_ships: Array) -> Dicti
 
 static func get_enemy_ships(ships: Array, own_team: int) -> Array:
 	return ships \
+		.filter(func(s): return s != null) \
 		.filter(func(s): return s.team != own_team) \
 		.filter(func(s): return s.status != "destroyed")
 
