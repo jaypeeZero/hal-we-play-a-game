@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Wizard Battle Arena (WBA) - a 2-player wizard battle arena built with Godot 4 using Test-Driven Development.
+Space Battle - A tactical space combat game built with Godot 4 using functional programming principles and data-driven systems.
 
-See `README.md` for controls and gameplay details. See `manifesto.md` for long-term vision.
+See `README.md` for controls, gameplay details, and architecture overview.
 
 ## Development Setup
 
@@ -14,14 +14,14 @@ See `README.md` for controls and gameplay details. See `manifesto.md` for long-t
 - Godot 4: `brew install godot`
 - GUT testing framework (included in `addons/gut/`)
 
+**Running the game:**
+```bash
+godot scenes/space_battle.tscn
+```
+
 **Running tests:**
 ```bash
 godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gexit
-```
-
-**Running the game:**
-```bash
-godot scenes/battlefield.tscn
 ```
 
 **Adding new scripts:**
@@ -54,31 +54,30 @@ When working on this codebase:
 - Use Godot's signal system for loose coupling between components
 - Warnings when compiling code are just unresolved errors, don't leave them around
 
-## Documentation Standards
-
-When creating documents in `tasks/`:
-- Documents are written for LLM consumption, not humans
-- Do NOT include time estimates, effort assessments, or difficulty ratings
-- Do NOT include subjective goals, priorities, or judgement-based criteria
-- Focus on technical facts: current state, problems, solutions, implementation steps
-- Include code examples, file paths, and concrete technical details
-- The human developer is the sole decision-maker for priorities and effort allocation
-
 ## Architecture
 
 **Signal-based event system:**
-- Direct signal connections for local events (e.g., player.died, creature.damaged)
+- Direct signal connections for local events (e.g., ship.damaged, projectile.hit)
 - Avoid signal bubbling through multiple parent nodes
+
+**Functional + Data-Driven:**
+- Pure functions process state (DamageResolver, WeaponSystem)
+- Dictionaries/JSON define entities (ships, weapons, armor)
+- No global state in game logic
 
 **Event logging and monitoring:**
 - `BattleEventLogger` - Centralized event stream logger that emits standardized events for all battle interactions
 - Event history tracking available for debugging, replay, and analysis
 - Used for testing, statistics collection, and event stream analysis
 
-## Testing Standards  
+**Rendering system:**
+- `IRenderable` base class for all visual entities
+- `VisualBridge` manages rendering of entities
+- Supports multiple renderers (Matrix, Emoji, Null for testing)
 
- - Tests should not be tied to data because data may change
- - Tests should be DRY
- - Tests should test functionality via expectations
+## Testing Standards
 
-Refer to `manifesto.md` for long-term game design vision.
+- Tests should not be tied to data because data may change
+- Tests should be DRY
+- Tests should test functionality via expectations
+- Core systems (ShipData, DamageResolver, WeaponSystem) must have comprehensive test coverage

@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://c4q8xwvq5kgxf"]
-
-[ext_resource type="Script" path="res://scripts/battlefield/terrain_debug.gd" id="1_terrain_debug"]
-
-[node name="TerrainDebug" type="Node2D"]
-script = ExtResource("1_terrain_debug")
