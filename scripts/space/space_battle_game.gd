@@ -9,10 +9,12 @@ extends Node2D
 const MovementSystem = preload("res://scripts/space/systems/movement_system.gd")
 const ProjectileSystem = preload("res://scripts/space/systems/projectile_system.gd")
 const CollisionSystem = preload("res://scripts/space/systems/collision_system.gd")
+const VisualEffectSystem = preload("res://scripts/space/systems/visual_effect_system.gd")
 
 # Preload entity classes
 const ShipEntity = preload("res://scripts/space/entities/ship_entity.gd")
 const ProjectileEntity = preload("res://scripts/space/entities/projectile_entity.gd")
+const VisualEffectEntity = preload("res://scripts/space/entities/visual_effect_entity.gd")
 
 signal game_started()
 signal game_ended(winner: int)
@@ -24,6 +26,7 @@ signal ship_spawned(ship_id: String)
 
 var _ships: Array = []  # Array of ship_data Dictionaries
 var _projectiles: Array = []  # Array of projectile_data Dictionaries
+var _visual_effects: Array = []  # Array of visual_effect_data Dictionaries
 
 # ============================================================================
 # ENTITIES - Minimal Godot nodes for physics
@@ -31,6 +34,7 @@ var _projectiles: Array = []  # Array of projectile_data Dictionaries
 
 var _ship_entities: Dictionary = {}  # ship_id -> ShipEntity
 var _projectile_entities: Dictionary = {}  # projectile_id -> ProjectileEntity
+var _effect_entities: Dictionary = {}  # effect_id -> VisualEffectEntity
 
 # ============================================================================
 # GAME STATE
@@ -98,17 +102,30 @@ func _process(delta: float) -> void:
 	_ships = collision_result.ships
 	_projectiles = collision_result.projectiles
 
+	# Spawn visual effects from collisions
+	if collision_result.has("visual_effects"):
+		for effect_data in collision_result.visual_effects:
+			_spawn_visual_effect(effect_data)
+
 	# Remove destroyed projectiles from hits
 	for hit in collision_result.hits:
 		_remove_projectile(hit.projectile_id)
 
-	# 6. CHECK FOR DESTROYED SHIPS
+	# 6. VISUAL EFFECT SYSTEM - Update and remove expired effects
+	var effect_result = VisualEffectSystem.update_all_effects(_visual_effects, delta)
+	_visual_effects = effect_result.effects
+
+	# Remove expired effects
+	for expired_id in effect_result.expired_ids:
+		_remove_visual_effect(expired_id)
+
+	# 7. CHECK FOR DESTROYED SHIPS
 	_cleanup_destroyed_ships()
 
-	# 7. SYNC ENTITIES - Update Godot nodes from data
+	# 8. SYNC ENTITIES - Update Godot nodes from data
 	_sync_all_entities()
 
-	# 8. CHECK WIN CONDITION
+	# 9. CHECK WIN CONDITION
 	_check_win_condition()
 
 ## Process weapons for all ships - returns Array of fire_commands
@@ -200,6 +217,24 @@ func _remove_projectile(projectile_id: String) -> void:
 		entity.queue_free()
 		_projectile_entities.erase(projectile_id)
 
+## Spawn visual effect
+func _spawn_visual_effect(effect_data: Dictionary) -> void:
+	_visual_effects.append(effect_data)
+
+	# Create entity
+	var entity = VisualEffectEntity.new()
+	entity.initialize(effect_data.effect_id, effect_data.type, effect_data.max_lifetime)
+	entity.global_position = effect_data.position
+	add_child(entity)
+	_effect_entities[effect_data.effect_id] = entity
+
+## Remove visual effect entity
+func _remove_visual_effect(effect_id: String) -> void:
+	if _effect_entities.has(effect_id):
+		var entity = _effect_entities[effect_id]
+		entity.queue_free()
+		_effect_entities.erase(effect_id)
+
 ## Sync all entities from data
 func _sync_all_entities() -> void:
 	# Sync ships
@@ -219,6 +254,15 @@ func _sync_all_entities() -> void:
 			var entity = _projectile_entities[projectile.projectile_id]
 			entity.sync_transform(projectile)
 			entity.emit_state(projectile)
+
+	# Sync visual effects
+	for effect in _visual_effects:
+		if effect == null:
+			continue
+		if _effect_entities.has(effect.effect_id):
+			var entity = _effect_entities[effect.effect_id]
+			entity.global_position = effect.position
+			entity.emit_state(effect)
 
 # ============================================================================
 # SHIP SPAWNING
