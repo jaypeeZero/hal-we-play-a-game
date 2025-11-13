@@ -6,10 +6,10 @@ func _ready() -> void:
 	bridge = VisualBridge.new()
 	add_child(bridge)
 
-	# Initialize with emoji renderer and theme
-	var emoji_renderer = EmojiRenderer.new()
-	var theme = JsonTheme.load_from_file("res://themes/emoji_simple.json")
-	bridge.set_renderer(emoji_renderer, theme)
+	# Initialize with matrix renderer (uses geometric shapes, not theme-based)
+	var matrix_renderer = MatrixRenderer.new()
+	var theme = JsonTheme.load_from_file("res://themes/emoji_simple.json")  # Fallback, not used by MatrixRenderer
+	bridge.set_renderer(matrix_renderer, theme)
 
 	# Log via GameLogger if available, otherwise use print
 	var logger = get_node_or_null("/root/GameLogger")
