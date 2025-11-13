@@ -1,5 +1,5 @@
 class_name ProjectileEntity
-extends Node2D
+extends IRenderable
 
 ## Minimal projectile entity for ECS architecture
 ## Only handles Godot physics/rendering integration
@@ -9,7 +9,6 @@ var entity_id: String = ""
 var team: int = 0
 
 var _area: Area2D
-var _renderable: IRenderable
 
 ## Initialize entity with ID and team for collision layers
 func initialize(id: String, projectile_team: int) -> void:
@@ -17,10 +16,9 @@ func initialize(id: String, projectile_team: int) -> void:
 	team = projectile_team
 	_setup_collision()
 
-	# Create and register renderable with visual bridge
+	# Register with visual bridge for rendering
 	if VisualBridgeAutoload.bridge:
-		_renderable = _create_renderable()
-		VisualBridgeAutoload.bridge.register_entity(_renderable)
+		VisualBridgeAutoload.bridge.register_entity(self)
 
 ## Setup collision area
 func _setup_collision() -> void:
@@ -48,19 +46,8 @@ func sync_transform(projectile_data: Dictionary) -> void:
 
 ## Emit state for renderer (called by game loop)
 func emit_state(projectile_data: Dictionary) -> void:
-	if _renderable:
-		var state = _create_entity_state(projectile_data)
-		# Update renderable position
-		_renderable.node_position = global_position
-		# Emit state changed signal
-		_renderable.state_changed.emit(state)
-
-## Create renderable wrapper for visual bridge
-func _create_renderable() -> IRenderable:
-	var renderable = ProjectileRenderable.new()
-	renderable.entity_id = entity_id
-	renderable.node_position = global_position
-	return renderable
+	var state = _create_entity_state(projectile_data)
+	state_changed.emit(state)
 
 ## Create entity state for renderer
 func _create_entity_state(projectile_data: Dictionary) -> EntityState:
@@ -70,24 +57,14 @@ func _create_entity_state(projectile_data: Dictionary) -> EntityState:
 	state.health_percent = 1.0
 	return state
 
+## IRenderable implementation
+func get_entity_id() -> String:
+	return entity_id
+
+func get_visual_type() -> String:
+	return "space_projectile"
+
 ## Clean up
 func _exit_tree() -> void:
-	if VisualBridgeAutoload.bridge and _renderable:
-		VisualBridgeAutoload.bridge.unregister_entity(_renderable)
-
-# ============================================================================
-# Minimal IRenderable Implementation
-# ============================================================================
-
-class ProjectileRenderable extends IRenderable:
-	var entity_id: String
-	var node_position: Vector2
-
-	func get_entity_id() -> String:
-		return entity_id
-
-	func get_visual_type() -> String:
-		return "space_projectile"
-
-	func _process(_delta: float) -> void:
-		global_position = node_position
+	if VisualBridgeAutoload.bridge:
+		VisualBridgeAutoload.bridge.unregister_entity(self)

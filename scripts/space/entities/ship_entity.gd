@@ -1,5 +1,5 @@
 class_name ShipEntity
-extends Node2D
+extends IRenderable
 
 ## Minimal ship entity for ECS architecture
 ## Only handles Godot physics/rendering integration
@@ -9,7 +9,6 @@ var entity_id: String = ""
 var team: int = 0
 
 var _area: Area2D
-var _renderable: IRenderable
 
 ## Initialize entity with ID and team for collision layers
 func initialize(id: String, ship_team: int, size: float) -> void:
@@ -17,10 +16,9 @@ func initialize(id: String, ship_team: int, size: float) -> void:
 	team = ship_team
 	_setup_collision(size)
 
-	# Create and register renderable with visual bridge
+	# Register with visual bridge for rendering
 	if VisualBridgeAutoload.bridge:
-		_renderable = _create_renderable()
-		VisualBridgeAutoload.bridge.register_entity(_renderable)
+		VisualBridgeAutoload.bridge.register_entity(self)
 
 ## Setup collision area
 func _setup_collision(size: float) -> void:
@@ -49,21 +47,8 @@ func sync_transform(ship_data: Dictionary) -> void:
 
 ## Emit state for renderer (called by game loop)
 func emit_state(ship_data: Dictionary) -> void:
-	if _renderable:
-		var state = _create_entity_state(ship_data)
-		# Update renderable position/rotation
-		_renderable.node_position = global_position
-		_renderable.node_rotation = rotation
-		# Emit state changed signal
-		_renderable.state_changed.emit(state)
-
-## Create renderable wrapper for visual bridge
-func _create_renderable() -> IRenderable:
-	var renderable = ShipRenderable.new()
-	renderable.entity_id = entity_id
-	renderable.node_position = global_position
-	renderable.node_rotation = rotation
-	return renderable
+	var state = _create_entity_state(ship_data)
+	state_changed.emit(state)
 
 ## Create entity state for renderer
 func _create_entity_state(ship_data: Dictionary) -> EntityState:
@@ -101,27 +86,14 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 
 	return state
 
+## IRenderable implementation
+func get_entity_id() -> String:
+	return entity_id
+
+func get_visual_type() -> String:
+	return "ship"
+
 ## Clean up
 func _exit_tree() -> void:
-	if VisualBridgeAutoload.bridge and _renderable:
-		VisualBridgeAutoload.bridge.unregister_entity(_renderable)
-
-# ============================================================================
-# Minimal IRenderable Implementation
-# ============================================================================
-
-class ShipRenderable extends IRenderable:
-	var entity_id: String
-	var node_position: Vector2
-	var node_rotation: float
-
-	func get_entity_id() -> String:
-		return entity_id
-
-	func get_visual_type() -> String:
-		return "ship"
-
-	func _process(_delta: float) -> void:
-		# Position and rotation are synced from game loop
-		global_position = node_position
-		rotation = node_rotation
+	if VisualBridgeAutoload.bridge:
+		VisualBridgeAutoload.bridge.unregister_entity(self)
