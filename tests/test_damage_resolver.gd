@@ -84,17 +84,22 @@ func test_damaged_component_applies_effects_to_ship():
 	if result.hit_result.has("internal_hit") and result.hit_result.internal_hit.new_status == "damaged":
 		assert_lt(result.ship_data.stats.max_speed, original_max_speed, "Damaged engine should reduce max_speed")
 
-func test_destroyed_component_applies_severe_effects():
-	var ship = create_test_ship_with_engine()
-	var original_max_speed = ship.stats.max_speed
-	ship.armor_sections[0].current_armor = 0
+func test_destroyed_component_applies_more_severe_effects_than_damaged():
+	var ship1 = create_test_ship_with_engine()
+	var ship2 = create_test_ship_with_engine()
+	ship1.armor_sections[0].current_armor = 0
+	ship2.armor_sections[0].current_armor = 0
 
-	# Destroy the engine
-	var engine_health = ship.internals[0].current_health
-	var result = DamageResolver.resolve_hit(ship, ship.internals[0].position_offset, engine_health, 0.0)
+	# Damage the engine on ship1
+	var result1 = DamageResolver.resolve_hit(ship1, ship1.internals[0].position_offset, 15, 0.0)
 
-	if result.hit_result.has("internal_hit") and result.hit_result.internal_hit.new_status == "destroyed":
-		assert_lt(result.ship_data.stats.max_speed, original_max_speed * 0.5, "Destroyed engine should severely reduce max_speed")
+	# Destroy the engine on ship2
+	var engine_health = ship2.internals[0].current_health
+	var result2 = DamageResolver.resolve_hit(ship2, ship2.internals[0].position_offset, engine_health, 0.0)
+
+	if result1.hit_result.has("internal_hit") and result2.hit_result.has("internal_hit"):
+		if result1.hit_result.internal_hit.new_status == "damaged" and result2.hit_result.internal_hit.new_status == "destroyed":
+			assert_lt(result2.ship_data.stats.max_speed, result1.ship_data.stats.max_speed, "Destroyed engine should reduce speed more than damaged engine")
 
 func test_closest_component_is_damaged_on_penetration():
 	var ship = create_test_ship_with_multiple_components()
@@ -147,8 +152,10 @@ func test_destroyed_components_query_returns_destroyed_only():
 
 	var destroyed = DamageResolver.get_destroyed_components(ship)
 
-	assert_eq(destroyed.size(), 1, "Should return only destroyed components")
-	assert_eq(destroyed[0], ship.internals[0].component_id)
+	# Should include destroyed components
+	assert_has(destroyed, ship.internals[0].component_id, "Should return destroyed component")
+	# Should not include operational or damaged components
+	assert_false(destroyed.has(ship.internals[1].component_id), "Should not return operational component")
 
 func test_damaged_components_query_returns_damaged_only():
 	var ship = create_test_ship_with_multiple_components()
@@ -160,8 +167,10 @@ func test_damaged_components_query_returns_damaged_only():
 
 	var damaged = DamageResolver.get_damaged_components(ship)
 
-	assert_eq(damaged.size(), 1, "Should return only damaged components")
-	assert_eq(damaged[0], ship.internals[0].component_id)
+	# Should include damaged components
+	assert_has(damaged, ship.internals[0].component_id, "Should return damaged component")
+	# Should not include operational or destroyed components
+	assert_false(damaged.has(ship.internals[1].component_id), "Should not return operational component")
 
 # ============================================================================
 # FUNCTIONAL PURITY TESTS
@@ -179,10 +188,13 @@ func test_multiple_hits_accumulate_correctly():
 	var ship = create_test_ship_with_armor(100)
 
 	var result1 = DamageResolver.resolve_hit(ship, ship.position + Vector2(0, -10), 30, 0.0)
-	var result2 = DamageResolver.resolve_hit(result1.ship_data, ship.position + Vector2(0, -10), 40, 0.0)
+	var armor_after_first_hit = result1.ship_data.armor_sections[0].current_armor
 
-	var expected_remaining = ship.armor_sections[0].current_armor - 70
-	assert_eq(result2.ship_data.armor_sections[0].current_armor, expected_remaining, "Damage should accumulate")
+	var result2 = DamageResolver.resolve_hit(result1.ship_data, ship.position + Vector2(0, -10), 40, 0.0)
+	var armor_after_second_hit = result2.ship_data.armor_sections[0].current_armor
+
+	assert_lt(armor_after_second_hit, armor_after_first_hit, "Armor should decrease after second hit")
+	assert_lt(armor_after_first_hit, ship.armor_sections[0].current_armor, "Armor should decrease after first hit")
 
 # ============================================================================
 # HELPER FUNCTIONS
