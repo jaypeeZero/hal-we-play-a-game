@@ -9,10 +9,11 @@ extends RefCounted
 # MAIN API - Detect collisions and apply damage
 # ============================================================================
 
-## Check all collisions - returns {ships: Array, projectiles: Array, hits: Array}
+## Check all collisions - returns {ships: Array, projectiles: Array, hits: Array, visual_effects: Array}
 static func process_collisions(ships: Array, projectiles: Array) -> Dictionary:
 	var hits = []
 	var destroyed_projectile_ids = []
+	var visual_effects = []
 
 	# Filter out null values
 	var valid_ships = ships.filter(func(s): return s != null)
@@ -25,8 +26,10 @@ static func process_collisions(ships: Array, projectiles: Array) -> Dictionary:
 			hits.append(hit)
 			destroyed_projectile_ids.append(projectile.projectile_id)
 
-	# Apply damage to ships
-	var updated_ships = apply_hits_to_ships(valid_ships, hits)
+	# Apply damage to ships and generate visual effects
+	var result = apply_hits_to_ships_with_effects(valid_ships, hits)
+	var updated_ships = result.ships
+	visual_effects = result.visual_effects
 
 	# Remove destroyed projectiles
 	var remaining_projectiles = valid_projectiles.filter(
@@ -36,7 +39,8 @@ static func process_collisions(ships: Array, projectiles: Array) -> Dictionary:
 	return {
 		ships = updated_ships,
 		projectiles = remaining_projectiles,
-		hits = hits
+		hits = hits,
+		visual_effects = visual_effects
 	}
 
 # ============================================================================
@@ -83,8 +87,8 @@ static func create_hit(projectile: Dictionary, ship: Dictionary) -> Dictionary:
 # DAMAGE APPLICATION
 # ============================================================================
 
-## Apply all hits to ships - returns new Array of ships
-static func apply_hits_to_ships(ships: Array, hits: Array) -> Array:
+## Apply all hits to ships with visual effects - returns {ships: Array, visual_effects: Array}
+static func apply_hits_to_ships_with_effects(ships: Array, hits: Array) -> Dictionary:
 	# Group hits by ship_id
 	var hits_by_ship = {}
 	for hit in hits:
@@ -92,15 +96,35 @@ static func apply_hits_to_ships(ships: Array, hits: Array) -> Array:
 			hits_by_ship[hit.ship_id] = []
 		hits_by_ship[hit.ship_id].append(hit)
 
-	# Apply hits to each ship
-	return ships.map(func(ship): return apply_hits_to_ship(ship, hits_by_ship.get(ship.ship_id, [])))
+	var updated_ships = []
+	var all_visual_effects = []
 
-static func apply_hits_to_ship(ship: Dictionary, hits: Array) -> Dictionary:
+	# Apply hits to each ship
+	for ship in ships:
+		var ship_hits = hits_by_ship.get(ship.ship_id, [])
+		var result = apply_hits_to_ship_with_effects(ship, ship_hits)
+		updated_ships.append(result.ship)
+		all_visual_effects.append_array(result.visual_effects)
+
+	return {
+		ships = updated_ships,
+		visual_effects = all_visual_effects
+	}
+
+## Apply all hits to ships - returns new Array of ships (deprecated, kept for compatibility)
+static func apply_hits_to_ships(ships: Array, hits: Array) -> Array:
+	var result = apply_hits_to_ships_with_effects(ships, hits)
+	return result.ships
+
+## Apply hits to ship with visual effects - returns {ship: Dictionary, visual_effects: Array}
+static func apply_hits_to_ship_with_effects(ship: Dictionary, hits: Array) -> Dictionary:
 	if hits.is_empty():
-		return ship
+		return {ship = ship, visual_effects = []}
+
+	var updated_ship = ship
+	var visual_effects = []
 
 	# Apply each hit sequentially (immutable)
-	var updated_ship = ship
 	for hit in hits:
 		var damage_result = DamageResolver.resolve_hit(
 			updated_ship,
@@ -110,6 +134,10 @@ static func apply_hits_to_ship(ship: Dictionary, hits: Array) -> Dictionary:
 		)
 		updated_ship = damage_result.ship_data
 
+		# Create visual effect based on damage result
+		var effect = VisualEffectSystem.create_damage_effect(damage_result.hit_result, hit.hit_position)
+		visual_effects.append(effect)
+
 		# Log damage event
 		if BattleEventLoggerAutoload.service:
 			BattleEventLoggerAutoload.log_damage_dealt(
@@ -118,7 +146,12 @@ static func apply_hits_to_ship(ship: Dictionary, hits: Array) -> Dictionary:
 				hit.damage         # amount
 			)
 
-	return updated_ship
+	return {ship = updated_ship, visual_effects = visual_effects}
+
+## Apply hits to ship - returns new ship (deprecated, kept for compatibility)
+static func apply_hits_to_ship(ship: Dictionary, hits: Array) -> Dictionary:
+	var result = apply_hits_to_ship_with_effects(ship, hits)
+	return result.ship
 
 # ============================================================================
 # UTILITY

@@ -129,6 +129,78 @@
       "bounds": [48, 48],
       "size": 1.0,
       "collision_radius_override": 20.0
+    },
+
+    "ship_fighter": {
+      "renderer_type": "label",
+      "emoji": "🚀",
+      "font_size": 24,
+      "bounds": [32, 32],
+      "size": 0.75
+    },
+
+    "ship_corvette": {
+      "renderer_type": "label",
+      "emoji": "🛸",
+      "font_size": 32,
+      "bounds": [48, 48],
+      "size": 1.0
+    },
+
+    "ship_capital": {
+      "renderer_type": "label",
+      "emoji": "🛰️",
+      "font_size": 48,
+      "bounds": [64, 64],
+      "size": 1.5
+    },
+
+    "ship": {
+      "renderer_type": "label",
+      "emoji": "◆",
+      "font_size": 24,
+      "bounds": [32, 32],
+      "size": 0.75
+    },
+
+    "space_projectile": {
+      "renderer_type": "label",
+      "emoji": "•",
+      "font_size": 16,
+      "bounds": [16, 16],
+      "size": 0.4
+    },
+
+    "effect_armor_hit": {
+      "renderer_type": "label",
+      "emoji": "💥",
+      "font_size": 20,
+      "bounds": [24, 24],
+      "size": 0.6
+    },
+
+    "effect_armor_penetration": {
+      "renderer_type": "label",
+      "emoji": "⚡",
+      "font_size": 24,
+      "bounds": [32, 32],
+      "size": 0.75
+    },
+
+    "effect_internal_damage": {
+      "renderer_type": "label",
+      "emoji": "🔥",
+      "font_size": 20,
+      "bounds": [24, 24],
+      "size": 0.6
+    },
+
+    "effect_projectile_impact": {
+      "renderer_type": "label",
+      "emoji": "✨",
+      "font_size": 16,
+      "bounds": [20, 20],
+      "size": 0.5
     }
   },
 
