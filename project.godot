@@ -17,7 +17,6 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-ClassRegistry="*res://scripts/core/autoload/class_registry_autoload.gd"
 GameLogger="*res://scripts/core/autoload/game_logger_autoload.gd"
 SignalMonitor="*res://scripts/core/autoload/signal_monitor_autoload.gd"
 VisualBridgeAutoload="*res://scripts/core/autoload/visual_bridge_autoload.gd"

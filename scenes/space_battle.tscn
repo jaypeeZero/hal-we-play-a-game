@@ -1,7 +1,6 @@
-[gd_scene load_steps=3 format=3 uid="uid://b2xq8v9k3space"]
+[gd_scene load_steps=2 format=3 uid="uid://b2xq8v9k3space"]
 
 [ext_resource type="Script" path="res://scripts/space/space_battle_game.gd" id="1_space_game"]
-[ext_resource type="Script" path="res://scripts/space/debug/ship_debug_visualizer.gd" id="2_debug"]
 
 [node name="SpaceBattle" type="Control"]
 layout_mode = 3
@@ -23,9 +22,6 @@ color = Color(0.0509804, 0.0509804, 0.0509804, 1)
 [node name="SpaceBattleGame" type="Node2D" parent="."]
 script = ExtResource("1_space_game")
 
-[node name="ShipDebugVisualizer" type="Node2D" parent="SpaceBattleGame"]
-script = ExtResource("2_debug")
-
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="HelpText" type="Label" parent="UI"]
@@ -43,9 +39,7 @@ Controls:
 5 - Spawn 1 Corvette (Enemy)
 6 - Spawn 1 Capital (Enemy)
 
-After pressing a key, click to place ships.
-
-Press F1 to toggle debug visualization."
+After pressing a key, click to place ships."
 
 [node name="StatusText" type="Label" parent="UI"]
 offset_left = 10.0
