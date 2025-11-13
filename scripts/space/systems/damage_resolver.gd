@@ -68,13 +68,13 @@ static func create_armor_penetrated_result(section: Dictionary, damage: int) -> 
 	}
 
 static func set_section_armor(section: Dictionary, new_armor: int) -> Dictionary:
-	return merge_dict(section, {current_armor = new_armor})
+	return DictUtils.merge_dict(section, {current_armor = new_armor})
 
 static func replace_armor_section(ship_data: Dictionary, new_section: Dictionary) -> Dictionary:
 	var new_sections = ship_data.armor_sections.map(
 		func(s): return new_section if s.section_id == new_section.section_id else s
 	)
-	return merge_dict(ship_data, {armor_sections = new_sections})
+	return DictUtils.merge_dict(ship_data, {armor_sections = new_sections})
 
 # ============================================================================
 # INTERNAL DAMAGE - Pure Functions
@@ -106,7 +106,7 @@ static func find_closest_internal(ship_data: Dictionary, hit_pos: Vector2) -> Di
 static func add_distance_to_component(component: Dictionary, ship_data: Dictionary, hit_pos: Vector2) -> Dictionary:
 	var world_pos = calculate_component_world_position(component, ship_data)
 	var distance = calculate_distance(hit_pos, world_pos)
-	return merge_dict(component, {_distance = distance})
+	return DictUtils.merge_dict(component, {_distance = distance})
 
 static func calculate_component_world_position(component: Dictionary, ship_data: Dictionary) -> Vector2:
 	return ship_data.position + component.position_offset.rotated(ship_data.rotation)
@@ -144,7 +144,7 @@ static func calculate_component_status(current_health: int, max_health: int, old
 		return old_status
 
 static func set_component_health_and_status(component: Dictionary, health: int, status: String) -> Dictionary:
-	return merge_dict(component, {
+	return DictUtils.merge_dict(component, {
 		current_health = health,
 		status = status
 	})
@@ -153,7 +153,7 @@ static func replace_internal_component(ship_data: Dictionary, new_component: Dic
 	var new_internals = ship_data.internals.map(
 		func(c): return new_component if c.component_id == new_component.component_id else c
 	)
-	return merge_dict(ship_data, {internals = new_internals})
+	return DictUtils.merge_dict(ship_data, {internals = new_internals})
 
 # ============================================================================
 # COMPONENT EFFECTS - Apply status effects to ship
@@ -218,46 +218,46 @@ static func apply_effects_to_ship(ship_data: Dictionary, effects: Dictionary) ->
 static func multiply_ship_stat(ship_data: Dictionary, stat_name: String, multiplier: float) -> Dictionary:
 	var new_stats = ship_data.stats.duplicate(true)
 	new_stats[stat_name] = ship_data.stats[stat_name] * multiplier
-	return merge_dict(ship_data, {stats = new_stats})
+	return DictUtils.merge_dict(ship_data, {stats = new_stats})
 
 static func clamp_velocity_to_max_speed(ship_data: Dictionary) -> Dictionary:
 	if ship_data.velocity.length() <= ship_data.stats.max_speed:
 		return ship_data
 
 	var clamped_velocity = ship_data.velocity.normalized() * ship_data.stats.max_speed
-	return merge_dict(ship_data, {velocity = clamped_velocity})
+	return DictUtils.merge_dict(ship_data, {velocity = clamped_velocity})
 
 static func multiply_all_weapon_damage(ship_data: Dictionary, multiplier: float) -> Dictionary:
 	var new_weapons = ship_data.weapons.map(
 		func(w): return multiply_weapon_damage(w, multiplier)
 	)
-	return merge_dict(ship_data, {weapons = new_weapons})
+	return DictUtils.merge_dict(ship_data, {weapons = new_weapons})
 
 static func multiply_weapon_damage(weapon: Dictionary, multiplier: float) -> Dictionary:
 	var new_stats = weapon.stats.duplicate(true)
 	new_stats.damage = int(weapon.stats.damage * multiplier)
-	return merge_dict(weapon, {stats = new_stats})
+	return DictUtils.merge_dict(weapon, {stats = new_stats})
 
 static func multiply_all_weapon_accuracy(ship_data: Dictionary, multiplier: float) -> Dictionary:
 	var new_weapons = ship_data.weapons.map(
 		func(w): return multiply_weapon_accuracy(w, multiplier)
 	)
-	return merge_dict(ship_data, {weapons = new_weapons})
+	return DictUtils.merge_dict(ship_data, {weapons = new_weapons})
 
 static func multiply_weapon_accuracy(weapon: Dictionary, multiplier: float) -> Dictionary:
 	var new_stats = weapon.stats.duplicate(true)
 	new_stats.accuracy = weapon.stats.accuracy * multiplier
-	return merge_dict(weapon, {stats = new_stats})
+	return DictUtils.merge_dict(weapon, {stats = new_stats})
 
 static func set_ship_disabled(ship_data: Dictionary) -> Dictionary:
-	return merge_dict(ship_data, {
+	return DictUtils.merge_dict(ship_data, {
 		status = "disabled",
 		velocity = Vector2.ZERO,
 		angular_velocity = 0.0
 	})
 
 static func set_ship_exploding(ship_data: Dictionary) -> Dictionary:
-	return merge_dict(ship_data, {status = "exploding"})
+	return DictUtils.merge_dict(ship_data, {status = "exploding"})
 
 # ============================================================================
 # HIT ANGLE CALCULATION
@@ -392,12 +392,3 @@ static func get_damaged_components(ship_data: Dictionary) -> Array:
 		.filter(func(i): return i.status == "damaged") \
 		.map(func(i): return i.component_id)
 
-# ============================================================================
-# UTILITY
-# ============================================================================
-
-static func merge_dict(base: Dictionary, override: Dictionary) -> Dictionary:
-	var result = base.duplicate(true)
-	for key in override:
-		result[key] = override[key]
-	return result

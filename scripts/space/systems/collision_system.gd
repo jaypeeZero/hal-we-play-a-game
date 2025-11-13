@@ -176,11 +176,6 @@ static func apply_hits_to_ships_with_effects(ships: Array, hits: Array) -> Dicti
 		visual_effects = all_visual_effects
 	}
 
-## Apply all hits to ships - returns new Array of ships (deprecated, kept for compatibility)
-static func apply_hits_to_ships(ships: Array, hits: Array) -> Array:
-	var result = apply_hits_to_ships_with_effects(ships, hits)
-	return result.ships
-
 ## Apply hits to ship with visual effects - returns {ship: Dictionary, visual_effects: Array}
 static func apply_hits_to_ship_with_effects(ship: Dictionary, hits: Array) -> Dictionary:
 	if hits.is_empty():
@@ -212,11 +207,6 @@ static func apply_hits_to_ship_with_effects(ship: Dictionary, hits: Array) -> Di
 			)
 
 	return {ship = updated_ship, visual_effects = visual_effects}
-
-## Apply hits to ship - returns new ship (deprecated, kept for compatibility)
-static func apply_hits_to_ship(ship: Dictionary, hits: Array) -> Dictionary:
-	var result = apply_hits_to_ship_with_effects(ship, hits)
-	return result.ship
 
 # ============================================================================
 # OBSTACLE DAMAGE APPLICATION
@@ -254,13 +244,3 @@ static func apply_projectile_hits_to_obstacles(obstacles: Array, projectiles: Ar
 		updated_obstacles.append(updated_obstacle)
 
 	return {obstacles = updated_obstacles}
-
-# ============================================================================
-# UTILITY
-# ============================================================================
-
-static func merge_dict(base: Dictionary, override: Dictionary) -> Dictionary:
-	var result = base.duplicate(true)
-	for key in override:
-		result[key] = override[key]
-	return result
