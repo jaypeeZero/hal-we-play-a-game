@@ -14,18 +14,22 @@ static func process_collisions(ships: Array, projectiles: Array) -> Dictionary:
 	var hits = []
 	var destroyed_projectile_ids = []
 
+	# Filter out null values
+	var valid_ships = ships.filter(func(s): return s != null)
+	var valid_projectiles = projectiles.filter(func(p): return p != null)
+
 	# Check each projectile against all ships
-	for projectile in projectiles:
-		var hit = find_hit_for_projectile(projectile, ships)
+	for projectile in valid_projectiles:
+		var hit = find_hit_for_projectile(projectile, valid_ships)
 		if not hit.is_empty():
 			hits.append(hit)
 			destroyed_projectile_ids.append(projectile.projectile_id)
 
 	# Apply damage to ships
-	var updated_ships = apply_hits_to_ships(ships, hits)
+	var updated_ships = apply_hits_to_ships(valid_ships, hits)
 
 	# Remove destroyed projectiles
-	var remaining_projectiles = projectiles.filter(
+	var remaining_projectiles = valid_projectiles.filter(
 		func(p): return not destroyed_projectile_ids.has(p.projectile_id)
 	)
 
@@ -42,6 +46,8 @@ static func process_collisions(ships: Array, projectiles: Array) -> Dictionary:
 ## Find if projectile hits any ship
 static func find_hit_for_projectile(projectile: Dictionary, ships: Array) -> Dictionary:
 	for ship in ships:
+		if ship == null:
+			continue
 		if can_projectile_hit_ship(projectile, ship):
 			if is_projectile_colliding_with_ship(projectile, ship):
 				return create_hit(projectile, ship)

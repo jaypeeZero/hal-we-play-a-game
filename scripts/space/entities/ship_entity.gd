@@ -7,13 +7,15 @@ extends IRenderable
 
 var entity_id: String = ""
 var team: int = 0
+var ship_type: String = ""
 
 var _area: Area2D
 
 ## Initialize entity with ID and team for collision layers
-func initialize(id: String, ship_team: int, size: float) -> void:
+func initialize(id: String, ship_team: int, size: float, ship_class: String = "") -> void:
 	entity_id = id
 	team = ship_team
+	ship_type = ship_class
 	_setup_collision(size)
 
 	# Register with visual bridge for rendering
@@ -91,7 +93,9 @@ func get_entity_id() -> String:
 	return entity_id
 
 func get_visual_type() -> String:
-	return "ship"
+	if ship_type.is_empty():
+		return "ship"
+	return "ship_" + ship_type
 
 ## Clean up
 func _exit_tree() -> void:
