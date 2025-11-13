@@ -105,11 +105,11 @@ static func apply_hits_to_ship(ship: Dictionary, hits: Array) -> Dictionary:
 		updated_ship = damage_result.ship_data
 
 		# Log damage event
-		if BattleEventLoggerAutoload.logger:
-			BattleEventLoggerAutoload.logger.log_damage_dealt(
-				hit.source_id,
-				ship.ship_id,
-				hit.damage
+		if BattleEventLoggerAutoload.service:
+			BattleEventLoggerAutoload.log_damage_dealt(
+				ship.ship_id,      # victim_id
+				hit.source_id,     # attacker_id
+				hit.damage         # amount
 			)
 
 	return updated_ship

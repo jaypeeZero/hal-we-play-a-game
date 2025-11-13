@@ -47,8 +47,8 @@ func _ready() -> void:
 	_setup_input_actions()
 	game_started.emit()
 
-	if BattleEventLoggerAutoload.logger:
-		BattleEventLoggerAutoload.logger.log_custom("game_started", {"mode": "space_combat_ecs"})
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("game_started", {"mode": "space_combat_ecs"})
 
 ## Setup input actions
 func _setup_input_actions() -> void:
@@ -146,8 +146,8 @@ func _spawn_projectiles(fire_commands: Array) -> void:
 		_projectile_entities[projectile_data.projectile_id] = entity
 
 		# Log event
-		if BattleEventLoggerAutoload.logger:
-			BattleEventLoggerAutoload.logger.log_custom("weapon_fired", {
+		if BattleEventLoggerAutoload.service:
+			BattleEventLoggerAutoload.service.log_event("weapon_fired", {
 				"ship_id": fire_command.ship_id,
 				"weapon_id": fire_command.weapon_id,
 				"target_id": fire_command.target_id
@@ -185,8 +185,8 @@ func _remove_ship(ship_id: String) -> void:
 		_ship_entities.erase(ship_id)
 
 	# Log event
-	if BattleEventLoggerAutoload.logger:
-		BattleEventLoggerAutoload.logger.log_custom("ship_destroyed", {"ship_id": ship_id})
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("ship_destroyed", {"ship_id": ship_id})
 
 ## Remove projectile entity
 func _remove_projectile(projectile_id: String) -> void:
@@ -283,8 +283,8 @@ func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
 	ship_spawned.emit(ship_data.ship_id)
 
 	# Log event
-	if BattleEventLoggerAutoload.logger:
-		BattleEventLoggerAutoload.logger.log_custom("ship_spawned", {
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("ship_spawned", {
 			"ship_id": ship_data.ship_id,
 			"type": ship_type,
 			"team": team,
@@ -318,8 +318,8 @@ func _check_win_condition() -> void:
 func _end_game(winner: int) -> void:
 	game_ended.emit(winner)
 
-	if BattleEventLoggerAutoload.logger:
-		BattleEventLoggerAutoload.logger.log_custom("game_ended", {"winner": winner})
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("game_ended", {"winner": winner})
 
 	print("Game Over! Team %d wins!" % winner)
 

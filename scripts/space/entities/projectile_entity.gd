@@ -9,6 +9,7 @@ var entity_id: String = ""
 var team: int = 0
 
 var _area: Area2D
+var _renderable: IRenderable
 
 ## Initialize entity with ID and team for collision layers
 func initialize(id: String, projectile_team: int) -> void:
@@ -16,10 +17,10 @@ func initialize(id: String, projectile_team: int) -> void:
 	team = projectile_team
 	_setup_collision()
 
-	# Register with visual bridge for rendering
+	# Create and register renderable with visual bridge
 	if VisualBridgeAutoload.bridge:
-		var renderable = _create_renderable()
-		VisualBridgeAutoload.bridge.register_entity(renderable)
+		_renderable = _create_renderable()
+		VisualBridgeAutoload.bridge.register_entity(_renderable)
 
 ## Setup collision area
 func _setup_collision() -> void:
@@ -47,10 +48,12 @@ func sync_transform(projectile_data: Dictionary) -> void:
 
 ## Emit state for renderer (called by game loop)
 func emit_state(projectile_data: Dictionary) -> void:
-	if VisualBridgeAutoload.bridge:
+	if _renderable:
 		var state = _create_entity_state(projectile_data)
-		var renderable = _create_renderable()
-		renderable.state_changed.emit(state)
+		# Update renderable position
+		_renderable.node_position = global_position
+		# Emit state changed signal
+		_renderable.state_changed.emit(state)
 
 ## Create renderable wrapper for visual bridge
 func _create_renderable() -> IRenderable:
@@ -69,8 +72,8 @@ func _create_entity_state(projectile_data: Dictionary) -> EntityState:
 
 ## Clean up
 func _exit_tree() -> void:
-	if VisualBridgeAutoload.bridge:
-		VisualBridgeAutoload.bridge.unregister_entity(entity_id)
+	if VisualBridgeAutoload.bridge and _renderable:
+		VisualBridgeAutoload.bridge.unregister_entity(_renderable)
 
 # ============================================================================
 # Minimal IRenderable Implementation
