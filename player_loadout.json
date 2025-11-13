@@ -1,0 +1,14 @@
+{
+	"loadout_name": "Player Default",
+	"medallions": {
+		"lightning_bolt": 0,
+		"fireball": 4,
+		"olophant": 3,
+		"chasm": 1,
+		"rat_swarm": 6,
+		"bear": 0,
+		"wolf_pack": 6,
+		"charging_knight": 2,
+		"wall_of_trees": 5
+	}
+}
