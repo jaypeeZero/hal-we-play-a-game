@@ -6,6 +6,17 @@ extends RefCounted
 ## Knowledge base can be extended with real battle data later
 
 # ============================================================================
+# PERFORMANCE CACHE
+# ============================================================================
+
+# PERFORMANCE TOGGLE - Set to false to disable knowledge queries entirely
+static var enable_knowledge_queries: bool = false  # DISABLED by default
+
+# Query cache to avoid re-computing same queries
+static var _query_cache: Dictionary = {}
+const MAX_CACHE_SIZE = 50  # Keep cache small
+
+# ============================================================================
 # KNOWLEDGE BASE - Placeholder tactical patterns
 # ============================================================================
 
@@ -201,8 +212,17 @@ static var knowledge_base = {
 ## Query knowledge base for relevant patterns
 ## Returns array of matches sorted by relevance
 static func query_knowledge(situation: String, role: int, top_k: int = 3) -> Array:
+	# PERFORMANCE: Skip if disabled
+	if not enable_knowledge_queries:
+		return []
+
 	if situation.is_empty():
 		return []
+
+	# Check cache first
+	var cache_key = str(situation) + "_" + str(role) + "_" + str(top_k)
+	if _query_cache.has(cache_key):
+		return _query_cache[cache_key]
 
 	var scored_patterns = []
 
@@ -227,7 +247,14 @@ static func query_knowledge(situation: String, role: int, top_k: int = 3) -> Arr
 	scored_patterns.sort_custom(func(a, b): return a.score > b.score)
 
 	# Return top K
-	return scored_patterns.slice(0, min(top_k, scored_patterns.size()))
+	var result = scored_patterns.slice(0, min(top_k, scored_patterns.size()))
+
+	# Cache result (limit cache size)
+	if _query_cache.size() >= MAX_CACHE_SIZE:
+		_query_cache.clear()  # Simple cache eviction
+	_query_cache[cache_key] = result
+
+	return result
 
 ## Calculate relevance score between query and pattern
 ## Simple BM25-style scoring: term matching with tag boosting

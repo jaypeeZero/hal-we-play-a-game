@@ -34,6 +34,12 @@ static func update_crew_member(crew_data: Dictionary, delta: float, game_time: f
 	if not can_make_decisions(updated):
 		return {"crew_data": updated}
 
+	# PERFORMANCE: Check decision cooldown (don't decide every frame!)
+	var last_decision_time = updated.get("last_decision_time", 0.0)
+	var decision_interval = calculate_decision_delay(updated)
+	if game_time - last_decision_time < decision_interval:
+		return {"crew_data": updated}  # Too soon to make another decision
+
 	# Make role-based decision
 	match updated.role:
 		CrewData.Role.PILOT:
@@ -160,6 +166,7 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 	}
 
 	updated.orders.current = decision
+	updated.last_decision_time = game_time  # Mark decision time for cooldown
 	return {"crew_data": updated, "decision": decision}
 
 ## Make pursuit decision
