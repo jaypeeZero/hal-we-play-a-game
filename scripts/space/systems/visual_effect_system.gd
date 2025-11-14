@@ -45,7 +45,7 @@ static func update_effect(effect_data: Dictionary, delta: float) -> Dictionary:
 		return {effect = effect_data, expired = true}
 
 	return {
-		effect = merge_dict(effect_data, {lifetime = new_lifetime}),
+		effect = DictUtils.merge_dict(effect_data, {lifetime = new_lifetime}),
 		expired = false
 	}
 
@@ -58,12 +58,3 @@ static func update_all_effects(effects: Array, delta: float) -> Dictionary:
 		expired_ids = results.filter(func(r): return r.expired).map(func(r): return r.effect.effect_id)
 	}
 
-# ============================================================================
-# UTILITY
-# ============================================================================
-
-static func merge_dict(base: Dictionary, override: Dictionary) -> Dictionary:
-	var result = base.duplicate(true)
-	for key in override:
-		result[key] = override[key]
-	return result

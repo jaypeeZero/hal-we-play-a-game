@@ -99,7 +99,7 @@ static func calculate_cooldown_time(weapon: Dictionary) -> float:
 	return 1.0 / weapon.stats.rate_of_fire
 
 static func set_weapon_cooldown(weapon: Dictionary, cooldown: float) -> Dictionary:
-	return merge_dict(weapon, {cooldown_remaining = cooldown})
+	return DictUtils.merge_dict(weapon, {cooldown_remaining = cooldown})
 
 static func update_all_weapon_cooldowns(weapons: Array, delta: float) -> Array:
 	return weapons.map(func(w): return update_weapon_cooldown(w, delta))
@@ -141,7 +141,7 @@ static func find_best_target_for_weapon(ship_data: Dictionary, weapon: Dictionar
 		.reduce(select_higher_priority, {})
 
 static func add_priority(target: Dictionary, ship_pos: Vector2) -> Dictionary:
-	return merge_dict(target, {_priority = calculate_priority(target, ship_pos)})
+	return DictUtils.merge_dict(target, {_priority = calculate_priority(target, ship_pos)})
 
 static func calculate_priority(target: Dictionary, ship_pos: Vector2) -> float:
 	return calculate_distance_priority(ship_pos, target.position) + \
@@ -302,16 +302,6 @@ static func get_component_accuracy_modifier(component: Dictionary) -> float:
 		"destroyed": return 0.3
 		"damaged": return component.effect_on_ship.on_damaged.get("accuracy", 1.0)
 		_: return 1.0
-
-# ============================================================================
-# UTILITY - Immutable Dictionary Operations
-# ============================================================================
-
-static func merge_dict(base: Dictionary, override: Dictionary) -> Dictionary:
-	var result = base.duplicate(true)
-	for key in override:
-		result[key] = override[key]
-	return result
 
 # ============================================================================
 # PUBLIC QUERY FUNCTIONS

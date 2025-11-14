@@ -18,7 +18,7 @@ static func update_projectile(projectile_data: Dictionary, delta: float) -> Dict
 		return {projectile = projectile_data, expired = true}
 
 	return {
-		projectile = merge_dict(projectile_data, {
+		projectile = DictUtils.merge_dict(projectile_data, {
 			position = new_position,
 			lifetime = new_lifetime
 		}),
@@ -61,12 +61,3 @@ static func create_projectile(fire_command: Dictionary, team: int) -> Dictionary
 static func spawn_projectiles(fire_commands: Array, team: int) -> Array:
 	return fire_commands.map(func(cmd): return create_projectile(cmd, team))
 
-# ============================================================================
-# UTILITY
-# ============================================================================
-
-static func merge_dict(base: Dictionary, override: Dictionary) -> Dictionary:
-	var result = base.duplicate(true)
-	for key in override:
-		result[key] = override[key]
-	return result

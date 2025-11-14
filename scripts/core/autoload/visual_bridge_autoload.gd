@@ -31,8 +31,5 @@ func set_renderer(renderer: IVisualRenderer, theme: IVisualTheme) -> void:
 func get_active_theme() -> IVisualTheme:
 	return bridge.active_theme
 
-func get_current_theme() -> IVisualTheme:
-	return bridge.active_theme
-
 func get_active_renderer() -> IVisualRenderer:
 	return bridge.active_renderer

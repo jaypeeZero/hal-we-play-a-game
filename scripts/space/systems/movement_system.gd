@@ -61,7 +61,7 @@ static func get_enemy_ships(ships: Array, own_team: int) -> Array:
 
 static func add_distance_from(ship: Dictionary, position: Vector2) -> Dictionary:
 	var distance = position.distance_to(ship.position)
-	return merge_dict(ship, {_distance = distance})
+	return DictUtils.merge_dict(ship, {_distance = distance})
 
 static func select_nearest(nearest: Dictionary, current: Dictionary) -> Dictionary:
 	if nearest.is_empty():
@@ -307,7 +307,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	# Update position based on velocity
 	var new_position = ship_data.position + new_velocity * delta
 
-	return merge_dict(ship_data, {
+	return DictUtils.merge_dict(ship_data, {
 		velocity = new_velocity,
 		position = new_position,
 		rotation = new_rotation,
@@ -317,7 +317,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 ## Ships in space maintain velocity (Newton's first law)
 static func apply_space_drift(ship_data: Dictionary, delta: float) -> Dictionary:
 	var new_position = ship_data.position + ship_data.velocity * delta
-	return merge_dict(ship_data, {
+	return DictUtils.merge_dict(ship_data, {
 		position = new_position
 	})
 
@@ -325,7 +325,7 @@ static func apply_space_drift(ship_data: Dictionary, delta: float) -> Dictionary
 static func apply_disabled_drift(ship_data: Dictionary, delta: float) -> Dictionary:
 	# Dead ships keep drifting - no decay, this is space!
 	var new_position = ship_data.position + ship_data.velocity * delta
-	return merge_dict(ship_data, {
+	return DictUtils.merge_dict(ship_data, {
 		position = new_position
 		# velocity and rotation unchanged - they drift forever
 	})
@@ -346,12 +346,3 @@ static func angle_difference(angle1: float, angle2: float) -> float:
 		diff += TAU
 	return diff
 
-# ============================================================================
-# UTILITY
-# ============================================================================
-
-static func merge_dict(base: Dictionary, override: Dictionary) -> Dictionary:
-	var result = base.duplicate(true)
-	for key in override:
-		result[key] = override[key]
-	return result
