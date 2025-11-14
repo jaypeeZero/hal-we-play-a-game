@@ -29,7 +29,13 @@ static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictiona
 			"known_entities": [],  # entities they're aware of
 			"last_update": 0.0,
 			"threats": [],  # prioritized threat list
-			"opportunities": []  # potential targets or actions
+			"opportunities": [],  # potential targets or actions
+			"tactical_memory": {
+				"recent_events": [],  # Last N events this crew witnessed
+				"successful_tactics": {},  # tactic_id -> success_count
+				"failed_tactics": {},  # tactic_id -> fail_count
+				"current_situation": ""  # Text summary for knowledge queries
+			}
 		},
 		"orders": {
 			"received": null,  # order from superior
@@ -39,7 +45,10 @@ static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictiona
 		"command_chain": {
 			"superior": null,  # crew_id of superior
 			"subordinates": []  # crew_ids of subordinates
-		}
+		},
+		# EVENT-DRIVEN: When to think next (not every frame!)
+		"next_decision_time": 0.0,  # Wake up at this time
+		"current_action": null  # What they're doing now
 	}
 
 	return base_crew
