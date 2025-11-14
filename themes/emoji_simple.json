@@ -201,6 +201,60 @@
       "font_size": 16,
       "bounds": [20, 20],
       "size": 0.5
+    },
+
+    "obstacle_asteroid_small": {
+      "renderer_type": "label",
+      "emoji": "☄️",
+      "font_size": 32,
+      "bounds": [40, 40],
+      "size": 1.0,
+      "collision_radius_override": 20.0
+    },
+
+    "obstacle_asteroid_medium": {
+      "renderer_type": "label",
+      "emoji": "☄️",
+      "font_size": 56,
+      "bounds": [80, 80],
+      "size": 1.75,
+      "collision_radius_override": 40.0
+    },
+
+    "obstacle_asteroid_large": {
+      "renderer_type": "label",
+      "emoji": "☄️",
+      "font_size": 96,
+      "bounds": [160, 160],
+      "size": 3.0,
+      "collision_radius_override": 80.0
+    },
+
+    "obstacle_platform": {
+      "renderer_type": "label",
+      "emoji": "🛰️",
+      "font_size": 72,
+      "bounds": [120, 120],
+      "size": 2.25,
+      "collision_radius_override": 60.0
+    },
+
+    "obstacle_dock_scaffolding": {
+      "renderer_type": "label",
+      "emoji": "⚙️",
+      "font_size": 64,
+      "bounds": [100, 100],
+      "size": 2.0,
+      "collision_radius_override": 50.0
+    },
+
+    "obstacle_debris": {
+      "renderer_type": "label",
+      "emoji": "🔩",
+      "font_size": 24,
+      "bounds": [30, 30],
+      "size": 0.75,
+      "collision_radius_override": 15.0
     }
   },
 

@@ -11,7 +11,7 @@ extends RefCounted
 # ============================================================================
 
 ## Update ship movement - returns new ship_data Dictionary
-static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: float) -> Dictionary:
+static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: float, obstacles: Array = []) -> Dictionary:
 	if is_ship_disabled(ship_data):
 		return apply_disabled_drift(ship_data, delta)
 
@@ -22,16 +22,16 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 	# Get nearby ships for collision avoidance
 	var nearby_ships = get_nearby_friendly_ships(ship_data, targets)
 
-	# Calculate pilot intentions based on target and current state
-	var pilot_control = calculate_pilot_control(ship_data, target, nearby_ships)
+	# Calculate pilot intentions based on target, nearby ships, and obstacles
+	var pilot_control = calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
 
 	return apply_space_physics(ship_data, pilot_control, delta)
 
 ## Update all ships - returns new Array of ship_data
-static func update_all_ships(ships: Array, delta: float) -> Array:
+static func update_all_ships(ships: Array, delta: float, obstacles: Array = []) -> Array:
 	return ships \
 		.filter(func(ship): return ship != null) \
-		.map(func(ship): return update_ship_movement(ship, ships, delta))
+		.map(func(ship): return update_ship_movement(ship, ships, delta, obstacles))
 
 # ============================================================================
 # SHIP STATE PREDICATES
@@ -86,7 +86,7 @@ static func get_nearby_friendly_ships(ship_data: Dictionary, all_ships: Array) -
 # ============================================================================
 
 ## Calculate what the pilot wants to do based on target and current state
-static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary, nearby_ships: Array) -> Dictionary:
+static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array = []) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 	var direction_to_target = to_target.normalized()
@@ -96,8 +96,10 @@ static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary, n
 	var min_safe_distance = engagement_range * 0.7  # Don't get too close
 	var max_engagement_distance = engagement_range * 1.3  # Don't get too far
 
-	# Check for collision threats
-	var avoidance_vector = calculate_collision_avoidance(ship_data, nearby_ships)
+	# Check for collision threats from ships and obstacles
+	var ship_avoidance = calculate_collision_avoidance(ship_data, nearby_ships)
+	var obstacle_avoidance = calculate_obstacle_avoidance(ship_data, obstacles)
+	var avoidance_vector = ship_avoidance + obstacle_avoidance
 	var has_collision_threat = avoidance_vector.length() > 0.1
 
 	# Determine desired position relative to target
@@ -124,9 +126,13 @@ static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary, n
 		should_thrust = velocity_toward_desired < ship_data.stats.max_speed * 0.3
 		is_braking = false
 
-	# Apply collision avoidance if needed
+	# Apply collision avoidance if needed (obstacles have higher priority)
 	if has_collision_threat:
-		desired_position += avoidance_vector * 100.0  # Add avoidance offset
+		# Obstacles are more urgent than tactical positioning
+		if obstacle_avoidance.length() > 0.1:
+			desired_position += obstacle_avoidance * 200.0  # Strong obstacle avoidance
+		else:
+			desired_position += ship_avoidance * 100.0  # Normal ship avoidance
 
 	# Calculate heading and movement
 	var to_desired = desired_position - ship_data.position
@@ -194,6 +200,51 @@ static func calculate_collision_avoidance(ship_data: Dictionary, nearby_ships: A
 			var avoidance_strength = (danger_distance - distance) / danger_distance
 			# Point away from the other ship
 			avoidance -= to_other.normalized() * avoidance_strength
+
+	return avoidance.normalized() if avoidance.length() > 0.1 else Vector2.ZERO
+
+## Calculate obstacle avoidance vector - returns normalized direction away from obstacles
+static func calculate_obstacle_avoidance(ship_data: Dictionary, obstacles: Array) -> Vector2:
+	if obstacles.is_empty():
+		return Vector2.ZERO
+
+	var avoidance = Vector2.ZERO
+	var detection_range = ship_data.stats.size * 8.0  # Look ahead distance
+
+	# Filter active obstacles that block movement
+	var active_obstacles = obstacles \
+		.filter(func(o): return o != null) \
+		.filter(func(o): return o.get("status", "operational") != "destroyed") \
+		.filter(func(o): return o.get("blocks_movement", true))
+
+	for obstacle in active_obstacles:
+		var to_obstacle = obstacle.position - ship_data.position
+		var distance = to_obstacle.length()
+		var combined_radius = ship_data.stats.size + obstacle.radius
+
+		# Only avoid obstacles in detection range
+		if distance > detection_range:
+			continue
+
+		# Emergency avoidance if already too close or colliding
+		if distance < combined_radius * 1.5:
+			var away_direction = -to_obstacle.normalized() if distance > 0.1 else Vector2(1, 0)
+			# Very strong avoidance for close obstacles
+			var urgency = max(2.0, (combined_radius * 1.5 - distance) / combined_radius)
+			avoidance += away_direction * urgency
+			continue
+
+		# Calculate avoidance strength based on distance and whether obstacle is ahead
+		var ahead_distance = to_obstacle.normalized().dot(ship_data.velocity.normalized()) if ship_data.velocity.length() > 0.1 else 0.0
+
+		# Only avoid obstacles in front of the ship
+		if ahead_distance > 0.3:
+			var threat_level = 1.0 - ((distance - combined_radius) / detection_range)
+			threat_level = clamp(threat_level, 0.0, 1.0)
+
+			# Stronger avoidance for closer obstacles
+			var away_direction = (ship_data.position - obstacle.position).normalized()
+			avoidance += away_direction * threat_level
 
 	return avoidance.normalized() if avoidance.length() > 0.1 else Vector2.ZERO
 

@@ -15,6 +15,7 @@ const VisualEffectSystem = preload("res://scripts/space/systems/visual_effect_sy
 const ShipEntity = preload("res://scripts/space/entities/ship_entity.gd")
 const ProjectileEntity = preload("res://scripts/space/entities/projectile_entity.gd")
 const VisualEffectEntity = preload("res://scripts/space/entities/visual_effect_entity.gd")
+const ObstacleEntity = preload("res://scripts/space/entities/obstacle_entity.gd")
 
 signal game_started()
 signal game_ended(winner: int)
@@ -27,6 +28,7 @@ signal ship_spawned(ship_id: String)
 var _ships: Array = []  # Array of ship_data Dictionaries
 var _projectiles: Array = []  # Array of projectile_data Dictionaries
 var _visual_effects: Array = []  # Array of visual_effect_data Dictionaries
+var _obstacles: Array = []  # Array of obstacle_data Dictionaries
 
 # ============================================================================
 # ENTITIES - Minimal Godot nodes for physics
@@ -35,6 +37,7 @@ var _visual_effects: Array = []  # Array of visual_effect_data Dictionaries
 var _ship_entities: Dictionary = {}  # ship_id -> ShipEntity
 var _projectile_entities: Dictionary = {}  # projectile_id -> ProjectileEntity
 var _effect_entities: Dictionary = {}  # effect_id -> VisualEffectEntity
+var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 
 # ============================================================================
 # GAME STATE
@@ -49,6 +52,7 @@ const WEAPON_UPDATE_INTERVAL: float = 0.1
 
 func _ready() -> void:
 	_setup_input_actions()
+	_spawn_initial_obstacles()
 	game_started.emit()
 
 	if BattleEventLoggerAutoload.service:
@@ -62,6 +66,10 @@ func _setup_input_actions() -> void:
 	_ensure_action("spawn_enemy_fighter", KEY_4)
 	_ensure_action("spawn_enemy_corvette", KEY_5)
 	_ensure_action("spawn_enemy_capital", KEY_6)
+	_ensure_action("spawn_obstacle_small", KEY_7)
+	_ensure_action("spawn_obstacle_medium", KEY_8)
+	_ensure_action("spawn_obstacle_large", KEY_9)
+	_ensure_action("spawn_platform", KEY_0)
 
 func _ensure_action(action_name: String, key: int) -> void:
 	if not InputMap.has_action(action_name):
@@ -75,8 +83,8 @@ func _ensure_action(action_name: String, key: int) -> void:
 # ============================================================================
 
 func _process(delta: float) -> void:
-	# 1. MOVEMENT SYSTEM - Update ship positions
-	_ships = MovementSystem.update_all_ships(_ships, delta)
+	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
+	_ships = MovementSystem.update_all_ships(_ships, delta, _obstacles)
 
 	# 2. WEAPON SYSTEM - Generate fire commands
 	_weapon_update_timer += delta
@@ -97,10 +105,11 @@ func _process(delta: float) -> void:
 	for expired_id in projectile_result.expired_ids:
 		_remove_projectile(expired_id)
 
-	# 5. COLLISION SYSTEM - Detect hits and apply damage
-	var collision_result = CollisionSystem.process_collisions(_ships, _projectiles)
+	# 5. COLLISION SYSTEM - Detect hits and apply damage (includes obstacles)
+	var collision_result = CollisionSystem.process_collisions(_ships, _projectiles, _obstacles)
 	_ships = collision_result.ships
 	_projectiles = collision_result.projectiles
+	_obstacles = collision_result.obstacles
 
 	# Spawn visual effects from collisions
 	if collision_result.has("visual_effects"):
@@ -119,8 +128,9 @@ func _process(delta: float) -> void:
 	for expired_id in effect_result.expired_ids:
 		_remove_visual_effect(expired_id)
 
-	# 7. CHECK FOR DESTROYED SHIPS
+	# 7. CHECK FOR DESTROYED SHIPS AND OBSTACLES
 	_cleanup_destroyed_ships()
+	_cleanup_destroyed_obstacles()
 
 	# 8. SYNC ENTITIES - Update Godot nodes from data
 	_sync_all_entities()
@@ -264,12 +274,21 @@ func _sync_all_entities() -> void:
 			entity.global_position = effect.position
 			entity.emit_state(effect)
 
+	# Sync obstacles
+	for obstacle in _obstacles:
+		if obstacle == null:
+			continue
+		if _obstacle_entities.has(obstacle.obstacle_id):
+			var entity = _obstacle_entities[obstacle.obstacle_id]
+			entity.sync_transform(obstacle)
+			entity.emit_state(obstacle)
+
 # ============================================================================
 # SHIP SPAWNING
 # ============================================================================
 
 func _input(event: InputEvent) -> void:
-	# Spawn requests
+	# Ship spawn requests
 	if event.is_action_pressed("spawn_fighter"):
 		_request_spawn("fighter", 3, 0)
 	elif event.is_action_pressed("spawn_corvette"):
@@ -282,6 +301,16 @@ func _input(event: InputEvent) -> void:
 		_request_spawn("corvette", 1, 1)
 	elif event.is_action_pressed("spawn_enemy_capital"):
 		_request_spawn("capital", 1, 1)
+
+	# Obstacle spawn requests
+	elif event.is_action_pressed("spawn_obstacle_small"):
+		_request_obstacle_spawn("asteroid_small")
+	elif event.is_action_pressed("spawn_obstacle_medium"):
+		_request_obstacle_spawn("asteroid_medium")
+	elif event.is_action_pressed("spawn_obstacle_large"):
+		_request_obstacle_spawn("asteroid_large")
+	elif event.is_action_pressed("spawn_platform"):
+		_request_obstacle_spawn("platform")
 
 	# Mouse click to confirm spawn
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -300,18 +329,24 @@ func _execute_spawn(spawn_position: Vector2) -> void:
 	if _pending_spawn.is_empty():
 		return
 
-	var ship_type = _pending_spawn.type
-	var count = _pending_spawn.count
-	var team = _pending_spawn.team
+	# Check if spawning obstacle or ship
+	if _pending_spawn.get("spawn_type", "ship") == "obstacle":
+		var obstacle_type = _pending_spawn.type
+		spawn_obstacle(obstacle_type, spawn_position)
+	else:
+		# Spawn ships
+		var ship_type = _pending_spawn.type
+		var count = _pending_spawn.count
+		var team = _pending_spawn.team
 
-	for i in range(count):
-		var offset = Vector2(randf_range(-50, 50), randf_range(-50, 50))
-		var ship_position = spawn_position + offset
+		for i in range(count):
+			var offset = Vector2(randf_range(-50, 50), randf_range(-50, 50))
+			var ship_position = spawn_position + offset
 
-		ship_position.x = clamp(ship_position.x, 50, _battlefield_size.x - 50)
-		ship_position.y = clamp(ship_position.y, 50, _battlefield_size.y - 50)
+			ship_position.x = clamp(ship_position.x, 50, _battlefield_size.x - 50)
+			ship_position.y = clamp(ship_position.y, 50, _battlefield_size.y - 50)
 
-		spawn_ship(ship_type, team, ship_position)
+			spawn_ship(ship_type, team, ship_position)
 
 	_pending_spawn = {}
 
@@ -345,6 +380,103 @@ func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
 		})
 
 	return ship_data
+
+# ============================================================================
+# OBSTACLE SPAWNING
+# ============================================================================
+
+func _request_obstacle_spawn(obstacle_type: String) -> void:
+	_pending_spawn = {
+		"spawn_type": "obstacle",
+		"type": obstacle_type
+	}
+	print("Click to spawn %s obstacle" % obstacle_type)
+
+## Spawn initial obstacles at game start
+func _spawn_initial_obstacles() -> void:
+	var obstacle_types = [
+		{"type": "asteroid_small", "count": 8},
+		{"type": "asteroid_medium", "count": 5},
+		{"type": "asteroid_large", "count": 3},
+		{"type": "platform", "count": 2},
+		{"type": "dock_scaffolding", "count": 2},
+		{"type": "debris", "count": 10}
+	]
+
+	# Add margin to keep obstacles away from edges
+	var margin = 150.0
+	var spawn_area_min = Vector2(margin, margin)
+	var spawn_area_max = _battlefield_size - Vector2(margin, margin)
+
+	for obstacle_config in obstacle_types:
+		for i in range(obstacle_config.count):
+			var random_pos = Vector2(
+				randf_range(spawn_area_min.x, spawn_area_max.x),
+				randf_range(spawn_area_min.y, spawn_area_max.y)
+			)
+			spawn_obstacle(obstacle_config.type, random_pos)
+
+## Spawn an obstacle at the given position
+func spawn_obstacle(obstacle_type: String, position: Vector2) -> Dictionary:
+	# Create obstacle data
+	var obstacle_data = ObstacleData.create_obstacle_instance(obstacle_type, position, randf() * TAU)
+	if obstacle_data.is_empty():
+		push_error("Failed to create obstacle data for type: " + obstacle_type)
+		return {}
+
+	# Add to data array
+	_obstacles.append(obstacle_data)
+
+	# Create entity
+	var entity = ObstacleEntity.new()
+	entity.initialize(obstacle_data.obstacle_id, obstacle_data.type, obstacle_data.radius)
+	add_child(entity)
+	_obstacle_entities[obstacle_data.obstacle_id] = entity
+
+	# Log event
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("obstacle_spawned", {
+			"obstacle_id": obstacle_data.obstacle_id,
+			"type": obstacle_type,
+			"position": position
+		})
+
+	return obstacle_data
+
+## Cleanup destroyed obstacles
+func _cleanup_destroyed_obstacles() -> void:
+	var destroyed_obstacles = []
+
+	for obstacle in _obstacles:
+		if obstacle == null:
+			continue
+		if obstacle.get("status", "operational") == "destroyed":
+			destroyed_obstacles.append(obstacle)
+
+	for obstacle in destroyed_obstacles:
+		_remove_obstacle(obstacle.obstacle_id)
+
+## Remove obstacle and entity
+func _remove_obstacle(obstacle_id: String) -> void:
+	# Remove from data
+	var obstacle_to_remove = null
+	for obstacle in _obstacles:
+		if obstacle.obstacle_id == obstacle_id:
+			obstacle_to_remove = obstacle
+			break
+
+	if obstacle_to_remove:
+		_obstacles.erase(obstacle_to_remove)
+
+	# Remove entity
+	if _obstacle_entities.has(obstacle_id):
+		var entity = _obstacle_entities[obstacle_id]
+		entity.queue_free()
+		_obstacle_entities.erase(obstacle_id)
+
+	# Log event
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("obstacle_destroyed", {"obstacle_id": obstacle_id})
 
 # ============================================================================
 # WIN CONDITION
