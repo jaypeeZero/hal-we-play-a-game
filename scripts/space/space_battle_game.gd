@@ -50,13 +50,11 @@ var _battlefield_size: Vector2 = Vector2(1920, 1080)
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
 
-# Crew AI
+# Crew AI - EVENT-DRIVEN (no polling!)
 var _crew_list: Array = []  # Array of crew_data Dictionaries
-var _recent_events: Array = []  # Events for tactical memory
-const MAX_EVENT_HISTORY = 20
-
-# PERFORMANCE: Disable crew AI entirely if too slow
-const ENABLE_CREW_AI = false  # Set to true to enable crew thinking
+var _crew_events: Array = []  # Events to process this frame
+var _crew_index: Dictionary = {}  # crew_id -> crew_data (O(1) lookup)
+const ENABLE_CREW_AI = true  # Re-enabled with proper event architecture
 
 func _ready() -> void:
 	_setup_input_actions()
@@ -103,6 +101,10 @@ func _process(delta: float) -> void:
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
 	_ships = MovementSystem.update_all_ships(_ships, delta, _obstacles)
 
+	# 1b. SPATIAL TRIGGERS - Check for sensor contacts after movement
+	if ENABLE_CREW_AI:
+		_check_spatial_awareness_triggers()
+
 	# 2. WEAPON SYSTEM - Generate fire commands
 	_weapon_update_timer += delta
 	var fire_commands = []
@@ -136,6 +138,10 @@ func _process(delta: float) -> void:
 	# Remove destroyed projectiles from hits
 	for hit in collision_result.hits:
 		_remove_projectile(hit.projectile_id)
+
+	# Emit damage events to crew (EVENT-DRIVEN)
+	if ENABLE_CREW_AI and not collision_result.hits.is_empty():
+		_emit_damage_events(collision_result.hits)
 
 	# 6. VISUAL EFFECT SYSTEM - Update and remove expired effects
 	var effect_result = VisualEffectSystem.update_all_effects(_visual_effects, delta)
@@ -564,33 +570,159 @@ func _enable_event_tracking() -> void:
 		BattleEventLoggerAutoload.service.track_history = true
 		print("Event history tracking enabled")
 
-## Update crew AI systems each frame
+## Update crew AI systems each frame - EVENT-DRIVEN (no polling!)
 func _update_crew_ai_systems(delta: float) -> void:
 	if _crew_list.is_empty():
 		return  # No crew to process
 
 	var game_time = Time.get_ticks_msec() / 1000.0
 
-	# 1. Update crew tactical memory with recent events
-	if BattleEventLoggerAutoload.service and BattleEventLoggerAutoload.service.track_history:
-		var all_events = BattleEventLoggerAutoload.service.event_history
-		_recent_events = all_events.slice(max(0, all_events.size() - MAX_EVENT_HISTORY), all_events.size())
+	# EVENT-DRIVEN: Only process crew events, don't poll all crew
+	_process_crew_events(_crew_events, delta, game_time)
+	_crew_events.clear()
 
-	_crew_list = TacticalMemorySystem.update_all_crew_memory(_crew_list, _recent_events, game_time)
+	# Check for decision timers (crew scheduled to wake up)
+	_check_crew_decision_timers(delta, game_time)
 
-	# 2. Update crew awareness (what they can see)
-	_crew_list = InformationSystem.update_all_crew_awareness(_crew_list, _ships, _projectiles, game_time)
+## Process crew events (EVENT-DRIVEN: only affected crew)
+func _process_crew_events(events: Array, delta: float, game_time: float) -> void:
+	for event in events:
+		var crew_id = event.get("crew_id", "")
+		if crew_id.is_empty():
+			continue
 
-	# 3. Process command chain (orders down, info up)
-	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
+		# Find crew member (O(1) with index, fallback to O(N) search)
+		var crew = _find_crew_by_id(crew_id)
+		if crew.is_empty():
+			continue
 
-	# 4. Process crew decisions (uses TacticalKnowledgeSystem internally)
-	var result = CrewAISystem.update_all_crew(_crew_list, delta, game_time)
-	_crew_list = result.crew_list
-	var decisions = result.decisions
+		# Handle event based on type
+		match event.type:
+			"sensor_contact":
+				_handle_sensor_contact_event(crew, event, game_time)
+			"target_lost":
+				_handle_target_lost_event(crew, event, game_time)
+			"order_received":
+				_handle_order_received_event(crew, event, game_time)
+			"ship_damaged":
+				_handle_ship_damaged_event(crew, event, game_time)
+			"battle_event":
+				_handle_battle_event(crew, event, game_time)
 
-	# 5. Apply crew decisions to ships (minimal for now - mainly logging)
-	_apply_crew_decisions(decisions)
+## Check if any crew need to make decisions (timer expired)
+func _check_crew_decision_timers(delta: float, game_time: float) -> void:
+	var decisions = []
+
+	for i in range(_crew_list.size()):
+		var crew = _crew_list[i]
+
+		# Check if it's time for this crew to think
+		if game_time >= crew.get("next_decision_time", 0.0):
+			# Make decision based on current state
+			var result = CrewAISystem.update_crew_member(crew, delta, game_time)
+			_crew_list[i] = result.crew_data
+
+			if result.has("decision") and not result.decision.is_empty():
+				decisions.append(result.decision)
+
+	# Apply decisions
+	if not decisions.is_empty():
+		_apply_crew_decisions(decisions)
+
+## Find crew by ID
+func _find_crew_by_id(crew_id: String) -> Dictionary:
+	# Try index first (O(1))
+	if _crew_index.has(crew_id):
+		return _crew_index[crew_id]
+
+	# Fallback to linear search and rebuild index
+	for crew in _crew_list:
+		if crew.crew_id == crew_id:
+			_crew_index[crew_id] = crew
+			return crew
+
+	return {}
+
+## EVENT HANDLERS - These wake crew when something happens to them
+
+func _handle_sensor_contact_event(crew: Dictionary, event: Dictionary, game_time: float) -> void:
+	# Enemy detected - update awareness and trigger decision
+	var enemy_id = event.data.get("enemy_id", "")
+	if enemy_id.is_empty():
+		return
+
+	# Update crew awareness with new contact
+	var updated_crew = InformationSystem.update_crew_awareness(crew, _ships, _projectiles, game_time)
+
+	# Record in tactical memory
+	updated_crew = TacticalMemorySystem.record_event(updated_crew, {
+		"type": "threat_detected",
+		"entity_id": enemy_id,
+		"timestamp": game_time
+	})
+
+	# Force immediate decision
+	updated_crew.next_decision_time = game_time
+
+	# Update in list
+	_update_crew_in_list(updated_crew)
+
+func _handle_target_lost_event(crew: Dictionary, event: Dictionary, game_time: float) -> void:
+	# Target lost - need new target
+	var updated_crew = crew.duplicate(true)
+
+	# Clear current target
+	if updated_crew.awareness.has("current_target"):
+		updated_crew.awareness.current_target = ""
+
+	# Force decision to find new target
+	updated_crew.next_decision_time = game_time
+
+	_update_crew_in_list(updated_crew)
+
+func _handle_order_received_event(crew: Dictionary, event: Dictionary, game_time: float) -> void:
+	# Order from superior - process through command chain
+	var order = event.data.get("order", {})
+	if order.is_empty():
+		return
+
+	var updated_crew = CommandChainSystem.process_single_order(crew, order)
+
+	# Force decision to execute order
+	updated_crew.next_decision_time = game_time
+
+	_update_crew_in_list(updated_crew)
+
+func _handle_ship_damaged_event(crew: Dictionary, event: Dictionary, game_time: float) -> void:
+	# Ship damaged - alert condition
+	var damage_data = event.data
+
+	var updated_crew = TacticalMemorySystem.record_event(crew, {
+		"type": "ship_damaged",
+		"damage": damage_data,
+		"timestamp": game_time
+	})
+
+	# Force immediate reassessment
+	updated_crew.next_decision_time = game_time
+
+	_update_crew_in_list(updated_crew)
+
+func _handle_battle_event(crew: Dictionary, event: Dictionary, game_time: float) -> void:
+	# Generic battle event - update memory
+	var event_data = event.data
+
+	var updated_crew = TacticalMemorySystem.record_event(crew, event_data)
+
+	_update_crew_in_list(updated_crew)
+
+## Update crew in the list (maintains immutability)
+func _update_crew_in_list(updated_crew: Dictionary) -> void:
+	for i in range(_crew_list.size()):
+		if _crew_list[i].crew_id == updated_crew.crew_id:
+			_crew_list[i] = updated_crew
+			_crew_index[updated_crew.crew_id] = updated_crew
+			break
 
 ## Apply crew decisions to game state
 func _apply_crew_decisions(decisions: Array) -> void:
@@ -605,31 +737,104 @@ func _apply_crew_decisions(decisions: Array) -> void:
 				"entity_id": decision.get("entity_id", "")
 			})
 
+## SPATIAL AWARENESS - Check for sensor contacts (EVENT-DRIVEN)
+func _check_spatial_awareness_triggers() -> void:
+	# For each crew member, check if enemies enter/exit their awareness range
+	for i in range(_crew_list.size()):
+		var crew = _crew_list[i]
+		var ship_id = crew.assigned_to
+		var ship = _find_ship_by_id(ship_id)
+		if ship.is_empty():
+			continue
+
+		var ship_pos = ship.position
+		var sensor_range = 800.0  # TODO: Get from ship stats
+
+		# Get previous contacts
+		var previous_contacts = crew.awareness.get("known_entities", {})
+		var current_contacts = {}
+
+		# Check all ships for contacts
+		for other_ship in _ships:
+			if other_ship.ship_id == ship_id:
+				continue  # Skip self
+			if other_ship.team == ship.team:
+				continue  # Skip allies (for now)
+
+			var distance = ship_pos.distance_to(other_ship.position)
+			if distance <= sensor_range:
+				# In range!
+				current_contacts[other_ship.ship_id] = true
+
+				# New contact?
+				if not previous_contacts.has(other_ship.ship_id):
+					_queue_crew_event(crew.crew_id, "sensor_contact", {
+						"enemy_id": other_ship.ship_id,
+						"position": other_ship.position,
+						"distance": distance
+					})
+
+		# Check for lost contacts
+		for previous_id in previous_contacts.keys():
+			if not current_contacts.has(previous_id):
+				_queue_crew_event(crew.crew_id, "target_lost", {
+					"enemy_id": previous_id
+				})
+
+		# Update crew with current contacts
+		var updated_crew = crew.duplicate(true)
+		updated_crew.awareness.known_entities = current_contacts
+		_crew_list[i] = updated_crew
+		_crew_index[crew.crew_id] = updated_crew
+
+## Queue an event for a crew member
+func _queue_crew_event(crew_id: String, event_type: String, data: Dictionary) -> void:
+	_crew_events.append({
+		"crew_id": crew_id,
+		"type": event_type,
+		"data": data
+	})
+
+## Emit damage events to crew of damaged ships
+func _emit_damage_events(hits: Array) -> void:
+	for hit in hits:
+		var target_id = hit.get("target_id", "")
+		if target_id.is_empty():
+			continue
+
+		# Find crew assigned to this ship
+		for crew in _crew_list:
+			if crew.assigned_to == target_id:
+				_queue_crew_event(crew.crew_id, "ship_damaged", {
+					"damage": hit.get("damage", 0),
+					"section": hit.get("section", ""),
+					"attacker": hit.get("projectile_id", "")
+				})
+
 ## Create and assign crew to a ship
 func _create_crew_for_ship(ship_id: String, ship_type: String) -> void:
 	# Determine crew size based on ship type
 	var weapon_count = 1  # Default
+	var new_crew = []
+
 	match ship_type:
 		"fighter":
 			# Solo pilot for fighters
-			var crew = CrewData.create_solo_fighter_crew(0.7)
-			for crew_member in crew:
-				crew_member.assigned_to = ship_id
-			_crew_list.append_array(crew)
+			new_crew = CrewData.create_solo_fighter_crew(0.7)
 		"corvette":
 			weapon_count = 2
-			var crew = CrewData.create_ship_crew(weapon_count, 0.6)
-			for crew_member in crew:
-				crew_member.assigned_to = ship_id
-			_crew_list.append_array(crew)
+			new_crew = CrewData.create_ship_crew(weapon_count, 0.6)
 		"capital":
 			weapon_count = 4
-			var crew = CrewData.create_ship_crew(weapon_count, 0.8)
-			for crew_member in crew:
-				crew_member.assigned_to = ship_id
-			_crew_list.append_array(crew)
+			new_crew = CrewData.create_ship_crew(weapon_count, 0.8)
 
-	print("Created crew for %s (type: %s)" % [ship_id, ship_type])
+	# Assign crew to ship and add to index
+	for crew_member in new_crew:
+		crew_member.assigned_to = ship_id
+		_crew_list.append(crew_member)
+		_crew_index[crew_member.crew_id] = crew_member
+
+	print("Created %d crew for %s (type: %s)" % [new_crew.size(), ship_id, ship_type])
 
 ## Remove crew assigned to a ship
 func _remove_crew_for_ship(ship_id: String) -> void:
@@ -640,6 +845,7 @@ func _remove_crew_for_ship(ship_id: String) -> void:
 
 	for crew in crew_to_remove:
 		_crew_list.erase(crew)
+		_crew_index.erase(crew.crew_id)  # Clean up index
 
 	if crew_to_remove.size() > 0:
 		print("Removed %d crew members from destroyed ship %s" % [crew_to_remove.size(), ship_id])

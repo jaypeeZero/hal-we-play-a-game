@@ -39,6 +39,24 @@ static func update_crew_memory(crew_data: Dictionary, recent_events: Array, game
 
 	return updated
 
+## Record a single event to crew memory (EVENT-DRIVEN)
+static func record_event(crew_data: Dictionary, event: Dictionary) -> Dictionary:
+	var updated = crew_data.duplicate(true)
+
+	# Add event to recent events
+	updated.awareness.tactical_memory.recent_events.append(event)
+
+	# Keep only last N events
+	if updated.awareness.tactical_memory.recent_events.size() > MAX_RECENT_EVENTS:
+		updated.awareness.tactical_memory.recent_events = \
+			updated.awareness.tactical_memory.recent_events.slice(-MAX_RECENT_EVENTS, \
+			updated.awareness.tactical_memory.recent_events.size())
+
+	# Update situation summary
+	updated.awareness.tactical_memory.current_situation = generate_situation_summary(updated)
+
+	return updated
+
 # ============================================================================
 # DECISION OUTCOME TRACKING
 # ============================================================================
