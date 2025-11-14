@@ -50,8 +50,15 @@ var _battlefield_size: Vector2 = Vector2(1920, 1080)
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
 
+# Crew AI
+var _crew_list: Array = []  # Array of crew_data Dictionaries
+var _recent_events: Array = []  # Events for tactical memory
+const MAX_EVENT_HISTORY = 20
+
 func _ready() -> void:
 	_setup_input_actions()
+	_initialize_knowledge_base()
+	_enable_event_tracking()
 	_spawn_initial_obstacles()
 	game_started.emit()
 
@@ -84,8 +91,7 @@ func _ensure_action(action_name: String, key: int) -> void:
 
 func _process(delta: float) -> void:
 	# 0. CREW AI SYSTEMS - Update crew awareness, tactical memory, and decisions
-	# (Future integration point - requires crew data to be added to ships)
-	# _update_crew_ai_systems(delta)
+	_update_crew_ai_systems(delta)
 
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
 	_ships = MovementSystem.update_all_ships(_ships, delta, _obstacles)
@@ -219,6 +225,9 @@ func _remove_ship(ship_id: String) -> void:
 		var entity = _ship_entities[ship_id]
 		entity.queue_free()
 		_ship_entities.erase(ship_id)
+
+	# Remove crew assigned to this ship
+	_remove_crew_for_ship(ship_id)
 
 	# Log event
 	if BattleEventLoggerAutoload.service:
@@ -370,6 +379,9 @@ func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
 	entity.initialize(ship_data.ship_id, team, ship_data.stats.size, ship_type)
 	add_child(entity)
 	_ship_entities[ship_data.ship_id] = entity
+
+	# Create crew for this ship
+	_create_crew_for_ship(ship_data.ship_id, ship_type)
 
 	# Emit signal
 	ship_spawned.emit(ship_data.ship_id)
@@ -530,56 +542,95 @@ func clear_ships() -> void:
 	_ships.clear()
 
 # ============================================================================
-# CREW AI INTEGRATION (Future - requires crew data on ships)
+# CREW AI INTEGRATION
 # ============================================================================
 
-## Example integration of crew AI systems
-## Uncomment and use when ships have crew data
-# var _crew_list: Array = []  # Array of crew_data Dictionaries
-# var _recent_events: Array = []  # Events for tactical memory
-# const MAX_EVENT_HISTORY = 20
-#
-# func _update_crew_ai_systems(delta: float) -> void:
-#	var game_time = Time.get_ticks_msec() / 1000.0
-#
-#	# 1. Update crew tactical memory with recent events
-#	if BattleEventLoggerAutoload.service and BattleEventLoggerAutoload.service.track_history:
-#		var all_events = BattleEventLoggerAutoload.service.event_history
-#		_recent_events = all_events.slice(max(0, all_events.size() - MAX_EVENT_HISTORY), all_events.size())
-#
-#	_crew_list = TacticalMemorySystem.update_all_crew_memory(_crew_list, _recent_events, game_time)
-#
-#	# 2. Update crew awareness (what they can see)
-#	_crew_list = InformationSystem.update_all_crew_awareness(_crew_list, _ships, _projectiles, game_time)
-#
-#	# 3. Process command chain (orders down, info up)
-#	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
-#
-#	# 4. Process crew decisions (uses TacticalKnowledgeSystem internally)
-#	var result = CrewAISystem.update_all_crew(_crew_list, delta, game_time)
-#	_crew_list = result.crew_list
-#	var decisions = result.decisions
-#
-#	# 5. Apply crew decisions to ships
-#	_apply_crew_decisions(decisions)
-#
-# func _apply_crew_decisions(decisions: Array) -> void:
-#	# Convert crew decisions into ship orders/modifications
-#	# This would update ship target_id, desired_velocity, etc.
-#	for decision in decisions:
-#		var ship_id = decision.entity_id
-#		var ship = _find_ship_by_id(ship_id)
-#		if ship.is_empty():
-#			continue
-#
-#		# Apply decision based on type
-#		match decision.type:
-#			"maneuver":
-#				# Update ship's target/movement based on pilot decision
-#				ship.target_id = decision.get("target_id")
-#			"fire":
-#				# Gunner target selection already handled by WeaponSystem
-#				pass
-#			"tactical":
-#				# Captain's tactical orders
-#				pass
+## Initialize knowledge base from JSON files
+func _initialize_knowledge_base() -> void:
+	KnowledgeLoader.initialize_knowledge_base()
+
+## Enable event history tracking
+func _enable_event_tracking() -> void:
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.track_history = true
+		print("Event history tracking enabled")
+
+## Update crew AI systems each frame
+func _update_crew_ai_systems(delta: float) -> void:
+	if _crew_list.is_empty():
+		return  # No crew to process
+
+	var game_time = Time.get_ticks_msec() / 1000.0
+
+	# 1. Update crew tactical memory with recent events
+	if BattleEventLoggerAutoload.service and BattleEventLoggerAutoload.service.track_history:
+		var all_events = BattleEventLoggerAutoload.service.event_history
+		_recent_events = all_events.slice(max(0, all_events.size() - MAX_EVENT_HISTORY), all_events.size())
+
+	_crew_list = TacticalMemorySystem.update_all_crew_memory(_crew_list, _recent_events, game_time)
+
+	# 2. Update crew awareness (what they can see)
+	_crew_list = InformationSystem.update_all_crew_awareness(_crew_list, _ships, _projectiles, game_time)
+
+	# 3. Process command chain (orders down, info up)
+	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
+
+	# 4. Process crew decisions (uses TacticalKnowledgeSystem internally)
+	var result = CrewAISystem.update_all_crew(_crew_list, delta, game_time)
+	_crew_list = result.crew_list
+	var decisions = result.decisions
+
+	# 5. Apply crew decisions to ships (minimal for now - mainly logging)
+	_apply_crew_decisions(decisions)
+
+## Apply crew decisions to game state
+func _apply_crew_decisions(decisions: Array) -> void:
+	# For now, just log decisions
+	# Full integration would modify ship behavior based on crew decisions
+	for decision in decisions:
+		if BattleEventLoggerAutoload.service:
+			BattleEventLoggerAutoload.service.log_event("crew_decision", {
+				"crew_id": decision.get("crew_id", "unknown"),
+				"type": decision.get("type", "unknown"),
+				"subtype": decision.get("subtype", ""),
+				"entity_id": decision.get("entity_id", "")
+			})
+
+## Create and assign crew to a ship
+func _create_crew_for_ship(ship_id: String, ship_type: String) -> void:
+	# Determine crew size based on ship type
+	var weapon_count = 1  # Default
+	match ship_type:
+		"fighter":
+			# Solo pilot for fighters
+			var crew = CrewData.create_solo_fighter_crew(0.7)
+			for crew_member in crew:
+				crew_member.assigned_to = ship_id
+			_crew_list.append_array(crew)
+		"corvette":
+			weapon_count = 2
+			var crew = CrewData.create_ship_crew(weapon_count, 0.6)
+			for crew_member in crew:
+				crew_member.assigned_to = ship_id
+			_crew_list.append_array(crew)
+		"capital":
+			weapon_count = 4
+			var crew = CrewData.create_ship_crew(weapon_count, 0.8)
+			for crew_member in crew:
+				crew_member.assigned_to = ship_id
+			_crew_list.append_array(crew)
+
+	print("Created crew for %s (type: %s)" % [ship_id, ship_type])
+
+## Remove crew assigned to a ship
+func _remove_crew_for_ship(ship_id: String) -> void:
+	var crew_to_remove = []
+	for crew in _crew_list:
+		if crew.assigned_to == ship_id:
+			crew_to_remove.append(crew)
+
+	for crew in crew_to_remove:
+		_crew_list.erase(crew)
+
+	if crew_to_remove.size() > 0:
+		print("Removed %d crew members from destroyed ship %s" % [crew_to_remove.size(), ship_id])
