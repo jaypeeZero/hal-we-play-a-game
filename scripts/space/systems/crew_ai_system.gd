@@ -10,11 +10,20 @@ extends RefCounted
 # ============================================================================
 
 ## Update all crew members and generate their decisions
+## EVENT-DRIVEN: Only processes crew when next_decision_time is reached
 static func update_all_crew(crew_list: Array, delta: float, game_time: float) -> Dictionary:
 	var updated_crew = []
 	var decisions = []
 
 	for crew in crew_list:
+		# EVENT-DRIVEN: Only process if it's time to think!
+		if game_time < crew.get("next_decision_time", 0.0):
+			# Still "sleeping" - just update state, no decisions
+			var updated = update_crew_state(crew, delta)
+			updated_crew.append(updated)
+			continue
+
+		# Time to make a decision
 		var result = update_crew_member(crew, delta, game_time)
 		updated_crew.append(result.crew_data)
 		if result.has("decision"):
@@ -32,13 +41,9 @@ static func update_crew_member(crew_data: Dictionary, delta: float, game_time: f
 
 	# Check if crew can make decisions
 	if not can_make_decisions(updated):
+		# Can't decide, but schedule next check soon
+		updated.next_decision_time = game_time + 1.0
 		return {"crew_data": updated}
-
-	# PERFORMANCE: Check decision cooldown (don't decide every frame!)
-	var last_decision_time = updated.get("last_decision_time", 0.0)
-	var decision_interval = calculate_decision_delay(updated)
-	if game_time - last_decision_time < decision_interval:
-		return {"crew_data": updated}  # Too soon to make another decision
 
 	# Make role-based decision
 	match updated.role:
@@ -110,8 +115,12 @@ static func make_pilot_decision(crew_data: Dictionary, game_time: float) -> Dict
 	if not crew_data.awareness.opportunities.is_empty():
 		return make_pursuit_decision(crew_data, game_time)
 
-	# No immediate action needed
-	return {"crew_data": crew_data}
+	# No immediate action needed - idle scanning
+	var updated = crew_data.duplicate(true)
+	updated.current_action = "idle_scan"
+	# EVENT-DRIVEN: Idle = check back in a few seconds
+	updated.next_decision_time = game_time + randf_range(2.0, 4.0)
+	return {"crew_data": updated}
 
 ## Execute order from captain
 static func execute_pilot_order(crew_data: Dictionary, game_time: float) -> Dictionary:
@@ -166,7 +175,9 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 	}
 
 	updated.orders.current = decision
-	updated.last_decision_time = game_time  # Mark decision time for cooldown
+	updated.current_action = "evading"
+	# EVENT-DRIVEN: Evasion requires frequent re-evaluation (0.3-0.5s)
+	updated.next_decision_time = game_time + randf_range(0.3, 0.5)
 	return {"crew_data": updated, "decision": decision}
 
 ## Make pursuit decision
@@ -186,6 +197,9 @@ static func make_pursuit_decision(crew_data: Dictionary, game_time: float) -> Di
 	}
 
 	updated.orders.current = decision
+	updated.current_action = "pursuing"
+	# EVENT-DRIVEN: Pursuit needs updates, but less frequent than evasion (0.7-1.0s)
+	updated.next_decision_time = game_time + randf_range(0.7, 1.0)
 	return {"crew_data": updated, "decision": decision}
 
 ## Create movement decision from order

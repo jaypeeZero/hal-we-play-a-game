@@ -45,7 +45,10 @@ static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictiona
 		"command_chain": {
 			"superior": null,  # crew_id of superior
 			"subordinates": []  # crew_ids of subordinates
-		}
+		},
+		# EVENT-DRIVEN: When to think next (not every frame!)
+		"next_decision_time": 0.0,  # Wake up at this time
+		"current_action": null  # What they're doing now
 	}
 
 	return base_crew
