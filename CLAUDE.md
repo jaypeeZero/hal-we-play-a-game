@@ -77,7 +77,29 @@ When working on this codebase:
 
 ## Testing Standards
 
+**Philosophy:**
+- Tests should test FUNCTIONALITY ONLY - behaviors and capabilities, not specific data values
 - Tests should not be tied to data because data may change
-- Tests should be DRY
-- Tests should test functionality via expectations
+- Tests should be DRY (Don't Repeat Yourself)
+- Tests should verify expected behaviors through assertions
+
+**What to test:**
+- ✅ "Armor penetration occurs when damage exceeds armor"
+- ✅ "Weapon fires when ready and target is in range"
+- ✅ "Damaged engine reduces ship max speed"
+- ❌ "Fighter has exactly 20 armor on nose section"
+- ❌ "Light cannon deals 5 damage"
+
+**Test coverage:**
 - Core systems (ShipData, DamageResolver, WeaponSystem) must have comprehensive test coverage
+- All tests are in `tests/` directory and use GUT framework
+- Test files follow naming convention: `test_<system_name>.gd`
+
+**Running specific tests:**
+```bash
+# Run all tests
+./test.sh
+
+# Run specific test file
+godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gfile=test_damage_resolver.gd -gexit
+```

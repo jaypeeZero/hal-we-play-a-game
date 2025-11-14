@@ -284,9 +284,12 @@ static func normalize_angle_to_degrees(angle_rad: float) -> float:
 
 ## Find which armor section is hit based on angle (0-360 degrees)
 static func find_armor_section_at_angle(ship_data: Dictionary, angle_deg: float) -> Dictionary:
-	return ship_data.armor_sections.filter(
+	var sections = ship_data.armor_sections.filter(
 		func(section): return is_angle_in_section_arc(angle_deg, section)
-	).reduce(func(a, b): return b, null)
+	)
+	if sections.is_empty():
+		return {}
+	return sections[0]
 
 static func is_angle_in_section_arc(angle_deg: float, section: Dictionary) -> bool:
 	var arc_start = section.arc.start
