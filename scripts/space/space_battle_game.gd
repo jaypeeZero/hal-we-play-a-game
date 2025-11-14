@@ -55,10 +55,16 @@ var _crew_list: Array = []  # Array of crew_data Dictionaries
 var _recent_events: Array = []  # Events for tactical memory
 const MAX_EVENT_HISTORY = 20
 
+# PERFORMANCE: Disable crew AI entirely if too slow
+const ENABLE_CREW_AI = false  # Set to true to enable crew thinking
+
 func _ready() -> void:
 	_setup_input_actions()
-	_initialize_knowledge_base()
-	_enable_event_tracking()
+
+	if ENABLE_CREW_AI:
+		_initialize_knowledge_base()
+		_enable_event_tracking()
+
 	_spawn_initial_obstacles()
 	game_started.emit()
 
@@ -91,7 +97,8 @@ func _ensure_action(action_name: String, key: int) -> void:
 
 func _process(delta: float) -> void:
 	# 0. CREW AI SYSTEMS - Update crew awareness, tactical memory, and decisions
-	_update_crew_ai_systems(delta)
+	if ENABLE_CREW_AI:
+		_update_crew_ai_systems(delta)
 
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
 	_ships = MovementSystem.update_all_ships(_ships, delta, _obstacles)
@@ -226,8 +233,9 @@ func _remove_ship(ship_id: String) -> void:
 		entity.queue_free()
 		_ship_entities.erase(ship_id)
 
-	# Remove crew assigned to this ship
-	_remove_crew_for_ship(ship_id)
+	# Remove crew assigned to this ship (if AI enabled)
+	if ENABLE_CREW_AI:
+		_remove_crew_for_ship(ship_id)
 
 	# Log event
 	if BattleEventLoggerAutoload.service:
@@ -380,8 +388,9 @@ func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
 	add_child(entity)
 	_ship_entities[ship_data.ship_id] = entity
 
-	# Create crew for this ship
-	_create_crew_for_ship(ship_data.ship_id, ship_type)
+	# Create crew for this ship (if AI enabled)
+	if ENABLE_CREW_AI:
+		_create_crew_for_ship(ship_data.ship_id, ship_type)
 
 	# Emit signal
 	ship_spawned.emit(ship_data.ship_id)
