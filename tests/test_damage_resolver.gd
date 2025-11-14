@@ -116,7 +116,7 @@ func test_closest_component_is_damaged_on_penetration():
 		for component in ship.internals:
 			if component.component_id != damaged_component.component_id:
 				var other_distance = hit_position.distance_to(ship.position + component.position_offset)
-				assert_le(distance, other_distance + 0.1, "Closest component should be damaged")
+				assert_lte(distance, other_distance + 0.1, "Closest component should be damaged")
 
 # ============================================================================
 # SHIP STATE QUERY TESTS

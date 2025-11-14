@@ -193,7 +193,7 @@ func test_damaged_power_core_reduces_weapon_damage():
 	if result.fire_commands.size() > 0:
 		var base_damage = ship.weapons[0].stats.damage
 		var actual_damage = result.fire_commands[0].damage
-		assert_less_than_or_equal(actual_damage, base_damage, "Damaged power core should reduce weapon damage")
+		assert_lte(actual_damage, base_damage, "Damaged power core should reduce weapon damage")
 
 func test_destroyed_power_core_disables_weapons():
 	var ship = create_test_ship_with_destroyed_power()
@@ -213,7 +213,7 @@ func test_damaged_control_reduces_accuracy():
 	if result.fire_commands.size() > 0:
 		var base_accuracy = ship.weapons[0].stats.accuracy
 		var actual_accuracy = result.fire_commands[0].accuracy
-		assert_less_than_or_equal(actual_accuracy, base_accuracy, "Damaged control should reduce accuracy")
+		assert_lte(actual_accuracy, base_accuracy, "Damaged control should reduce accuracy")
 
 # ============================================================================
 # FUNCTIONAL PURITY TESTS
@@ -250,7 +250,7 @@ func test_get_fireable_weapons_returns_ready_weapons_only():
 	var target = create_test_target(Vector2(300, 0))
 	var fireable = WeaponSystem.get_fireable_weapons(ship, target)
 
-	assert_less_than_or_equal(fireable.size(), ship.weapons.size(), "Should return subset of weapons")
+	assert_lte(fireable.size(), ship.weapons.size(), "Should return subset of weapons")
 
 func test_calculate_hit_probability_returns_valid_range():
 	var ship = create_test_ship_with_weapon(0.0)
@@ -259,8 +259,8 @@ func test_calculate_hit_probability_returns_valid_range():
 
 	var probability = WeaponSystem.calculate_hit_probability(ship, weapon, target)
 
-	assert_greater_than_or_equal(probability, 0.0, "Hit probability should be >= 0")
-	assert_less_than_or_equal(probability, 1.0, "Hit probability should be <= 1")
+	assert_gte(probability, 0.0, "Hit probability should be >= 0")
+	assert_lte(probability, 1.0, "Hit probability should be <= 1")
 
 # ============================================================================
 # HELPER FUNCTIONS

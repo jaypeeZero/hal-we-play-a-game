@@ -278,7 +278,7 @@ func test_capital_has_most_weapons():
 	var capital = ShipData.get_ship_template("capital")
 
 	assert_gt(capital.weapons.size(), fighter.weapons.size(), "Capital should have more weapons than fighter")
-	assert_ge(capital.weapons.size(), corvette.weapons.size(), "Capital should have at least as many weapons as corvette")
+	assert_gte(capital.weapons.size(), corvette.weapons.size(), "Capital should have at least as many weapons as corvette")
 
 # ============================================================================
 # TEMPLATE IMMUTABILITY TESTS
