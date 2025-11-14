@@ -94,10 +94,11 @@ static func create_entity_info(entity: Dictionary, entity_type: String) -> Dicti
 static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary) -> Array:
 	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team)
 
-	return enemies \
+	var threats = enemies \
 		.map(func(e): return add_threat_priority(e, own_ship, crew_data)) \
-		.filter(func(e): return e._threat_priority > 0.0) \
-		.sorted_custom(func(a, b): return a._threat_priority > b._threat_priority)
+		.filter(func(e): return e._threat_priority > 0.0)
+	threats.sort_custom(func(a, b): return a._threat_priority > b._threat_priority)
+	return threats
 
 ## Calculate threat priority for an entity
 static func add_threat_priority(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> Dictionary:
@@ -165,10 +166,11 @@ static func calculate_ship_threat(ship: Dictionary) -> float:
 static func identify_opportunities(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary) -> Array:
 	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team and e.type == "ship")
 
-	return enemies \
+	var opportunities = enemies \
 		.map(func(e): return add_opportunity_score(e, own_ship, crew_data)) \
-		.filter(func(e): return e._opportunity_score > 0.0) \
-		.sorted_custom(func(a, b): return a._opportunity_score > b._opportunity_score)
+		.filter(func(e): return e._opportunity_score > 0.0)
+	opportunities.sort_custom(func(a, b): return a._opportunity_score > b._opportunity_score)
+	return opportunities
 
 ## Add opportunity score to entity
 static func add_opportunity_score(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> Dictionary:
