@@ -1,0 +1,7 @@
+{
+  "id": "entry_117",
+  "title": "Spaceflight Principle 117",
+  "category": "space_piloting_and_combat",
+  "summary": "This entry describes a core principle of realistic space piloting and tactical combat behavior, including maneuvering, awareness, and physics-driven decision-making.",
+  "details": "Principle 117: In realistic 2D spaceflight, ships obey inertia-dominant motion. Piloting requires balancing thrust vectors, rotational momentum, situational awareness, weapons alignment, thermal load, and collision avoidance. Combat considerations include relative velocity management, firing solutions, predictive targeting, and fuel-efficient trajectory shaping. AI behavior must anticipate motion, plan multi-step thrust arcs, and maintain state coherence under tactical stress."
+}
