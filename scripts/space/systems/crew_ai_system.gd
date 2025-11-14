@@ -126,9 +126,30 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 	var top_threat = crew_data.awareness.threats[0]
 	var updated = crew_data.duplicate(true)
 
+	# Query knowledge for best evasion tactic
+	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
+	var knowledge = TacticalKnowledgeSystem.query_pilot_knowledge(situation, 1)
+
+	# Default evasion subtype
+	var evasion_subtype = "evade"
+
+	# Use knowledge to inform maneuver choice
+	if knowledge.size() > 0:
+		var action = knowledge[0].content.get("action", "")
+		if action == "evasive_maneuver":
+			# Check if this crew has experience with different maneuvers
+			var maneuver_types = knowledge[0].content.get("maneuver_types", [])
+			for maneuver in maneuver_types:
+				var tactic_id = "maneuver_" + maneuver
+				var success_rate = TacticalMemorySystem.get_tactic_success_rate(crew_data, tactic_id)
+				# If crew has tried this and it works well, use it
+				if TacticalMemorySystem.has_tried_tactic(crew_data, tactic_id) and success_rate > 0.6:
+					evasion_subtype = maneuver
+					break
+
 	var decision = {
 		"type": "maneuver",
-		"subtype": "evade",
+		"subtype": evasion_subtype,
 		"crew_id": crew_data.crew_id,
 		"entity_id": crew_data.assigned_to,
 		"target_id": top_threat.id,
@@ -209,9 +230,24 @@ static func execute_gunner_order(crew_data: Dictionary, game_time: float) -> Dic
 
 ## Make target selection decision
 static func make_target_selection_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
-	# Pick best target from opportunities
-	var target = crew_data.awareness.opportunities[0]
 	var updated = crew_data.duplicate(true)
+
+	# Query knowledge for target priority guidance
+	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
+	var knowledge = TacticalKnowledgeSystem.query_gunner_knowledge(situation, 1)
+
+	# Default: pick first target
+	var target = crew_data.awareness.opportunities[0]
+
+	# Use knowledge to inform target selection
+	if knowledge.size() > 0:
+		var priority_order = knowledge[0].content.get("priority_order", [])
+		if "damaged_enemies" in priority_order:
+			# Prefer damaged targets if available
+			for opp in crew_data.awareness.opportunities:
+				if opp.get("status", "") in ["damaged", "disabled"]:
+					target = opp
+					break
 
 	var decision = create_fire_decision(updated, target.id, game_time)
 	updated.orders.current = decision
@@ -265,6 +301,10 @@ static func execute_captain_order(crew_data: Dictionary, game_time: float) -> Di
 static func make_ship_tactical_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
 	var updated = crew_data.duplicate(true)
 
+	# Query knowledge for tactical guidance
+	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
+	var knowledge = TacticalKnowledgeSystem.query_captain_knowledge(situation, 1)
+
 	# Analyze situation
 	var has_threats = not crew_data.awareness.threats.is_empty()
 	var has_opportunities = not crew_data.awareness.opportunities.is_empty()
@@ -272,15 +312,30 @@ static func make_ship_tactical_decision(crew_data: Dictionary, game_time: float)
 	var decision = null
 	var subordinate_orders = []
 
-	if has_threats:
+	# Use knowledge to inform tactical choice
+	var tactical_action = "engage"  # default
+	if knowledge.size() > 0:
+		var action = knowledge[0].content.get("action", "")
+		# Knowledge might suggest defensive stance, withdrawal, etc.
+		if action == "tactical_withdrawal" and has_threats:
+			# Check threat level
+			var top_threat = crew_data.awareness.threats[0]
+			if top_threat.get("_threat_priority", 0.0) > 200.0:
+				tactical_action = "withdraw"
+		elif action == "concentrate_fire" and has_opportunities:
+			# Focus fire on damaged targets
+			tactical_action = "concentrate_fire"
+
+	if has_threats or has_opportunities:
 		# Prioritize best target
 		var target = select_best_tactical_target(crew_data)
-		subordinate_orders = create_engage_orders(crew_data, target)
-		decision = create_captain_decision(updated, {"type": "engage", "target_id": target.id}, game_time)
-	elif has_opportunities:
-		var target = crew_data.awareness.opportunities[0]
-		subordinate_orders = create_engage_orders(crew_data, target)
-		decision = create_captain_decision(updated, {"type": "engage", "target_id": target.id}, game_time)
+
+		if tactical_action == "withdraw":
+			subordinate_orders = create_withdraw_orders(crew_data)
+			decision = create_captain_decision(updated, {"type": "withdraw"}, game_time)
+		else:
+			subordinate_orders = create_engage_orders(crew_data, target)
+			decision = create_captain_decision(updated, {"type": "engage", "target_id": target.id}, game_time)
 
 	updated.orders.current = decision
 	updated.orders.issued = subordinate_orders

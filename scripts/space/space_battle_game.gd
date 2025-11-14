@@ -83,6 +83,10 @@ func _ensure_action(action_name: String, key: int) -> void:
 # ============================================================================
 
 func _process(delta: float) -> void:
+	# 0. CREW AI SYSTEMS - Update crew awareness, tactical memory, and decisions
+	# (Future integration point - requires crew data to be added to ships)
+	# _update_crew_ai_systems(delta)
+
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
 	_ships = MovementSystem.update_all_ships(_ships, delta, _obstacles)
 
@@ -524,3 +528,58 @@ func clear_ships() -> void:
 	for ship_id in _ship_entities.keys():
 		_remove_ship(ship_id)
 	_ships.clear()
+
+# ============================================================================
+# CREW AI INTEGRATION (Future - requires crew data on ships)
+# ============================================================================
+
+## Example integration of crew AI systems
+## Uncomment and use when ships have crew data
+# var _crew_list: Array = []  # Array of crew_data Dictionaries
+# var _recent_events: Array = []  # Events for tactical memory
+# const MAX_EVENT_HISTORY = 20
+#
+# func _update_crew_ai_systems(delta: float) -> void:
+#	var game_time = Time.get_ticks_msec() / 1000.0
+#
+#	# 1. Update crew tactical memory with recent events
+#	if BattleEventLoggerAutoload.service and BattleEventLoggerAutoload.service.track_history:
+#		var all_events = BattleEventLoggerAutoload.service.event_history
+#		_recent_events = all_events.slice(max(0, all_events.size() - MAX_EVENT_HISTORY), all_events.size())
+#
+#	_crew_list = TacticalMemorySystem.update_all_crew_memory(_crew_list, _recent_events, game_time)
+#
+#	# 2. Update crew awareness (what they can see)
+#	_crew_list = InformationSystem.update_all_crew_awareness(_crew_list, _ships, _projectiles, game_time)
+#
+#	# 3. Process command chain (orders down, info up)
+#	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
+#
+#	# 4. Process crew decisions (uses TacticalKnowledgeSystem internally)
+#	var result = CrewAISystem.update_all_crew(_crew_list, delta, game_time)
+#	_crew_list = result.crew_list
+#	var decisions = result.decisions
+#
+#	# 5. Apply crew decisions to ships
+#	_apply_crew_decisions(decisions)
+#
+# func _apply_crew_decisions(decisions: Array) -> void:
+#	# Convert crew decisions into ship orders/modifications
+#	# This would update ship target_id, desired_velocity, etc.
+#	for decision in decisions:
+#		var ship_id = decision.entity_id
+#		var ship = _find_ship_by_id(ship_id)
+#		if ship.is_empty():
+#			continue
+#
+#		# Apply decision based on type
+#		match decision.type:
+#			"maneuver":
+#				# Update ship's target/movement based on pilot decision
+#				ship.target_id = decision.get("target_id")
+#			"fire":
+#				# Gunner target selection already handled by WeaponSystem
+#				pass
+#			"tactical":
+#				# Captain's tactical orders
+#				pass
