@@ -204,10 +204,13 @@ func create_test_ship_with_armor(armor_value: int) -> Dictionary:
 	return {
 		"ship_id": "test_ship",
 		"type": "fighter",
+		"team": 0,
 		"position": Vector2(0, 0),
 		"rotation": 0.0,
+		"velocity": Vector2.ZERO,
+		"angular_velocity": 0.0,
 		"status": "operational",
-		"stats": {"max_speed": 300.0, "turn_rate": 3.0},
+		"stats": {"max_speed": 300.0, "acceleration": 100.0, "turn_rate": 3.0},
 		"armor_sections": [
 			{
 				"section_id": "front",
@@ -216,6 +219,7 @@ func create_test_ship_with_armor(armor_value: int) -> Dictionary:
 				"current_armor": armor_value
 			}
 		],
+		"weapons": [],
 		"internals": [
 			{
 				"component_id": "test_component",
@@ -236,10 +240,13 @@ func create_test_ship_with_multiple_sections() -> Dictionary:
 	return {
 		"ship_id": "test_ship",
 		"type": "corvette",
+		"team": 0,
 		"position": Vector2(0, 0),
+		"velocity": Vector2.ZERO,
+		"angular_velocity": 0.0,
 		"rotation": 0.0,
 		"status": "operational",
-		"stats": {"max_speed": 200.0},
+		"stats": {"max_speed": 200.0, "acceleration": 100.0, "turn_rate": 3.0},
 		"armor_sections": [
 			{
 				"section_id": "front",
