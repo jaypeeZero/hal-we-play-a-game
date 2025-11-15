@@ -754,6 +754,21 @@ func _check_spatial_awareness_triggers() -> void:
 		var previous_contacts = crew.awareness.get("known_entities", {})
 		var current_contacts = {}
 
+		# Helper to check if ID exists in previous contacts (handles both Dict and Array)
+		var has_previous_contact = func(ship_id: String) -> bool:
+			if typeof(previous_contacts) == TYPE_DICTIONARY:
+				return previous_contacts.has(ship_id)
+			elif typeof(previous_contacts) == TYPE_ARRAY:
+				for entity in previous_contacts:
+					if typeof(entity) == TYPE_DICTIONARY:
+						if entity.get("id") == ship_id:
+							return true
+					elif typeof(entity) == TYPE_STRING:
+						if entity == ship_id:
+							return true
+				return false
+			return false
+
 		# Check all ships for contacts
 		for other_ship in _ships:
 			if other_ship.ship_id == ship_id:
@@ -767,7 +782,7 @@ func _check_spatial_awareness_triggers() -> void:
 				current_contacts[other_ship.ship_id] = true
 
 				# New contact?
-				if not previous_contacts.has(other_ship.ship_id):
+				if not has_previous_contact.call(other_ship.ship_id):
 					_queue_crew_event(crew.crew_id, "sensor_contact", {
 						"enemy_id": other_ship.ship_id,
 						"position": other_ship.position,
@@ -775,7 +790,19 @@ func _check_spatial_awareness_triggers() -> void:
 					})
 
 		# Check for lost contacts
-		for previous_id in previous_contacts.keys():
+		# Handle both Dictionary (new format) and Array (from command chain system)
+		var previous_ids = []
+		if typeof(previous_contacts) == TYPE_DICTIONARY:
+			previous_ids = previous_contacts.keys()
+		elif typeof(previous_contacts) == TYPE_ARRAY:
+			# Extract IDs from entity objects
+			for entity in previous_contacts:
+				if typeof(entity) == TYPE_DICTIONARY and entity.has("id"):
+					previous_ids.append(entity.id)
+				elif typeof(entity) == TYPE_STRING:
+					previous_ids.append(entity)
+
+		for previous_id in previous_ids:
 			if not current_contacts.has(previous_id):
 				_queue_crew_event(crew.crew_id, "target_lost", {
 					"enemy_id": previous_id
