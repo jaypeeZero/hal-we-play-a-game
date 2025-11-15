@@ -244,3 +244,280 @@ static func apply_projectile_hits_to_obstacles(obstacles: Array, projectiles: Ar
 		updated_obstacles.append(updated_obstacle)
 
 	return {obstacles = updated_obstacles}
+
+# ============================================================================
+# PHYSICAL COLLISION RESOLUTION (Ship-Ship & Ship-Obstacle)
+# ============================================================================
+
+## Process all physical collisions between ships and obstacles
+## Returns {ships: Array, obstacles: Array, collision_events: Array}
+static func process_physical_collisions(ships: Array, obstacles: Array) -> Dictionary:
+	var collision_events = []
+	var updated_ships = ships.duplicate()
+	var updated_obstacles = obstacles.duplicate()
+
+	# Process ship-obstacle collisions
+	for i in range(updated_ships.size()):
+		var ship = updated_ships[i]
+		if ship == null or ship.status == "destroyed":
+			continue
+
+		for j in range(updated_obstacles.size()):
+			var obstacle = updated_obstacles[j]
+			if obstacle == null or obstacle.get("status", "operational") == "destroyed":
+				continue
+			if not obstacle.get("blocks_movement", true):
+				continue
+
+			var collision_result = check_and_resolve_ship_obstacle_collision(ship, obstacle)
+			if not collision_result.is_empty():
+				updated_ships[i] = collision_result.ship
+				updated_obstacles[j] = collision_result.obstacle
+				collision_events.append(collision_result.event)
+
+	# Process ship-ship collisions
+	for i in range(updated_ships.size()):
+		for j in range(i + 1, updated_ships.size()):
+			var ship1 = updated_ships[i]
+			var ship2 = updated_ships[j]
+
+			if ship1 == null or ship2 == null:
+				continue
+			if ship1.status == "destroyed" or ship2.status == "destroyed":
+				continue
+
+			var collision_result = check_and_resolve_ship_ship_collision(ship1, ship2)
+			if not collision_result.is_empty():
+				updated_ships[i] = collision_result.ship1
+				updated_ships[j] = collision_result.ship2
+				collision_events.append(collision_result.event)
+
+	return {
+		ships = updated_ships,
+		obstacles = updated_obstacles,
+		collision_events = collision_events
+	}
+
+## Check and resolve collision between ship and obstacle
+## Returns {ship: Dictionary, obstacle: Dictionary, event: Dictionary} or empty dict
+static func check_and_resolve_ship_obstacle_collision(ship: Dictionary, obstacle: Dictionary) -> Dictionary:
+	var distance = ship.position.distance_to(obstacle.position)
+	var collision_radius = ship.stats.size + obstacle.radius
+
+	# Not colliding
+	if distance > collision_radius:
+		return {}
+
+	# Calculate collision normal (from obstacle to ship)
+	var collision_normal = (ship.position - obstacle.position)
+	if collision_normal.length() < 0.1:
+		# Objects are exactly on top of each other - use random direction
+		collision_normal = Vector2(randf() * 2 - 1, randf() * 2 - 1)
+	collision_normal = collision_normal.normalized()
+
+	# Calculate relative velocity
+	var obstacle_velocity = obstacle.get("velocity", Vector2.ZERO)
+	var relative_velocity = ship.velocity - obstacle_velocity
+	var velocity_along_normal = relative_velocity.dot(collision_normal)
+
+	# Objects are moving apart - no collision response needed
+	if velocity_along_normal > 0:
+		return {}
+
+	# Calculate impact velocity (for damage)
+	var impact_speed = abs(velocity_along_normal)
+
+	# Apply elastic collision physics
+	var ship_mass = ship.stats.mass
+	var obstacle_mass = obstacle.mass
+	var restitution = 0.4  # Coefficient of restitution (0 = perfectly inelastic, 1 = perfectly elastic)
+
+	# Calculate impulse scalar: j = -(1 + e) * v_rel • n / (1/m1 + 1/m2)
+	var impulse_scalar = -(1.0 + restitution) * velocity_along_normal / (1.0 / ship_mass + 1.0 / obstacle_mass)
+	var impulse = collision_normal * impulse_scalar
+
+	# Apply impulse to ship and obstacle
+	var updated_ship = ship.duplicate(true)
+	var updated_obstacle = obstacle.duplicate(true)
+
+	updated_ship.velocity += impulse / ship_mass
+
+	# Only move obstacle if it's moveable (not platforms/stations)
+	if obstacle.get("destructible", true):
+		var new_obstacle_velocity = obstacle_velocity - impulse / obstacle_mass
+		updated_obstacle.velocity = new_obstacle_velocity
+
+	# Separate the objects to prevent overlap
+	var separation = (collision_radius - distance) * 1.01
+	var separation_ratio = ship_mass / (ship_mass + obstacle_mass)
+	updated_ship.position += collision_normal * separation * (1.0 - separation_ratio)
+
+	# Only move obstacle if it's moveable
+	if obstacle.get("destructible", true):
+		updated_obstacle.position -= collision_normal * separation * separation_ratio
+
+	# Calculate damage based on impact speed and size discrepancy
+	var damage = calculate_collision_damage(ship, obstacle, impact_speed)
+	if damage > 0:
+		# Apply damage to ship using DamageResolver
+		var damage_result = DamageResolver.resolve_hit(
+			updated_ship,
+			ship.position,  # Hit position
+			damage,
+			collision_normal.angle()  # Impact angle
+		)
+		updated_ship = damage_result.ship_data
+
+	# Create collision event
+	var event = {
+		type = "ship_obstacle_collision",
+		ship_id = ship.ship_id,
+		obstacle_id = obstacle.obstacle_id,
+		impact_speed = impact_speed,
+		damage = damage,
+		position = ship.position
+	}
+
+	return {
+		ship = updated_ship,
+		obstacle = updated_obstacle,
+		event = event
+	}
+
+## Check and resolve collision between two ships
+## Returns {ship1: Dictionary, ship2: Dictionary, event: Dictionary} or empty dict
+static func check_and_resolve_ship_ship_collision(ship1: Dictionary, ship2: Dictionary) -> Dictionary:
+	var distance = ship1.position.distance_to(ship2.position)
+	var collision_radius = ship1.stats.size + ship2.stats.size
+
+	# Not colliding
+	if distance > collision_radius:
+		return {}
+
+	# Calculate collision normal (from ship2 to ship1)
+	var collision_normal = (ship1.position - ship2.position)
+	if collision_normal.length() < 0.1:
+		# Ships are exactly on top of each other - use random direction
+		collision_normal = Vector2(randf() * 2 - 1, randf() * 2 - 1)
+	collision_normal = collision_normal.normalized()
+
+	# Calculate relative velocity
+	var relative_velocity = ship1.velocity - ship2.velocity
+	var velocity_along_normal = relative_velocity.dot(collision_normal)
+
+	# Ships are moving apart - no collision response needed
+	if velocity_along_normal > 0:
+		return {}
+
+	# Calculate impact velocity
+	var impact_speed = abs(velocity_along_normal)
+
+	# Apply elastic collision physics
+	var mass1 = ship1.stats.mass
+	var mass2 = ship2.stats.mass
+	var restitution = 0.3  # Ship-ship collisions are less elastic (more crumpling)
+
+	# Calculate impulse scalar
+	var impulse_scalar = -(1.0 + restitution) * velocity_along_normal / (1.0 / mass1 + 1.0 / mass2)
+	var impulse = collision_normal * impulse_scalar
+
+	# Apply impulse to both ships
+	var updated_ship1 = ship1.duplicate(true)
+	var updated_ship2 = ship2.duplicate(true)
+
+	updated_ship1.velocity += impulse / mass1
+	updated_ship2.velocity -= impulse / mass2
+
+	# Separate the ships to prevent overlap
+	var separation = (collision_radius - distance) * 1.01
+	var separation_ratio = mass1 / (mass1 + mass2)
+	updated_ship1.position += collision_normal * separation * (1.0 - separation_ratio)
+	updated_ship2.position -= collision_normal * separation * separation_ratio
+
+	# Calculate damage to both ships based on impact speed and size
+	var damage1 = calculate_ship_collision_damage(ship1, ship2, impact_speed)
+	var damage2 = calculate_ship_collision_damage(ship2, ship1, impact_speed)
+
+	# Apply damage to ship1
+	if damage1 > 0:
+		var damage_result = DamageResolver.resolve_hit(
+			updated_ship1,
+			ship1.position,
+			damage1,
+			collision_normal.angle()
+		)
+		updated_ship1 = damage_result.ship_data
+
+	# Apply damage to ship2
+	if damage2 > 0:
+		var damage_result = DamageResolver.resolve_hit(
+			updated_ship2,
+			ship2.position,
+			damage2,
+			(collision_normal * -1).angle()
+		)
+		updated_ship2 = damage_result.ship_data
+
+	# Create collision event
+	var event = {
+		type = "ship_ship_collision",
+		ship1_id = ship1.ship_id,
+		ship2_id = ship2.ship_id,
+		impact_speed = impact_speed,
+		damage1 = damage1,
+		damage2 = damage2,
+		position = (ship1.position + ship2.position) / 2.0
+	}
+
+	return {
+		ship1 = updated_ship1,
+		ship2 = updated_ship2,
+		event = event
+	}
+
+## Calculate damage from ship-obstacle collision based on impact speed and size discrepancy
+static func calculate_collision_damage(ship: Dictionary, obstacle: Dictionary, impact_speed: float) -> float:
+	# No damage from very slow collisions
+	if impact_speed < 20.0:
+		return 0.0
+
+	# Base damage scales with impact speed squared (kinetic energy)
+	var base_damage = pow(impact_speed / 50.0, 2.0) * 10.0
+
+	# Size discrepancy multiplier - bigger obstacles hurt more
+	var ship_size = ship.stats.size
+	var obstacle_size = obstacle.radius
+	var size_ratio = obstacle_size / ship_size
+
+	# Larger obstacles deal significantly more damage
+	var size_multiplier = 1.0 + (size_ratio - 1.0) * 1.5
+	size_multiplier = max(0.5, size_multiplier)  # Minimum 0.5x for small obstacles
+
+	# Mass matters too - heavier obstacles deal more damage
+	var mass_ratio = obstacle.mass / ship.stats.mass
+	var mass_multiplier = sqrt(mass_ratio)  # Square root to smooth the curve
+
+	var total_damage = base_damage * size_multiplier * mass_multiplier
+
+	return total_damage
+
+## Calculate damage from ship-ship collision
+static func calculate_ship_collision_damage(receiving_ship: Dictionary, impacting_ship: Dictionary, impact_speed: float) -> float:
+	# No damage from very slow collisions
+	if impact_speed < 15.0:
+		return 0.0
+
+	# Base damage scales with impact speed
+	var base_damage = pow(impact_speed / 40.0, 2.0) * 8.0
+
+	# Larger ships hitting you deal more damage
+	var size_ratio = impacting_ship.stats.size / receiving_ship.stats.size
+	var size_multiplier = sqrt(size_ratio)
+
+	# Heavier ships deal more damage
+	var mass_ratio = impacting_ship.stats.mass / receiving_ship.stats.mass
+	var mass_multiplier = sqrt(mass_ratio)
+
+	var total_damage = base_damage * size_multiplier * mass_multiplier
+
+	return total_damage
