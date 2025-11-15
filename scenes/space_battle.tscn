@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://b2xq8v9k3space"]
+[gd_scene load_steps=3 format=3 uid="uid://b2xq8v9k3space"]
 
 [ext_resource type="Script" path="res://scripts/space/space_battle_game.gd" id="1_space_game"]
+[ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
 
 [node name="SpaceBattle" type="Control"]
 layout_mode = 3
@@ -22,6 +23,10 @@ color = Color(0.0509804, 0.0509804, 0.0509804, 1)
 [node name="SpaceBattleGame" type="Node2D" parent="."]
 script = ExtResource("1_space_game")
 
+[node name="Camera" type="Camera2D" parent="SpaceBattleGame"]
+position = Vector2(960, 540)
+script = ExtResource("2_camera")
+
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="HelpText" type="Label" parent="UI"]
@@ -31,7 +36,7 @@ offset_right = 500.0
 offset_bottom = 200.0
 text = "Space Battle Tactics
 
-Controls:
+Spawn Controls:
 1 - Spawn 3 Fighters (Player)
 2 - Spawn 1 Corvette (Player)
 3 - Spawn 1 Capital (Player)
@@ -39,7 +44,12 @@ Controls:
 5 - Spawn 1 Corvette (Enemy)
 6 - Spawn 1 Capital (Enemy)
 
-After pressing a key, click to place ships."
+Camera Controls:
+WASD - Pan camera
+-/+ - Zoom out/in
+/ - Reset camera
+
+After pressing a spawn key, click to place ships."
 
 [node name="StatusText" type="Label" parent="UI"]
 offset_left = 10.0
