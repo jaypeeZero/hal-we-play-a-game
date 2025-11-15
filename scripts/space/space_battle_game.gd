@@ -577,6 +577,12 @@ func _update_crew_ai_systems(delta: float) -> void:
 
 	var game_time = Time.get_ticks_msec() / 1000.0
 
+	# Update crew awareness (periodic - every frame for now, could be throttled)
+	_crew_list = InformationSystem.update_all_crew_awareness(_crew_list, _ships, _projectiles, game_time)
+
+	# Process command chain (information flows up, orders flow down)
+	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
+
 	# EVENT-DRIVEN: Only process crew events, don't poll all crew
 	_process_crew_events(_crew_events, delta, game_time)
 	_crew_events.clear()
@@ -726,8 +732,7 @@ func _update_crew_in_list(updated_crew: Dictionary) -> void:
 
 ## Apply crew decisions to game state
 func _apply_crew_decisions(decisions: Array) -> void:
-	# For now, just log decisions
-	# Full integration would modify ship behavior based on crew decisions
+	# Log decisions
 	for decision in decisions:
 		if BattleEventLoggerAutoload.service:
 			BattleEventLoggerAutoload.service.log_event("crew_decision", {
@@ -736,6 +741,10 @@ func _apply_crew_decisions(decisions: Array) -> void:
 				"subtype": decision.get("subtype", ""),
 				"entity_id": decision.get("entity_id", "")
 			})
+
+	# Apply decisions to ships
+	var result = CrewIntegrationSystem.apply_crew_decisions_to_ships(_ships, _crew_list, decisions)
+	_ships = result.ships
 
 ## SPATIAL AWARENESS - Check for sensor contacts (EVENT-DRIVEN)
 func _check_spatial_awareness_triggers() -> void:

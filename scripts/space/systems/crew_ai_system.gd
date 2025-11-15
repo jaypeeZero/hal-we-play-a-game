@@ -104,23 +104,39 @@ static func calculate_decision_delay(crew_data: Dictionary) -> float:
 
 ## Pilot makes tactical maneuvering decisions
 static func make_pilot_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
-	# Check for orders from captain
+	# Check for orders from captain - ALWAYS respect superior orders
 	if crew_data.orders.received != null:
 		return execute_pilot_order(crew_data, game_time)
 
-	# Autonomous decision - evaluate threats and opportunities
-	if not crew_data.awareness.threats.is_empty():
-		return make_evasive_decision(crew_data, game_time)
+	# Analyze tactical context
+	var context = analyze_tactical_context(crew_data)
 
-	if not crew_data.awareness.opportunities.is_empty():
-		return make_pursuit_decision(crew_data, game_time)
+	# Make ship-type-specific decision
+	# Note: We need to determine ship type from awareness or crew data
+	# For now, use a heuristic based on role and command chain
+	var ship_type = infer_ship_type(crew_data)
 
-	# No immediate action needed - idle scanning
-	var updated = crew_data.duplicate(true)
-	updated.current_action = "idle_scan"
-	# EVENT-DRIVEN: Idle = check back in a few seconds
-	updated.next_decision_time = game_time + randf_range(2.0, 4.0)
-	return {"crew_data": updated}
+	match ship_type:
+		"fighter":
+			return make_fighter_pilot_decision(crew_data, context, game_time)
+		"corvette":
+			return make_corvette_pilot_decision(crew_data, context, game_time)
+		"capital":
+			return make_capital_pilot_decision(crew_data, context, game_time)
+		_:
+			# Default behavior - balanced approach
+			return make_balanced_pilot_decision(crew_data, context, game_time)
+
+## Infer ship type from crew context
+static func infer_ship_type(crew_data: Dictionary) -> String:
+	# If crew has a superior, they're likely on a multi-crew ship
+	if crew_data.command_chain.superior != null:
+		# Pilot with captain = likely corvette or capital
+		# TODO: Could check subordinate count on captain to determine size
+		return "corvette"  # Default to corvette for multi-crew
+	else:
+		# Solo pilot = fighter
+		return "fighter"
 
 ## Execute order from captain
 static func execute_pilot_order(crew_data: Dictionary, game_time: float) -> Dictionary:
@@ -199,6 +215,125 @@ static func make_pursuit_decision(crew_data: Dictionary, game_time: float) -> Di
 	updated.orders.current = decision
 	updated.current_action = "pursuing"
 	# EVENT-DRIVEN: Pursuit needs updates, but less frequent than evasion (0.7-1.0s)
+	updated.next_decision_time = game_time + randf_range(0.7, 1.0)
+	return {"crew_data": updated, "decision": decision}
+
+## Fighter pilot decision - aggressive, evade only when critical
+static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
+	var awareness = crew_data.awareness
+
+	# Evade if:
+	# 1. Critically damaged, OR
+	# 2. Solo and outnumbered (2+ to 1), OR
+	# 3. With squadron but heavily outnumbered (3+ to 1), OR
+	# 4. Explicit retreat order from superior
+	var should_evade = false
+
+	# Check if critically damaged (would need ship data - skip for now)
+	# var ship = get_assigned_ship_from_awareness(crew_data)
+	# if is_critically_damaged(crew_data, ship):
+	#     should_evade = true
+
+	# Solo pilots are cautious - evade if outnumbered
+	if context.is_solo and context.enemy_count >= 2:
+		should_evade = true
+	# With squadron, only evade if heavily outnumbered
+	elif context.has_squadron_support and context.enemy_count >= context.friendly_count * 2:
+		should_evade = true
+
+	if should_evade and not awareness.threats.is_empty():
+		return make_evasive_decision(crew_data, game_time)
+
+	# Default: ENGAGE
+	# Fighters are aggressive - pursue any available target
+	if not awareness.opportunities.is_empty():
+		return make_pursuit_decision(crew_data, game_time)
+
+	# If no opportunities but threats exist, STILL engage (fighters are aggressive)
+	if not awareness.threats.is_empty():
+		return make_pursuit_decision_from_threat(crew_data, game_time)
+
+	# No targets - idle scan
+	return make_idle_decision(crew_data, game_time)
+
+## Corvette pilot decision - balanced, tactical positioning
+static func make_corvette_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
+	var awareness = crew_data.awareness
+
+	# Corvettes evade if:
+	# 1. Damaged, OR
+	# 2. Outnumbered without squadron support
+	var should_evade = context.is_outnumbered and not context.has_squadron_support
+
+	if should_evade and not awareness.threats.is_empty():
+		return make_evasive_decision(crew_data, game_time)
+
+	# Engage if have targets and not heavily outnumbered
+	if not awareness.opportunities.is_empty():
+		return make_pursuit_decision(crew_data, game_time)
+
+	# Idle otherwise
+	return make_idle_decision(crew_data, game_time)
+
+## Capital ship pilot decision - cautious, maintains distance
+static func make_capital_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
+	var awareness = crew_data.awareness
+
+	# Capital ships are cautious - evade if threatened
+	if not awareness.threats.is_empty():
+		# Check if threats are close (would need distance data)
+		# For now, evade if any significant threats
+		if context.threat_count > 2:
+			return make_evasive_decision(crew_data, game_time)
+
+	# Engage only if have clear opportunities
+	if not awareness.opportunities.is_empty() and not context.is_outnumbered:
+		return make_pursuit_decision(crew_data, game_time)
+
+	# Default: maintain position
+	return make_idle_decision(crew_data, game_time)
+
+## Balanced pilot decision - default behavior
+static func make_balanced_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
+	var awareness = crew_data.awareness
+
+	# Evade if threatened and outnumbered
+	if not awareness.threats.is_empty() and context.is_outnumbered:
+		return make_evasive_decision(crew_data, game_time)
+
+	# Pursue opportunities
+	if not awareness.opportunities.is_empty():
+		return make_pursuit_decision(crew_data, game_time)
+
+	# Idle
+	return make_idle_decision(crew_data, game_time)
+
+## Make idle/scanning decision
+static func make_idle_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
+	var updated = crew_data.duplicate(true)
+	updated.current_action = "idle_scan"
+	# EVENT-DRIVEN: Idle = check back in a few seconds
+	updated.next_decision_time = game_time + randf_range(2.0, 4.0)
+	return {"crew_data": updated}
+
+## Make pursuit decision from threat (treat threat as target)
+static func make_pursuit_decision_from_threat(crew_data: Dictionary, game_time: float) -> Dictionary:
+	var threat = crew_data.awareness.threats[0]
+	var updated = crew_data.duplicate(true)
+
+	var decision = {
+		"type": "maneuver",
+		"subtype": "pursue",
+		"crew_id": crew_data.crew_id,
+		"entity_id": crew_data.assigned_to,
+		"target_id": threat.id,
+		"skill_factor": calculate_effective_skill(crew_data),
+		"delay": calculate_decision_delay(crew_data),
+		"timestamp": game_time
+	}
+
+	updated.orders.current = decision
+	updated.current_action = "pursuing"
 	updated.next_decision_time = game_time + randf_range(0.7, 1.0)
 	return {"crew_data": updated, "decision": decision}
 
@@ -487,3 +622,74 @@ static func make_commander_decision(crew_data: Dictionary, game_time: float) -> 
 
 	updated.orders.current = decision
 	return {"crew_data": updated, "decision": decision}
+
+# ============================================================================
+# TACTICAL CONTEXT ANALYSIS
+# ============================================================================
+
+## Analyze tactical context for decision-making
+static func analyze_tactical_context(crew_data: Dictionary) -> Dictionary:
+	var awareness = crew_data.awareness
+	var friendlies = count_friendlies(awareness.known_entities)
+	var enemies = count_enemies(awareness.known_entities, awareness.threats)
+
+	return {
+		"friendly_count": friendlies,
+		"enemy_count": enemies,
+		"has_squadron_support": friendlies > 1,  # Other friendlies nearby
+		"is_outnumbered": enemies > friendlies,
+		"has_numerical_advantage": friendlies > enemies,
+		"is_solo": friendlies == 0,
+		"threat_count": awareness.threats.size(),
+		"opportunity_count": awareness.opportunities.size()
+	}
+
+## Count friendly ships in awareness
+static func count_friendlies(known_entities: Variant) -> int:
+	var count = 0
+	if typeof(known_entities) == TYPE_ARRAY:
+		for entity in known_entities:
+			if typeof(entity) == TYPE_DICTIONARY and entity.get("type") == "ship":
+				# InformationSystem marks friendlies differently
+				count += 1
+	elif typeof(known_entities) == TYPE_DICTIONARY:
+		count = known_entities.size()
+	return count
+
+## Count enemy ships
+static func count_enemies(known_entities: Variant, threats: Array) -> int:
+	# Threats array contains enemy ships
+	return threats.filter(func(t): return t.get("type") == "ship").size()
+
+## Check if ship is critically damaged
+static func is_critically_damaged(crew_data: Dictionary, ship_data: Dictionary) -> bool:
+	if ship_data.is_empty():
+		return false
+
+	# Check armor integrity
+	var total_armor = 0
+	var max_armor = 0
+	for section in ship_data.get("armor_sections", []):
+		total_armor += section.get("current_armor", 0)
+		max_armor += section.get("max_armor", 0)
+
+	if max_armor > 0:
+		var armor_percent = float(total_armor) / float(max_armor)
+		return armor_percent < 0.3  # Less than 30% armor
+
+	return false
+
+## Get ship the crew member is assigned to (requires ships array from awareness)
+static func get_assigned_ship_from_awareness(crew_data: Dictionary) -> Dictionary:
+	var ship_id = crew_data.assigned_to
+	if ship_id == null:
+		return {}
+
+	# Try to find in known_entities
+	var entities = crew_data.awareness.get("known_entities", [])
+	if typeof(entities) == TYPE_ARRAY:
+		for entity in entities:
+			if typeof(entity) == TYPE_DICTIONARY and entity.get("id") == ship_id:
+				return entity
+
+	return {}

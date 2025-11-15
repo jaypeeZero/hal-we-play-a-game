@@ -15,15 +15,35 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 	if is_ship_disabled(ship_data):
 		return apply_disabled_drift(ship_data, delta)
 
-	var target = find_nearest_enemy(ship_data, targets)
-	if target.is_empty():
-		return apply_space_drift(ship_data, delta)
-
 	# Get nearby ships for collision avoidance
 	var nearby_ships = get_nearby_friendly_ships(ship_data, targets)
 
-	# Calculate pilot intentions based on target, nearby ships, and obstacles
-	var pilot_control = calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
+	# Check crew AI orders first
+	var current_order = ship_data.get("orders", {}).get("current_order", "")
+	var pilot_control: Dictionary
+
+	if current_order == "evade":
+		# Evade mode - retreat from threats
+		var threat_id = ship_data.get("orders", {}).get("threat_id", "")
+		var threat = find_ship_by_id(targets, threat_id) if threat_id else find_nearest_enemy(ship_data, targets)
+		if threat.is_empty():
+			return apply_space_drift(ship_data, delta)
+		pilot_control = calculate_evasion_control(ship_data, threat, nearby_ships, obstacles)
+
+	elif current_order == "engage":
+		# Engage mode - pursue and attack target
+		var target_id = ship_data.get("orders", {}).get("target_id", "")
+		var target = find_ship_by_id(targets, target_id) if target_id else find_nearest_enemy(ship_data, targets)
+		if target.is_empty():
+			return apply_space_drift(ship_data, delta)
+		pilot_control = calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
+
+	else:
+		# No orders or unknown order - use default behavior (find nearest enemy)
+		var target = find_nearest_enemy(ship_data, targets)
+		if target.is_empty():
+			return apply_space_drift(ship_data, delta)
+		pilot_control = calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
 
 	return apply_space_physics(ship_data, pilot_control, delta)
 
@@ -52,6 +72,12 @@ static func find_nearest_enemy(ship_data: Dictionary, all_ships: Array) -> Dicti
 	return enemies \
 		.map(func(enemy): return add_distance_from(enemy, ship_data.position)) \
 		.reduce(select_nearest, {})
+
+static func find_ship_by_id(ships: Array, ship_id: String) -> Dictionary:
+	for ship in ships:
+		if ship != null and ship.get("ship_id") == ship_id:
+			return ship
+	return {}
 
 static func get_enemy_ships(ships: Array, own_team: int) -> Array:
 	return ships \
@@ -169,6 +195,59 @@ static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary, n
 		"thrust_active": should_thrust,
 		"is_braking": is_braking,
 		"engagement_range": engagement_range,
+		"current_distance": distance
+	}
+
+## Calculate evasion control - retreat from threat
+static func calculate_evasion_control(ship_data: Dictionary, threat: Dictionary, nearby_ships: Array, obstacles: Array = []) -> Dictionary:
+	var to_threat = threat.position - ship_data.position
+	var distance = to_threat.length()
+	var direction_from_threat = -to_threat.normalized()  # Run AWAY from threat
+
+	# Try to get at least this far from threat
+	var safe_distance = get_engagement_range(ship_data) * 2.0
+
+	# Check for collision threats
+	var ship_avoidance = calculate_collision_avoidance(ship_data, nearby_ships)
+	var obstacle_avoidance = calculate_obstacle_avoidance(ship_data, obstacles)
+	var avoidance_vector = ship_avoidance + obstacle_avoidance
+	var has_collision_threat = avoidance_vector.length() > 0.1
+
+	var desired_heading: float
+	var should_thrust: bool
+	var is_braking: bool = false
+
+	if distance < safe_distance:
+		# Too close! Retreat at full speed
+		var retreat_direction = direction_from_threat
+
+		# Apply avoidance if needed
+		if has_collision_threat:
+			if obstacle_avoidance.length() > 0.1:
+				retreat_direction = (retreat_direction + obstacle_avoidance.normalized()).normalized()
+			else:
+				retreat_direction = (retreat_direction + ship_avoidance.normalized()).normalized()
+
+		desired_heading = retreat_direction.angle()
+		should_thrust = true
+	else:
+		# At safe distance - maintain position with evasive drift
+		var drift_position = ship_data.position + direction_from_threat * safe_distance
+		var to_drift = drift_position - ship_data.position
+
+		if to_drift.length() > 10.0:
+			desired_heading = to_drift.angle()
+			should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.5
+		else:
+			# At good position, face away from threat
+			desired_heading = direction_from_threat.angle()
+			should_thrust = false
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": is_braking,
+		"engagement_range": safe_distance,
 		"current_distance": distance
 	}
 

@@ -117,9 +117,10 @@ func test_pilot_makes_evasive_decision():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
 	crew.assigned_to = "ship_1"
 
-	# Add a threat
+	# Add multiple threats (solo fighter outnumbered should evade)
 	crew.awareness.threats = [
-		{"id": "enemy_1", "type": "ship", "_threat_priority": 150.0}
+		{"id": "enemy_1", "type": "ship", "_threat_priority": 150.0},
+		{"id": "enemy_2", "type": "ship", "_threat_priority": 140.0}
 	]
 
 	var result = CrewAISystem.update_crew_member(crew, 0.1, 1.0)
