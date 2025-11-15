@@ -200,17 +200,31 @@ func test_multiple_hits_accumulate_correctly():
 # HELPER FUNCTIONS
 # ============================================================================
 
-func create_test_ship_with_armor(armor_value: int) -> Dictionary:
-	return {
+## Base template for creating test ships with common fields
+func _base_test_ship(ship_type: String = "fighter", extra_fields: Dictionary = {}) -> Dictionary:
+	var base = {
 		"ship_id": "test_ship",
-		"type": "fighter",
+		"type": ship_type,
 		"team": 0,
 		"position": Vector2(0, 0),
-		"rotation": 0.0,
 		"velocity": Vector2.ZERO,
 		"angular_velocity": 0.0,
+		"rotation": 0.0,
 		"status": "operational",
 		"stats": {"max_speed": 300.0, "acceleration": 100.0, "turn_rate": 3.0},
+		"weapons": [],
+		"armor_sections": [],
+		"internals": []
+	}
+
+	# Merge in extra fields
+	for key in extra_fields:
+		base[key] = extra_fields[key]
+
+	return base
+
+func create_test_ship_with_armor(armor_value: int) -> Dictionary:
+	return _base_test_ship("fighter", {
 		"armor_sections": [
 			{
 				"section_id": "front",
@@ -219,7 +233,6 @@ func create_test_ship_with_armor(armor_value: int) -> Dictionary:
 				"current_armor": armor_value
 			}
 		],
-		"weapons": [],
 		"internals": [
 			{
 				"component_id": "test_component",
@@ -234,111 +247,41 @@ func create_test_ship_with_armor(armor_value: int) -> Dictionary:
 				}
 			}
 		]
-	}
+	})
 
 func create_test_ship_with_multiple_sections() -> Dictionary:
-	return {
-		"ship_id": "test_ship",
-		"type": "corvette",
-		"team": 0,
-		"position": Vector2(0, 0),
-		"velocity": Vector2.ZERO,
-		"angular_velocity": 0.0,
-		"rotation": 0.0,
-		"status": "operational",
+	return _base_test_ship("corvette", {
 		"stats": {"max_speed": 200.0, "acceleration": 100.0, "turn_rate": 3.0},
 		"armor_sections": [
-			{
-				"section_id": "front",
-				"arc": {"start": -45, "end": 45},
-				"max_armor": 50,
-				"current_armor": 50
-			},
-			{
-				"section_id": "left",
-				"arc": {"start": 45, "end": 135},
-				"max_armor": 40,
-				"current_armor": 40
-			},
-			{
-				"section_id": "right",
-				"arc": {"start": 225, "end": 315},
-				"max_armor": 40,
-				"current_armor": 40
-			}
+			{"section_id": "front", "arc": {"start": -45, "end": 45}, "max_armor": 50, "current_armor": 50},
+			{"section_id": "left", "arc": {"start": 45, "end": 135}, "max_armor": 40, "current_armor": 40},
+			{"section_id": "right", "arc": {"start": 225, "end": 315}, "max_armor": 40, "current_armor": 40}
 		],
 		"internals": [
-			{
-				"component_id": "comp1",
-				"type": "control",
-				"position_offset": Vector2(0, 0),
-				"max_health": 30,
-				"current_health": 30,
-				"status": "operational",
-				"effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}
-			}
+			{"component_id": "comp1", "type": "control", "position_offset": Vector2(0, 0), "max_health": 30, "current_health": 30, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}}
 		]
-	}
+	})
 
 func create_test_ship_with_components() -> Dictionary:
-	return {
-		"ship_id": "test_ship",
-		"position": Vector2(0, 0),
-		"rotation": 0.0,
-		"status": "operational",
-		"stats": {"max_speed": 300.0},
+	return _base_test_ship("fighter", {
 		"armor_sections": [
-			{
-				"section_id": "front",
-				"arc": {"start": -180, "end": 180},
-				"max_armor": 20,
-				"current_armor": 20
-			}
+			{"section_id": "front", "arc": {"start": -180, "end": 180}, "max_armor": 20, "current_armor": 20}
 		],
 		"internals": [
-			{
-				"component_id": "engine",
-				"type": "engine",
-				"position_offset": Vector2(0, 5),
-				"max_health": 25,
-				"current_health": 25,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.7},
-					"on_destroyed": {"max_speed": 0.2}
-				}
-			}
+			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 5), "max_health": 25, "current_health": 25, "status": "operational", "effect_on_ship": {"on_damaged": {"max_speed": 0.7}, "on_destroyed": {"max_speed": 0.2}}}
 		]
-	}
+	})
 
 func create_test_ship_with_engine() -> Dictionary:
 	return create_test_ship_with_components()
 
 func create_test_ship_with_multiple_components() -> Dictionary:
-	return {
-		"ship_id": "test_ship",
-		"position": Vector2(0, 0),
-		"rotation": 0.0,
-		"status": "operational",
-		"stats": {"max_speed": 300.0},
+	return _base_test_ship("fighter", {
 		"armor_sections": [
-			{
-				"section_id": "front",
-				"arc": {"start": -180, "end": 180},
-				"max_armor": 50,
-				"current_armor": 50
-			}
+			{"section_id": "front", "arc": {"start": -180, "end": 180}, "max_armor": 50, "current_armor": 50}
 		],
 		"internals": [
-			{
-				"component_id": "engine",
-				"type": "engine",
-				"position_offset": Vector2(0, 10),
-				"max_health": 30,
-				"current_health": 30,
-				"status": "operational",
-				"effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}
-			},
+			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 10), "max_health": 30, "current_health": 30, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}},
 			{
 				"component_id": "control",
 				"type": "control",
@@ -358,10 +301,10 @@ func create_test_ship_with_multiple_components() -> Dictionary:
 				"effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}
 			}
 		]
-	}
+	})
 
 func find_component(ship: Dictionary, component_id: String) -> Dictionary:
-	for component in ship.internals:
+	for component in ship["internals"]:
 		if component.component_id == component_id:
 			return component
 	return {}
