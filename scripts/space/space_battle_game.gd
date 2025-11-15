@@ -101,6 +101,9 @@ func _process(delta: float) -> void:
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
 	_ships = MovementSystem.update_all_ships(_ships, delta, _obstacles)
 
+	# 1a. OBSTACLE MOVEMENT - Update asteroid/debris positions
+	_obstacles = MovementSystem.update_all_obstacles(_obstacles, delta)
+
 	# 1b. SPATIAL TRIGGERS - Check for sensor contacts after movement
 	if ENABLE_CREW_AI:
 		_check_spatial_awareness_triggers()
@@ -142,6 +145,47 @@ func _process(delta: float) -> void:
 	# Emit damage events to crew (EVENT-DRIVEN)
 	if ENABLE_CREW_AI and not collision_result.hits.is_empty():
 		_emit_damage_events(collision_result.hits)
+
+	# 5a. PHYSICAL COLLISION SYSTEM - Handle ship-ship and ship-obstacle collisions
+	var physics_collision_result = CollisionSystem.process_physical_collisions(_ships, _obstacles)
+	_ships = physics_collision_result.ships
+	_obstacles = physics_collision_result.obstacles
+
+	# Spawn visual effects from physical collisions
+	for collision_event in physics_collision_result.collision_events:
+		if collision_event.damage > 5.0:  # Only show effect for significant impacts
+			var effect = VisualEffectSystem.create_effect(
+				"effect_impact",
+				collision_event.position,
+				0.4
+			)
+			_spawn_visual_effect(effect)
+
+	# Emit collision damage events to crew (EVENT-DRIVEN)
+	if ENABLE_CREW_AI and not physics_collision_result.collision_events.is_empty():
+		for event in physics_collision_result.collision_events:
+			if event.type == "ship_obstacle_collision" and event.damage > 0:
+				_crew_events.append({
+					type = "ship_collision",
+					ship_id = event.ship_id,
+					damage = event.damage,
+					timestamp = Time.get_ticks_msec()
+				})
+			elif event.type == "ship_ship_collision":
+				if event.damage1 > 0:
+					_crew_events.append({
+						type = "ship_collision",
+						ship_id = event.ship1_id,
+						damage = event.damage1,
+						timestamp = Time.get_ticks_msec()
+					})
+				if event.damage2 > 0:
+					_crew_events.append({
+						type = "ship_collision",
+						ship_id = event.ship2_id,
+						damage = event.damage2,
+						timestamp = Time.get_ticks_msec()
+					})
 
 	# 6. VISUAL EFFECT SYSTEM - Update and remove expired effects
 	var effect_result = VisualEffectSystem.update_all_effects(_visual_effects, delta)

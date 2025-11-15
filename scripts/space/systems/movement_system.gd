@@ -425,3 +425,35 @@ static func angle_difference(angle1: float, angle2: float) -> float:
 		diff += TAU
 	return diff
 
+# ============================================================================
+# OBSTACLE MOVEMENT
+# ============================================================================
+
+## Update obstacle position based on velocity (Newton's first law - objects in motion stay in motion)
+static func update_obstacle_movement(obstacle_data: Dictionary, delta: float) -> Dictionary:
+	if obstacle_data == null:
+		return obstacle_data
+
+	# Skip destroyed obstacles
+	if obstacle_data.get("status", "operational") == "destroyed":
+		return obstacle_data
+
+	var velocity = obstacle_data.get("velocity", Vector2.ZERO)
+	var angular_velocity = obstacle_data.get("angular_velocity", 0.0)
+
+	# No movement needed if stationary
+	if velocity.length() < 0.01 and abs(angular_velocity) < 0.001:
+		return obstacle_data
+
+	# Update position and rotation based on velocity
+	var updated_obstacle = obstacle_data.duplicate(true)
+	updated_obstacle.position += velocity * delta
+	updated_obstacle.rotation += angular_velocity * delta
+
+	return updated_obstacle
+
+## Update all obstacles - returns new Array of obstacle_data
+static func update_all_obstacles(obstacles: Array, delta: float) -> Array:
+	return obstacles \
+		.filter(func(obstacle): return obstacle != null) \
+		.map(func(obstacle): return update_obstacle_movement(obstacle, delta))
