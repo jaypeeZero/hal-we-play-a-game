@@ -296,6 +296,13 @@ static func calculate_pursue_full_speed(ship_data: Dictionary, target: Dictionar
 	var to_target = target.position - ship_data.position
 	var desired_heading = to_target.angle()
 
+	# DART AND DASH: Check if we need to brake and change direction
+	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
+
+	if needs_course_correction:
+		# Brake hard, then we'll dart in the new direction
+		return create_braking_control(ship_data, desired_heading, to_target.length())
+
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": true,
@@ -317,9 +324,14 @@ static func calculate_pursue_tactical(ship_data: Dictionary, target: Dictionary,
 	var to_predicted = predicted_pos - ship_data.position
 	var desired_heading = to_predicted.angle()
 
-	# Slow down if going too fast
+	# DART AND DASH: Brake if changing direction significantly
+	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
+	if needs_course_correction:
+		return create_braking_control(ship_data, desired_heading, distance)
+
+	# Slow down if going too fast toward target
 	var closing_speed = ship_data.velocity.dot(direction)
-	var should_brake = closing_speed > ship_data.stats.max_speed * 0.6
+	var should_brake = closing_speed > ship_data.stats.max_speed * 0.5
 
 	return {
 		"desired_heading": desired_heading,
@@ -341,6 +353,11 @@ static func calculate_flank_behind(ship_data: Dictionary, target: Dictionary, ne
 	var to_behind = behind_position - ship_data.position
 	var desired_heading = to_behind.angle()
 
+	# DART AND DASH: Sharp turns to get behind enemy
+	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
+	if needs_course_correction:
+		return create_braking_control(ship_data, desired_heading, to_behind.length())
+
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": true,
@@ -359,19 +376,25 @@ static func calculate_tight_pursuit(ship_data: Dictionary, target: Dictionary, n
 	var desired_pos = target.position + behind_offset + target_velocity * 0.3
 
 	var to_desired = desired_pos - ship_data.position
+	var distance = to_desired.length()
 	var desired_heading = to_desired.angle()
 
-	# Match target speed
+	# DART AND DASH: Quick corrections to stay on target's tail
+	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
+	if needs_course_correction:
+		return create_braking_control(ship_data, desired_heading, distance)
+
+	# Match target speed - brake if too fast, thrust if too slow
 	var speed_diff = ship_data.velocity.length() - target_velocity.length()
-	var should_brake = speed_diff > 20.0
-	var should_thrust = speed_diff < -20.0
+	var should_brake = speed_diff > 30.0  # More aggressive braking
+	var should_thrust = speed_diff < -10.0 or distance > 150.0
 
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": should_thrust,
 		"is_braking": should_brake,
 		"engagement_range": 120.0,
-		"current_distance": to_desired.length()
+		"current_distance": distance
 	}
 
 ## Dogfight maneuver - tight weaving and loops
@@ -381,20 +404,30 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 
 	# Weave pattern - add perpendicular offset
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var weave_phase = fmod(Time.get_ticks_msec() / 1000.0, 2.0)  # 2 second cycle
-	var weave_offset = perpendicular * sin(weave_phase * PI) * 80.0
+	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)  # Faster weaving
+	var weave_offset = perpendicular * sin(weave_phase * PI) * 60.0  # Tighter weave
 
 	var desired_pos = target.position + weave_offset
 	var to_desired = desired_pos - ship_data.position
 	var desired_heading = to_desired.angle()
 
-	# Small adjustments only
-	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.7
+	# DART AND DASH: Very aggressive direction changes for dogfighting
+	# Use tighter threshold for course correction (30 degrees instead of 45)
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+	if current_velocity.length() > 40.0:
+		var current_heading = current_velocity.angle()
+		var heading_diff = abs(angle_difference(current_heading, desired_heading))
+		if heading_diff > PI / 6.0:  # 30 degrees - tighter for dogfighting
+			return create_braking_control(ship_data, desired_heading, distance)
+
+	# Quick bursts - not constant thrust
+	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.6
+	var should_brake = ship_data.velocity.length() > ship_data.stats.max_speed * 0.8
 
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": should_thrust,
-		"is_braking": false,
+		"is_braking": should_brake,
 		"engagement_range": 150.0,
 		"current_distance": distance
 	}
@@ -404,6 +437,11 @@ static func calculate_group_run_approach(ship_data: Dictionary, target: Dictiona
 	var formation_offset = ship_data.get("orders", {}).get("formation_offset", Vector2.ZERO)
 	var to_target = target.position - ship_data.position + formation_offset
 	var desired_heading = to_target.angle()
+
+	# DART AND DASH: Brake for formation adjustments
+	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
+	if needs_course_correction:
+		return create_braking_control(ship_data, desired_heading, to_target.length())
 
 	return {
 		"desired_heading": desired_heading,
@@ -419,7 +457,12 @@ static func calculate_group_run_attack(ship_data: Dictionary, target: Dictionary
 	var distance = to_target.length()
 	var desired_heading = to_target.angle()
 
-	# Full speed attack run
+	# DART AND DASH: Line up the attack run
+	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
+	if needs_course_correction:
+		return create_braking_control(ship_data, desired_heading, distance)
+
+	# Full speed attack run once lined up
 	var should_thrust = distance > 150.0
 
 	return {
@@ -442,6 +485,11 @@ static func calculate_group_run_swing_around(ship_data: Dictionary, target: Dict
 	var to_swing = swing_out_pos - ship_data.position
 	var desired_heading = to_swing.angle()
 
+	# DART AND DASH: Hard brake to swing around quickly
+	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
+	if needs_course_correction:
+		return create_braking_control(ship_data, desired_heading, distance)
+
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": true,
@@ -455,14 +503,22 @@ static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary,
 	var away_from_target = (ship_data.position - target.position).normalized()
 	var desired_heading = away_from_target.angle()
 
-	# Add weave to dodge
+	# Add weave to dodge - quick darts side to side
 	var perpendicular = Vector2(-away_from_target.y, away_from_target.x)
-	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)
-	var weave_offset = perpendicular * sin(weave_phase * PI) * 100.0
+	var weave_phase = fmod(Time.get_ticks_msec() / 600.0, 2.0)  # Faster weaving
+	var weave_offset = perpendicular * sin(weave_phase * PI) * 80.0  # Tighter weave
 
 	var desired_pos = ship_data.position + away_from_target * 300.0 + weave_offset
 	var to_desired = desired_pos - ship_data.position
 	desired_heading = to_desired.angle()
+
+	# DART AND DASH: Sharp evasive maneuvers
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+	if current_velocity.length() > 40.0:
+		var current_heading = current_velocity.angle()
+		var heading_diff = abs(angle_difference(current_heading, desired_heading))
+		if heading_diff > PI / 5.0:  # 36 degrees - quick evasion threshold
+			return create_braking_control(ship_data, desired_heading, to_desired.length())
 
 	return {
 		"desired_heading": desired_heading,
@@ -500,25 +556,70 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
-	# Orbit around target with weave pattern
+	# Orbit around target with weave pattern - quick darts
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var orbit_phase = fmod(Time.get_ticks_msec() / 2000.0, 2.0 * PI)
-	var weave_phase = fmod(Time.get_ticks_msec() / 600.0, 2.0)
+	var orbit_phase = fmod(Time.get_ticks_msec() / 1500.0, 2.0 * PI)  # Faster orbit
+	var weave_phase = fmod(Time.get_ticks_msec() / 500.0, 2.0)  # Faster weave
 
 	var orbit_offset = perpendicular * 400.0
-	var weave_offset = to_target.normalized() * sin(weave_phase * PI) * 100.0
+	var weave_offset = to_target.normalized() * sin(weave_phase * PI) * 80.0  # Tighter weave
 
 	var desired_pos = target.position + orbit_offset + weave_offset
 	var to_desired = desired_pos - ship_data.position
 	var desired_heading = to_desired.angle()
 
-	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.7
+	# DART AND DASH: Quick direction changes while dodging
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+	if current_velocity.length() > 50.0:
+		var current_heading = current_velocity.angle()
+		var heading_diff = abs(angle_difference(current_heading, desired_heading))
+		if heading_diff > PI / 4.5:  # ~40 degrees
+			return create_braking_control(ship_data, desired_heading, distance)
+
+	# Burst thrust pattern - not constant
+	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.6
+	var should_brake = ship_data.velocity.length() > ship_data.stats.max_speed * 0.8
 
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": should_thrust,
-		"is_braking": false,
+		"is_braking": should_brake,
 		"engagement_range": 400.0,
+		"current_distance": distance
+	}
+
+## DART AND DASH HELPERS - Make fighters fly with sharp movements, not sliding
+
+## Check if ship needs to brake before changing direction
+static func check_needs_braking(ship_data: Dictionary, desired_heading: float) -> bool:
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+
+	# If moving very slowly, no need to brake
+	if current_velocity.length() < 30.0:
+		return false
+
+	# Calculate angle difference between current velocity and desired heading
+	var current_heading = current_velocity.angle()
+	var heading_diff = abs(angle_difference(current_heading, desired_heading))
+
+	# If we need to turn more than 45 degrees and we're moving fast, brake first
+	if heading_diff > PI / 4.0:  # 45 degrees
+		return true
+
+	return false
+
+## Create braking control - hard brake to prepare for direction change
+static func create_braking_control(ship_data: Dictionary, desired_heading: float, distance: float) -> Dictionary:
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+
+	# Point opposite to current velocity for maximum braking
+	var brake_heading = current_velocity.angle() + PI
+
+	return {
+		"desired_heading": brake_heading,
+		"thrust_active": true,  # Thrust in opposite direction = hard brake
+		"is_braking": true,
+		"engagement_range": 250.0,
 		"current_distance": distance
 	}
 
