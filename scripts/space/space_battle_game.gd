@@ -147,6 +147,10 @@ func _process(delta: float) -> void:
 	if ENABLE_CREW_AI and not collision_result.hits.is_empty():
 		_emit_damage_events(collision_result.hits)
 
+	# SQUADRON LEADERSHIP SUCCESSION - Check for destroyed squadron leaders
+	if ENABLE_CREW_AI:
+		_check_squadron_leadership_succession()
+
 	# 5a. PHYSICAL COLLISION SYSTEM - Handle ship-ship and ship-obstacle collisions
 	var physics_collision_result = CollisionSystem.process_physical_collisions(_ships, _obstacles)
 	_ships = physics_collision_result.ships
@@ -362,13 +366,13 @@ func _sync_all_entities() -> void:
 func _input(event: InputEvent) -> void:
 	# Ship spawn requests
 	if event.is_action_pressed("spawn_fighter"):
-		_request_spawn("fighter", 3, 0)
+		_request_squadron_spawn("fighter", 0)  # Spawn squadron of 6 fighters
 	elif event.is_action_pressed("spawn_corvette"):
 		_request_spawn("corvette", 1, 0)
 	elif event.is_action_pressed("spawn_capital"):
 		_request_spawn("capital", 1, 0)
 	elif event.is_action_pressed("spawn_enemy_fighter"):
-		_request_spawn("fighter", 3, 1)
+		_request_squadron_spawn("fighter", 1)  # Spawn squadron of 6 enemy fighters
 	elif event.is_action_pressed("spawn_enemy_corvette"):
 		_request_spawn("corvette", 1, 1)
 	elif event.is_action_pressed("spawn_enemy_capital"):
@@ -387,15 +391,27 @@ func _input(event: InputEvent) -> void:
 	# Mouse click to confirm spawn
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if not _pending_spawn.is_empty():
-			_execute_spawn(get_global_mouse_position())
+			if _pending_spawn.get("is_squadron", false):
+				_execute_squadron_spawn(get_global_mouse_position())
+			else:
+				_execute_spawn(get_global_mouse_position())
 
 func _request_spawn(ship_type: String, count: int, team: int) -> void:
 	_pending_spawn = {
 		"type": ship_type,
 		"count": count,
-		"team": team
+		"team": team,
+		"is_squadron": false
 	}
 	print("Click to spawn %d %s(s) for team %d" % [count, ship_type, team])
+
+func _request_squadron_spawn(ship_type: String, team: int) -> void:
+	_pending_spawn = {
+		"type": ship_type,
+		"team": team,
+		"is_squadron": true
+	}
+	print("Click to spawn fighter squadron (6 fighters) for team %d" % team)
 
 func _execute_spawn(spawn_position: Vector2) -> void:
 	if _pending_spawn.is_empty():
@@ -419,6 +435,68 @@ func _execute_spawn(spawn_position: Vector2) -> void:
 			ship_position.y = clamp(ship_position.y, 50, _battlefield_size.y - 50)
 
 			spawn_ship(ship_type, team, ship_position)
+
+	_pending_spawn = {}
+
+func _execute_squadron_spawn(spawn_position: Vector2) -> void:
+	if _pending_spawn.is_empty():
+		return
+
+	var team = _pending_spawn.team
+	var ship_ids = []
+
+	# Formation positions for 6 fighters (V formation with leader at point)
+	# Alpha at point, alternating backward in rank left-to-right
+	var formation_positions = [
+		Vector2(0, 0),        # Alpha - point (squadron leader)
+		Vector2(-80, 80),     # Beta - left back
+		Vector2(80, 80),      # Gamma - right back
+		Vector2(-160, 160),   # Delta - left further back
+		Vector2(160, 160),    # Epsilon - right further back
+		Vector2(-240, 240)    # Zeta - left furthest back
+	]
+
+	# Spawn 6 fighters
+	for i in range(6):
+		var offset = formation_positions[i]
+		var ship_position = spawn_position + offset
+
+		ship_position.x = clamp(ship_position.x, 50, _battlefield_size.x - 50)
+		ship_position.y = clamp(ship_position.y, 50, _battlefield_size.y - 50)
+
+		# Create ship data
+		var ship_data = ShipData.create_ship_instance("fighter", team, ship_position)
+		if ship_data.is_empty():
+			push_error("Failed to create fighter for squadron")
+			continue
+
+		# Add to data array
+		_ships.append(ship_data)
+		ship_ids.append(ship_data.ship_id)
+
+		# Create entity
+		var entity = ShipEntity.new()
+		entity.initialize(ship_data.ship_id, team, ship_data.stats.size, "fighter")
+		add_child(entity)
+		_ship_entities[ship_data.ship_id] = entity
+
+		# Emit signal
+		ship_spawned.emit(ship_data.ship_id)
+
+	# Create squadron crew structure if AI enabled
+	if ENABLE_CREW_AI and ship_ids.size() == 6:
+		var squadron_crew = CrewData.create_fighter_squadron(0.7)
+
+		# Assign each crew member to their ship
+		for i in range(6):
+			if i < squadron_crew.size() and i < ship_ids.size():
+				squadron_crew[i].assigned_to = ship_ids[i]
+				squadron_crew[i].assigned_ship_id = ship_ids[i]
+				_crew_list.append(squadron_crew[i])
+				_crew_index[squadron_crew[i].crew_id] = squadron_crew[i]
+
+		var leader_callsign = squadron_crew[0].get("callsign", "Alpha")
+		print("Spawned fighter squadron: %s leads with %d fighters for team %d" % [leader_callsign, 6, team])
 
 	_pending_spawn = {}
 
@@ -670,7 +748,7 @@ func _check_crew_decision_timers(delta: float, game_time: float) -> void:
 		# Check if it's time for this crew to think
 		if game_time >= crew.get("next_decision_time", 0.0):
 			# Make decision based on current state
-			var result = CrewAISystem.update_crew_member(crew, delta, game_time)
+			var result = CrewAISystem.update_crew_member(crew, delta, game_time, _ships, _crew_list)
 			_crew_list[i] = result.crew_data
 
 			if result.has("decision") and not result.decision.is_empty():
@@ -930,3 +1008,69 @@ func _remove_crew_for_ship(ship_id: String) -> void:
 
 	if crew_to_remove.size() > 0:
 		print("Removed %d crew members from destroyed ship %s" % [crew_to_remove.size(), ship_id])
+
+## Check for squadron leader deaths and promote next in line
+func _check_squadron_leadership_succession() -> void:
+	# Group crew by squadron (using command chain)
+	var squadrons = {}  # superior_id -> [crew_list]
+
+	# Find all squadron structures
+	for crew in _crew_list:
+		if not crew.has("squadron_rank"):
+			continue
+
+		# Find their squadron by checking superior
+		var superior_id = crew.command_chain.get("superior", "")
+		if superior_id != "":
+			# Non-leader - group by their superior
+			if not squadrons.has(superior_id):
+				squadrons[superior_id] = []
+			squadrons[superior_id].append(crew)
+		else:
+			# This is a leader - create squadron entry if not exists
+			if not squadrons.has(crew.crew_id):
+				squadrons[crew.crew_id] = []
+
+	# Check each squadron for leader status
+	for leader_id in squadrons.keys():
+		var squadron = squadrons[leader_id]
+
+		# Find the leader
+		var leader = null
+		for crew in _crew_list:
+			if crew.crew_id == leader_id:
+				leader = crew
+				break
+
+		# If leader doesn't exist or their ship is destroyed, promote next in line
+		if leader == null:
+			continue
+
+		var leader_ship_id = leader.get("assigned_to", "")
+		var leader_ship = null
+		for ship in _ships:
+			if ship.get("ship_id", "") == leader_ship_id:
+				leader_ship = ship
+				break
+
+		# Leader's ship destroyed or disabled - promote!
+		if leader_ship == null or leader_ship.get("status", "") in ["destroyed", "disabled"]:
+			# Add leader to squadron list for promotion calculation
+			squadron.append(leader)
+
+			# Promote next in line
+			var updated_squadron = CrewData.promote_squadron_leader(squadron)
+
+			# Update crew list with promoted squadron
+			for updated_crew in updated_squadron:
+				for i in range(_crew_list.size()):
+					if _crew_list[i].crew_id == updated_crew.crew_id:
+						_crew_list[i] = updated_crew
+						_crew_index[updated_crew.crew_id] = updated_crew
+						break
+
+			# Print promotion message
+			for crew in updated_squadron:
+				if crew.get("is_squadron_leader", false) and crew.crew_id != leader_id:
+					var callsign = crew.get("callsign", "Unknown")
+					print("Squadron leadership succession: %s promoted to squadron leader" % callsign)
