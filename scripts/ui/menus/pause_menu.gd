@@ -14,7 +14,7 @@ func _input(event: InputEvent) -> void:
 
 	# Spacebar toggles pause when menu is visible OR when game is running (not initial pause)
 	# Check if game is running by checking if we're NOT paused OR if menu is visible
-	if event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		# Only handle if menu is visible (user wants to unpause)
 		# OR if game is running and not initially paused (user wants to pause)
 		if visible or not get_tree().paused:

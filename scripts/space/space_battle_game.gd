@@ -378,7 +378,7 @@ func _sync_all_entities() -> void:
 
 func _input(event: InputEvent) -> void:
 	# Handle initial unpause with spacebar
-	if _initial_paused and event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
+	if _initial_paused and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		get_tree().paused = false
 		_initial_paused = false
 		get_viewport().set_input_as_handled()
