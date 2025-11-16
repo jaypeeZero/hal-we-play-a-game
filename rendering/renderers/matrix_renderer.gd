@@ -281,7 +281,7 @@ func _create_fighter_shape(container: Node2D, size: float, team: int) -> Diction
 	line.add_point(Vector2(width * 0.4, tail_y))
 	line.add_point(Vector2(width * 0.5, mid_y))
 	line.add_point(Vector2(0, nose_y))
-	line.default_color = COLOR_SOFT_GLOW
+	line.default_color = _get_section_color(team, 1).lightened(0.2)
 	line.width = 2.0
 	container.add_child(line)
 
@@ -422,7 +422,7 @@ func _create_corvette_shape(container: Node2D, size: float, team: int) -> Dictio
 	line.add_point(Vector2(-body_width * 0.5, rear_mid_y))
 	line.add_point(Vector2(-body_width * 0.5, front_mid_y))
 	line.add_point(Vector2(-hammer_width * 0.5, front_y))
-	line.default_color = COLOR_SOFT_GLOW
+	line.default_color = _get_section_color(team, 1).lightened(0.2)
 	line.width = 2.5
 	container.add_child(line)
 
@@ -548,25 +548,26 @@ func _create_capital_shape(container: Node2D, size: float, team: int) -> Diction
 	line.add_point(Vector2(width_at_back * 0.5, back_y))  # Right wing
 	line.add_point(Vector2(-width_at_back * 0.5, back_y))  # Left wing
 	line.add_point(Vector2(0, nose_y))  # Back to nose
-	line.default_color = COLOR_SOFT_GLOW
+	line.default_color = _get_section_color(team, 1).lightened(0.2)
 	line.width = 3.0
 	container.add_child(line)
 
 	# Add internal detail lines (section dividers)
-	var add_detail_line = func(from: Vector2, to: Vector2, container_node: Node2D):
+	var detail_color = _get_section_color(team, 2).darkened(0.2)
+	var add_detail_line = func(from: Vector2, to: Vector2, container_node: Node2D, line_color: Color):
 		var detail = Line2D.new()
 		detail.add_point(from)
 		detail.add_point(to)
-		detail.default_color = COLOR_DIM
+		detail.default_color = line_color
 		detail.width = 1.5
 		container_node.add_child(detail)
 
 	# Centerline
-	add_detail_line.call(Vector2(0, nose_y), Vector2(0, back_y), container)
+	add_detail_line.call(Vector2(0, nose_y), Vector2(0, back_y), container, detail_color)
 	# Front split line
-	add_detail_line.call(Vector2(-width_at_front * 0.5, front_split_y), Vector2(width_at_front * 0.5, front_split_y), container)
+	add_detail_line.call(Vector2(-width_at_front * 0.5, front_split_y), Vector2(width_at_front * 0.5, front_split_y), container, detail_color)
 	# Middle split line
-	add_detail_line.call(Vector2(-width_at_middle * 0.5, middle_split_y), Vector2(width_at_middle * 0.5, middle_split_y), container)
+	add_detail_line.call(Vector2(-width_at_middle * 0.5, middle_split_y), Vector2(width_at_middle * 0.5, middle_split_y), container, detail_color)
 
 	return sections
 
