@@ -1,0 +1,26 @@
+{
+	"ship_type": "fighter",
+	"base_size": 15.0,
+	"description": "Elongated triangle - narrow front tapering to wider back",
+	"sections": [
+		{
+			"section_id": "front",
+			"points": [
+				{"x": 0.0, "y": -24.0},
+				{"x": -6.0, "y": 0.0},
+				{"x": 6.0, "y": 0.0},
+				{"x": 0.0, "y": -24.0}
+			]
+		},
+		{
+			"section_id": "back",
+			"points": [
+				{"x": -6.0, "y": 0.0},
+				{"x": -4.8, "y": 7.2},
+				{"x": 4.8, "y": 7.2},
+				{"x": 6.0, "y": 0.0},
+				{"x": -6.0, "y": 0.0}
+			]
+		}
+	]
+}

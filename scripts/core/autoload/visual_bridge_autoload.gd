@@ -6,17 +6,17 @@ func _ready() -> void:
 	bridge = VisualBridge.new()
 	add_child(bridge)
 
-	# Initialize with matrix renderer (uses geometric shapes, not theme-based)
-	var matrix_renderer = MatrixRenderer.new()
-	var theme = JsonTheme.load_from_file("res://themes/emoji_simple.json")  # Fallback, not used by MatrixRenderer
-	bridge.set_renderer(matrix_renderer, theme)
+	# Initialize with sprite renderer (uses Kenny sprite sheet)
+	var sprite_renderer = SpriteRenderer.new()
+	var theme = JsonTheme.load_from_file("res://themes/emoji_simple.json")  # Fallback, not used by SpriteRenderer
+	bridge.set_renderer(sprite_renderer, theme)
 
 	# Log via GameLogger if available, otherwise use print
 	var logger = get_node_or_null("/root/GameLogger")
 	if logger:
-		logger.write_log("VisualBridgeAutoload ready")
+		logger.write_log("VisualBridgeAutoload ready (using SpriteRenderer)")
 	else:
-		print("VisualBridgeAutoload ready")
+		print("VisualBridgeAutoload ready (using SpriteRenderer)")
 
 ## Convenience methods for global access
 func register_entity(entity: IRenderable) -> void:
