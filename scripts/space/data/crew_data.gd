@@ -123,6 +123,79 @@ static func create_solo_fighter_crew(skill_level: float = 0.5) -> Array:
 	# Solo pilot makes their own decisions (no superior)
 	return [pilot]
 
+## Create a fighter squadron (6 fighters in 3 wingman pairs)
+## Squadron Leader (Alpha) decides targets, others follow
+## Leadership succession: Alpha -> Beta -> Gamma -> Delta -> Epsilon -> Zeta
+static func create_fighter_squadron(skill_level: float = 0.5) -> Array:
+	var all_crew = []
+	var ranks = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"]
+
+	# Create 6 fighters with rank structure
+	for i in range(6):
+		var pilot = create_crew_member(Role.PILOT, skill_level)
+		pilot.squadron_rank = i  # 0 = Alpha (leader), 5 = Zeta (lowest)
+		pilot.squadron_role = ranks[i]
+		pilot.callsign = ranks[i]
+
+		# Wingman pairs: (Alpha, Beta), (Gamma, Delta), (Epsilon, Zeta)
+		pilot.wingman_pair = int(i / 2)  # 0, 0, 1, 1, 2, 2
+
+		# Leader is the first pilot (Alpha)
+		if i == 0:
+			pilot.is_squadron_leader = true
+		else:
+			pilot.is_squadron_leader = false
+			# All non-leaders report to the current leader (Alpha initially)
+			pilot.command_chain.superior = all_crew[0].crew_id
+			all_crew[0].command_chain.subordinates.append(pilot.crew_id)
+
+		all_crew.append(pilot)
+
+	return all_crew
+
+## Promote next in line to squadron leader (on death/incapacitation)
+static func promote_squadron_leader(squadron_crew: Array) -> Array:
+	var updated_crew = squadron_crew.duplicate(true)
+
+	# Find current leader and next in line
+	var current_leader_idx = -1
+	var next_leader_idx = -1
+	var lowest_rank = 999
+
+	for i in range(updated_crew.size()):
+		var crew = updated_crew[i]
+		if crew.get("is_squadron_leader", false):
+			current_leader_idx = i
+
+		# Find pilot with lowest squadron_rank (highest seniority) who's still alive
+		if crew.has("squadron_rank"):
+			var rank = crew.squadron_rank
+			if rank < lowest_rank and not crew.get("is_squadron_leader", false):
+				lowest_rank = rank
+				next_leader_idx = i
+
+	# No one to promote
+	if next_leader_idx == -1:
+		return updated_crew
+
+	# Remove old leader's command links if they existed
+	if current_leader_idx >= 0:
+		updated_crew[current_leader_idx].is_squadron_leader = false
+		updated_crew[current_leader_idx].command_chain.subordinates = []
+
+	# Promote new leader
+	updated_crew[next_leader_idx].is_squadron_leader = true
+	updated_crew[next_leader_idx].command_chain.superior = null
+	updated_crew[next_leader_idx].command_chain.subordinates = []
+
+	# All other pilots report to new leader
+	for i in range(updated_crew.size()):
+		if i != next_leader_idx and updated_crew[i].has("squadron_rank"):
+			updated_crew[i].command_chain.superior = updated_crew[next_leader_idx].crew_id
+			updated_crew[next_leader_idx].command_chain.subordinates.append(updated_crew[i].crew_id)
+
+	return updated_crew
+
 ## Create a ship crew (captain, pilot, gunners)
 static func create_ship_crew(weapon_count: int, skill_level: float = 0.5) -> Array:
 	var crew = []

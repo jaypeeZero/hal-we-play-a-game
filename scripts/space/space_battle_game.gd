@@ -147,6 +147,10 @@ func _process(delta: float) -> void:
 	if ENABLE_CREW_AI and not collision_result.hits.is_empty():
 		_emit_damage_events(collision_result.hits)
 
+	# SQUADRON LEADERSHIP SUCCESSION - Check for destroyed squadron leaders
+	if ENABLE_CREW_AI:
+		_check_squadron_leadership_succession()
+
 	# 5a. PHYSICAL COLLISION SYSTEM - Handle ship-ship and ship-obstacle collisions
 	var physics_collision_result = CollisionSystem.process_physical_collisions(_ships, _obstacles)
 	_ships = physics_collision_result.ships
@@ -930,3 +934,69 @@ func _remove_crew_for_ship(ship_id: String) -> void:
 
 	if crew_to_remove.size() > 0:
 		print("Removed %d crew members from destroyed ship %s" % [crew_to_remove.size(), ship_id])
+
+## Check for squadron leader deaths and promote next in line
+func _check_squadron_leadership_succession() -> void:
+	# Group crew by squadron (using command chain)
+	var squadrons = {}  # superior_id -> [crew_list]
+
+	# Find all squadron structures
+	for crew in _crew_list:
+		if not crew.has("squadron_rank"):
+			continue
+
+		# Find their squadron by checking superior
+		var superior_id = crew.command_chain.get("superior", "")
+		if superior_id != "":
+			# Non-leader - group by their superior
+			if not squadrons.has(superior_id):
+				squadrons[superior_id] = []
+			squadrons[superior_id].append(crew)
+		else:
+			# This is a leader - create squadron entry if not exists
+			if not squadrons.has(crew.crew_id):
+				squadrons[crew.crew_id] = []
+
+	# Check each squadron for leader status
+	for leader_id in squadrons.keys():
+		var squadron = squadrons[leader_id]
+
+		# Find the leader
+		var leader = null
+		for crew in _crew_list:
+			if crew.crew_id == leader_id:
+				leader = crew
+				break
+
+		# If leader doesn't exist or their ship is destroyed, promote next in line
+		if leader == null:
+			continue
+
+		var leader_ship_id = leader.get("assigned_to", "")
+		var leader_ship = null
+		for ship in _ships:
+			if ship.get("ship_id", "") == leader_ship_id:
+				leader_ship = ship
+				break
+
+		# Leader's ship destroyed or disabled - promote!
+		if leader_ship == null or leader_ship.get("status", "") in ["destroyed", "disabled"]:
+			# Add leader to squadron list for promotion calculation
+			squadron.append(leader)
+
+			# Promote next in line
+			var updated_squadron = CrewData.promote_squadron_leader(squadron)
+
+			# Update crew list with promoted squadron
+			for updated_crew in updated_squadron:
+				for i in range(_crew_list.size()):
+					if _crew_list[i].crew_id == updated_crew.crew_id:
+						_crew_list[i] = updated_crew
+						_crew_index[updated_crew.crew_id] = updated_crew
+						break
+
+			# Print promotion message
+			for crew in updated_squadron:
+				if crew.get("is_squadron_leader", false) and crew.crew_id != leader_id:
+					var callsign = crew.get("callsign", "Unknown")
+					print("Squadron leadership succession: %s promoted to squadron leader" % callsign)

@@ -23,8 +23,21 @@ const BEHIND_ANGLE_TOLERANCE = 30.0  # Degrees - "behind" the enemy
 
 ## Main decision function - called by CrewAISystem
 static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
-	# Find best target from crew awareness
-	var target_id = _find_best_target(crew_data, all_ships)
+	# SQUADRON STRUCTURE: Check if we have a squadron leader to follow
+	var target_id = ""
+	var is_leader = crew_data.get("is_squadron_leader", false)
+
+	if is_leader:
+		# Squadron Leader picks target for the whole squadron
+		target_id = _find_best_target(crew_data, all_ships)
+	else:
+		# Non-leaders follow squadron leader's target
+		target_id = _get_squadron_leader_target(crew_data, all_crew)
+
+		# Fallback to own target if leader has no target
+		if target_id == "":
+			target_id = _find_best_target(crew_data, all_ships)
+
 	if target_id == "":
 		return _make_idle_decision(crew_data, game_time)
 
@@ -193,6 +206,22 @@ static func _calculate_behind_position(target_ship: Dictionary) -> Vector2:
 
 	return predicted_pos + behind_offset
 
+## Get squadron leader's target
+static func _get_squadron_leader_target(crew_data: Dictionary, all_crew: Array) -> String:
+	# Find squadron leader via command chain
+	var leader_id = crew_data.get("command_chain", {}).get("superior", "")
+	if leader_id == "":
+		return ""
+
+	# Find leader in crew list
+	for crew in all_crew:
+		if crew.get("crew_id", "") == leader_id:
+			# Get leader's current target from their orders
+			var leader_orders = crew.get("orders", {}).get("current", {})
+			return leader_orders.get("target_id", "")
+
+	return ""
+
 ## Find wingmates (other fighters on same team)
 static func _find_wingmates(crew_data: Dictionary, all_crew: Array, all_ships: Array) -> Array:
 	var wingmates = []
@@ -202,8 +231,23 @@ static func _find_wingmates(crew_data: Dictionary, all_crew: Array, all_ships: A
 		return wingmates
 
 	var my_team = my_ship.get("team", -1)
+	var my_pair = crew_data.get("wingman_pair", -1)
 
-	# Find other fighters on same team
+	# Prioritize wingman pair first
+	if my_pair >= 0:
+		# Find specific wingman in same pair
+		for crew in all_crew:
+			if crew.get("crew_id", "") == crew_data.get("crew_id", ""):
+				continue
+			if crew.get("wingman_pair", -1) != my_pair:
+				continue
+
+			var crew_ship_id = crew.get("assigned_ship_id", "")
+			var crew_ship = _get_ship_by_id(crew_ship_id, all_ships)
+			if crew_ship != null and crew_ship.get("status", "") == "operational":
+				wingmates.append(crew_ship)
+
+	# Then add other squadron members
 	for ship in all_ships:
 		if ship.get("ship_id", "") == my_ship_id:
 			continue
@@ -214,7 +258,15 @@ static func _find_wingmates(crew_data: Dictionary, all_crew: Array, all_ships: A
 		if ship.get("status", "") != "operational":
 			continue
 
-		wingmates.append(ship)
+		# Don't duplicate wingman pair
+		var already_added = false
+		for wingmate in wingmates:
+			if wingmate.get("ship_id", "") == ship.get("ship_id", ""):
+				already_added = true
+				break
+
+		if not already_added:
+			wingmates.append(ship)
 
 	return wingmates
 
@@ -229,18 +281,39 @@ static func _calculate_formation_offset(crew_data: Dictionary, wingmates: Array,
 		return Vector2.ZERO
 
 	var my_pos = my_ship.get("position", Vector2.ZERO)
+	var my_pair = crew_data.get("wingman_pair", -1)
 	var offset = Vector2.ZERO
 
-	# Simple repulsion from wingmates that are too close
-	for wingmate in wingmates:
+	# WINGMAN PAIR FORMATION: Maintain tight spacing with your wingman
+	# wingmates[0] is your wingman pair partner (if they exist)
+	# Others are squadron members to avoid
+
+	for i in range(wingmates.size()):
+		var wingmate = wingmates[i]
 		var wingmate_pos = wingmate.get("position", Vector2.ZERO)
 		var distance = my_pos.distance_to(wingmate_pos)
 
-		if distance < FORMATION_SPACING and distance > 0:
-			# Push away from wingmate
-			var direction = (my_pos - wingmate_pos).normalized()
-			var strength = (FORMATION_SPACING - distance) / FORMATION_SPACING
-			offset += direction * strength * 100.0
+		# First wingmate is your pair partner - maintain closer formation
+		if i == 0 and my_pair >= 0:
+			# Maintain 80 unit spacing with wingman (tighter than others)
+			var desired_spacing = 80.0
+			if distance > desired_spacing * 1.3:
+				# Too far from wingman, pull closer
+				var direction = (wingmate_pos - my_pos).normalized()
+				var strength = (distance - desired_spacing) / desired_spacing
+				offset += direction * strength * 50.0
+			elif distance < desired_spacing * 0.7 and distance > 0:
+				# Too close to wingman, push away slightly
+				var direction = (my_pos - wingmate_pos).normalized()
+				var strength = (desired_spacing - distance) / desired_spacing
+				offset += direction * strength * 30.0
+		else:
+			# Other squadron members - maintain standard spacing
+			if distance < FORMATION_SPACING and distance > 0:
+				# Push away from other fighters
+				var direction = (my_pos - wingmate_pos).normalized()
+				var strength = (FORMATION_SPACING - distance) / FORMATION_SPACING
+				offset += direction * strength * 100.0
 
 	return offset
 
