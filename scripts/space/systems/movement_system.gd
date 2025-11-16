@@ -287,6 +287,8 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 			return calculate_cautious_approach(ship_data, target, nearby_ships, obstacles)
 		"dodge_and_weave":
 			return calculate_dodge_and_weave(ship_data, target, nearby_ships, obstacles)
+		"rejoin_wingman":
+			return calculate_rejoin_wingman(ship_data, target, nearby_ships, obstacles)
 		_:
 			# Fallback to standard pilot control
 			return calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
@@ -585,6 +587,59 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		"thrust_active": should_thrust,
 		"is_braking": should_brake,
 		"engagement_range": 400.0,
+		"current_distance": distance
+	}
+
+## Rejoin wingman - return to formation position
+static func calculate_rejoin_wingman(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	# Get formation position from orders
+	var formation_pos = ship_data.get("orders", {}).get("formation_position", Vector2.ZERO)
+
+	# If no formation position specified, use target position as fallback
+	if formation_pos == Vector2.ZERO:
+		formation_pos = target.get("position", Vector2.ZERO)
+
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var to_formation = formation_pos - my_pos
+	var distance = to_formation.length()
+	var desired_heading = to_formation.angle()
+
+	# Get lead's velocity to match when close
+	var lead_velocity = target.get("velocity", Vector2.ZERO)
+
+	# DART AND DASH: Brake if we need to change direction significantly
+	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
+	if needs_course_correction and distance > 50.0:
+		return create_braking_control(ship_data, desired_heading, distance)
+
+	# Speed management based on distance
+	var should_thrust: bool
+	var should_brake: bool = false
+
+	if distance > 120.0:
+		# Far from formation - full speed approach
+		should_thrust = true
+	elif distance > 60.0:
+		# Mid range - moderate speed
+		var closing_speed = ship_data.velocity.dot(to_formation.normalized())
+		var desired_speed = ship_data.stats.max_speed * 0.6
+		should_thrust = closing_speed < desired_speed
+		should_brake = closing_speed > desired_speed * 1.5
+	else:
+		# Close to formation position - match lead's velocity
+		var speed_diff = ship_data.velocity.length() - lead_velocity.length()
+		should_brake = speed_diff > 20.0
+		should_thrust = speed_diff < -10.0 or distance > 40.0
+
+		# If very close, try to match lead's heading too
+		if distance < 40.0 and lead_velocity.length() > 10.0:
+			desired_heading = lead_velocity.angle()
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": should_brake,
+		"engagement_range": 80.0,
 		"current_distance": distance
 	}
 

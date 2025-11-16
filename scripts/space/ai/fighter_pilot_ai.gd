@@ -21,8 +21,24 @@ const GROUP_RUN_THRESHOLD = 4  # Number of fighters needed for coordinated runs
 const FORMATION_SPACING = 100.0  # Distance to maintain from wingmates
 const BEHIND_ANGLE_TOLERANCE = 30.0  # Degrees - "behind" the enemy
 
+## Wingmate formation constants
+const FORMATION_DISTANCE = 80.0  # Ideal distance between wingmates
+const FORMATION_BROKEN_DISTANCE = 150.0  # Distance at which formation is considered broken
+const FORMATION_ANGLE_OFFSET = 45.0  # Degrees - wingman stays at 45° behind and to the side
+
 ## Main decision function - called by CrewAISystem
 static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
+	# WINGMATE FORMATION: Check formation status FIRST - TOP PRIORITY
+	# If we're a wingman and formation is broken, rejoin before engaging targets
+	var is_wingman = _is_wingman_role(crew_data, all_crew)
+	if is_wingman:
+		var partner = _find_wingman_partner(crew_data, all_crew, all_ships)
+		if not partner.is_empty():
+			var partner_ship = partner.get("ship", {})
+			if _is_formation_broken(ship_data, partner_ship):
+				# Formation broken! Priority #1 is to rejoin
+				return _make_rejoin_wingman_decision(crew_data, ship_data, partner_ship, game_time)
+
 	# SQUADRON STRUCTURE: Check if we have a squadron leader to follow
 	var target_id = ""
 	var is_leader = crew_data.get("is_squadron_leader", false)
@@ -386,5 +402,112 @@ static func _make_pursuit_decision(crew_data: Dictionary, ship_data: Dictionary,
 		"target_id": target_ship.get("ship_id", ""),
 		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
 		"delay": crew_data.get("stats", {}).get("reaction_time", 0.1),
+		"timestamp": game_time
+	}
+
+# ============================================================================
+# WINGMATE FORMATION SYSTEM
+# ============================================================================
+
+## Find wingman partner (the other member of the wingman pair)
+static func _find_wingman_partner(crew_data: Dictionary, all_crew: Array, all_ships: Array) -> Dictionary:
+	var my_pair = crew_data.get("wingman_pair", -1)
+	if my_pair < 0:
+		return {}  # Not in a wingman pair
+
+	var my_crew_id = crew_data.get("crew_id", "")
+
+	# Find the other pilot in the same wingman pair
+	for crew in all_crew:
+		if crew.get("crew_id", "") == my_crew_id:
+			continue
+		if crew.get("wingman_pair", -1) != my_pair:
+			continue
+
+		# Found our wingman partner - get their ship
+		var partner_ship_id = crew.get("assigned_ship_id", "")
+		var partner_ship = _get_ship_by_id(partner_ship_id, all_ships)
+
+		if partner_ship != null and partner_ship.get("status", "") == "operational":
+			return {
+				"crew": crew,
+				"ship": partner_ship
+			}
+
+	return {}  # Partner not found or not operational
+
+## Check if this pilot is the wingman (not the lead) in their pair
+## In each pair, the pilot with the lower squadron_rank is the lead
+static func _is_wingman_role(crew_data: Dictionary, all_crew: Array) -> bool:
+	var my_pair = crew_data.get("wingman_pair", -1)
+	if my_pair < 0:
+		return false  # Not in a wingman pair
+
+	var my_rank = crew_data.get("squadron_rank", 999)
+	var my_crew_id = crew_data.get("crew_id", "")
+
+	# Find partner's rank
+	for crew in all_crew:
+		if crew.get("crew_id", "") == my_crew_id:
+			continue
+		if crew.get("wingman_pair", -1) != my_pair:
+			continue
+
+		var partner_rank = crew.get("squadron_rank", 999)
+		# If partner has lower rank, they are the lead, so we are the wingman
+		return partner_rank < my_rank
+
+	return false  # No partner found, default to not wingman
+
+## Check if formation with wingman is broken
+static func _is_formation_broken(ship_data: Dictionary, partner_ship: Dictionary) -> bool:
+	if partner_ship.is_empty():
+		return false  # No partner, no formation to break
+
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var partner_pos = partner_ship.get("position", Vector2.ZERO)
+	var distance = my_pos.distance_to(partner_pos)
+
+	return distance > FORMATION_BROKEN_DISTANCE
+
+## Calculate ideal formation position relative to lead
+## Wingman should be behind and to the side of the lead
+static func _calculate_formation_position(lead_ship: Dictionary, offset_side: int = 1) -> Vector2:
+	var lead_pos = lead_ship.get("position", Vector2.ZERO)
+	var lead_velocity = lead_ship.get("velocity", Vector2.ZERO)
+
+	# Use velocity direction if moving, otherwise use rotation
+	var lead_heading: float
+	if lead_velocity.length() > 10.0:
+		lead_heading = lead_velocity.angle()
+	else:
+		lead_heading = lead_ship.get("rotation", 0.0)
+
+	# Calculate position behind and to the side
+	# offset_side: 1 = right, -1 = left
+	var angle_offset = deg_to_rad(FORMATION_ANGLE_OFFSET) * offset_side
+	var formation_angle = lead_heading + PI + angle_offset  # Behind and to the side
+
+	var formation_offset = Vector2(cos(formation_angle), sin(formation_angle)) * FORMATION_DISTANCE
+
+	# Predict lead's future position based on velocity
+	var predicted_lead_pos = lead_pos + lead_velocity * 0.5
+
+	return predicted_lead_pos + formation_offset
+
+## Make rejoin wingman decision - TOP PRIORITY when formation is broken
+static func _make_rejoin_wingman_decision(crew_data: Dictionary, ship_data: Dictionary, partner_ship: Dictionary, game_time: float) -> Dictionary:
+	# Calculate formation position
+	var formation_pos = _calculate_formation_position(partner_ship)
+
+	return {
+		"type": "maneuver",
+		"subtype": "rejoin_wingman",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": partner_ship.get("ship_id", ""),  # Target is the lead ship
+		"formation_position": formation_pos,
+		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
+		"delay": 0.3,  # Check frequently when rejoining
 		"timestamp": game_time
 	}
