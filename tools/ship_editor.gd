@@ -142,7 +142,8 @@ func _calculate_centroid(points: Array) -> Vector2:
 func _draw_internal_component(internal: Dictionary, center: Vector2, scale: float) -> void:
 	# Draw internal as a small circle at offset position
 	var offset = internal.get("position_offset", Vector2.ZERO) * scale
-	var pos = center + offset
+	var rotated_offset = HullShapes.rotate_90(offset)
+	var pos = center + rotated_offset
 
 	var circle = Control.new()
 	circle.position = pos - Vector2(5, 5)
@@ -163,7 +164,8 @@ func _draw_internal_component(internal: Dictionary, center: Vector2, scale: floa
 func _draw_weapon(weapon: Dictionary, center: Vector2, scale: float) -> void:
 	# Draw weapon as a small rectangle at offset position with rotation
 	var offset = weapon.get("position_offset", Vector2.ZERO) * scale
-	var pos = center + offset
+	var rotated_offset = HullShapes.rotate_90(offset)
+	var pos = center + rotated_offset
 	var facing = weapon.get("facing", 0.0)
 
 	var rect = Control.new()
