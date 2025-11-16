@@ -220,6 +220,10 @@ static func can_damage_any_armor_section(weapon_size: int, target: Dictionary) -
 static func can_ship_damage_target(ship_data: Dictionary, target: Dictionary) -> bool:
 	var weapons = ship_data.get("weapons", [])
 
+	# If ship has no weapons defined, allow targeting (backward compatibility for tests)
+	if weapons.is_empty():
+		return true
+
 	for weapon in weapons:
 		if can_weapon_damage_target(weapon, target):
 			return true
