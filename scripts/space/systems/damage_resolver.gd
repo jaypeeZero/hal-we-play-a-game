@@ -39,25 +39,35 @@ static func apply_damage_to_ship(ship_data: Dictionary, section: Dictionary, hit
 # ============================================================================
 
 static func apply_damage_to_armor(section: Dictionary, damage: int, weapon_size: int) -> Dictionary:
-	# Check if weapon size can damage this armor size
-	# Rule: weapon can damage armor if armor_size <= weapon_size + 1
+	# Apply size-based damage reduction
+	# Weapons are fully effective against armor sizes: weapon_size to weapon_size + 1
+	# Beyond that range, damage is reduced based on size mismatch
 	var armor_size = section.get("size", 1)
-	var can_damage = armor_size <= weapon_size + 1
-
-	if not can_damage:
-		# Weapon cannot damage this armor - treat as if armor absorbed all damage
-		return {
-			"section": section,
-			"armor_damaged": 0,
-			"remaining_damage": 0,
-			"penetrated": false,
-			"size_blocked": true
-		}
+	var effective_damage = calculate_size_adjusted_damage(damage, weapon_size, armor_size)
 
 	if has_armor_remaining(section):
-		return damage_armor_section(section, damage)
+		return damage_armor_section(section, effective_damage)
 	else:
-		return create_armor_penetrated_result(section, damage)
+		return create_armor_penetrated_result(section, effective_damage)
+
+## Calculate damage after applying size-based reduction
+## Size 1 weapon vs Size 3 armor = ~10% damage
+## Size 2 weapon vs Size 4 armor = ~15% damage
+## Size 3 weapon vs Size 5 armor = ~18% damage
+## Formula: Higher size weapons are more effective against oversized armor
+static func calculate_size_adjusted_damage(base_damage: int, weapon_size: int, armor_size: int) -> int:
+	# Full damage if armor is within weapon's effective range
+	if armor_size <= weapon_size + 1:
+		return base_damage
+
+	# Reduced damage based on size mismatch
+	# Formula: weapon_size / armor_size * 0.3
+	# This gives higher size weapons better scaling against tough armor
+	var damage_multiplier = float(weapon_size) / float(armor_size) * 0.3
+	var adjusted_damage = int(base_damage * damage_multiplier)
+
+	# Ensure at least 1 damage gets through
+	return max(1, adjusted_damage)
 
 static func has_armor_remaining(section: Dictionary) -> bool:
 	return section.get("current_armor", 0) > 0

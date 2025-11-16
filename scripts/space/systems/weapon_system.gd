@@ -136,8 +136,21 @@ static func calculate_distance(from: Vector2, to: Vector2) -> float:
 # ============================================================================
 
 static func find_best_target_for_weapon(ship_data: Dictionary, weapon: Dictionary, targets: Array) -> Dictionary:
-	return filter_targets_in_range(targets, ship_data.position, weapon.stats.range) \
+	# Filter by range, then prioritize good targets over poor ones
+	var in_range_targets = filter_targets_in_range(targets, ship_data.position, weapon.stats.range)
+
+	# Try to find a good target (effective damage)
+	var good_targets = in_range_targets \
 		.filter(func(t): return can_weapon_damage_target(weapon, t)) \
+		.map(func(t): return add_priority(t, ship_data.position)) \
+		.reduce(select_higher_priority, {})
+
+	# If we found a good target, use it
+	if not good_targets.is_empty():
+		return good_targets
+
+	# Otherwise, target anything in range (reduced effectiveness is better than nothing)
+	return in_range_targets \
 		.map(func(t): return add_priority(t, ship_data.position)) \
 		.reduce(select_higher_priority, {})
 
@@ -171,19 +184,21 @@ static func get_priority(target: Dictionary) -> float:
 # SIZE-BASED TARGETING - AC3 Implementation
 # ============================================================================
 
-## Check if weapon can damage target based on size rules
-## AC3: Pilots only target ships with damageable armor OR >50% unarmored
+## Check if weapon can effectively damage target
+## All weapons can damage all targets, but effectiveness varies by size
+## Prefer targets within effective range or heavily damaged targets
 static func can_weapon_damage_target(weapon: Dictionary, target: Dictionary) -> bool:
+	# All weapons can damage all targets (just at reduced effectiveness for size mismatch)
+	# This function now checks if target is a GOOD choice (effective damage)
 	var weapon_size = weapon.stats.get("size", 1)
 
-	# Check if target is more than 50% unarmored
+	# Target is good if heavily damaged (>50% armor gone = can hit internals easily)
 	var armor_percentage = calculate_armor_percentage(target)
 	if armor_percentage < 0.5:
-		return true  # Target is mostly unarmored, can damage internals
+		return true
 
-	# Check if weapon can damage any armor section
-	# Rule: weapon size N can damage armor size N to N+1
-	return can_damage_any_armor_section(weapon_size, target)
+	# Target is good if we have at least one armor section in effective range
+	return can_damage_any_armor_section_effectively(weapon_size, target)
 
 ## Calculate percentage of armor remaining on target (0.0 to 1.0)
 static func calculate_armor_percentage(target: Dictionary) -> float:
@@ -203,13 +218,14 @@ static func calculate_armor_percentage(target: Dictionary) -> float:
 
 	return float(total_current_armor) / float(total_max_armor)
 
-## Check if weapon size can damage any armor section on target
-static func can_damage_any_armor_section(weapon_size: int, target: Dictionary) -> bool:
+## Check if weapon can effectively damage any armor section on target
+## "Effectively" means within the weapon's optimal range (weapon_size to weapon_size+1)
+static func can_damage_any_armor_section_effectively(weapon_size: int, target: Dictionary) -> bool:
 	var armor_sections = target.get("armor_sections", [])
 
 	for section in armor_sections:
 		var armor_size = section.get("size", 1)
-		# Weapon can damage armor if armor_size <= weapon_size + 1
+		# Effective damage range: armor_size <= weapon_size + 1
 		if armor_size <= weapon_size + 1:
 			return true
 

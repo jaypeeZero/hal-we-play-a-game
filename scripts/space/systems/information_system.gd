@@ -94,17 +94,9 @@ static func create_entity_info(entity: Dictionary, entity_type: String) -> Dicti
 static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array) -> Array:
 	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team)
 
-	# AC3: Filter out ships we cannot damage
-	var damageable_enemies = enemies.filter(func(e):
-		if e.type != "ship":
-			return true  # Always track projectiles
-		var target_ship = find_ship_by_id(all_ships, e.id)
-		if target_ship.is_empty():
-			return false
-		return WeaponSystem.can_ship_damage_target(own_ship, target_ship)
-	)
-
-	var threats = damageable_enemies \
+	# All enemies are potential threats (weapons can damage any target, just at reduced effectiveness)
+	# Prioritization happens at the weapon system level
+	var threats = enemies \
 		.map(func(e): return add_threat_priority(e, own_ship, crew_data)) \
 		.filter(func(e): return e._threat_priority > 0.0)
 	threats.sort_custom(func(a, b): return a._threat_priority > b._threat_priority)
@@ -176,15 +168,9 @@ static func calculate_ship_threat(ship: Dictionary) -> float:
 static func identify_opportunities(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array) -> Array:
 	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team and e.type == "ship")
 
-	# AC3: Filter out ships we cannot damage
-	var damageable_enemies = enemies.filter(func(e):
-		var target_ship = find_ship_by_id(all_ships, e.id)
-		if target_ship.is_empty():
-			return false
-		return WeaponSystem.can_ship_damage_target(own_ship, target_ship)
-	)
-
-	var opportunities = damageable_enemies \
+	# All enemy ships are potential opportunities (can damage any target at some effectiveness)
+	# Prioritization of good targets happens at the weapon system level
+	var opportunities = enemies \
 		.map(func(e): return add_opportunity_score(e, own_ship, crew_data)) \
 		.filter(func(e): return e._opportunity_score > 0.0)
 	opportunities.sort_custom(func(a, b): return a._opportunity_score > b._opportunity_score)
