@@ -16,7 +16,6 @@ static func get_ship_template(ship_type: String) -> Dictionary:
 		"capital":
 			return _create_capital_template()
 		_:
-			push_error("Unknown ship type: " + ship_type)
 			return {}
 
 ## Create a ship instance from template with crew

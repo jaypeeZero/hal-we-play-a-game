@@ -424,7 +424,7 @@ func test_collision_separates_overlapping_ships():
 		var final_distance = result.ship1.position.distance_to(result.ship2.position)
 		var min_distance = ship1.stats.size + ship2.stats.size
 
-		assert_ge(final_distance, min_distance, "Ships should be separated after collision")
+		assert_gte(final_distance, min_distance, "Ships should be separated after collision")
 
 func test_moving_apart_ships_not_colliding():
 	var ship1 = create_test_ship("ship_1", Vector2(100, 100), 0)
