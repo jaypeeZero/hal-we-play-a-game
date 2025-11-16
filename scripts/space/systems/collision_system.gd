@@ -238,7 +238,7 @@ static func apply_projectile_hits_to_obstacles(obstacles: Array, projectiles: Ar
 		# Update status based on health
 		if updated_obstacle.current_health <= 0:
 			updated_obstacle.status = "destroyed"
-		elif took_damage and updated_obstacle.current_health < updated_obstacle.max_health * 0.5:
+		elif took_damage and updated_obstacle.current_health <= updated_obstacle.max_health * 0.5:
 			updated_obstacle.status = "damaged"
 
 		updated_obstacles.append(updated_obstacle)

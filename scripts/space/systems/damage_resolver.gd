@@ -14,7 +14,7 @@ static func resolve_hit(ship_data: Dictionary, hit_position: Vector2, damage: in
 	var hit_angle = calculate_hit_angle(ship_data, hit_position)
 	var section = find_armor_section_at_angle(ship_data, hit_angle)
 
-	if section == null:
+	if section.is_empty():
 		return create_miss_result(ship_data)
 
 	return apply_damage_to_ship(ship_data, section, hit_position, damage, hit_angle)
@@ -73,9 +73,12 @@ static func set_section_armor(section: Dictionary, new_armor: int) -> Dictionary
 static func replace_armor_section(ship_data: Dictionary, new_section: Dictionary) -> Dictionary:
 	var armor_sections = ship_data.get("armor_sections", [])
 	if armor_sections is Array:
-		var new_sections = armor_sections.map(
-			func(s): return new_section if s.get("section_id") == new_section.get("section_id") else s
-		)
+		var new_sections = []
+		for s in armor_sections:
+			if s.get("section_id") == new_section.get("section_id"):
+				new_sections.append(new_section)
+			else:
+				new_sections.append(s.duplicate(true))
 		return DictUtils.merge_dict(ship_data, {"armor_sections": new_sections})
 	return ship_data
 
@@ -156,9 +159,12 @@ static func set_component_health_and_status(component: Dictionary, health: int, 
 static func replace_internal_component(ship_data: Dictionary, new_component: Dictionary) -> Dictionary:
 	var internals = ship_data.get("internals", [])
 	if internals is Array:
-		var new_internals = internals.map(
-			func(c): return new_component if c.get("component_id") == new_component.get("component_id") else c
-		)
+		var new_internals = []
+		for c in internals:
+			if c.get("component_id") == new_component.get("component_id"):
+				new_internals.append(new_component)
+			else:
+				new_internals.append(c.duplicate(true))
 		return DictUtils.merge_dict(ship_data, {"internals": new_internals})
 	return ship_data
 
@@ -315,7 +321,7 @@ static func find_armor_section_at_angle(ship_data: Dictionary, angle_deg: float)
 		func(section): return is_angle_in_section_arc(angle_deg, section)
 	)
 	if sections.is_empty():
-		return {}
+		return {}  # Return empty dict which will be caught by is_empty() check
 	return sections[0]
 
 static func is_angle_in_section_arc(angle_deg: float, section: Dictionary) -> bool:
@@ -323,7 +329,18 @@ static func is_angle_in_section_arc(angle_deg: float, section: Dictionary) -> bo
 	var arc_start = arc.get("start", 0)
 	var arc_end = arc.get("end", 360)
 
-	if is_wrapping_arc(arc_end):
+	# Normalize arc_start and arc_end to 0-360 range
+	while arc_start < 0:
+		arc_start += 360
+	while arc_start >= 360:
+		arc_start -= 360
+	while arc_end < 0:
+		arc_end += 360
+	while arc_end > 360:
+		arc_end -= 360
+
+	# Check if arc wraps around 0 (e.g., 270 to 90 means 270-360 and 0-90)
+	if arc_start > arc_end:
 		return is_in_wrapping_arc(angle_deg, arc_start, arc_end)
 	else:
 		return is_in_normal_arc(angle_deg, arc_start, arc_end)
@@ -332,10 +349,13 @@ static func is_wrapping_arc(arc_end: float) -> bool:
 	return arc_end > 360
 
 static func is_in_wrapping_arc(angle: float, arc_start: float, arc_end: float) -> bool:
-	return angle >= arc_start or angle <= (arc_end - 360)
+	# For wrapping arc (e.g., 270 to 90), angle is in arc if >= start OR <= end
+	const EPSILON = 0.01
+	return angle >= (arc_start - EPSILON) or angle <= (arc_end + EPSILON)
 
 static func is_in_normal_arc(angle: float, arc_start: float, arc_end: float) -> bool:
-	return angle >= arc_start and angle <= arc_end
+	const EPSILON = 0.01
+	return angle >= (arc_start - EPSILON) and angle <= (arc_end + EPSILON)
 
 # ============================================================================
 # RESULT CONSTRUCTORS

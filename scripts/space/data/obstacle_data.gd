@@ -46,7 +46,7 @@ static func validate_obstacle_data(data: Dictionary) -> bool:
 	if not data.has("type"): return false
 	if not data.has("position"): return false
 	if not data.has("radius"): return false
-	if not data.has("health"): return false
+	if not data.has("current_health"): return false
 	return true
 
 ## Small Asteroid - 20 radius, low health
