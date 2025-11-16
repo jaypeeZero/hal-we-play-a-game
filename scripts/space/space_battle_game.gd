@@ -46,6 +46,9 @@ var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 var _pending_spawn: Dictionary = {}
 var _battlefield_size: Vector2 = Vector2(1920, 1080)
 
+# Initial pause state
+var _initial_paused: bool = true
+
 # Weapon update timer
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
@@ -57,6 +60,8 @@ var _crew_index: Dictionary = {}  # crew_id -> crew_data (O(1) lookup)
 const ENABLE_CREW_AI = true  # Re-enabled with proper event architecture
 
 func _ready() -> void:
+	# Allow processing when paused (for initial unpause)
+	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	_setup_input_actions()
 
 	if ENABLE_CREW_AI:
@@ -372,6 +377,13 @@ func _sync_all_entities() -> void:
 # ============================================================================
 
 func _input(event: InputEvent) -> void:
+	# Handle initial unpause with spacebar
+	if _initial_paused and event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
+		get_tree().paused = false
+		_initial_paused = false
+		get_viewport().set_input_as_handled()
+		return
+
 	# Ship spawn requests
 	if event.is_action_pressed("spawn_fighter"):
 		_request_squadron_spawn("fighter", 0)  # Spawn squadron of 6 fighters
