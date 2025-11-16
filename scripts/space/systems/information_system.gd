@@ -24,8 +24,8 @@ static func update_crew_awareness(crew_data: Dictionary, ships: Array, projectil
 		return crew_data
 
 	var visible_entities = gather_visible_entities(own_ship, crew_data, ships, projectiles)
-	var threats = identify_threats(visible_entities, own_ship, crew_data)
-	var opportunities = identify_opportunities(visible_entities, own_ship, crew_data)
+	var threats = identify_threats(visible_entities, own_ship, crew_data, ships)
+	var opportunities = identify_opportunities(visible_entities, own_ship, crew_data, ships)
 
 	return update_crew_awareness_data(crew_data, visible_entities, threats, opportunities, game_time)
 
@@ -91,9 +91,11 @@ static func create_entity_info(entity: Dictionary, entity_type: String) -> Dicti
 # ============================================================================
 
 ## Identify and prioritize threats
-static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary) -> Array:
+static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array) -> Array:
 	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team)
 
+	# All enemies are potential threats (weapons can damage any target, just at reduced effectiveness)
+	# Prioritization happens at the weapon system level
 	var threats = enemies \
 		.map(func(e): return add_threat_priority(e, own_ship, crew_data)) \
 		.filter(func(e): return e._threat_priority > 0.0)
@@ -163,9 +165,11 @@ static func calculate_ship_threat(ship: Dictionary) -> float:
 # ============================================================================
 
 ## Identify tactical opportunities
-static func identify_opportunities(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary) -> Array:
+static func identify_opportunities(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array) -> Array:
 	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team and e.type == "ship")
 
+	# All enemy ships are potential opportunities (can damage any target at some effectiveness)
+	# Prioritization of good targets happens at the weapon system level
 	var opportunities = enemies \
 		.map(func(e): return add_opportunity_score(e, own_ship, crew_data)) \
 		.filter(func(e): return e._opportunity_score > 0.0)

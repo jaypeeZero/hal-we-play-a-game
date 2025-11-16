@@ -136,7 +136,21 @@ static func calculate_distance(from: Vector2, to: Vector2) -> float:
 # ============================================================================
 
 static func find_best_target_for_weapon(ship_data: Dictionary, weapon: Dictionary, targets: Array) -> Dictionary:
-	return filter_targets_in_range(targets, ship_data.position, weapon.stats.range) \
+	# Filter by range, then prioritize good targets over poor ones
+	var in_range_targets = filter_targets_in_range(targets, ship_data.position, weapon.stats.range)
+
+	# Try to find a good target (effective damage)
+	var good_targets = in_range_targets \
+		.filter(func(t): return can_weapon_damage_target(weapon, t)) \
+		.map(func(t): return add_priority(t, ship_data.position)) \
+		.reduce(select_higher_priority, {})
+
+	# If we found a good target, use it
+	if not good_targets.is_empty():
+		return good_targets
+
+	# Otherwise, target anything in range (reduced effectiveness is better than nothing)
+	return in_range_targets \
 		.map(func(t): return add_priority(t, ship_data.position)) \
 		.reduce(select_higher_priority, {})
 
@@ -165,6 +179,72 @@ static func select_higher_priority(best: Dictionary, current: Dictionary) -> Dic
 
 static func get_priority(target: Dictionary) -> float:
 	return target.get("_priority", -INF)
+
+# ============================================================================
+# SIZE-BASED TARGETING - AC3 Implementation
+# ============================================================================
+
+## Check if weapon can effectively damage target
+## All weapons can damage all targets, but effectiveness varies by size
+## Prefer targets within effective range or heavily damaged targets
+static func can_weapon_damage_target(weapon: Dictionary, target: Dictionary) -> bool:
+	# All weapons can damage all targets (just at reduced effectiveness for size mismatch)
+	# This function now checks if target is a GOOD choice (effective damage)
+	var weapon_size = weapon.stats.get("size", 1)
+
+	# Target is good if heavily damaged (>50% armor gone = can hit internals easily)
+	var armor_percentage = calculate_armor_percentage(target)
+	if armor_percentage < 0.5:
+		return true
+
+	# Target is good if we have at least one armor section in effective range
+	return can_damage_any_armor_section_effectively(weapon_size, target)
+
+## Calculate percentage of armor remaining on target (0.0 to 1.0)
+static func calculate_armor_percentage(target: Dictionary) -> float:
+	var armor_sections = target.get("armor_sections", [])
+	if armor_sections.is_empty():
+		return 0.0  # No armor sections means 0% armored
+
+	var total_max_armor = 0
+	var total_current_armor = 0
+
+	for section in armor_sections:
+		total_max_armor += section.get("max_armor", 0)
+		total_current_armor += section.get("current_armor", 0)
+
+	if total_max_armor == 0:
+		return 0.0
+
+	return float(total_current_armor) / float(total_max_armor)
+
+## Check if weapon can effectively damage any armor section on target
+## "Effectively" means within the weapon's optimal range (weapon_size to weapon_size+1)
+static func can_damage_any_armor_section_effectively(weapon_size: int, target: Dictionary) -> bool:
+	var armor_sections = target.get("armor_sections", [])
+
+	for section in armor_sections:
+		var armor_size = section.get("size", 1)
+		# Effective damage range: armor_size <= weapon_size + 1
+		if armor_size <= weapon_size + 1:
+			return true
+
+	return false
+
+## Check if ship has ANY weapon that can damage the target
+## Used by AI to filter valid targets in awareness system
+static func can_ship_damage_target(ship_data: Dictionary, target: Dictionary) -> bool:
+	var weapons = ship_data.get("weapons", [])
+
+	# If ship has no weapons defined, allow targeting (backward compatibility for tests)
+	if weapons.is_empty():
+		return true
+
+	for weapon in weapons:
+		if can_weapon_damage_target(weapon, target):
+			return true
+
+	return false
 
 # ============================================================================
 # FIRING ARC VALIDATION
@@ -224,7 +304,8 @@ static func create_fire_command(ship_data: Dictionary, weapon: Dictionary, targe
 		speed = weapon.stats.projectile_speed,
 		target_id = target.ship_id,
 		delay = generate_reaction_delay(),
-		accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data)
+		accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data),
+		weapon_size = weapon.stats.get("size", 1)
 	}
 
 static func calculate_weapon_world_position(ship_data: Dictionary, weapon: Dictionary) -> Vector2:

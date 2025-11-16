@@ -96,7 +96,8 @@ static func create_hit(projectile: Dictionary, ship: Dictionary) -> Dictionary:
 		hit_position = projectile.position,
 		damage = projectile.damage,
 		projectile_angle = projectile.velocity.angle(),
-		source_id = projectile.source_id
+		source_id = projectile.source_id,
+		weapon_size = projectile.get("weapon_size", 1)
 	}
 
 # ============================================================================
@@ -191,7 +192,8 @@ static func apply_hits_to_ship_with_effects(ship: Dictionary, hits: Array) -> Di
 			updated_ship,
 			hit.hit_position,
 			hit.damage,
-			hit.projectile_angle
+			hit.projectile_angle,
+			hit.get("weapon_size", 1)
 		)
 		updated_ship = damage_result.ship_data
 
