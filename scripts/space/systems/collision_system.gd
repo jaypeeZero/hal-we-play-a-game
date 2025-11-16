@@ -55,6 +55,7 @@ static func process_collisions(ships: Array, projectiles: Array, obstacles: Arra
 		projectiles = remaining_projectiles,
 		obstacles = updated_obstacles,
 		hits = hits,
+		destroyed_projectile_ids = destroyed_projectile_ids,
 		visual_effects = visual_effects
 	}
 

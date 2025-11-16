@@ -86,6 +86,30 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 		elif internal.status == "destroyed":
 			state.status_effects.append(internal.component_id + "_destroyed")
 
+	# Calculate per-section damage data
+	for section in ship_data.armor_sections:
+		var armor_percent = section.current_armor / float(section.max_armor) if section.max_armor > 0 else 0.0
+
+		# Find internals in this section and calculate average health
+		var section_internals = ship_data.internals.filter(
+			func(internal): return internal.get("section_id", "") == section.section_id
+		)
+
+		var internal_percent = 1.0
+		if section_internals.size() > 0:
+			var total_internal_health = 0.0
+			var max_internal_health = 0.0
+			for internal in section_internals:
+				total_internal_health += internal.current_health
+				max_internal_health += internal.max_health
+			internal_percent = total_internal_health / max_internal_health if max_internal_health > 0 else 0.0
+
+		state.section_damage.append({
+			"section_id": section.section_id,
+			"armor_percent": armor_percent,
+			"internal_percent": internal_percent
+		})
+
 	return state
 
 ## IRenderable implementation

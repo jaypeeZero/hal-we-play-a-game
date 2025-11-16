@@ -86,41 +86,35 @@ static func _create_fighter_template() -> Dictionary:
 		"name": "Fighter",
 		"stats": {
 			"max_speed": 300.0,
-			"acceleration": 100.0,
+			"acceleration": 100.0,  # Forward thrust (main engines)
+			"lateral_acceleration": 30.0,  # Lateral/reverse thrust (maneuvering thrusters)
 			"turn_rate": 3.0,  # radians per second
 			"mass": 50.0,
 			"size": 15.0  # visual/collision size
 		},
 		"armor_sections": [
 			{
-				"section_id": "nose",
+				"section_id": "front",
 				"position_offset": Vector2(0, -8),
-				"arc": {"start": -60, "end": 60},  # degrees from forward
-				"max_armor": 20,
-				"current_armor": 20,
-				"size": 8
-			},
-			{
-				"section_id": "body",
-				"position_offset": Vector2(0, 0),
-				"arc": {"start": 60, "end": 300},  # sides and rear
-				"max_armor": 30,
-				"current_armor": 30,
+				"arc": {"start": -90, "end": 90},  # front 180 degrees
+				"max_armor": 25,
+				"current_armor": 25,
 				"size": 10
 			},
 			{
-				"section_id": "tail",
+				"section_id": "back",
 				"position_offset": Vector2(0, 8),
-				"arc": {"start": 300, "end": 420},  # rear arc (wraps around)
-				"max_armor": 15,
-				"current_armor": 15,
-				"size": 6
+				"arc": {"start": 90, "end": 270},  # back 180 degrees
+				"max_armor": 20,
+				"current_armor": 20,
+				"size": 10
 			}
 		],
 		"internals": [
 			{
 				"component_id": "cockpit",
 				"type": "control",
+				"section_id": "front",
 				"position_offset": Vector2(0, -3),
 				"max_health": 20,
 				"current_health": 20,
@@ -133,6 +127,7 @@ static func _create_fighter_template() -> Dictionary:
 			{
 				"component_id": "engine",
 				"type": "engine",
+				"section_id": "back",
 				"position_offset": Vector2(0, 6),
 				"max_health": 25,
 				"current_health": 25,
@@ -175,7 +170,8 @@ static func _create_corvette_template() -> Dictionary:
 		"name": "Corvette",
 		"stats": {
 			"max_speed": 150.0,
-			"acceleration": 50.0,
+			"acceleration": 50.0,  # Forward thrust (main engines)
+			"lateral_acceleration": 15.0,  # Lateral/reverse thrust (maneuvering thrusters)
 			"turn_rate": 1.5,
 			"mass": 200.0,
 			"size": 25.0
@@ -184,40 +180,33 @@ static func _create_corvette_template() -> Dictionary:
 			{
 				"section_id": "front",
 				"position_offset": Vector2(0, -15),
-				"arc": {"start": -45, "end": 45},
+				"arc": {"start": -60, "end": 60},  # front 120 degrees
 				"max_armor": 100,
 				"current_armor": 100,
-				"size": 12
+				"size": 14
 			},
 			{
-				"section_id": "left",
-				"position_offset": Vector2(-10, 0),
-				"arc": {"start": 45, "end": 135},
-				"max_armor": 80,
-				"current_armor": 80,
-				"size": 15
+				"section_id": "middle",
+				"position_offset": Vector2(0, 0),
+				"arc": {"start": 60, "end": 300},  # middle 240 degrees (sides)
+				"max_armor": 90,
+				"current_armor": 90,
+				"size": 16
 			},
 			{
-				"section_id": "right",
-				"position_offset": Vector2(10, 0),
-				"arc": {"start": 225, "end": 315},
-				"max_armor": 80,
-				"current_armor": 80,
-				"size": 15
-			},
-			{
-				"section_id": "rear",
+				"section_id": "back",
 				"position_offset": Vector2(0, 15),
-				"arc": {"start": 135, "end": 225},
-				"max_armor": 60,
-				"current_armor": 60,
-				"size": 12
+				"arc": {"start": 300, "end": 420},  # back 120 degrees (wraps around)
+				"max_armor": 70,
+				"current_armor": 70,
+				"size": 14
 			}
 		],
 		"internals": [
 			{
 				"component_id": "power_core",
 				"type": "power",
+				"section_id": "front",
 				"position_offset": Vector2(0, -8),
 				"max_health": 50,
 				"current_health": 50,
@@ -230,6 +219,7 @@ static func _create_corvette_template() -> Dictionary:
 			{
 				"component_id": "bridge",
 				"type": "control",
+				"section_id": "middle",
 				"position_offset": Vector2(0, 0),
 				"max_health": 40,
 				"current_health": 40,
@@ -242,6 +232,7 @@ static func _create_corvette_template() -> Dictionary:
 			{
 				"component_id": "engines",
 				"type": "engine",
+				"section_id": "back",
 				"position_offset": Vector2(0, 10),
 				"max_health": 60,
 				"current_health": 60,
@@ -300,74 +291,68 @@ static func _create_capital_template() -> Dictionary:
 		"name": "Capital Ship",
 		"stats": {
 			"max_speed": 80.0,
-			"acceleration": 20.0,
+			"acceleration": 20.0,  # Forward thrust (main engines)
+			"lateral_acceleration": 5.0,  # Lateral/reverse thrust (maneuvering thrusters)
 			"turn_rate": 0.5,
 			"mass": 1000.0,
 			"size": 50.0
 		},
 		"armor_sections": [
 			{
-				"section_id": "front_upper",
-				"position_offset": Vector2(0, -25),
-				"arc": {"start": -30, "end": 30},
-				"max_armor": 200,
-				"current_armor": 200,
-				"size": 20
-			},
-			{
-				"section_id": "front_lower",
-				"position_offset": Vector2(0, -15),
-				"arc": {"start": -50, "end": 50},
-				"max_armor": 200,
-				"current_armor": 200,
+				"section_id": "front_left",
+				"position_offset": Vector2(-10, -20),
+				"arc": {"start": 300, "end": 360},  # front left 60 degrees
+				"max_armor": 180,
+				"current_armor": 180,
 				"size": 18
 			},
 			{
-				"section_id": "left_fore",
-				"position_offset": Vector2(-20, -10),
-				"arc": {"start": 50, "end": 110},
-				"max_armor": 150,
-				"current_armor": 150,
-				"size": 22
+				"section_id": "front_right",
+				"position_offset": Vector2(10, -20),
+				"arc": {"start": 0, "end": 60},  # front right 60 degrees
+				"max_armor": 180,
+				"current_armor": 180,
+				"size": 18
 			},
 			{
-				"section_id": "left_aft",
-				"position_offset": Vector2(-20, 10),
-				"arc": {"start": 110, "end": 170},
+				"section_id": "middle_right",
+				"position_offset": Vector2(20, 0),
+				"arc": {"start": 60, "end": 120},  # right side 60 degrees
 				"max_armor": 150,
 				"current_armor": 150,
-				"size": 22
+				"size": 20
 			},
 			{
-				"section_id": "right_fore",
-				"position_offset": Vector2(20, -10),
-				"arc": {"start": 250, "end": 310},
+				"section_id": "back_right",
+				"position_offset": Vector2(10, 20),
+				"arc": {"start": 120, "end": 180},  # back right 60 degrees
+				"max_armor": 120,
+				"current_armor": 120,
+				"size": 18
+			},
+			{
+				"section_id": "back_left",
+				"position_offset": Vector2(-10, 20),
+				"arc": {"start": 180, "end": 240},  # back left 60 degrees
+				"max_armor": 120,
+				"current_armor": 120,
+				"size": 18
+			},
+			{
+				"section_id": "middle_left",
+				"position_offset": Vector2(-20, 0),
+				"arc": {"start": 240, "end": 300},  # left side 60 degrees
 				"max_armor": 150,
 				"current_armor": 150,
-				"size": 22
-			},
-			{
-				"section_id": "right_aft",
-				"position_offset": Vector2(20, 10),
-				"arc": {"start": 190, "end": 250},
-				"max_armor": 150,
-				"current_armor": 150,
-				"size": 22
-			},
-			{
-				"section_id": "rear",
-				"position_offset": Vector2(0, 25),
-				"arc": {"start": 170, "end": 190},
-				"max_armor": 100,
-				"current_armor": 100,
-				"size": 15
+				"size": 20
 			}
 		],
 		"internals": [
 			{
 				"component_id": "power_core",
 				"type": "power",
-				"position_offset": Vector2(0, -12),
+				"section_id": "front_left",
+				"position_offset": Vector2(-5, -12),
 				"max_health": 200,
 				"current_health": 200,
 				"status": "operational",
@@ -379,7 +364,8 @@ static func _create_capital_template() -> Dictionary:
 			{
 				"component_id": "bridge",
 				"type": "control",
-				"position_offset": Vector2(0, 0),
+				"section_id": "front_right",
+				"position_offset": Vector2(5, -8),
 				"max_health": 100,
 				"current_health": 100,
 				"status": "operational",
@@ -391,7 +377,8 @@ static func _create_capital_template() -> Dictionary:
 			{
 				"component_id": "engines_main",
 				"type": "engine",
-				"position_offset": Vector2(0, 20),
+				"section_id": "back_left",
+				"position_offset": Vector2(-5, 20),
 				"max_health": 150,
 				"current_health": 150,
 				"status": "operational",
@@ -462,6 +449,38 @@ static func _create_capital_template() -> Dictionary:
 					"projectile_speed": 500,
 					"range": 1000,
 					"accuracy": 0.80
+				},
+				"cooldown_remaining": 0.0,
+				"operator_id": null
+			},
+			{
+				"weapon_id": "gatling_1",
+				"type": "gatling_gun",
+				"position_offset": Vector2(-20, 0),
+				"facing": 0.0,
+				"arc": {"min": -180, "max": 180},  # Full 360° coverage for point defense
+				"stats": {
+					"damage": 3,
+					"rate_of_fire": 12.0,  # Fast firing for anti-fighter
+					"projectile_speed": 700,  # Faster projectiles
+					"range": 600,  # Shorter range, close defense
+					"accuracy": 0.70  # Lower accuracy due to rapid fire
+				},
+				"cooldown_remaining": 0.0,
+				"operator_id": null
+			},
+			{
+				"weapon_id": "gatling_2",
+				"type": "gatling_gun",
+				"position_offset": Vector2(20, 0),
+				"facing": 0.0,
+				"arc": {"min": -180, "max": 180},  # Full 360° coverage for point defense
+				"stats": {
+					"damage": 3,
+					"rate_of_fire": 12.0,  # Fast firing for anti-fighter
+					"projectile_speed": 700,  # Faster projectiles
+					"range": 600,  # Shorter range, close defense
+					"accuracy": 0.70  # Lower accuracy due to rapid fire
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
