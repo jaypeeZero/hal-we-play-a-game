@@ -162,7 +162,7 @@ static func _create_corvette_template() -> Dictionary:
 			"lateral_acceleration": 0.15,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
 			"turn_rate": 1.5,
 			"mass": 200.0,
-			"size": 25.0
+			"size": 90.0
 		},
 		"armor_sections": [
 			{
@@ -272,7 +272,7 @@ static func _create_capital_template() -> Dictionary:
 			"lateral_acceleration": 0.05,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
 			"turn_rate": 0.5,
 			"mass": 1000.0,
-			"size": 50.0
+			"size": 150.0
 		},
 		"armor_sections": [
 			{
