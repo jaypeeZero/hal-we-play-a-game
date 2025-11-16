@@ -859,12 +859,16 @@ func _update_maneuvering_thruster_debug(parent_node: Node2D, thrust_direction: V
 		if debug_line:
 			debug_line.visible = false
 
-## Get color based on damage percent
-func _get_damage_color(percent: float) -> Color:
+## Get color based on damage percent and team
+func _get_damage_color(percent: float, team: int = 0) -> Color:
+	# Determine base colors based on team
+	var base_color = COLOR_PRIMARY_GLOW if team == 0 else COLOR_TEAM1
+	var dim_color = COLOR_SOFT_GLOW if team == 0 else COLOR_TEAM1.darkened(0.2)
+
 	if percent > 0.75:
-		return COLOR_PRIMARY_GLOW  # Green - healthy
+		return base_color  # Full team color - healthy
 	elif percent > 0.5:
-		return COLOR_SOFT_GLOW     # Dim green - slightly damaged
+		return dim_color   # Dimmed team color - slightly damaged
 	elif percent > 0.25:
 		return Color("FFA500")     # Orange - heavily damaged
 	else:
@@ -874,6 +878,11 @@ func _get_damage_color(percent: float) -> Color:
 func _update_section_colors(visual: Dictionary, section_damage: Array[Dictionary]) -> void:
 	if not visual.has("sections"):
 		return
+
+	# Get team from visual root metadata
+	var team = 0
+	if visual.root and visual.root.has_meta("team"):
+		team = visual.root.get_meta("team")
 
 	for section_data in section_damage:
 		var section_id = section_data.section_id
@@ -886,13 +895,13 @@ func _update_section_colors(visual: Dictionary, section_damage: Array[Dictionary
 		if section_visual.has("armor"):
 			var armor_node = section_visual.armor
 			if armor_node and is_instance_valid(armor_node):
-				armor_node.color = _get_damage_color(section_data.armor_percent)
+				armor_node.color = _get_damage_color(section_data.armor_percent, team)
 
 		# Update internal color
 		if section_visual.has("internal"):
 			var internal_node = section_visual.internal
 			if internal_node and is_instance_valid(internal_node):
-				internal_node.color = _get_damage_color(section_data.internal_percent)
+				internal_node.color = _get_damage_color(section_data.internal_percent, team)
 
 ## Update visual color based on health (fallback for non-sectioned entities)
 func _update_health_color(visual: Dictionary, health_percent: float) -> void:
@@ -901,8 +910,13 @@ func _update_health_color(visual: Dictionary, health_percent: float) -> void:
 	if not body:
 		return
 
+	# Get team from visual root metadata
+	var team = 0
+	if root and root.has_meta("team"):
+		team = root.get_meta("team")
+
 	# Interpolate color based on health
-	var color = _get_damage_color(health_percent)
+	var color = _get_damage_color(health_percent, team)
 	body.color = color
 
 	# Update outline too
