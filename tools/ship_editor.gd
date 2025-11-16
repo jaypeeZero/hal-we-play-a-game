@@ -71,14 +71,13 @@ func _draw_ship(ship_data: Dictionary) -> void:
 	# Draw hull shape based on ship type (ARMOR ONLY)
 	_draw_hull_shape(ship_type, ship_data, center, scale_factor)
 
-	# TEMPORARILY DISABLED - only drawing armor for now
 	# # Draw internal components
-	# for internal in ship_data.get("internals", []):
-	# 	_draw_internal_component(internal, center, scale_factor)
+	for internal in ship_data.get("internals", []):
+		_draw_internal_component(internal, center, scale_factor)
 
 	# # Draw weapons
-	# for weapon in ship_data.get("weapons", []):
-	# 	_draw_weapon(weapon, center, scale_factor)
+	for weapon in ship_data.get("weapons", []):
+		_draw_weapon(weapon, center, scale_factor)
 
 	print("Ship drawn (ARMOR ONLY): " + ship_type + " with " +
 		str(ship_data.get("armor_sections", []).size()) + " armor sections")
