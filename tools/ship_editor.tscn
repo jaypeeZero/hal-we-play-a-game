@@ -44,7 +44,23 @@ layout_mode = 2
 layout_mode = 2
 
 [node name="ShipInfoLabel" type="Label" parent="VBoxContainer"]
-custom_minimum_size = Vector2(0, 100)
+custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 text = "Select a ship type to view data"
 vertical_alignment = 1
+
+[node name="HSeparator3" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="CanvasLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Ship Visualization:"
+
+[node name="ShipCanvas" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 400)
+layout_mode = 2
+
+[node name="LegendLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Blue=Armor  Orange=Internals  Red=Weapons  Green=Engines"
+horizontal_alignment = 1
