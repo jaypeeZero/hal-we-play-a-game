@@ -366,13 +366,13 @@ func _sync_all_entities() -> void:
 func _input(event: InputEvent) -> void:
 	# Ship spawn requests
 	if event.is_action_pressed("spawn_fighter"):
-		_request_spawn("fighter", 3, 0)
+		_request_squadron_spawn("fighter", 0)  # Spawn squadron of 6 fighters
 	elif event.is_action_pressed("spawn_corvette"):
 		_request_spawn("corvette", 1, 0)
 	elif event.is_action_pressed("spawn_capital"):
 		_request_spawn("capital", 1, 0)
 	elif event.is_action_pressed("spawn_enemy_fighter"):
-		_request_spawn("fighter", 3, 1)
+		_request_squadron_spawn("fighter", 1)  # Spawn squadron of 6 enemy fighters
 	elif event.is_action_pressed("spawn_enemy_corvette"):
 		_request_spawn("corvette", 1, 1)
 	elif event.is_action_pressed("spawn_enemy_capital"):
@@ -391,15 +391,27 @@ func _input(event: InputEvent) -> void:
 	# Mouse click to confirm spawn
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if not _pending_spawn.is_empty():
-			_execute_spawn(get_global_mouse_position())
+			if _pending_spawn.get("is_squadron", false):
+				_execute_squadron_spawn(get_global_mouse_position())
+			else:
+				_execute_spawn(get_global_mouse_position())
 
 func _request_spawn(ship_type: String, count: int, team: int) -> void:
 	_pending_spawn = {
 		"type": ship_type,
 		"count": count,
-		"team": team
+		"team": team,
+		"is_squadron": false
 	}
 	print("Click to spawn %d %s(s) for team %d" % [count, ship_type, team])
+
+func _request_squadron_spawn(ship_type: String, team: int) -> void:
+	_pending_spawn = {
+		"type": ship_type,
+		"team": team,
+		"is_squadron": true
+	}
+	print("Click to spawn fighter squadron (6 fighters) for team %d" % team)
 
 func _execute_spawn(spawn_position: Vector2) -> void:
 	if _pending_spawn.is_empty():
@@ -423,6 +435,67 @@ func _execute_spawn(spawn_position: Vector2) -> void:
 			ship_position.y = clamp(ship_position.y, 50, _battlefield_size.y - 50)
 
 			spawn_ship(ship_type, team, ship_position)
+
+	_pending_spawn = {}
+
+func _execute_squadron_spawn(spawn_position: Vector2) -> void:
+	if _pending_spawn.is_empty():
+		return
+
+	var team = _pending_spawn.team
+	var ship_ids = []
+
+	# Formation positions for 6 fighters (2 rows of 3)
+	var formation_positions = [
+		Vector2(-100, -50),  # Alpha (leader, front left)
+		Vector2(-100, 50),   # Beta (front right)
+		Vector2(0, -50),     # Gamma (middle left)
+		Vector2(0, 50),      # Delta (middle right)
+		Vector2(100, -50),   # Epsilon (back left)
+		Vector2(100, 50)     # Zeta (back right)
+	]
+
+	# Spawn 6 fighters
+	for i in range(6):
+		var offset = formation_positions[i]
+		var ship_position = spawn_position + offset
+
+		ship_position.x = clamp(ship_position.x, 50, _battlefield_size.x - 50)
+		ship_position.y = clamp(ship_position.y, 50, _battlefield_size.y - 50)
+
+		# Create ship data
+		var ship_data = ShipData.create_ship_instance("fighter", team, ship_position)
+		if ship_data.is_empty():
+			push_error("Failed to create fighter for squadron")
+			continue
+
+		# Add to data array
+		_ships.append(ship_data)
+		ship_ids.append(ship_data.ship_id)
+
+		# Create entity
+		var entity = ShipEntity.new()
+		entity.initialize(ship_data.ship_id, team, ship_data.stats.size, "fighter")
+		add_child(entity)
+		_ship_entities[ship_data.ship_id] = entity
+
+		# Emit signal
+		ship_spawned.emit(ship_data.ship_id)
+
+	# Create squadron crew structure if AI enabled
+	if ENABLE_CREW_AI and ship_ids.size() == 6:
+		var squadron_crew = CrewData.create_fighter_squadron(0.7)
+
+		# Assign each crew member to their ship
+		for i in range(6):
+			if i < squadron_crew.size() and i < ship_ids.size():
+				squadron_crew[i].assigned_to = ship_ids[i]
+				squadron_crew[i].assigned_ship_id = ship_ids[i]
+				_crew_list.append(squadron_crew[i])
+				_crew_index[squadron_crew[i].crew_id] = squadron_crew[i]
+
+		var leader_callsign = squadron_crew[0].get("callsign", "Alpha")
+		print("Spawned fighter squadron: %s leads with %d fighters for team %d" % [leader_callsign, 6, team])
 
 	_pending_spawn = {}
 
