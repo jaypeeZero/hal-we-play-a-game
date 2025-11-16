@@ -1,7 +1,7 @@
 class_name SpriteRenderer extends IVisualRenderer
 
 ## Sprite-based visual renderer using Kenny's Space Shooter sprite sheet
-## Renders ships and components using pre-made sprite graphics
+## COMPOSES ships from individual sprite parts to match MatrixRenderer shapes
 
 # Sprite atlas configuration
 const SPRITE_SHEET_PATH = "res://assets/kenney_space-shooter-extension/Spritesheet/spaceShooter2_spritesheet.png"
@@ -30,7 +30,7 @@ func initialize(theme: IVisualTheme) -> void:
 	# Load and parse sprite atlas XML
 	_load_sprite_atlas()
 
-	print("SpriteRenderer initialized with Kenny sprite sheet")
+	print("SpriteRenderer initialized - composing ships from sprite parts")
 
 func attach_to_entity(entity: IRenderable) -> void:
 	var entity_id: String = entity.get_entity_id()
@@ -44,7 +44,7 @@ func attach_to_entity(entity: IRenderable) -> void:
 	elif visual_type == "space_projectile":
 		visual_node = _create_projectile_visual(entity)
 	else:
-		# Fallback to simple placeholder
+		# Fallback
 		visual_node = _create_fallback_visual()
 
 	# Add as child of entity
@@ -108,7 +108,6 @@ func _load_sprite_atlas() -> void:
 	file.close()
 
 	# Parse XML to extract sprite regions
-	# Format: <SubTexture name="spaceShips_001.png" x="480" y="1045" width="106" height="80"/>
 	var parser = XMLParser.new()
 	parser.open_buffer(xml_content.to_utf8_buffer())
 
@@ -133,7 +132,7 @@ func _load_sprite_atlas() -> void:
 
 	print("Loaded " + str(_sprite_atlas.size()) + " sprites from atlas")
 
-## Create ship visual using sprite sheet
+## Create ship visual by composing sprite parts to match MatrixRenderer shapes
 func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	var container = Node2D.new()
 	container.name = "SpriteShipVisual"
@@ -143,31 +142,167 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	if entity.has_method("get_ship_data"):
 		ship_data = entity.get_ship_data()
 
-	# Determine sprite based on ship type
+	# Determine ship type and build from parts
 	var ship_type = visual_type.replace("ship_", "")
-	var sprite_name = _get_ship_sprite_name(ship_type)
+	var team = ship_data.get("team", 0)
+	var tint = COLOR_TEAM0_TINT if team == 0 else COLOR_TEAM1_TINT
 
-	# Create sprite
-	var ship_sprite = _create_sprite(sprite_name)
-	if ship_sprite:
-		# Store team in metadata for later use
-		if ship_data.has("team"):
-			container.set_meta("team", ship_data.team)
-			# Apply team color tint
-			var tint = COLOR_TEAM0_TINT if ship_data.team == 0 else COLOR_TEAM1_TINT
-			ship_sprite.modulate = tint
+	# Store team in metadata
+	container.set_meta("team", team)
 
-		container.add_child(ship_sprite)
-	else:
-		# Fallback to simple shape if sprite not found
-		push_warning("Sprite not found: " + sprite_name + ", using fallback")
-		var fallback = ColorRect.new()
-		fallback.size = Vector2(20, 20)
-		fallback.position = Vector2(-10, -10)
-		fallback.color = Color.GRAY
-		container.add_child(fallback)
+	# Build ship from sprite parts based on type
+	match ship_type:
+		"fighter":
+			_build_fighter_from_parts(container, tint)
+		"corvette":
+			_build_corvette_from_parts(container, tint)
+		"capital":
+			_build_capital_from_parts(container, tint)
+		_:
+			_build_fighter_from_parts(container, tint)
 
 	return container
+
+## Build fighter - elongated triangle like MatrixRenderer
+## Front section: pointy nose, Back section: wider tail
+func _build_fighter_from_parts(container: Node2D, tint: Color) -> void:
+	# Fighter is small, elongated triangle
+	# Use small/medium spaceParts to build pointy front and wider back
+
+	# NOSE (front section) - narrow pointy part
+	var nose = _create_sprite("spaceParts_004")  # Narrow long part (26x84)
+	if nose:
+		nose.position = Vector2(0, -20)  # Forward position
+		nose.modulate = tint
+		nose.rotation = 0  # Point up
+		container.add_child(nose)
+
+	# MID BODY - slightly wider
+	var mid = _create_sprite("spaceParts_005")  # Medium part (36x79)
+	if mid:
+		mid.position = Vector2(0, 5)
+		mid.modulate = tint
+		container.add_child(mid)
+
+	# TAIL (back section) - wider base
+	var tail_left = _create_sprite("spaceParts_057")  # Small wing part
+	if tail_left:
+		tail_left.position = Vector2(-8, 20)
+		tail_left.modulate = tint
+		container.add_child(tail_left)
+
+	var tail_right = _create_sprite("spaceParts_057")  # Small wing part
+	if tail_right:
+		tail_right.position = Vector2(8, 20)
+		tail_right.modulate = tint
+		container.add_child(tail_right)
+
+## Build corvette - hammerhead front, thin body, thick rear like MatrixRenderer
+func _build_corvette_from_parts(container: Node2D, tint: Color) -> void:
+	# HAMMERHEAD FRONT - wide horizontal piece
+	var hammer_left = _create_sprite("spaceParts_087")  # Wide flat part (36x22)
+	if hammer_left:
+		hammer_left.position = Vector2(-15, -25)
+		hammer_left.modulate = tint
+		hammer_left.rotation = PI / 2  # Rotate to horizontal
+		container.add_child(hammer_left)
+
+	var hammer_right = _create_sprite("spaceParts_087")  # Wide flat part
+	if hammer_right:
+		hammer_right.position = Vector2(15, -25)
+		hammer_right.modulate = tint
+		hammer_right.rotation = PI / 2  # Rotate to horizontal
+		container.add_child(hammer_right)
+
+	# THIN BODY - narrow middle section
+	var body_upper = _create_sprite("spaceParts_004")  # Narrow part (26x84)
+	if body_upper:
+		body_upper.position = Vector2(0, -5)
+		body_upper.modulate = tint
+		container.add_child(body_upper)
+
+	# THICK REAR - wider engine section
+	var rear = _create_sprite("spaceParts_014")  # Wider part (50x67)
+	if rear:
+		rear.position = Vector2(0, 25)
+		rear.modulate = tint
+		container.add_child(rear)
+
+	# Rear wings
+	var rear_left = _create_sprite("spaceParts_061")  # Small accent
+	if rear_left:
+		rear_left.position = Vector2(-18, 30)
+		rear_left.modulate = tint
+		container.add_child(rear_left)
+
+	var rear_right = _create_sprite("spaceParts_061")  # Small accent
+	if rear_right:
+		rear_right.position = Vector2(18, 30)
+		rear_right.modulate = tint
+		container.add_child(rear_right)
+
+## Build capital - Star Destroyer triangle like MatrixRenderer
+func _build_capital_from_parts(container: Node2D, tint: Color) -> void:
+	# Capital is 3x longer, builds a triangle from nose to wide back
+
+	# NOSE - single narrow point
+	var nose = _create_sprite("spaceParts_004")  # Narrow (26x84)
+	if nose:
+		nose.position = Vector2(0, -60)
+		nose.modulate = tint
+		container.add_child(nose)
+
+	# FRONT SECTIONS - narrow widening
+	var front_left = _create_sprite("spaceParts_007")  # Medium narrow (32x86)
+	if front_left:
+		front_left.position = Vector2(-12, -30)
+		front_left.modulate = tint
+		container.add_child(front_left)
+
+	var front_right = _create_sprite("spaceParts_007")
+	if front_right:
+		front_right.position = Vector2(12, -30)
+		front_right.modulate = tint
+		container.add_child(front_right)
+
+	# MIDDLE SECTIONS - wider
+	var mid_left = _create_sprite("spaceParts_002")  # Medium (41x71)
+	if mid_left:
+		mid_left.position = Vector2(-25, 0)
+		mid_left.modulate = tint
+		container.add_child(mid_left)
+
+	var mid_right = _create_sprite("spaceParts_002")
+	if mid_right:
+		mid_right.position = Vector2(25, 0)
+		mid_right.modulate = tint
+		container.add_child(mid_right)
+
+	# BACK SECTIONS - widest parts
+	var back_left = _create_sprite("spaceParts_014")  # Wide (50x67)
+	if back_left:
+		back_left.position = Vector2(-40, 30)
+		back_left.modulate = tint
+		container.add_child(back_left)
+
+	var back_right = _create_sprite("spaceParts_014")
+	if back_right:
+		back_right.position = Vector2(40, 30)
+		back_right.modulate = tint
+		container.add_child(back_right)
+
+	# WING TIPS - outermost edges
+	var wing_left = _create_sprite("spaceParts_041")  # Large part (59x66)
+	if wing_left:
+		wing_left.position = Vector2(-55, 35)
+		wing_left.modulate = tint
+		container.add_child(wing_left)
+
+	var wing_right = _create_sprite("spaceParts_041")
+	if wing_right:
+		wing_right.position = Vector2(55, 35)
+		wing_right.modulate = tint
+		container.add_child(wing_right)
 
 ## Create projectile visual using sprite
 func _create_projectile_visual(entity: IRenderable) -> Node2D:
@@ -177,28 +312,20 @@ func _create_projectile_visual(entity: IRenderable) -> Node2D:
 	# Use a missile sprite for projectiles
 	var projectile_sprite = _create_sprite("spaceMissiles_001")
 	if projectile_sprite:
-		projectile_sprite.scale = Vector2(0.6, 0.6)  # Scale down a bit
+		projectile_sprite.scale = Vector2(0.6, 0.6)
 		container.add_child(projectile_sprite)
-	else:
-		# Fallback
-		var fallback = ColorRect.new()
-		fallback.size = Vector2(4, 8)
-		fallback.position = Vector2(-2, -4)
-		fallback.color = Color.YELLOW
-		container.add_child(fallback)
 
 	return container
 
-## Create fallback visual for unknown types
+## Create fallback visual
 func _create_fallback_visual() -> Node2D:
 	var container = Node2D.new()
 	container.name = "SpriteFallbackVisual"
 
-	var fallback = ColorRect.new()
-	fallback.size = Vector2(16, 16)
-	fallback.position = Vector2(-8, -8)
-	fallback.color = Color.MAGENTA
-	container.add_child(fallback)
+	# Use a small part as fallback
+	var fallback = _create_sprite("spaceParts_054")
+	if fallback:
+		container.add_child(fallback)
 
 	return container
 
@@ -223,18 +350,6 @@ func _create_sprite(sprite_name: String) -> Sprite2D:
 
 	return sprite
 
-## Map ship type to sprite name
-func _get_ship_sprite_name(ship_type: String) -> String:
-	match ship_type:
-		"fighter":
-			return "spaceShips_001"  # Small fighter
-		"corvette":
-			return "spaceShips_004"  # Medium ship
-		"capital":
-			return "spaceShips_007"  # Large capital ship
-		_:
-			return "spaceShips_002"  # Default ship
-
 ## Update component visuals based on state
 func _update_components(entity_id: String, components: Array[Dictionary], parent_node: Node2D, is_main_engine_firing: bool, maneuvering_thrust_direction: Vector2) -> void:
 	# Initialize component visuals dictionary for this entity if needed
@@ -248,6 +363,7 @@ func _update_components(entity_id: String, components: Array[Dictionary], parent
 	var team = 0
 	if parent_node.has_meta("team"):
 		team = parent_node.get_meta("team")
+	var tint = COLOR_TEAM0_TINT if team == 0 else COLOR_TEAM1_TINT
 
 	# Create or update components
 	for component_data in components:
@@ -256,7 +372,7 @@ func _update_components(entity_id: String, components: Array[Dictionary], parent
 
 		# Create component visual if it doesn't exist
 		if component_id not in component_dict:
-			var component_visual = _create_component_visual(component_data, team)
+			var component_visual = _create_component_visual(component_data, tint)
 			if component_visual:
 				parent_node.add_child(component_visual)
 				component_dict[component_id] = component_visual
@@ -286,7 +402,7 @@ func _update_components(entity_id: String, components: Array[Dictionary], parent
 		component_dict.erase(component_id)
 
 ## Create visual node for a component
-func _create_component_visual(component_data: Dictionary, team: int) -> Node2D:
+func _create_component_visual(component_data: Dictionary, tint: Color) -> Node2D:
 	var visual_type: String = component_data.visual_type
 	var component_type: String = component_data.component_type
 
@@ -295,75 +411,52 @@ func _create_component_visual(component_data: Dictionary, team: int) -> Node2D:
 
 	if component_type == "weapon":
 		# Weapons: use missile sprites as turret/gun barrels
-		_create_weapon_visual(container, visual_type, team)
+		_create_weapon_visual(container, visual_type, tint)
 	elif component_type == "engine":
 		# Engines: show thrust effect sprites
-		_create_engine_visual(container, team)
+		_create_engine_visual(container, tint)
 
 	return container
 
-## Create weapon visual using sprite
-func _create_weapon_visual(container: Node2D, visual_type: String, team: int) -> void:
+## Create weapon visual using missile sprites
+func _create_weapon_visual(container: Node2D, visual_type: String, tint: Color) -> void:
 	var weapon_sprite_name = _get_weapon_sprite_name(visual_type)
 	var weapon_sprite = _create_sprite(weapon_sprite_name)
 
 	if weapon_sprite:
 		weapon_sprite.name = "WeaponSprite"
-		# Apply team tint
-		var tint = COLOR_TEAM0_TINT if team == 0 else COLOR_TEAM1_TINT
 		weapon_sprite.modulate = tint
-		weapon_sprite.scale = Vector2(0.8, 0.8)  # Scale appropriately
+		weapon_sprite.scale = Vector2(0.7, 0.7)
 		container.add_child(weapon_sprite)
-	else:
-		# Fallback: simple rectangle
-		var fallback = ColorRect.new()
-		fallback.size = Vector2(4, 12)
-		fallback.position = Vector2(-2, -12)
-		fallback.color = Color.DARK_GRAY
-		container.add_child(fallback)
 
 ## Create engine visual with thrust effect sprites
-func _create_engine_visual(container: Node2D, team: int) -> void:
+func _create_engine_visual(container: Node2D, tint: Color) -> void:
 	# Engine thrust: use spaceEffects sprites for flame/thrust
 	var thrust_sprite = _create_sprite("spaceEffects_005")  # Vertical thrust flame
 
 	if thrust_sprite:
 		thrust_sprite.name = "ThrustSprite"
-		thrust_sprite.modulate = Color(1.0, 0.6, 0.0)  # Orange thrust color
+		thrust_sprite.modulate = Color(1.0, 0.6, 0.0)  # Orange thrust
 		thrust_sprite.scale = Vector2(0.4, 0.4)
 		thrust_sprite.rotation = PI  # Point backward
-		thrust_sprite.visible = false  # Hidden by default, shown when firing
+		thrust_sprite.visible = false  # Hidden by default
 		container.add_child(thrust_sprite)
-	else:
-		# Fallback: simple polygon thrust
-		var thrust = Polygon2D.new()
-		thrust.name = "ThrustSprite"
-		var thrust_size = 12.0
-		thrust.polygon = PackedVector2Array([
-			Vector2(0, 0),
-			Vector2(-thrust_size * 0.5, thrust_size * 0.8),
-			Vector2(0, thrust_size * 1.8),
-			Vector2(thrust_size * 0.5, thrust_size * 0.8)
-		])
-		thrust.color = Color("FF8C00")
-		thrust.visible = false
-		container.add_child(thrust)
 
 ## Map weapon visual type to sprite name
 func _get_weapon_sprite_name(visual_type: String) -> String:
 	match visual_type:
 		"heavy_turret":
-			return "spaceMissiles_021"  # Larger missile for heavy turret
+			return "spaceMissiles_021"  # Larger missile
 		"medium_turret":
-			return "spaceMissiles_007"  # Medium missile
+			return "spaceMissiles_007"
 		"gatling_turret":
-			return "spaceMissiles_001"  # Small missile
+			return "spaceMissiles_001"
 		"light_weapon":
-			return "spaceMissiles_001"  # Small missile for light weapon
+			return "spaceMissiles_001"
 		_:
 			return "spaceMissiles_001"
 
-## Update engine thrust visual based on firing state and status
+## Update engine thrust visual based on firing state
 func _update_engine_thrust(component_visual: Node2D, status: String, is_firing: bool) -> void:
 	var thrust = component_visual.get_node_or_null("ThrustSprite")
 	if not thrust:
@@ -372,45 +465,36 @@ func _update_engine_thrust(component_visual: Node2D, status: String, is_firing: 
 	# Only show thrust when engine is firing
 	if is_firing and status != "destroyed":
 		thrust.visible = true
-
-		# Modify thrust color/intensity based on engine status
 		match status:
 			"operational":
 				thrust.modulate = Color(1.0, 0.6, 0.0)  # Bright orange
 			"damaged":
-				thrust.modulate = Color(0.8, 0.4, 0.0)  # Dimmer orange for damaged
+				thrust.modulate = Color(0.8, 0.4, 0.0)  # Dimmer
 	else:
-		# Hide thrust when not firing or destroyed
 		thrust.visible = false
 
-## Update component visual based on status
+## Update component status
 func _update_component_status(component_visual: Node2D, status: String) -> void:
-	# Currently weapons don't have damage status, so this is a no-op
+	# Weapons don't have damage status currently
 	pass
 
 ## Update health color modulation
 func _update_health_modulation(root: Node2D, health_percent: float) -> void:
-	# Tint sprite based on health
-	var ship_sprite = root.get_child(0) if root.get_child_count() > 0 else null
-	if not ship_sprite:
-		return
-
-	# Calculate damage tint (red overlay as health decreases)
+	# Tint all child sprites based on health
 	var damage_tint = Color.WHITE.lerp(Color(1.0, 0.3, 0.3), 1.0 - health_percent)
 
-	# Preserve team tint and combine with damage
-	var base_tint = ship_sprite.modulate
-	ship_sprite.modulate = Color(
-		base_tint.r * damage_tint.r,
-		base_tint.g * damage_tint.g,
-		base_tint.b * damage_tint.b,
-		1.0
-	)
+	for child in root.get_children():
+		if child is Sprite2D:
+			var base_tint = child.modulate
+			child.modulate = Color(
+				base_tint.r * damage_tint.r,
+				base_tint.g * damage_tint.g,
+				base_tint.b * damage_tint.b,
+				1.0
+			)
 
 ## Show destruction effect
 func _show_destruction_effect(visual: Dictionary) -> void:
 	var root = visual.root
-
-	# Fade out
 	var tween = root.create_tween()
 	tween.tween_property(root, "modulate:a", 0.0, 1.0)
