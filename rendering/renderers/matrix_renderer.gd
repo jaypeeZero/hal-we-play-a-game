@@ -210,6 +210,8 @@ func _create_fighter_shape(container: Node2D, size: float, team: int) -> Diction
 	var front_color = _get_section_color(team, 0)
 	var back_color = _get_section_color(team, 1)
 
+	print("Creating FIGHTER for team ", team, " - Front color: ", front_color, " Back color: ", back_color)
+
 	# Front section (pointy nose to middle)
 	var front_armor = Polygon2D.new()
 	front_armor.name = "Armor"
@@ -306,6 +308,8 @@ func _create_corvette_shape(container: Node2D, size: float, team: int) -> Dictio
 	var front_color = _get_section_color(team, 0)
 	var middle_color = _get_section_color(team, 1)
 	var back_color = _get_section_color(team, 2)
+
+	print("Creating CORVETTE for team ", team, " - Front: ", front_color, " Middle: ", middle_color, " Back: ", back_color)
 
 	# FRONT SECTION - Hammerhead
 	var front_armor = Polygon2D.new()
@@ -450,6 +454,8 @@ func _create_capital_shape(container: Node2D, size: float, team: int) -> Diction
 	var width_at_front = max_width * 0.2
 	var width_at_middle = max_width * 0.6
 	var width_at_back = max_width
+
+	print("Creating CAPITAL for team ", team, " - Colors 0-5: ", _get_section_color(team, 0), ", ", _get_section_color(team, 1), ", ", _get_section_color(team, 2), ", ", _get_section_color(team, 3), ", ", _get_section_color(team, 4), ", ", _get_section_color(team, 5))
 
 	# Helper to create a section polygon
 	var create_section = func(left_front: Vector2, right_front: Vector2, right_back: Vector2, left_back: Vector2, section_id: String, section_color: Color, container_node: Node2D):
@@ -700,6 +706,8 @@ func _update_section_colors(visual: Dictionary, section_damage: Array[Dictionary
 	if not visual.has("sections"):
 		return
 
+	print("UPDATE_SECTION_COLORS called with ", section_damage.size(), " sections")
+
 	for section_data in section_damage:
 		var section_id = section_data.section_id
 		if not visual.sections.has(section_id):
@@ -714,7 +722,9 @@ func _update_section_colors(visual: Dictionary, section_damage: Array[Dictionary
 		if section_visual.has("armor"):
 			var armor_node = section_visual.armor
 			if armor_node and is_instance_valid(armor_node):
-				armor_node.color = _get_damage_color(section_data.armor_percent, base_color)
+				var final_color = _get_damage_color(section_data.armor_percent, base_color)
+				print("  Section ", section_id, ": base=", base_color, " armor%=", section_data.armor_percent, " final=", final_color)
+				armor_node.color = final_color
 
 		# Update internal color based on damage, preserving the base color
 		if section_visual.has("internal"):
