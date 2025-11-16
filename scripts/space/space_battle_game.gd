@@ -63,7 +63,15 @@ func _ready() -> void:
 		_initialize_knowledge_base()
 		_enable_event_tracking()
 
-	_spawn_initial_obstacles()
+	# Obstacle spawning disabled for better user interaction
+	# _spawn_initial_obstacles()
+
+	# Spawn 2 squadrons per team on opposite sides of the map
+	_spawn_initial_squadrons()
+
+	# Pause the game on start
+	get_tree().paused = true
+
 	game_started.emit()
 
 	if BattleEventLoggerAutoload.service:
@@ -545,6 +553,42 @@ func _request_obstacle_spawn(obstacle_type: String) -> void:
 		"type": obstacle_type
 	}
 	print("Click to spawn %s obstacle" % obstacle_type)
+
+## Spawn initial squadrons at game start (2 per team on opposite sides)
+func _spawn_initial_squadrons() -> void:
+	# Calculate spawn positions on opposite sides of the map
+	var margin = 200.0
+	var squadron_spacing = 100.0
+
+	# Team 0 (Player) - Left side (Green)
+	var team0_x = margin
+	var team0_y1 = _battlefield_size.y / 2 - squadron_spacing
+	var team0_y2 = _battlefield_size.y / 2 + squadron_spacing
+
+	# Team 1 (Enemy) - Right side (Grey/White)
+	var team1_x = _battlefield_size.x - margin
+	var team1_y1 = _battlefield_size.y / 2 - squadron_spacing
+	var team1_y2 = _battlefield_size.y / 2 + squadron_spacing
+
+	# Spawn Team 0 Squadron 1 (3 fighters)
+	for i in range(3):
+		var offset = Vector2(randf_range(-50, 50), randf_range(-50, 50))
+		spawn_ship("fighter", 0, Vector2(team0_x, team0_y1) + offset)
+
+	# Spawn Team 0 Squadron 2 (3 fighters)
+	for i in range(3):
+		var offset = Vector2(randf_range(-50, 50), randf_range(-50, 50))
+		spawn_ship("fighter", 0, Vector2(team0_x, team0_y2) + offset)
+
+	# Spawn Team 1 Squadron 1 (3 fighters)
+	for i in range(3):
+		var offset = Vector2(randf_range(-50, 50), randf_range(-50, 50))
+		spawn_ship("fighter", 1, Vector2(team1_x, team1_y1) + offset)
+
+	# Spawn Team 1 Squadron 2 (3 fighters)
+	for i in range(3):
+		var offset = Vector2(randf_range(-50, 50), randf_range(-50, 50))
+		spawn_ship("fighter", 1, Vector2(team1_x, team1_y2) + offset)
 
 ## Spawn initial obstacles at game start
 func _spawn_initial_obstacles() -> void:

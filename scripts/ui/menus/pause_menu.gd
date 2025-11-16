@@ -6,7 +6,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 
 func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
+	# Check for ESC or Spacebar to toggle pause
+	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_SPACE):
 		toggle_pause()
 		get_viewport().set_input_as_handled()
 
