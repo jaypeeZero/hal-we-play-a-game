@@ -749,13 +749,17 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
 
 		# Determine which thrusters to use based on angle
+		# CRITICAL: Braking uses FULL MAIN ENGINE POWER regardless of angle!
 		# Forward arc (±45°): main engines at full power
-		# Lateral arc (45°-135°): maneuvering thrusters
-		# Reverse arc (135°-180°): reverse thrusters (also maneuvering)
+		# Lateral arc (45°-135°): maneuvering thrusters (30% power)
+		# Reverse arc (135°-180°): reverse thrusters (30% power)
 		var acceleration_to_use: float
-		if thrust_angle_diff < PI / 4:  # Within 45° of forward
+		if pilot_control.get("is_braking", false):
+			# BRAKING: Use full main engine power (100%) to stop quickly
 			acceleration_to_use = ship_data.stats.acceleration
-		else:  # Lateral or reverse
+		elif thrust_angle_diff < PI / 4:  # Within 45° of forward
+			acceleration_to_use = ship_data.stats.acceleration
+		else:  # Lateral or reverse (normal maneuvering)
 			acceleration_to_use = ship_data.stats.get("lateral_acceleration", ship_data.stats.acceleration * 0.3)
 
 		thrust_vector = desired_thrust_direction * acceleration_to_use * delta

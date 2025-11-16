@@ -445,14 +445,15 @@ func _execute_squadron_spawn(spawn_position: Vector2) -> void:
 	var team = _pending_spawn.team
 	var ship_ids = []
 
-	# Formation positions for 6 fighters (2 rows of 3)
+	# Formation positions for 6 fighters (V formation with leader at point)
+	# Alpha at point, alternating backward in rank left-to-right
 	var formation_positions = [
-		Vector2(-100, -50),  # Alpha (leader, front left)
-		Vector2(-100, 50),   # Beta (front right)
-		Vector2(0, -50),     # Gamma (middle left)
-		Vector2(0, 50),      # Delta (middle right)
-		Vector2(100, -50),   # Epsilon (back left)
-		Vector2(100, 50)     # Zeta (back right)
+		Vector2(0, 0),        # Alpha - point (squadron leader)
+		Vector2(-80, 80),     # Beta - left back
+		Vector2(80, 80),      # Gamma - right back
+		Vector2(-160, 160),   # Delta - left further back
+		Vector2(160, 160),    # Epsilon - right further back
+		Vector2(-240, 240)    # Zeta - left furthest back
 	]
 
 	# Spawn 6 fighters
