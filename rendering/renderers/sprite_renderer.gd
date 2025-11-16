@@ -1,7 +1,11 @@
 class_name SpriteRenderer extends IVisualRenderer
 
 ## Sprite-based visual renderer using Kenny's Space Shooter sprite sheet
-## COMPOSES ships from individual sprite parts to match MatrixRenderer shapes
+## COMPOSES ships from multiple spaceRocketParts sprites to match MatrixRenderer shapes
+##
+## Fighter: 2 stacked parts creating elongated triangle (narrow front, wider back)
+## Corvette: 3 stacked parts creating hammerhead (wide front, thin middle, thick rear)
+## Capital: 4 stacked parts creating Star Destroyer triangle (progressively wider from nose to rear)
 
 # Sprite atlas configuration
 const SPRITE_SHEET_PATH = "res://assets/kenney_space-shooter-extension/Spritesheet/spaceShooter2_spritesheet.png"
@@ -164,43 +168,97 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	return container
 
 ## Build fighter - elongated triangle like MatrixRenderer
-## ARMOR ONLY (for now - verifying shape)
+## Composes from multiple rocket parts to create triangle shape
 func _build_fighter_from_parts(container: Node2D, tint: Color) -> void:
-	# Fighter: small elongated ship - use rocket parts for clear shape
-	# Single narrow rocket body creates triangle silhouette
+	# Fighter: elongated triangle - narrow front tapering to wider back
+	# Stack 2 parts vertically to create elongated shape
 
-	# Main body - tall narrow rocket part
-	var body = _create_sprite("spaceRocketParts_028")  # Narrow (31x83)
-	if body:
-		body.position = Vector2(0, 0)
-		body.modulate = tint
-		container.add_child(body)
+	# Front section - narrow nose
+	var front = _create_sprite("spaceRocketParts_028")  # Very narrow (31x83)
+	if front:
+		front.position = Vector2(0, -25)  # Position toward front
+		front.modulate = tint
+		front.scale = Vector2(0.8, 1.0)  # Make narrower
+		container.add_child(front)
+
+	# Back section - slightly wider tail
+	var back = _create_sprite("spaceRocketParts_026")  # Medium narrow (37x89)
+	if back:
+		back.position = Vector2(0, 35)  # Position toward rear
+		back.modulate = tint.lightened(0.2)  # Slightly lighter shade
+		back.scale = Vector2(0.9, 0.6)  # Compress vertically, slightly wider
+		back.rotation = PI  # Flip to point backward
+		container.add_child(back)
 
 ## Build corvette - hammerhead front, thin body, thick rear like MatrixRenderer
-## ARMOR ONLY (for now - verifying shape)
+## Composes from 3 sections to create hammerhead silhouette
 func _build_corvette_from_parts(container: Node2D, tint: Color) -> void:
-	# Corvette: medium ship - wider than fighter
-	# Use wider rocket body
+	# Corvette: hammerhead design - wide front, thin middle, thick rear
+	# Stack 3 distinct sections
 
-	# Main body - medium width rocket part
-	var body = _create_sprite("spaceRocketParts_026")  # Medium (37x89)
-	if body:
-		body.position = Vector2(0, 0)
-		body.modulate = tint
-		container.add_child(body)
+	# Front section - wide hammerhead
+	var front = _create_sprite("spaceRocketParts_027")  # Wider (47x85)
+	if front:
+		front.position = Vector2(0, -45)
+		front.modulate = tint
+		front.scale = Vector2(1.2, 0.5)  # Make wider and shorter
+		container.add_child(front)
+
+	# Middle section - thin body
+	var middle = _create_sprite("spaceRocketParts_028")  # Narrow (31x83)
+	if middle:
+		middle.position = Vector2(0, 0)
+		middle.modulate = tint.lightened(0.15)
+		middle.scale = Vector2(0.7, 0.7)  # Thinner
+		container.add_child(middle)
+
+	# Rear section - thick engine block
+	var rear = _create_sprite("spaceRocketParts_026")  # Medium (37x89)
+	if rear:
+		rear.position = Vector2(0, 45)
+		rear.modulate = tint.lightened(0.3)
+		rear.scale = Vector2(1.0, 0.6)
+		rear.rotation = PI  # Flip to point backward
+		container.add_child(rear)
 
 ## Build capital - Star Destroyer triangle like MatrixRenderer
-## ARMOR ONLY (for now - verifying shape)
+## Composes from 4 stacked sections creating progressively wider triangle
 func _build_capital_from_parts(container: Node2D, tint: Color) -> void:
-	# Capital: large ship - much taller/longer than corvette
-	# Use very tall rocket part
+	# Capital: Star Destroyer triangle - narrow nose progressively widening to wide rear
+	# Stack 4 sections with increasing widths
 
-	# Main body - tall rocket part (3x fighter height)
-	var body = _create_sprite("spaceRocketParts_020")  # Very tall (29x170)
-	if body:
-		body.position = Vector2(0, 0)
-		body.modulate = tint
-		container.add_child(body)
+	# Front section - narrow nose
+	var front = _create_sprite("spaceRocketParts_028")  # Very narrow (31x83)
+	if front:
+		front.position = Vector2(0, -90)
+		front.modulate = tint
+		front.scale = Vector2(0.6, 1.2)  # Very narrow and elongated
+		container.add_child(front)
+
+	# Front-mid section - getting wider
+	var front_mid = _create_sprite("spaceRocketParts_026")  # Medium narrow (37x89)
+	if front_mid:
+		front_mid.position = Vector2(0, -30)
+		front_mid.modulate = tint.lightened(0.1)
+		front_mid.scale = Vector2(0.9, 1.0)
+		container.add_child(front_mid)
+
+	# Rear-mid section - wider still
+	var rear_mid = _create_sprite("spaceRocketParts_027")  # Wider (47x85)
+	if rear_mid:
+		rear_mid.position = Vector2(0, 35)
+		rear_mid.modulate = tint.lightened(0.2)
+		rear_mid.scale = Vector2(1.3, 1.0)
+		container.add_child(rear_mid)
+
+	# Rear section - widest part
+	var rear = _create_sprite("spaceRocketParts_001")  # Large (68x78)
+	if rear:
+		rear.position = Vector2(0, 85)
+		rear.modulate = tint.lightened(0.3)
+		rear.scale = Vector2(1.5, 0.6)  # Make very wide and compressed
+		rear.rotation = PI  # Flip to point backward
+		container.add_child(rear)
 
 ## Create projectile visual using sprite
 func _create_projectile_visual(entity: IRenderable) -> Node2D:
