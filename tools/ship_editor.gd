@@ -150,6 +150,12 @@ func _draw_hull_shape(ship_type: String, ship_data: Dictionary, center: Vector2,
 			var rotated_point = HullShapes.rotate_90(scaled_point)
 			line.add_point(center + rotated_point)
 
+		# Close the polygon by adding the first point again
+		if points.size() > 0:
+			var first_point = points[0] * scale
+			var rotated_first = HullShapes.rotate_90(first_point)
+			line.add_point(center + rotated_first)
+
 		ship_canvas.add_child(line)
 
 		# Add section label
