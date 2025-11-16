@@ -71,6 +71,11 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 			updated.orders.target_id = decision.get("target_id")
 			updated.orders.maneuver_subtype = decision.get("subtype")
 			updated.orders.nearby_fighters = decision.get("nearby_fighters", 0)
+		"rejoin_wingman":
+			updated.orders.current_order = "fighter_engage"
+			updated.orders.target_id = decision.get("target_id")  # Lead ship ID
+			updated.orders.maneuver_subtype = decision.get("subtype")
+			updated.orders.formation_position = decision.get("formation_position", Vector2.ZERO)
 		"idle":
 			updated.orders.current_order = ""
 			updated.orders.target_id = ""
