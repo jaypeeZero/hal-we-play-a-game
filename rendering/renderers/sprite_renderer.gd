@@ -166,101 +166,41 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 ## Build fighter - elongated triangle like MatrixRenderer
 ## ARMOR ONLY (for now - verifying shape)
 func _build_fighter_from_parts(container: Node2D, tint: Color) -> void:
-	# Fighter: elongated triangle shape
-	# Front: pointy nose, Back: wider tail
+	# Fighter: small elongated ship - use rocket parts for clear shape
+	# Single narrow rocket body creates triangle silhouette
 
-	# FRONT ARMOR - narrow pointy nose
-	var nose = _create_sprite("spaceParts_004")  # Narrow (26x84)
-	if nose:
-		nose.position = Vector2(0, -18)
-		nose.modulate = tint
-		container.add_child(nose)
-
-	# BACK ARMOR - wider tail section
-	var tail = _create_sprite("spaceParts_005")  # Medium (36x79)
-	if tail:
-		tail.position = Vector2(0, 12)
-		tail.modulate = tint
-		container.add_child(tail)
-
-## Build corvette - hammerhead front, thin body, thick rear like MatrixRenderer
-## ARMOR ONLY (for now - verifying shape)
-func _build_corvette_from_parts(container: Node2D, tint: Color) -> void:
-	# Corvette: hammerhead front, thin body, thick oval rear
-
-	# FRONT ARMOR - wide hammerhead
-	var hammer = _create_sprite("spaceParts_088")  # Wide flat (58x28)
-	if hammer:
-		hammer.position = Vector2(0, -28)
-		hammer.modulate = tint
-		hammer.rotation = PI / 2  # Horizontal
-		container.add_child(hammer)
-
-	# MIDDLE ARMOR - thin body
-	var body = _create_sprite("spaceParts_004")  # Narrow (26x84)
+	# Main body - tall narrow rocket part
+	var body = _create_sprite("spaceRocketParts_028")  # Narrow (31x83)
 	if body:
 		body.position = Vector2(0, 0)
 		body.modulate = tint
 		container.add_child(body)
 
-	# BACK ARMOR - thick rear
-	var rear = _create_sprite("spaceParts_014")  # Wide (50x67)
-	if rear:
-		rear.position = Vector2(0, 28)
-		rear.modulate = tint
-		container.add_child(rear)
+## Build corvette - hammerhead front, thin body, thick rear like MatrixRenderer
+## ARMOR ONLY (for now - verifying shape)
+func _build_corvette_from_parts(container: Node2D, tint: Color) -> void:
+	# Corvette: medium ship - wider than fighter
+	# Use wider rocket body
+
+	# Main body - medium width rocket part
+	var body = _create_sprite("spaceRocketParts_026")  # Medium (37x89)
+	if body:
+		body.position = Vector2(0, 0)
+		body.modulate = tint
+		container.add_child(body)
 
 ## Build capital - Star Destroyer triangle like MatrixRenderer
 ## ARMOR ONLY (for now - verifying shape)
 func _build_capital_from_parts(container: Node2D, tint: Color) -> void:
-	# Capital: large triangle, 3x corvette length
-	# Narrow nose widening to broad back
+	# Capital: large ship - much taller/longer than corvette
+	# Use very tall rocket part
 
-	# FRONT ARMOR - narrow nose
-	var nose = _create_sprite("spaceParts_004")  # Narrow (26x84)
-	if nose:
-		nose.position = Vector2(0, -70)
-		nose.modulate = tint
-		container.add_child(nose)
-
-	# FRONT-MID ARMOR - widening
-	var front_left = _create_sprite("spaceParts_007")  # Medium narrow (32x86)
-	if front_left:
-		front_left.position = Vector2(-15, -35)
-		front_left.modulate = tint
-		container.add_child(front_left)
-
-	var front_right = _create_sprite("spaceParts_007")
-	if front_right:
-		front_right.position = Vector2(15, -35)
-		front_right.modulate = tint
-		container.add_child(front_right)
-
-	# MIDDLE ARMOR - wider
-	var mid_left = _create_sprite("spaceParts_002")  # Medium (41x71)
-	if mid_left:
-		mid_left.position = Vector2(-30, 0)
-		mid_left.modulate = tint
-		container.add_child(mid_left)
-
-	var mid_right = _create_sprite("spaceParts_002")
-	if mid_right:
-		mid_right.position = Vector2(30, 0)
-		mid_right.modulate = tint
-		container.add_child(mid_right)
-
-	# BACK ARMOR - widest
-	var back_left = _create_sprite("spaceParts_014")  # Wide (50x67)
-	if back_left:
-		back_left.position = Vector2(-45, 35)
-		back_left.modulate = tint
-		container.add_child(back_left)
-
-	var back_right = _create_sprite("spaceParts_014")
-	if back_right:
-		back_right.position = Vector2(45, 35)
-		back_right.modulate = tint
-		container.add_child(back_right)
+	# Main body - tall rocket part (3x fighter height)
+	var body = _create_sprite("spaceRocketParts_020")  # Very tall (29x170)
+	if body:
+		body.position = Vector2(0, 0)
+		body.modulate = tint
+		container.add_child(body)
 
 ## Create projectile visual using sprite
 func _create_projectile_visual(entity: IRenderable) -> Node2D:
