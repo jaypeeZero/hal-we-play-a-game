@@ -670,7 +670,7 @@ func _check_crew_decision_timers(delta: float, game_time: float) -> void:
 		# Check if it's time for this crew to think
 		if game_time >= crew.get("next_decision_time", 0.0):
 			# Make decision based on current state
-			var result = CrewAISystem.update_crew_member(crew, delta, game_time)
+			var result = CrewAISystem.update_crew_member(crew, delta, game_time, _ships, _crew_list)
 			_crew_list[i] = result.crew_data
 
 			if result.has("decision") and not result.decision.is_empty():

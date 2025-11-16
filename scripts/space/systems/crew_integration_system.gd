@@ -54,6 +54,26 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		"pursue":
 			updated.orders.current_order = "engage"
 			updated.orders.target_id = decision.get("target_id")
+		# FighterPilotAI maneuver types - all treated as specialized engage orders
+		"pursue_full_speed", "pursue_tactical", "flank_behind", "tight_pursuit", "dogfight_maneuver":
+			updated.orders.current_order = "fighter_engage"
+			updated.orders.target_id = decision.get("target_id")
+			updated.orders.maneuver_subtype = decision.get("subtype")
+			updated.orders.formation_offset = decision.get("formation_offset", Vector2.ZERO)
+			updated.orders.behind_position = decision.get("behind_position", Vector2.ZERO)
+		"group_run_approach", "group_run_attack", "group_run_swing_around":
+			updated.orders.current_order = "fighter_engage"
+			updated.orders.target_id = decision.get("target_id")
+			updated.orders.maneuver_subtype = decision.get("subtype")
+			updated.orders.nearby_fighters = decision.get("nearby_fighters", 0)
+		"evasive_retreat", "cautious_approach", "dodge_and_weave":
+			updated.orders.current_order = "fighter_engage"
+			updated.orders.target_id = decision.get("target_id")
+			updated.orders.maneuver_subtype = decision.get("subtype")
+			updated.orders.nearby_fighters = decision.get("nearby_fighters", 0)
+		"idle":
+			updated.orders.current_order = ""
+			updated.orders.target_id = ""
 		_:
 			pass
 

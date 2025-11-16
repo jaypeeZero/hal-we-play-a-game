@@ -11,7 +11,7 @@ extends RefCounted
 
 ## Update all crew members and generate their decisions
 ## EVENT-DRIVEN: Only processes crew when next_decision_time is reached
-static func update_all_crew(crew_list: Array, delta: float, game_time: float) -> Dictionary:
+static func update_all_crew(crew_list: Array, delta: float, game_time: float, ships: Array = []) -> Dictionary:
 	var updated_crew = []
 	var decisions = []
 
@@ -24,7 +24,7 @@ static func update_all_crew(crew_list: Array, delta: float, game_time: float) ->
 			continue
 
 		# Time to make a decision
-		var result = update_crew_member(crew, delta, game_time)
+		var result = update_crew_member(crew, delta, game_time, ships, crew_list)
 		updated_crew.append(result.crew_data)
 		if result.has("decision"):
 			decisions.append(result.decision)
@@ -35,7 +35,7 @@ static func update_all_crew(crew_list: Array, delta: float, game_time: float) ->
 	}
 
 ## Update single crew member and generate decision
-static func update_crew_member(crew_data: Dictionary, delta: float, game_time: float) -> Dictionary:
+static func update_crew_member(crew_data: Dictionary, delta: float, game_time: float, ships: Array = [], crew_list: Array = []) -> Dictionary:
 	# Update stress/fatigue
 	var updated = update_crew_state(crew_data, delta)
 
@@ -48,7 +48,7 @@ static func update_crew_member(crew_data: Dictionary, delta: float, game_time: f
 	# Make role-based decision
 	match updated.role:
 		CrewData.Role.PILOT:
-			return make_pilot_decision(updated, game_time)
+			return make_pilot_decision(updated, game_time, ships, crew_list)
 		CrewData.Role.GUNNER:
 			return make_gunner_decision(updated, game_time)
 		CrewData.Role.CAPTAIN:
@@ -103,13 +103,13 @@ static func calculate_decision_delay(crew_data: Dictionary) -> float:
 # ============================================================================
 
 ## Pilot makes tactical maneuvering decisions
-static func make_pilot_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
+static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = []) -> Dictionary:
 	# Check for orders from captain - ALWAYS respect superior orders
 	if crew_data.orders.received != null:
 		return execute_pilot_order(crew_data, game_time)
 
 	# Analyze tactical context
-	var context = analyze_tactical_context(crew_data)
+	var context = analyze_tactical_context(crew_data, ships, crew_list)
 
 	# Make ship-type-specific decision
 	# Note: We need to determine ship type from awareness or crew data
@@ -218,43 +218,56 @@ static func make_pursuit_decision(crew_data: Dictionary, game_time: float) -> Di
 	updated.next_decision_time = game_time + randf_range(0.7, 1.0)
 	return {"crew_data": updated, "decision": decision}
 
-## Fighter pilot decision - aggressive, evade only when critical
+## Fighter pilot decision - uses FighterPilotAI for advanced tactics
 static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
-	var awareness = crew_data.awareness
+	# Get all ships and crew from context
+	var all_ships = context.get("all_ships", [])
+	var all_crew = context.get("all_crew", [])
 
-	# Evade if:
-	# 1. Critically damaged, OR
-	# 2. Solo and outnumbered (2+ to 1), OR
-	# 3. With squadron but heavily outnumbered (3+ to 1), OR
-	# 4. Explicit retreat order from superior
-	var should_evade = false
+	# Get the ship this crew is assigned to
+	var ship_id = crew_data.get("assigned_to", "")
+	var ship_data = _find_ship_by_id(ship_id, all_ships)
 
-	# Check if critically damaged (would need ship data - skip for now)
-	# var ship = get_assigned_ship_from_awareness(crew_data)
-	# if is_critically_damaged(crew_data, ship):
-	#     should_evade = true
+	if ship_data.is_empty():
+		# Fallback to idle if no ship
+		return make_idle_decision(crew_data, game_time)
 
-	# Solo pilots are cautious - evade if outnumbered
-	if context.is_solo and context.enemy_count >= 2:
-		should_evade = true
-	# With squadron, only evade if heavily outnumbered
-	elif context.has_squadron_support and context.enemy_count >= context.friendly_count * 2:
-		should_evade = true
+	# Use FighterPilotAI to make decision
+	var decision = FighterPilotAI.make_decision(crew_data, ship_data, all_ships, all_crew, game_time)
 
-	if should_evade and not awareness.threats.is_empty():
-		return make_evasive_decision(crew_data, game_time)
+	# Wrap decision in standard format
+	var updated = crew_data.duplicate(true)
+	updated.orders.current = decision
+	updated.current_action = decision.get("subtype", "idle")
 
-	# Default: ENGAGE
-	# Fighters are aggressive - pursue any available target
-	if not awareness.opportunities.is_empty():
-		return make_pursuit_decision(crew_data, game_time)
+	# Set next decision time based on maneuver type
+	var next_delay = _get_fighter_decision_delay(decision.get("subtype", "idle"))
+	updated.next_decision_time = game_time + next_delay
 
-	# If no opportunities but threats exist, STILL engage (fighters are aggressive)
-	if not awareness.threats.is_empty():
-		return make_pursuit_decision_from_threat(crew_data, game_time)
+	return {"crew_data": updated, "decision": decision}
 
-	# No targets - idle scan
-	return make_idle_decision(crew_data, game_time)
+## Get decision delay for fighter maneuvers
+static func _get_fighter_decision_delay(maneuver_subtype: String) -> float:
+	match maneuver_subtype:
+		"dogfight_maneuver", "tight_pursuit":
+			return randf_range(0.2, 0.4)  # Very frequent updates for close combat
+		"flank_behind", "pursue_tactical":
+			return randf_range(0.4, 0.7)  # Moderate updates for tactical maneuvers
+		"group_run_attack", "dodge_and_weave":
+			return randf_range(0.3, 0.6)  # Quick updates for dynamic maneuvers
+		"pursue_full_speed", "group_run_approach":
+			return randf_range(0.7, 1.0)  # Less frequent for straightforward approach
+		"idle":
+			return randf_range(2.0, 4.0)  # Slow when idle
+		_:
+			return randf_range(0.5, 0.8)  # Default
+
+## Helper to find ship by ID
+static func _find_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
+	for ship in all_ships:
+		if ship != null and ship.get("ship_id", "") == ship_id:
+			return ship
+	return {}
 
 ## Corvette pilot decision - balanced, tactical positioning
 static func make_corvette_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
@@ -628,7 +641,7 @@ static func make_commander_decision(crew_data: Dictionary, game_time: float) -> 
 # ============================================================================
 
 ## Analyze tactical context for decision-making
-static func analyze_tactical_context(crew_data: Dictionary) -> Dictionary:
+static func analyze_tactical_context(crew_data: Dictionary, ships: Array = [], crew_list: Array = []) -> Dictionary:
 	var awareness = crew_data.awareness
 	var friendlies = count_friendlies(awareness.known_entities)
 	var enemies = count_enemies(awareness.known_entities, awareness.threats)
@@ -641,7 +654,9 @@ static func analyze_tactical_context(crew_data: Dictionary) -> Dictionary:
 		"has_numerical_advantage": friendlies > enemies,
 		"is_solo": friendlies == 0,
 		"threat_count": awareness.threats.size(),
-		"opportunity_count": awareness.opportunities.size()
+		"opportunity_count": awareness.opportunities.size(),
+		"all_ships": ships,
+		"all_crew": crew_list
 	}
 
 ## Count friendly ships in awareness

@@ -30,6 +30,14 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 			return apply_space_drift(ship_data, delta)
 		pilot_control = calculate_evasion_control(ship_data, threat, nearby_ships, obstacles)
 
+	elif current_order == "fighter_engage":
+		# FighterPilotAI engage mode - specialized fighter maneuvers
+		var target_id = ship_data.get("orders", {}).get("target_id", "")
+		var target = find_ship_by_id(targets, target_id) if target_id else find_nearest_enemy(ship_data, targets)
+		if target.is_empty():
+			return apply_space_drift(ship_data, delta)
+		pilot_control = calculate_fighter_pilot_control(ship_data, target, nearby_ships, obstacles)
+
 	elif current_order == "engage":
 		# Engage mode - pursue and attack target
 		var target_id = ship_data.get("orders", {}).get("target_id", "")
@@ -248,6 +256,269 @@ static func calculate_evasion_control(ship_data: Dictionary, threat: Dictionary,
 		"thrust_active": should_thrust,
 		"is_braking": is_braking,
 		"engagement_range": safe_distance,
+		"current_distance": distance
+	}
+
+## Calculate fighter pilot control - specialized FighterPilotAI maneuvers
+static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array = []) -> Dictionary:
+	var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "pursue")
+
+	# Route to appropriate maneuver calculation
+	match maneuver_subtype:
+		"pursue_full_speed":
+			return calculate_pursue_full_speed(ship_data, target, nearby_ships, obstacles)
+		"pursue_tactical":
+			return calculate_pursue_tactical(ship_data, target, nearby_ships, obstacles)
+		"flank_behind":
+			return calculate_flank_behind(ship_data, target, nearby_ships, obstacles)
+		"tight_pursuit":
+			return calculate_tight_pursuit(ship_data, target, nearby_ships, obstacles)
+		"dogfight_maneuver":
+			return calculate_dogfight_maneuver(ship_data, target, nearby_ships, obstacles)
+		"group_run_approach":
+			return calculate_group_run_approach(ship_data, target, nearby_ships, obstacles)
+		"group_run_attack":
+			return calculate_group_run_attack(ship_data, target, nearby_ships, obstacles)
+		"group_run_swing_around":
+			return calculate_group_run_swing_around(ship_data, target, nearby_ships, obstacles)
+		"evasive_retreat":
+			return calculate_evasive_retreat(ship_data, target, nearby_ships, obstacles)
+		"cautious_approach":
+			return calculate_cautious_approach(ship_data, target, nearby_ships, obstacles)
+		"dodge_and_weave":
+			return calculate_dodge_and_weave(ship_data, target, nearby_ships, obstacles)
+		_:
+			# Fallback to standard pilot control
+			return calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
+
+## Pursue at full speed - far away approach
+static func calculate_pursue_full_speed(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var desired_heading = to_target.angle()
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": true,
+		"is_braking": false,
+		"engagement_range": 250.0,
+		"current_distance": to_target.length()
+	}
+
+## Tactical pursuit - mid range, slowing approach
+static func calculate_pursue_tactical(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+	var direction = to_target.normalized()
+
+	# Predict target position
+	var target_velocity = target.get("velocity", Vector2.ZERO)
+	var predicted_pos = target.position + target_velocity * 0.5
+
+	var to_predicted = predicted_pos - ship_data.position
+	var desired_heading = to_predicted.angle()
+
+	# Slow down if going too fast
+	var closing_speed = ship_data.velocity.dot(direction)
+	var should_brake = closing_speed > ship_data.stats.max_speed * 0.6
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": not should_brake,
+		"is_braking": should_brake,
+		"engagement_range": 250.0,
+		"current_distance": distance
+	}
+
+## Flank behind - try to get behind target
+static func calculate_flank_behind(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var behind_position = ship_data.get("orders", {}).get("behind_position", Vector2.ZERO)
+	if behind_position == Vector2.ZERO:
+		# Calculate behind position
+		var target_rotation = target.get("rotation", 0.0)
+		var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 150.0
+		behind_position = target.position + behind_offset
+
+	var to_behind = behind_position - ship_data.position
+	var desired_heading = to_behind.angle()
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": true,
+		"is_braking": false,
+		"engagement_range": 250.0,
+		"current_distance": to_behind.length()
+	}
+
+## Tight pursuit - close range, stay behind
+static func calculate_tight_pursuit(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var target_rotation = target.get("rotation", 0.0)
+	var target_velocity = target.get("velocity", Vector2.ZERO)
+
+	# Stay behind target at close range
+	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 120.0
+	var desired_pos = target.position + behind_offset + target_velocity * 0.3
+
+	var to_desired = desired_pos - ship_data.position
+	var desired_heading = to_desired.angle()
+
+	# Match target speed
+	var speed_diff = ship_data.velocity.length() - target_velocity.length()
+	var should_brake = speed_diff > 20.0
+	var should_thrust = speed_diff < -20.0
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": should_brake,
+		"engagement_range": 120.0,
+		"current_distance": to_desired.length()
+	}
+
+## Dogfight maneuver - tight weaving and loops
+static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Weave pattern - add perpendicular offset
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+	var weave_phase = fmod(Time.get_ticks_msec() / 1000.0, 2.0)  # 2 second cycle
+	var weave_offset = perpendicular * sin(weave_phase * PI) * 80.0
+
+	var desired_pos = target.position + weave_offset
+	var to_desired = desired_pos - ship_data.position
+	var desired_heading = to_desired.angle()
+
+	# Small adjustments only
+	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.7
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": false,
+		"engagement_range": 150.0,
+		"current_distance": distance
+	}
+
+## Group run approach - approach with other fighters
+static func calculate_group_run_approach(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var formation_offset = ship_data.get("orders", {}).get("formation_offset", Vector2.ZERO)
+	var to_target = target.position - ship_data.position + formation_offset
+	var desired_heading = to_target.angle()
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": true,
+		"is_braking": false,
+		"engagement_range": 400.0,
+		"current_distance": to_target.length()
+	}
+
+## Group run attack - execute attack run
+static func calculate_group_run_attack(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+	var desired_heading = to_target.angle()
+
+	# Full speed attack run
+	var should_thrust = distance > 150.0
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": false,
+		"engagement_range": 300.0,
+		"current_distance": distance
+	}
+
+## Group run swing around - swing around for another pass
+static func calculate_group_run_swing_around(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Swing out to the side then come back around
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+	var swing_out_pos = target.position + perpendicular * 500.0
+
+	var to_swing = swing_out_pos - ship_data.position
+	var desired_heading = to_swing.angle()
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": true,
+		"is_braking": false,
+		"engagement_range": 500.0,
+		"current_distance": distance
+	}
+
+## Evasive retreat - get away from big ship
+static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var away_from_target = (ship_data.position - target.position).normalized()
+	var desired_heading = away_from_target.angle()
+
+	# Add weave to dodge
+	var perpendicular = Vector2(-away_from_target.y, away_from_target.x)
+	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)
+	var weave_offset = perpendicular * sin(weave_phase * PI) * 100.0
+
+	var desired_pos = ship_data.position + away_from_target * 300.0 + weave_offset
+	var to_desired = desired_pos - ship_data.position
+	desired_heading = to_desired.angle()
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": true,
+		"is_braking": false,
+		"engagement_range": 500.0,
+		"current_distance": ship_data.position.distance_to(target.position)
+	}
+
+## Cautious approach - close in slowly
+static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Approach at an angle, not directly
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+	var approach_pos = target.position + perpendicular * 200.0
+
+	var to_approach = approach_pos - ship_data.position
+	var desired_heading = to_approach.angle()
+
+	# Half speed approach
+	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.5
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": false,
+		"engagement_range": 400.0,
+		"current_distance": distance
+	}
+
+## Dodge and weave - stay at range, dodge
+static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Orbit around target with weave pattern
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+	var orbit_phase = fmod(Time.get_ticks_msec() / 2000.0, 2.0 * PI)
+	var weave_phase = fmod(Time.get_ticks_msec() / 600.0, 2.0)
+
+	var orbit_offset = perpendicular * 400.0
+	var weave_offset = to_target.normalized() * sin(weave_phase * PI) * 100.0
+
+	var desired_pos = target.position + orbit_offset + weave_offset
+	var to_desired = desired_pos - ship_data.position
+	var desired_heading = to_desired.angle()
+
+	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.7
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": false,
+		"engagement_range": 400.0,
 		"current_distance": distance
 	}
 
