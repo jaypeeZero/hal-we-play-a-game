@@ -80,7 +80,7 @@ func update_state(entity_id: String, state: EntityState) -> void:
 
 	# Update component visuals if present
 	if state.components.size() > 0:
-		_update_components(entity_id, state.components, visual.root)
+		_update_components(entity_id, state.components, visual.root, state.is_main_engine_firing, state.maneuvering_thrust_direction)
 
 	# Update based on state flags
 	if state.has_flag("destroyed"):
@@ -631,7 +631,7 @@ func _create_fallback_visual() -> Node2D:
 	return container
 
 ## Update component visuals based on state
-func _update_components(entity_id: String, components: Array[Dictionary], parent_node: Node2D) -> void:
+func _update_components(entity_id: String, components: Array[Dictionary], parent_node: Node2D, is_main_engine_firing: bool, maneuvering_thrust_direction: Vector2) -> void:
 	# Initialize component visuals dictionary for this entity if needed
 	if entity_id not in _component_visuals:
 		_component_visuals[entity_id] = {}
@@ -664,8 +664,11 @@ func _update_components(entity_id: String, components: Array[Dictionary], parent
 				component_visual.position = component_data.position_offset
 				component_visual.rotation = component_data.rotation
 
-				# Update visual based on status
-				_update_component_status(component_visual, component_data.status)
+				# Update visual based on status and thrust state
+				if component_data.component_type == "engine":
+					_update_engine_thrust(component_visual, component_data.status, is_main_engine_firing)
+				else:
+					_update_component_status(component_visual, component_data.status)
 
 	# Remove components that no longer exist
 	var to_remove: Array = []
@@ -677,6 +680,9 @@ func _update_components(entity_id: String, components: Array[Dictionary], parent
 		if is_instance_valid(component_dict[component_id]):
 			component_dict[component_id].queue_free()
 		component_dict.erase(component_id)
+
+	# Debug visualization: show maneuvering thruster firing direction
+	_update_maneuvering_thruster_debug(parent_node, maneuvering_thrust_direction)
 
 ## Create visual node for a component
 func _create_component_visual(component_data: Dictionary, base_color: Color) -> Node2D:
@@ -798,20 +804,60 @@ func _get_weapon_size(visual_type: String) -> float:
 		_:
 			return 4.0
 
-## Update component visual based on status (engines only - weapons don't take damage)
-func _update_component_status(component_visual: Node2D, status: String) -> void:
+## Update engine thrust visual based on firing state and status
+func _update_engine_thrust(component_visual: Node2D, status: String, is_firing: bool) -> void:
 	var thrust = component_visual.get_node_or_null("Thrust")
+	var glow = component_visual.get_node_or_null("ThrustGlow")
 	if not thrust:
-		return  # Not an engine
+		return
 
-	# Modify thrust color/intensity based on engine status
-	match status:
-		"operational":
-			thrust.modulate = Color.WHITE
-		"damaged":
-			thrust.modulate = Color(1.0, 0.6, 0.0)  # Dimmer orange for damaged
-		"destroyed":
-			thrust.modulate = Color(0.2, 0.2, 0.2)  # Almost invisible for destroyed
+	# Only show thrust when engine is firing
+	if is_firing and status != "destroyed":
+		thrust.visible = true
+		if glow:
+			glow.visible = true
+
+		# Modify thrust color/intensity based on engine status
+		match status:
+			"operational":
+				thrust.modulate = Color.WHITE
+			"damaged":
+				thrust.modulate = Color(1.0, 0.6, 0.0)  # Dimmer orange for damaged
+	else:
+		# Hide thrust when not firing or destroyed
+		thrust.visible = false
+		if glow:
+			glow.visible = false
+
+## Update component visual based on status (weapons only - don't take damage currently)
+func _update_component_status(component_visual: Node2D, status: String) -> void:
+	# Currently weapons don't have damage status, so this is a no-op
+	pass
+
+## Debug visualization for maneuvering thrusters
+func _update_maneuvering_thruster_debug(parent_node: Node2D, thrust_direction: Vector2) -> void:
+	var debug_line = parent_node.get_node_or_null("ManeuveringThrustDebug")
+
+	if thrust_direction.length() > 0.01:
+		# Maneuvering thrusters are firing - show debug line
+		if not debug_line:
+			debug_line = Line2D.new()
+			debug_line.name = "ManeuveringThrustDebug"
+			debug_line.width = 2.0
+			debug_line.default_color = Color("FF8C00")  # Orange for thruster debug
+			parent_node.add_child(debug_line)
+
+		# Draw a line showing thrust direction (world space converted to local)
+		debug_line.clear_points()
+		debug_line.add_point(Vector2.ZERO)
+		# Convert world space thrust direction to local ship space
+		var local_thrust = thrust_direction.rotated(-parent_node.rotation) * 15.0
+		debug_line.add_point(local_thrust)
+		debug_line.visible = true
+	else:
+		# No maneuvering thrust - hide debug line
+		if debug_line:
+			debug_line.visible = false
 
 ## Get color based on damage percent
 func _get_damage_color(percent: float) -> Color:

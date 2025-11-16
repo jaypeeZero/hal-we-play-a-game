@@ -33,6 +33,10 @@ var section_damage: Array[Dictionary] = []
 ## }
 var components: Array[Dictionary] = []
 
+## Thrust state for visual effects
+var is_main_engine_firing: bool = false  # True when forward thrust is active
+var maneuvering_thrust_direction: Vector2 = Vector2.ZERO  # Direction of lateral/reverse thrust
+
 # ===== TYPE-SAFE HELPER METHODS =====
 func has_flag(flag: String) -> bool:
 	return flag in state_flags
@@ -56,7 +60,9 @@ func to_dict() -> Dictionary:
 		"state_flags": state_flags,
 		"status_effects": status_effects,
 		"section_damage": section_damage,
-		"components": components
+		"components": components,
+		"is_main_engine_firing": is_main_engine_firing,
+		"maneuvering_thrust_direction": maneuvering_thrust_direction
 	}
 
 static func from_dict(data: Dictionary) -> EntityState:
@@ -76,5 +82,8 @@ static func from_dict(data: Dictionary) -> EntityState:
 
 	var components_arr = data.get("components", [])
 	state.components.assign(components_arr)
+
+	state.is_main_engine_firing = data.get("is_main_engine_firing", false)
+	state.maneuvering_thrust_direction = data.get("maneuvering_thrust_direction", Vector2.ZERO)
 
 	return state

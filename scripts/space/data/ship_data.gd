@@ -87,7 +87,7 @@ static func _create_fighter_template() -> Dictionary:
 		"stats": {
 			"max_speed": 300.0,
 			"acceleration": 100.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 30.0,  # Lateral/reverse thrust (maneuvering thrusters)
+			"lateral_acceleration": 0.3,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
 			"turn_rate": 3.0,  # radians per second
 			"mass": 50.0,
 			"size": 15.0  # visual/collision size
@@ -159,7 +159,7 @@ static func _create_corvette_template() -> Dictionary:
 		"stats": {
 			"max_speed": 150.0,
 			"acceleration": 50.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 15.0,  # Lateral/reverse thrust (maneuvering thrusters)
+			"lateral_acceleration": 0.15,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
 			"turn_rate": 1.5,
 			"mass": 200.0,
 			"size": 25.0
@@ -256,7 +256,7 @@ static func _create_capital_template() -> Dictionary:
 		"stats": {
 			"max_speed": 80.0,
 			"acceleration": 20.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 5.0,  # Lateral/reverse thrust (maneuvering thrusters)
+			"lateral_acceleration": 0.05,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
 			"turn_rate": 0.5,
 			"mass": 1000.0,
 			"size": 50.0
