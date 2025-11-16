@@ -155,6 +155,7 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	container.set_meta("team", team)
 
 	# Build ship from sprite parts based on type
+	print("[SpriteRenderer] Building ship: type='%s', visual_type='%s', team=%d" % [ship_type, visual_type, team])
 	match ship_type:
 		"fighter":
 			_build_fighter_from_parts(container, tint)
@@ -163,6 +164,7 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 		"capital":
 			_build_capital_from_parts(container, tint)
 		_:
+			print("[SpriteRenderer] WARNING: Unknown ship type '%s', defaulting to fighter" % ship_type)
 			_build_fighter_from_parts(container, tint)
 
 	return container
