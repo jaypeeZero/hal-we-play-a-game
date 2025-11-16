@@ -2,9 +2,10 @@ extends Control
 
 ## Ship Editor UI - Visual tool for composing ships from sprite parts
 
-@onready var ship_type_dropdown: OptionButton = $VBoxContainer/ShipTypeDropdown
-@onready var ship_info_label: Label = $VBoxContainer/ShipInfoLabel
-@onready var ship_canvas: Control = $VBoxContainer/ShipCanvas
+@onready var ship_type_dropdown: OptionButton = $HBoxContainer/VBoxContainer/ShipTypeDropdown
+@onready var ship_info_label: Label = $HBoxContainer/VBoxContainer/ShipInfoLabel
+@onready var ship_canvas: Control = $HBoxContainer/VBoxContainer/ShipCanvas
+@onready var properties_label: Label = $HBoxContainer/PropertiesPanel/PropertiesScrollContainer/PropertiesLabel
 
 # Ship types available in the game
 const SHIP_TYPES = ["fighter", "corvette", "capital"]
@@ -14,6 +15,11 @@ const COLOR_ARMOR = Color(0.3, 0.6, 1.0)       # Blue - armor sections
 const COLOR_INTERNAL = Color(1.0, 0.5, 0.2)   # Orange - internal components
 const COLOR_WEAPON = Color(1.0, 0.3, 0.3)     # Red - weapons
 const COLOR_ENGINE = Color(0.3, 1.0, 0.5)     # Green - engines
+
+# Current ship data and selected component
+var current_ship_data: Dictionary = {}
+var selected_component: Dictionary = {}
+var selected_component_type: String = ""
 
 func _ready() -> void:
 	_setup_dropdown()
@@ -34,6 +40,14 @@ func _on_ship_type_selected(index: int) -> void:
 	var ship_data = _get_ship_data(ship_type)
 
 	if ship_data:
+		# Store current ship data
+		current_ship_data = ship_data
+
+		# Clear selected component
+		selected_component = {}
+		selected_component_type = ""
+		_update_properties_display()
+
 		# Log the JSON data
 		var json_string = JSON.stringify(ship_data, "\t")
 		print("Ship Data JSON:")
@@ -99,9 +113,32 @@ func _draw_hull_shape(ship_type: String, ship_data: Dictionary, center: Vector2,
 		if points.is_empty():
 			continue
 
+		# Find matching armor section data
+		var armor_data = {}
+		for armor_section in ship_data.get("armor_sections", []):
+			if armor_section.get("section_id") == section_id:
+				armor_data = armor_section
+				break
+
+		# Calculate centroid for positioning
+		var centroid = _calculate_centroid(points)
+		var scaled_centroid = centroid * scale
+		var rotated_centroid = HullShapes.rotate_90(scaled_centroid)
+		var centroid_pos = center + rotated_centroid
+
+		# Create clickable button for armor section
+		if not armor_data.is_empty():
+			var button = Button.new()
+			button.position = centroid_pos - Vector2(20, 20)
+			button.custom_minimum_size = Vector2(40, 40)
+			button.flat = true
+			button.pressed.connect(_on_component_clicked.bind(armor_data, "armor"))
+			ship_canvas.add_child(button)
+
 		# Create Line2D for this section
 		var line = Line2D.new()
 		line.width = 1.5
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		# Color shade based on section index
 		var shade = section_index * 0.15
@@ -119,12 +156,8 @@ func _draw_hull_shape(ship_type: String, ship_data: Dictionary, center: Vector2,
 		var label = Label.new()
 		label.text = section_id
 		label.add_theme_color_override("font_color", COLOR_ARMOR.lightened(shade))
-
-		# Position label at centroid of section
-		var centroid = _calculate_centroid(points)
-		var scaled_centroid = centroid * scale
-		var rotated_centroid = HullShapes.rotate_90(scaled_centroid)
-		label.position = center + rotated_centroid - Vector2(15, 5)
+		label.position = centroid_pos - Vector2(15, 5)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ship_canvas.add_child(label)
 
 		section_index += 1
@@ -145,9 +178,18 @@ func _draw_internal_component(internal: Dictionary, center: Vector2, scale: floa
 	var rotated_offset = HullShapes.rotate_90(offset)
 	var pos = center + rotated_offset
 
+	# Create clickable button for internal component
+	var button = Button.new()
+	button.position = pos - Vector2(8, 8)
+	button.custom_minimum_size = Vector2(16, 16)
+	button.flat = true
+	button.pressed.connect(_on_component_clicked.bind(internal, "internal"))
+	ship_canvas.add_child(button)
+
 	var circle = Control.new()
 	circle.position = pos - Vector2(5, 5)
 	circle.custom_minimum_size = Vector2(10, 10)
+	circle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	circle.draw.connect(func():
 		circle.draw_circle(Vector2(5, 5), 5, COLOR_INTERNAL)
 		circle.draw_arc(Vector2(5, 5), 5, 0, TAU, 12, COLOR_INTERNAL.lightened(0.3), 1.5)
@@ -159,6 +201,7 @@ func _draw_internal_component(internal: Dictionary, center: Vector2, scale: floa
 	label.text = internal.get("type", "?")[0].to_upper()  # First letter of type
 	label.add_theme_color_override("font_color", COLOR_INTERNAL)
 	label.position = pos + Vector2(8, -8)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ship_canvas.add_child(label)
 
 func _draw_weapon(weapon: Dictionary, center: Vector2, scale: float) -> void:
@@ -168,10 +211,19 @@ func _draw_weapon(weapon: Dictionary, center: Vector2, scale: float) -> void:
 	var pos = center + rotated_offset
 	var facing = weapon.get("facing", 0.0)
 
+	# Create clickable button for weapon
+	var button = Button.new()
+	button.position = pos - Vector2(8, 12)
+	button.custom_minimum_size = Vector2(16, 24)
+	button.flat = true
+	button.pressed.connect(_on_component_clicked.bind(weapon, "weapon"))
+	ship_canvas.add_child(button)
+
 	var rect = Control.new()
 	rect.position = pos - Vector2(4, 8)
 	rect.custom_minimum_size = Vector2(8, 16)
 	rect.rotation = facing
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.draw.connect(func():
 		rect.draw_rect(Rect2(0, 0, 8, 16), Color.TRANSPARENT, false, 1.5)
 		rect.draw_rect(Rect2(1, 1, 6, 14), COLOR_WEAPON, false, 1.5)
@@ -183,4 +235,51 @@ func _draw_weapon(weapon: Dictionary, center: Vector2, scale: float) -> void:
 	label.text = "W"
 	label.add_theme_color_override("font_color", COLOR_WEAPON)
 	label.position = pos + Vector2(10, -8)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ship_canvas.add_child(label)
+
+## Handle component click
+func _on_component_clicked(component_data: Dictionary, component_type: String) -> void:
+	selected_component = component_data
+	selected_component_type = component_type
+	_update_properties_display()
+	print("Selected " + component_type + ": " + str(component_data))
+
+## Update the properties panel with selected component data
+func _update_properties_display() -> void:
+	if selected_component.is_empty():
+		properties_label.text = "Click on a component to view its properties"
+		return
+
+	var props_text = "=== " + selected_component_type.to_upper() + " ===\n\n"
+
+	# Display all properties recursively
+	props_text += _format_properties(selected_component, 0)
+
+	properties_label.text = props_text
+
+## Recursively format properties for display
+func _format_properties(data: Variant, indent_level: int) -> String:
+	var result = ""
+	var indent = "  ".repeat(indent_level)
+
+	if data is Dictionary:
+		for key in data.keys():
+			var value = data[key]
+			if value is Dictionary or value is Array:
+				result += indent + str(key) + ":\n"
+				result += _format_properties(value, indent_level + 1)
+			else:
+				result += indent + str(key) + ": " + str(value) + "\n"
+	elif data is Array:
+		for i in range(data.size()):
+			var value = data[i]
+			if value is Dictionary or value is Array:
+				result += indent + "[" + str(i) + "]:\n"
+				result += _format_properties(value, indent_level + 1)
+			else:
+				result += indent + "[" + str(i) + "]: " + str(value) + "\n"
+	else:
+		result += indent + str(data) + "\n"
+
+	return result
