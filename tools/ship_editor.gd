@@ -42,20 +42,6 @@ func _on_ship_type_selected(index: int) -> void:
 		ship_info_label.text = "ERROR: Ship data not found"
 
 func _get_ship_data(ship_type: String) -> Dictionary:
-	# Get ship definition from ShipData
-	var ship_def = {}
-
-	match ship_type:
-		"fighter":
-			ship_def = ShipData.create_fighter_definition()
-		"corvette":
-			ship_def = ShipData.create_corvette_definition()
-		"capital":
-			ship_def = ShipData.create_capital_definition()
-
-	# Create a full ship instance to get complete data
-	if ship_def:
-		var ship_instance = ShipData.create_ship(ship_type, 0, Vector2.ZERO, 0.0)
-		return ship_instance
-
-	return {}
+	# Create a full ship instance using ShipData API
+	var ship_instance = ShipData.create_ship_instance(ship_type, 0, Vector2.ZERO, false)
+	return ship_instance
