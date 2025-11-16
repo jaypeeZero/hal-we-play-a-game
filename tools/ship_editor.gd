@@ -68,21 +68,20 @@ func _draw_ship(ship_data: Dictionary) -> void:
 	# Determine ship type from class_name
 	var ship_type = ship_data.get("class_name", "fighter")
 
-	# Draw hull shape based on ship type
+	# Draw hull shape based on ship type (ARMOR ONLY)
 	_draw_hull_shape(ship_type, ship_data, center, scale_factor)
 
-	# Draw internal components
-	for internal in ship_data.get("internals", []):
-		_draw_internal_component(internal, center, scale_factor)
+	# TEMPORARILY DISABLED - only drawing armor for now
+	# # Draw internal components
+	# for internal in ship_data.get("internals", []):
+	# 	_draw_internal_component(internal, center, scale_factor)
 
-	# Draw weapons
-	for weapon in ship_data.get("weapons", []):
-		_draw_weapon(weapon, center, scale_factor)
+	# # Draw weapons
+	# for weapon in ship_data.get("weapons", []):
+	# 	_draw_weapon(weapon, center, scale_factor)
 
-	print("Ship drawn: " + ship_type + " with " +
-		str(ship_data.get("armor_sections", []).size()) + " armor sections, " +
-		str(ship_data.get("internals", []).size()) + " internals, " +
-		str(ship_data.get("weapons", []).size()) + " weapons")
+	print("Ship drawn (ARMOR ONLY): " + ship_type + " with " +
+		str(ship_data.get("armor_sections", []).size()) + " armor sections")
 
 func _draw_hull_shape(ship_type: String, ship_data: Dictionary, center: Vector2, scale: float) -> void:
 	match ship_type:
