@@ -178,6 +178,13 @@ func get_visual_type() -> String:
 		return "ship"
 	return "ship_" + ship_type
 
+## Get basic ship data for renderer
+func get_ship_data() -> Dictionary:
+	return {
+		"team": team,
+		"ship_type": ship_type
+	}
+
 ## Clean up
 func _exit_tree() -> void:
 	if VisualBridgeAutoload.bridge:
