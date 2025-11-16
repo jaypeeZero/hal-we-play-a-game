@@ -110,7 +110,64 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 			"internal_percent": internal_percent
 		})
 
+	# Add physicalized components (only engines - weapons are visual only)
+	for internal in ship_data.internals:
+		if internal.type == "engine":
+			state.components.append({
+				"component_id": internal.component_id,
+				"component_type": "engine",
+				"visual_type": "engine",
+				"position_offset": internal.position_offset,
+				"rotation": 0.0,
+				"status": internal.status
+			})
+
+	# Add weapons as visual-only components (not physicalized)
+	for weapon in ship_data.weapons:
+		state.components.append({
+			"component_id": weapon.weapon_id,
+			"component_type": "weapon",
+			"visual_type": _get_weapon_visual_type(weapon.type),
+			"position_offset": weapon.position_offset,
+			"rotation": weapon.get("facing", 0.0),
+			"status": "operational"
+		})
+
+	# Calculate thrust state from pilot control
+	var pilot_state = ship_data.get("_pilot_state", {})
+	if pilot_state.has("thrust_active") and pilot_state.thrust_active:
+		# Calculate thrust direction and determine which thrusters are firing
+		var desired_heading = pilot_state.get("desired_heading", ship_data.rotation)
+		var desired_thrust_direction = Vector2(cos(desired_heading), sin(desired_heading))
+		var ship_facing = Vector2(cos(ship_data.rotation), sin(ship_data.rotation))
+
+		# Calculate angle between ship facing and desired thrust direction
+		var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
+
+		# Determine which thrusters are firing
+		if thrust_angle_diff < PI / 4:  # Within 45° of forward - main engines
+			state.is_main_engine_firing = true
+			state.maneuvering_thrust_direction = Vector2.ZERO
+		else:  # Lateral or reverse - maneuvering thrusters
+			state.is_main_engine_firing = false
+			# Store thrust direction in local (ship) space for debug visualization
+			state.maneuvering_thrust_direction = desired_thrust_direction
+
 	return state
+
+## Map weapon types to visual types
+func _get_weapon_visual_type(weapon_type: String) -> String:
+	match weapon_type:
+		"light_cannon":
+			return "light_weapon"
+		"medium_cannon":
+			return "medium_turret"
+		"heavy_cannon":
+			return "heavy_turret"
+		"gatling_gun":
+			return "gatling_turret"
+		_:
+			return "generic_weapon"
 
 ## IRenderable implementation
 func get_entity_id() -> String:

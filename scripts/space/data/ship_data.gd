@@ -87,7 +87,7 @@ static func _create_fighter_template() -> Dictionary:
 		"stats": {
 			"max_speed": 300.0,
 			"acceleration": 100.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 30.0,  # Lateral/reverse thrust (maneuvering thrusters)
+			"lateral_acceleration": 0.3,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
 			"turn_rate": 3.0,  # radians per second
 			"mass": 50.0,
 			"size": 15.0  # visual/collision size
@@ -111,19 +111,6 @@ static func _create_fighter_template() -> Dictionary:
 			}
 		],
 		"internals": [
-			{
-				"component_id": "cockpit",
-				"type": "control",
-				"section_id": "front",
-				"position_offset": Vector2(0, -3),
-				"max_health": 20,
-				"current_health": 20,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"turn_rate": 0.6, "accuracy": 0.7},
-					"on_destroyed": {"ai_disabled": true}
-				}
-			},
 			{
 				"component_id": "engine",
 				"type": "engine",
@@ -172,7 +159,7 @@ static func _create_corvette_template() -> Dictionary:
 		"stats": {
 			"max_speed": 150.0,
 			"acceleration": 50.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 15.0,  # Lateral/reverse thrust (maneuvering thrusters)
+			"lateral_acceleration": 0.15,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
 			"turn_rate": 1.5,
 			"mass": 200.0,
 			"size": 25.0
@@ -204,32 +191,6 @@ static func _create_corvette_template() -> Dictionary:
 			}
 		],
 		"internals": [
-			{
-				"component_id": "power_core",
-				"type": "power",
-				"section_id": "front",
-				"position_offset": Vector2(0, -8),
-				"max_health": 50,
-				"current_health": 50,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"weapon_power": 0.5},
-					"on_destroyed": {"disabled": true}
-				}
-			},
-			{
-				"component_id": "bridge",
-				"type": "control",
-				"section_id": "middle",
-				"position_offset": Vector2(0, 0),
-				"max_health": 40,
-				"current_health": 40,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"turn_rate": 0.5, "accuracy": 0.7},
-					"on_destroyed": {"ai_disabled": true}
-				}
-			},
 			{
 				"component_id": "engines",
 				"type": "engine",
@@ -295,7 +256,7 @@ static func _create_capital_template() -> Dictionary:
 		"stats": {
 			"max_speed": 80.0,
 			"acceleration": 20.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 5.0,  # Lateral/reverse thrust (maneuvering thrusters)
+			"lateral_acceleration": 0.05,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
 			"turn_rate": 0.5,
 			"mass": 1000.0,
 			"size": 50.0
@@ -351,32 +312,6 @@ static func _create_capital_template() -> Dictionary:
 			}
 		],
 		"internals": [
-			{
-				"component_id": "power_core",
-				"type": "power",
-				"section_id": "front_left",
-				"position_offset": Vector2(-5, -12),
-				"max_health": 200,
-				"current_health": 200,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"weapon_power": 0.5},
-					"on_destroyed": {"disabled": true}
-				}
-			},
-			{
-				"component_id": "bridge",
-				"type": "control",
-				"section_id": "front_right",
-				"position_offset": Vector2(5, -8),
-				"max_health": 100,
-				"current_health": 100,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"turn_rate": 0.5, "accuracy": 0.7},
-					"on_destroyed": {"ai_disabled": true}
-				}
-			},
 			{
 				"component_id": "engines_main",
 				"type": "engine",

@@ -14,6 +14,7 @@ const COLOR_TEAM1 = Color("CCCCCC")         # Grey/White - Team 1
 
 var _theme: IVisualTheme = null
 var _entity_visuals: Dictionary = {}  # entity_id -> Dictionary of visual nodes
+var _component_visuals: Dictionary = {}  # entity_id -> Dictionary[component_id -> Node]
 
 func initialize(theme: IVisualTheme) -> void:
 	_theme = theme
@@ -58,6 +59,10 @@ func detach_from_entity(entity: IRenderable) -> void:
 			visual.root.queue_free()
 		_entity_visuals.erase(entity_id)
 
+	# Clean up component visuals
+	if _component_visuals.has(entity_id):
+		_component_visuals.erase(entity_id)
+
 func update_state(entity_id: String, state: EntityState) -> void:
 	if not _entity_visuals.has(entity_id):
 		return
@@ -73,6 +78,10 @@ func update_state(entity_id: String, state: EntityState) -> void:
 		# Fallback to overall health color
 		_update_health_color(visual, state.health_percent)
 
+	# Update component visuals if present
+	if state.components.size() > 0:
+		_update_components(entity_id, state.components, visual.root, state.is_main_engine_firing, state.maneuvering_thrust_direction)
+
 	# Update based on state flags
 	if state.has_flag("destroyed"):
 		_show_destruction_effect(visual)
@@ -85,6 +94,7 @@ func cleanup() -> void:
 	for entity_id in _entity_visuals:
 		detach_from_entity(_entity_visuals[entity_id].entity)
 	_entity_visuals.clear()
+	_component_visuals.clear()
 
 ## Create ship visual
 func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
@@ -119,8 +129,9 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	# Store sections in container metadata for later retrieval
 	container.set_meta("sections", sections)
 
-	# Add team indicator
+	# Add team indicator and store team in metadata
 	if ship_data.has("team"):
+		container.set_meta("team", ship_data.team)
 		_add_team_indicator(container, ship_data.team)
 
 	# Add glow effect with team-appropriate color
@@ -618,6 +629,235 @@ func _create_fallback_visual() -> Node2D:
 	container.add_child(polygon)
 
 	return container
+
+## Update component visuals based on state
+func _update_components(entity_id: String, components: Array[Dictionary], parent_node: Node2D, is_main_engine_firing: bool, maneuvering_thrust_direction: Vector2) -> void:
+	# Initialize component visuals dictionary for this entity if needed
+	if entity_id not in _component_visuals:
+		_component_visuals[entity_id] = {}
+
+	var component_dict: Dictionary = _component_visuals[entity_id]
+	var current_component_ids: Array = []
+
+	# Get team color from parent (ship)
+	var team_color = COLOR_PRIMARY_GLOW  # Default green
+	if parent_node.has_meta("team"):
+		var team = parent_node.get_meta("team")
+		team_color = COLOR_PRIMARY_GLOW if team == 0 else COLOR_TEAM1
+
+	# Create or update components
+	for component_data in components:
+		var component_id: String = component_data.component_id
+		current_component_ids.append(component_id)
+
+		# Create component visual if it doesn't exist
+		if component_id not in component_dict:
+			var component_visual = _create_component_visual(component_data, team_color)
+			if component_visual:
+				parent_node.add_child(component_visual)
+				component_dict[component_id] = component_visual
+
+		# Update component position and rotation
+		if component_id in component_dict:
+			var component_visual: Node2D = component_dict[component_id]
+			if is_instance_valid(component_visual):
+				component_visual.position = component_data.position_offset
+				component_visual.rotation = component_data.rotation
+
+				# Update visual based on status and thrust state
+				if component_data.component_type == "engine":
+					_update_engine_thrust(component_visual, component_data.status, is_main_engine_firing)
+				else:
+					_update_component_status(component_visual, component_data.status)
+
+	# Remove components that no longer exist
+	var to_remove: Array = []
+	for component_id in component_dict.keys():
+		if component_id not in current_component_ids:
+			to_remove.append(component_id)
+
+	for component_id in to_remove:
+		if is_instance_valid(component_dict[component_id]):
+			component_dict[component_id].queue_free()
+		component_dict.erase(component_id)
+
+	# Debug visualization: show maneuvering thruster firing direction
+	_update_maneuvering_thruster_debug(parent_node, maneuvering_thrust_direction)
+
+## Create visual node for a component
+func _create_component_visual(component_data: Dictionary, base_color: Color) -> Node2D:
+	var visual_type: String = component_data.visual_type
+	var component_type: String = component_data.component_type
+
+	var container = Node2D.new()
+	container.name = "Component_" + component_data.component_id
+
+	if component_type == "weapon":
+		# Weapons: elongated guns/turrets (visual only)
+		_create_weapon_visual(container, visual_type, base_color)
+	elif component_type == "engine":
+		# Engines: show thrust effect
+		_create_engine_visual(container, base_color)
+
+	return container
+
+## Create weapon visual (elongated gun or turret)
+func _create_weapon_visual(container: Node2D, visual_type: String, base_color: Color) -> void:
+	var color = base_color.lightened(0.2)
+
+	# Determine if it's a turret (medium/heavy/gatling) or fixed gun (light)
+	var is_turret = visual_type in ["medium_turret", "heavy_turret", "gatling_turret"]
+
+	if is_turret:
+		# Turret: oval body with gun barrel
+		var turret_size = _get_weapon_size(visual_type)
+
+		# Oval turret base
+		var turret_body = Polygon2D.new()
+		turret_body.name = "TurretBody"
+		var points = PackedVector2Array()
+		var segments = 12
+		for i in range(segments):
+			var angle = (float(i) / segments) * TAU
+			# Oval: wider than tall
+			points.append(Vector2(cos(angle) * turret_size * 1.2, sin(angle) * turret_size * 0.8))
+		turret_body.polygon = points
+		turret_body.color = color.darkened(0.2)
+		container.add_child(turret_body)
+
+		# Gun barrel (elongated rectangle pointing up/forward)
+		var barrel = Polygon2D.new()
+		barrel.name = "GunBarrel"
+		var barrel_length = turret_size * 2.5
+		var barrel_width = turret_size * 0.4
+		barrel.polygon = PackedVector2Array([
+			Vector2(-barrel_width, 0),
+			Vector2(barrel_width, 0),
+			Vector2(barrel_width * 0.7, -barrel_length),
+			Vector2(-barrel_width * 0.7, -barrel_length)
+		])
+		barrel.color = color
+		container.add_child(barrel)
+
+		# Add outline
+		var outline = Line2D.new()
+		outline.name = "TurretOutline"
+		for point in points:
+			outline.add_point(point)
+		outline.add_point(points[0])
+		outline.default_color = color.lightened(0.3)
+		outline.width = 1.5
+		container.add_child(outline)
+
+	else:
+		# Fixed gun: simple elongated barrel
+		var gun_length = 15.0
+		var gun_width = 2.5
+
+		var barrel = Polygon2D.new()
+		barrel.name = "GunBarrel"
+		barrel.polygon = PackedVector2Array([
+			Vector2(-gun_width, 0),
+			Vector2(gun_width, 0),
+			Vector2(gun_width * 0.6, -gun_length),
+			Vector2(-gun_width * 0.6, -gun_length)
+		])
+		barrel.color = color
+		container.add_child(barrel)
+
+## Create engine visual with thrust effect
+func _create_engine_visual(container: Node2D, base_color: Color) -> void:
+	# Engine is not visible itself - only thrust is shown
+	# Thrust: orange diamond pointing backward
+	var thrust = Polygon2D.new()
+	thrust.name = "Thrust"
+
+	var thrust_size = 12.0
+	thrust.polygon = PackedVector2Array([
+		Vector2(0, 0),  # Point at engine
+		Vector2(-thrust_size * 0.5, thrust_size * 0.8),  # Left side
+		Vector2(0, thrust_size * 1.8),  # Tip (pointing back)
+		Vector2(thrust_size * 0.5, thrust_size * 0.8)  # Right side
+	])
+	thrust.color = Color("FF8C00")  # Dark orange
+	container.add_child(thrust)
+
+	# Add glow to thrust
+	var light = PointLight2D.new()
+	light.name = "ThrustGlow"
+	light.position = Vector2(0, thrust_size)
+	light.enabled = true
+	light.texture_scale = 0.3
+	light.energy = 0.6
+	light.color = Color("FF8C00")
+	container.add_child(light)
+
+## Get weapon size based on type
+func _get_weapon_size(visual_type: String) -> float:
+	match visual_type:
+		"heavy_turret":
+			return 8.0
+		"medium_turret":
+			return 6.0
+		"gatling_turret":
+			return 5.0
+		_:
+			return 4.0
+
+## Update engine thrust visual based on firing state and status
+func _update_engine_thrust(component_visual: Node2D, status: String, is_firing: bool) -> void:
+	var thrust = component_visual.get_node_or_null("Thrust")
+	var glow = component_visual.get_node_or_null("ThrustGlow")
+	if not thrust:
+		return
+
+	# Only show thrust when engine is firing
+	if is_firing and status != "destroyed":
+		thrust.visible = true
+		if glow:
+			glow.visible = true
+
+		# Modify thrust color/intensity based on engine status
+		match status:
+			"operational":
+				thrust.modulate = Color.WHITE
+			"damaged":
+				thrust.modulate = Color(1.0, 0.6, 0.0)  # Dimmer orange for damaged
+	else:
+		# Hide thrust when not firing or destroyed
+		thrust.visible = false
+		if glow:
+			glow.visible = false
+
+## Update component visual based on status (weapons only - don't take damage currently)
+func _update_component_status(component_visual: Node2D, status: String) -> void:
+	# Currently weapons don't have damage status, so this is a no-op
+	pass
+
+## Debug visualization for maneuvering thrusters
+func _update_maneuvering_thruster_debug(parent_node: Node2D, thrust_direction: Vector2) -> void:
+	var debug_line = parent_node.get_node_or_null("ManeuveringThrustDebug")
+
+	if thrust_direction.length() > 0.01:
+		# Maneuvering thrusters are firing - show debug line
+		if not debug_line:
+			debug_line = Line2D.new()
+			debug_line.name = "ManeuveringThrustDebug"
+			debug_line.width = 2.0
+			debug_line.default_color = Color("FF8C00")  # Orange for thruster debug
+			parent_node.add_child(debug_line)
+
+		# Draw a line showing thrust direction (world space converted to local)
+		debug_line.clear_points()
+		debug_line.add_point(Vector2.ZERO)
+		# Convert world space thrust direction to local ship space
+		var local_thrust = thrust_direction.rotated(-parent_node.rotation) * 15.0
+		debug_line.add_point(local_thrust)
+		debug_line.visible = true
+	else:
+		# No maneuvering thrust - hide debug line
+		if debug_line:
+			debug_line.visible = false
 
 ## Get color based on damage percent
 func _get_damage_color(percent: float) -> Color:
