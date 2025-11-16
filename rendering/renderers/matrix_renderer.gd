@@ -237,7 +237,8 @@ func _create_fighter_shape(container: Node2D, size: float, team: int) -> Diction
 
 	sections["front"] = {
 		"armor": front_armor,
-		"internal": front_internal
+		"internal": front_internal,
+		"base_color": front_color
 	}
 
 	# Back section (middle to tail)
@@ -269,7 +270,8 @@ func _create_fighter_shape(container: Node2D, size: float, team: int) -> Diction
 
 	sections["back"] = {
 		"armor": back_armor,
-		"internal": back_internal
+		"internal": back_internal,
+		"base_color": back_color
 	}
 
 	# Add outline for the whole ship
@@ -334,7 +336,8 @@ func _create_corvette_shape(container: Node2D, size: float, team: int) -> Dictio
 
 	sections["front"] = {
 		"armor": front_armor,
-		"internal": front_internal
+		"internal": front_internal,
+		"base_color": front_color
 	}
 
 	# MIDDLE SECTION - Thin rectangle body
@@ -366,7 +369,8 @@ func _create_corvette_shape(container: Node2D, size: float, team: int) -> Dictio
 
 	sections["middle"] = {
 		"armor": middle_armor,
-		"internal": middle_internal
+		"internal": middle_internal,
+		"base_color": middle_color
 	}
 
 	# BACK SECTION - Thick oval rear
@@ -407,7 +411,8 @@ func _create_corvette_shape(container: Node2D, size: float, team: int) -> Dictio
 
 	sections["back"] = {
 		"armor": back_armor,
-		"internal": back_internal
+		"internal": back_internal,
+		"base_color": back_color
 	}
 
 	# Add outline for the whole ship
@@ -473,7 +478,7 @@ func _create_capital_shape(container: Node2D, size: float, team: int) -> Diction
 		section_container.add_child(internal)
 		container_node.add_child(section_container)
 
-		return {"armor": armor, "internal": internal}
+		return {"armor": armor, "internal": internal, "base_color": section_color}
 
 	# FRONT LEFT SECTION (nose to front split, left side)
 	sections["front_left"] = create_section.call(
@@ -674,32 +679,26 @@ func _create_fallback_visual() -> Node2D:
 
 	return container
 
-## Get color based on damage percent and team
-func _get_damage_color(percent: float, team: int) -> Color:
-	var team_colors = _get_team_colors(team)
-
+## Get color based on damage percent and base color
+## Modifies the base color to show damage rather than replacing it
+func _get_damage_color(percent: float, base_color: Color) -> Color:
 	if percent > 0.75:
-		# Healthy - use primary team color
-		return team_colors[0]
+		# Healthy - use base color as-is
+		return base_color
 	elif percent > 0.5:
-		# Slightly damaged - use secondary team color
-		return team_colors[1]
+		# Slightly damaged - darken the base color slightly
+		return base_color.darkened(0.15)
 	elif percent > 0.25:
-		# Heavily damaged - orange (universal damage indicator)
-		return Color("FFA500")
+		# Heavily damaged - blend base color with orange
+		return base_color.lerp(Color("FFA500"), 0.5)
 	else:
-		# Critical - red (universal critical indicator)
-		return COLOR_ERROR
+		# Critical - blend heavily towards red
+		return base_color.lerp(COLOR_ERROR, 0.7)
 
 ## Update section colors based on per-section damage
 func _update_section_colors(visual: Dictionary, section_damage: Array[Dictionary]) -> void:
 	if not visual.has("sections"):
 		return
-
-	# Get team from visual root metadata
-	var team = 0
-	if visual.root.has_meta("team"):
-		team = visual.root.get_meta("team")
 
 	for section_data in section_damage:
 		var section_id = section_data.section_id
@@ -708,17 +707,22 @@ func _update_section_colors(visual: Dictionary, section_damage: Array[Dictionary
 
 		var section_visual = visual.sections[section_id]
 
-		# Update armor color
+		# Get the base color for this section
+		var base_color = section_visual.get("base_color", Color.WHITE)
+
+		# Update armor color based on damage, preserving the base color
 		if section_visual.has("armor"):
 			var armor_node = section_visual.armor
 			if armor_node and is_instance_valid(armor_node):
-				armor_node.color = _get_damage_color(section_data.armor_percent, team)
+				armor_node.color = _get_damage_color(section_data.armor_percent, base_color)
 
-		# Update internal color
+		# Update internal color based on damage, preserving the base color
 		if section_visual.has("internal"):
 			var internal_node = section_visual.internal
 			if internal_node and is_instance_valid(internal_node):
-				internal_node.color = _get_damage_color(section_data.internal_percent, team)
+				# Internal is darkened version of base color
+				var internal_base = base_color.darkened(0.3)
+				internal_node.color = _get_damage_color(section_data.internal_percent, internal_base)
 
 ## Update visual color based on health (fallback for non-sectioned entities)
 func _update_health_color(visual: Dictionary, health_percent: float) -> void:
@@ -727,13 +731,16 @@ func _update_health_color(visual: Dictionary, health_percent: float) -> void:
 	if not body:
 		return
 
-	# Get team from visual root metadata
+	# Get team from visual root metadata to determine base color
 	var team = 0
 	if root.has_meta("team"):
 		team = root.get_meta("team")
 
-	# Interpolate color based on health and team
-	var color = _get_damage_color(health_percent, team)
+	# Use team primary color as base
+	var base_color = _get_team_primary_color(team)
+
+	# Interpolate color based on health, preserving base color
+	var color = _get_damage_color(health_percent, base_color)
 	body.color = color
 
 	# Update outline too
