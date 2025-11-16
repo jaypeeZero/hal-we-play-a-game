@@ -86,7 +86,8 @@ static func _create_fighter_template() -> Dictionary:
 		"name": "Fighter",
 		"stats": {
 			"max_speed": 300.0,
-			"acceleration": 100.0,
+			"acceleration": 100.0,  # Forward thrust (main engines)
+			"lateral_acceleration": 30.0,  # Lateral/reverse thrust (maneuvering thrusters)
 			"turn_rate": 3.0,  # radians per second
 			"mass": 50.0,
 			"size": 15.0  # visual/collision size
@@ -169,7 +170,8 @@ static func _create_corvette_template() -> Dictionary:
 		"name": "Corvette",
 		"stats": {
 			"max_speed": 150.0,
-			"acceleration": 50.0,
+			"acceleration": 50.0,  # Forward thrust (main engines)
+			"lateral_acceleration": 15.0,  # Lateral/reverse thrust (maneuvering thrusters)
 			"turn_rate": 1.5,
 			"mass": 200.0,
 			"size": 25.0
@@ -289,7 +291,8 @@ static func _create_capital_template() -> Dictionary:
 		"name": "Capital Ship",
 		"stats": {
 			"max_speed": 80.0,
-			"acceleration": 20.0,
+			"acceleration": 20.0,  # Forward thrust (main engines)
+			"lateral_acceleration": 5.0,  # Lateral/reverse thrust (maneuvering thrusters)
 			"turn_rate": 0.5,
 			"mass": 1000.0,
 			"size": 50.0
@@ -446,6 +449,38 @@ static func _create_capital_template() -> Dictionary:
 					"projectile_speed": 500,
 					"range": 1000,
 					"accuracy": 0.80
+				},
+				"cooldown_remaining": 0.0,
+				"operator_id": null
+			},
+			{
+				"weapon_id": "gatling_1",
+				"type": "gatling_gun",
+				"position_offset": Vector2(-20, 0),
+				"facing": 0.0,
+				"arc": {"min": -180, "max": 180},  # Full 360° coverage for point defense
+				"stats": {
+					"damage": 3,
+					"rate_of_fire": 12.0,  # Fast firing for anti-fighter
+					"projectile_speed": 700,  # Faster projectiles
+					"range": 600,  # Shorter range, close defense
+					"accuracy": 0.70  # Lower accuracy due to rapid fire
+				},
+				"cooldown_remaining": 0.0,
+				"operator_id": null
+			},
+			{
+				"weapon_id": "gatling_2",
+				"type": "gatling_gun",
+				"position_offset": Vector2(20, 0),
+				"facing": 0.0,
+				"arc": {"min": -180, "max": 180},  # Full 360° coverage for point defense
+				"stats": {
+					"damage": 3,
+					"rate_of_fire": 12.0,  # Fast firing for anti-fighter
+					"projectile_speed": 700,  # Faster projectiles
+					"range": 600,  # Shorter range, close defense
+					"accuracy": 0.70  # Lower accuracy due to rapid fire
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null

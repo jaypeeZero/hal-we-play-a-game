@@ -138,9 +138,10 @@ func _process(delta: float) -> void:
 		for effect_data in collision_result.visual_effects:
 			_spawn_visual_effect(effect_data)
 
-	# Remove destroyed projectiles from hits
-	for hit in collision_result.hits:
-		_remove_projectile(hit.projectile_id)
+	# Remove all destroyed projectile entities (ship hits and obstacle hits)
+	if collision_result.has("destroyed_projectile_ids"):
+		for projectile_id in collision_result.destroyed_projectile_ids:
+			_remove_projectile(projectile_id)
 
 	# Emit damage events to crew (EVENT-DRIVEN)
 	if ENABLE_CREW_AI and not collision_result.hits.is_empty():
