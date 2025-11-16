@@ -135,28 +135,30 @@ func _draw_hull_shape(ship_type: String, ship_data: Dictionary, center: Vector2,
 			button.pressed.connect(_on_component_clicked.bind(armor_data, "armor"))
 			ship_canvas.add_child(button)
 
-		# Create Line2D for this section
-		var line = Line2D.new()
-		line.width = 1.5
-		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		# Color shade based on section index
-		var shade = section_index * 0.15
-		line.default_color = COLOR_ARMOR.lightened(shade)
-
-		# Add rotated and scaled points
+		# Calculate transformed points for this section
+		var transformed_points: PackedVector2Array = []
 		for point in points:
 			var scaled_point = point * scale
 			var rotated_point = HullShapes.rotate_90(scaled_point)
-			line.add_point(center + rotated_point)
+			transformed_points.append(center + rotated_point)
 
 		# Close the polygon by adding the first point again
 		if points.size() > 0:
 			var first_point = points[0] * scale
 			var rotated_first = HullShapes.rotate_90(first_point)
-			line.add_point(center + rotated_first)
+			transformed_points.append(center + rotated_first)
 
-		ship_canvas.add_child(line)
+		# Color shade based on section index
+		var shade = section_index * 0.15
+		var line_color = COLOR_ARMOR.lightened(shade)
+
+		# Create Control node with draw callback for this section
+		var hull_section = Control.new()
+		hull_section.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hull_section.draw.connect(func():
+			hull_section.draw_polyline(transformed_points, line_color, 1.5)
+		)
+		ship_canvas.add_child(hull_section)
 
 		# Add section label
 		var label = Label.new()
