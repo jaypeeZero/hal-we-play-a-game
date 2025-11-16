@@ -12,6 +12,26 @@ const COLOR_ERROR = Color("FF003C")         # Damage/warning
 const COLOR_BACKGROUND = Color("0D0D0D")    # Deep black
 const COLOR_TEAM1 = Color("CCCCCC")         # Grey/White - Team 1
 
+# Team 0 color scheme: Greens/Grays/Whites
+const TEAM0_COLORS = [
+	Color("00FF41"),  # Bright green (primary)
+	Color("36BA01"),  # Medium green
+	Color("009A22"),  # Dark green
+	Color("88CC88"),  # Light green-gray
+	Color("AAAAAA"),  # Medium gray
+	Color("E8E8E8"),  # Off-white
+]
+
+# Team 1 color scheme: Reds/Yellows/Grays
+const TEAM1_COLORS = [
+	Color("FF4444"),  # Bright red (primary)
+	Color("FF8844"),  # Red-orange
+	Color("FFBB44"),  # Yellow-orange
+	Color("FFDD88"),  # Light yellow
+	Color("BBBBBB"),  # Light gray
+	Color("888888"),  # Medium gray
+]
+
 var _theme: IVisualTheme = null
 var _entity_visuals: Dictionary = {}  # entity_id -> Dictionary of visual nodes
 
@@ -86,6 +106,24 @@ func cleanup() -> void:
 		detach_from_entity(_entity_visuals[entity_id].entity)
 	_entity_visuals.clear()
 
+## Get color palette for a team
+func _get_team_colors(team: int) -> Array:
+	if team == 0:
+		return TEAM0_COLORS
+	else:
+		return TEAM1_COLORS
+
+## Get specific color for a section based on team and section index
+## This ensures different ship sections use different colors from the team palette
+func _get_section_color(team: int, section_index: int) -> Color:
+	var colors = _get_team_colors(team)
+	# Cycle through colors based on section index
+	return colors[section_index % colors.size()]
+
+## Get primary team color (for glow and team indicator)
+func _get_team_primary_color(team: int) -> Color:
+	return _get_team_colors(team)[0]
+
 ## Create ship visual
 func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	var container = Node2D.new()
@@ -99,32 +137,33 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	# Determine size and shape based on ship type
 	var ship_type = visual_type.replace("ship_", "")
 	var size = 20.0
-	# Set color based on team: Green for Team 0, Grey/White for Team 1
-	var color = COLOR_PRIMARY_GLOW if ship_data.get("team", 0) == 0 else COLOR_TEAM1
+	var team = ship_data.get("team", 0)
 	var sections = {}
 
 	match ship_type:
 		"fighter":
 			size = 15.0
-			sections = _create_fighter_shape(container, size, color)
+			sections = _create_fighter_shape(container, size, team)
 		"corvette":
 			size = 25.0
-			sections = _create_corvette_shape(container, size, color)
+			sections = _create_corvette_shape(container, size, team)
 		"capital":
 			size = 50.0
-			sections = _create_capital_shape(container, size, color)
+			sections = _create_capital_shape(container, size, team)
 		_:
-			_create_generic_ship_shape(container, size, color)
+			_create_generic_ship_shape(container, size, team)
 
-	# Store sections in container metadata for later retrieval
+	# Store sections and team in container metadata for later retrieval
 	container.set_meta("sections", sections)
+	container.set_meta("team", team)
 
 	# Add team indicator
 	if ship_data.has("team"):
-		_add_team_indicator(container, ship_data.team)
+		_add_team_indicator(container, team)
 
 	# Add glow effect with team-appropriate color
-	_add_glow_effect(container, color)
+	var primary_color = _get_team_primary_color(team)
+	_add_glow_effect(container, primary_color)
 
 	return container
 
@@ -157,7 +196,7 @@ func _create_section_wedge(start_angle_deg: float, end_angle_deg: float, outer_r
 	return points
 
 ## Create fighter shape - elongated triangle, pointy front (2 sections: front, back)
-func _create_fighter_shape(container: Node2D, size: float, color: Color) -> Dictionary:
+func _create_fighter_shape(container: Node2D, size: float, team: int) -> Dictionary:
 	var sections = {}
 
 	# Fighter dimensions - elongated triangle
@@ -167,6 +206,10 @@ func _create_fighter_shape(container: Node2D, size: float, color: Color) -> Dict
 	var tail_y = length * 0.3
 	var mid_y = 0  # Split point between front and back sections
 
+	# Get colors for different sections
+	var front_color = _get_section_color(team, 0)
+	var back_color = _get_section_color(team, 1)
+
 	# Front section (pointy nose to middle)
 	var front_armor = Polygon2D.new()
 	front_armor.name = "Armor"
@@ -175,7 +218,7 @@ func _create_fighter_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(-width * 0.5, mid_y),    # Left mid
 		Vector2(width * 0.5, mid_y)      # Right mid
 	])
-	front_armor.color = color
+	front_armor.color = front_color
 
 	var front_internal = Polygon2D.new()
 	front_internal.name = "Internal"
@@ -184,7 +227,7 @@ func _create_fighter_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(-width * 0.3, mid_y),    # Left mid (narrower)
 		Vector2(width * 0.3, mid_y)      # Right mid (narrower)
 	])
-	front_internal.color = color.darkened(0.3)
+	front_internal.color = front_color.darkened(0.3)
 
 	var front_container = Node2D.new()
 	front_container.name = "Section_front"
@@ -206,7 +249,7 @@ func _create_fighter_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(width * 0.4, tail_y),    # Right tail
 		Vector2(width * 0.5, mid_y)      # Right mid
 	])
-	back_armor.color = color
+	back_armor.color = back_color
 
 	var back_internal = Polygon2D.new()
 	back_internal.name = "Internal"
@@ -216,7 +259,7 @@ func _create_fighter_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(width * 0.2, tail_y * 0.8),   # Right tail (scaled inward)
 		Vector2(width * 0.3, mid_y)      # Right mid (narrower)
 	])
-	back_internal.color = color.darkened(0.3)
+	back_internal.color = back_color.darkened(0.3)
 
 	var back_container = Node2D.new()
 	back_container.name = "Section_back"
@@ -245,7 +288,7 @@ func _create_fighter_shape(container: Node2D, size: float, color: Color) -> Dict
 	return sections
 
 ## Create corvette shape - hammerhead front, thin body, thick oval rear (3 sections)
-func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dictionary:
+func _create_corvette_shape(container: Node2D, size: float, team: int) -> Dictionary:
 	var sections = {}
 
 	# Corvette dimensions
@@ -257,6 +300,11 @@ func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dic
 	var rear_mid_y = size * 0.4
 	var rear_y = size * 1.2
 
+	# Get colors for different sections
+	var front_color = _get_section_color(team, 0)
+	var middle_color = _get_section_color(team, 1)
+	var back_color = _get_section_color(team, 2)
+
 	# FRONT SECTION - Hammerhead
 	var front_armor = Polygon2D.new()
 	front_armor.name = "Armor"
@@ -266,7 +314,7 @@ func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dic
 		Vector2(body_width * 0.5, front_mid_y),     # Right body connection
 		Vector2(-body_width * 0.5, front_mid_y)     # Left body connection
 	])
-	front_armor.color = color
+	front_armor.color = front_color
 
 	var front_internal = Polygon2D.new()
 	front_internal.name = "Internal"
@@ -276,7 +324,7 @@ func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dic
 		Vector2(body_width * 0.3, front_mid_y),         # Right body
 		Vector2(-body_width * 0.3, front_mid_y)         # Left body
 	])
-	front_internal.color = color.darkened(0.3)
+	front_internal.color = front_color.darkened(0.3)
 
 	var front_container = Node2D.new()
 	front_container.name = "Section_front"
@@ -298,7 +346,7 @@ func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dic
 		Vector2(body_width * 0.5, rear_mid_y),      # Right rear
 		Vector2(-body_width * 0.5, rear_mid_y)      # Left rear
 	])
-	middle_armor.color = color
+	middle_armor.color = middle_color
 
 	var middle_internal = Polygon2D.new()
 	middle_internal.name = "Internal"
@@ -308,7 +356,7 @@ func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dic
 		Vector2(body_width * 0.3, rear_mid_y),      # Right rear (narrower)
 		Vector2(-body_width * 0.3, rear_mid_y)      # Left rear (narrower)
 	])
-	middle_internal.color = color.darkened(0.3)
+	middle_internal.color = middle_color.darkened(0.3)
 
 	var middle_container = Node2D.new()
 	middle_container.name = "Section_middle"
@@ -335,7 +383,7 @@ func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dic
 		Vector2(body_width * 0.5, rear_mid_y)       # Right body connection
 	])
 	back_armor.polygon = back_points
-	back_armor.color = color
+	back_armor.color = back_color
 
 	var back_internal = Polygon2D.new()
 	back_internal.name = "Internal"
@@ -349,7 +397,7 @@ func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dic
 		Vector2(body_width * 0.3, rear_mid_y)       # Right body (narrower)
 	])
 	back_internal.polygon = back_internal_points
-	back_internal.color = color.darkened(0.3)
+	back_internal.color = back_color.darkened(0.3)
 
 	var back_container = Node2D.new()
 	back_container.name = "Section_back"
@@ -381,7 +429,7 @@ func _create_corvette_shape(container: Node2D, size: float, color: Color) -> Dic
 	return sections
 
 ## Create capital shape - Star Destroyer triangle (6 sections, 3x corvette length)
-func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dictionary:
+func _create_capital_shape(container: Node2D, size: float, team: int) -> Dictionary:
 	var sections = {}
 
 	# Capital dimensions - Star Destroyer (3x corvette length)
@@ -399,12 +447,12 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 	var width_at_back = max_width
 
 	# Helper to create a section polygon
-	var create_section = func(left_front: Vector2, right_front: Vector2, right_back: Vector2, left_back: Vector2, section_id: String, container_node: Node2D):
+	var create_section = func(left_front: Vector2, right_front: Vector2, right_back: Vector2, left_back: Vector2, section_id: String, section_color: Color, container_node: Node2D):
 		# Armor polygon
 		var armor = Polygon2D.new()
 		armor.name = "Armor"
 		armor.polygon = PackedVector2Array([left_front, right_front, right_back, left_back])
-		armor.color = color
+		armor.color = section_color
 
 		# Internal polygon (scaled inward)
 		var internal = Polygon2D.new()
@@ -417,7 +465,7 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 			center + (right_back - center) * scale_factor,
 			center + (left_back - center) * scale_factor
 		])
-		internal.color = color.darkened(0.3)
+		internal.color = section_color.darkened(0.3)
 
 		var section_container = Node2D.new()
 		section_container.name = "Section_" + section_id
@@ -434,6 +482,7 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(-width_at_front * 0.5, front_split_y),  # Left at front split
 		Vector2(0, front_split_y),  # Center at front split
 		"front_left",
+		_get_section_color(team, 0),
 		container
 	)
 
@@ -444,6 +493,7 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(0, front_split_y),  # Center at front split
 		Vector2(width_at_front * 0.5, front_split_y),  # Right at front split
 		"front_right",
+		_get_section_color(team, 1),
 		container
 	)
 
@@ -454,6 +504,7 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(-width_at_middle * 0.5, middle_split_y),  # Left at middle split
 		Vector2(0, middle_split_y),  # Center at middle split
 		"middle_left",
+		_get_section_color(team, 2),
 		container
 	)
 
@@ -464,6 +515,7 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(0, middle_split_y),  # Center at middle split
 		Vector2(width_at_middle * 0.5, middle_split_y),  # Right at middle split
 		"middle_right",
+		_get_section_color(team, 3),
 		container
 	)
 
@@ -474,6 +526,7 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(-width_at_back * 0.5, back_y),  # Left at back
 		Vector2(0, back_y),  # Center at back
 		"back_left",
+		_get_section_color(team, 4),
 		container
 	)
 
@@ -484,6 +537,7 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 		Vector2(0, back_y),  # Center at back
 		Vector2(width_at_back * 0.5, back_y),  # Right at back
 		"back_right",
+		_get_section_color(team, 5),
 		container
 	)
 
@@ -517,7 +571,7 @@ func _create_capital_shape(container: Node2D, size: float, color: Color) -> Dict
 	return sections
 
 ## Create generic ship shape
-func _create_generic_ship_shape(container: Node2D, size: float, color: Color) -> void:
+func _create_generic_ship_shape(container: Node2D, size: float, team: int) -> void:
 	var polygon = Polygon2D.new()
 	polygon.name = "ShipBody"
 	polygon.polygon = PackedVector2Array([
@@ -525,7 +579,7 @@ func _create_generic_ship_shape(container: Node2D, size: float, color: Color) ->
 		Vector2(-size * 0.5, size * 0.5),
 		Vector2(size * 0.5, size * 0.5)
 	])
-	polygon.color = color
+	polygon.color = _get_team_primary_color(team)
 	container.add_child(polygon)
 
 ## Add team indicator (color dot)
@@ -544,8 +598,8 @@ func _add_team_indicator(container: Node2D, team: int) -> void:
 	indicator.polygon = points
 	indicator.position = Vector2(0, -20)
 
-	# Team colors: Green for Team 0, Grey/White for Team 1
-	indicator.color = COLOR_PRIMARY_GLOW if team == 0 else COLOR_TEAM1
+	# Use team's primary color
+	indicator.color = _get_team_primary_color(team)
 
 	container.add_child(indicator)
 
@@ -619,21 +673,32 @@ func _create_fallback_visual() -> Node2D:
 
 	return container
 
-## Get color based on damage percent
-func _get_damage_color(percent: float) -> Color:
+## Get color based on damage percent and team
+func _get_damage_color(percent: float, team: int) -> Color:
+	var team_colors = _get_team_colors(team)
+
 	if percent > 0.75:
-		return COLOR_PRIMARY_GLOW  # Green - healthy
+		# Healthy - use primary team color
+		return team_colors[0]
 	elif percent > 0.5:
-		return COLOR_SOFT_GLOW     # Dim green - slightly damaged
+		# Slightly damaged - use secondary team color
+		return team_colors[1]
 	elif percent > 0.25:
-		return Color("FFA500")     # Orange - heavily damaged
+		# Heavily damaged - orange (universal damage indicator)
+		return Color("FFA500")
 	else:
-		return COLOR_ERROR         # Red - critical
+		# Critical - red (universal critical indicator)
+		return COLOR_ERROR
 
 ## Update section colors based on per-section damage
 func _update_section_colors(visual: Dictionary, section_damage: Array[Dictionary]) -> void:
 	if not visual.has("sections"):
 		return
+
+	# Get team from visual root metadata
+	var team = 0
+	if visual.root.has_meta("team"):
+		team = visual.root.get_meta("team")
 
 	for section_data in section_damage:
 		var section_id = section_data.section_id
@@ -646,13 +711,13 @@ func _update_section_colors(visual: Dictionary, section_damage: Array[Dictionary
 		if section_visual.has("armor"):
 			var armor_node = section_visual.armor
 			if armor_node and is_instance_valid(armor_node):
-				armor_node.color = _get_damage_color(section_data.armor_percent)
+				armor_node.color = _get_damage_color(section_data.armor_percent, team)
 
 		# Update internal color
 		if section_visual.has("internal"):
 			var internal_node = section_visual.internal
 			if internal_node and is_instance_valid(internal_node):
-				internal_node.color = _get_damage_color(section_data.internal_percent)
+				internal_node.color = _get_damage_color(section_data.internal_percent, team)
 
 ## Update visual color based on health (fallback for non-sectioned entities)
 func _update_health_color(visual: Dictionary, health_percent: float) -> void:
@@ -661,8 +726,13 @@ func _update_health_color(visual: Dictionary, health_percent: float) -> void:
 	if not body:
 		return
 
-	# Interpolate color based on health
-	var color = _get_damage_color(health_percent)
+	# Get team from visual root metadata
+	var team = 0
+	if root.has_meta("team"):
+		team = root.get_meta("team")
+
+	# Interpolate color based on health and team
+	var color = _get_damage_color(health_percent, team)
 	body.color = color
 
 	# Update outline too
