@@ -181,41 +181,6 @@ func test_fire_command_targets_correct_enemy():
 		assert_eq(result.fire_commands[0].target_id, "enemy_123", "Fire command should target correct enemy")
 
 # ============================================================================
-# COMPONENT DAMAGE EFFECTS TESTS
-# ============================================================================
-
-func test_damaged_power_core_reduces_weapon_damage():
-	var ship = create_test_ship_with_damaged_power()
-	var target = create_test_target(Vector2(300, 0))
-
-	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
-
-	if result.fire_commands.size() > 0:
-		var base_damage = ship.weapons[0].stats.damage
-		var actual_damage = result.fire_commands[0].damage
-		assert_lte(actual_damage, base_damage, "Damaged power core should reduce weapon damage")
-
-func test_destroyed_power_core_disables_weapons():
-	var ship = create_test_ship_with_destroyed_power()
-	var target = create_test_target(Vector2(300, 0))
-
-	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
-
-	if result.fire_commands.size() > 0:
-		assert_eq(result.fire_commands[0].damage, 0, "Destroyed power core should disable weapons")
-
-func test_damaged_control_reduces_accuracy():
-	var ship = create_test_ship_with_damaged_control()
-	var target = create_test_target(Vector2(300, 0))
-
-	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
-
-	if result.fire_commands.size() > 0:
-		var base_accuracy = ship.weapons[0].stats.accuracy
-		var actual_accuracy = result.fire_commands[0].accuracy
-		assert_lte(actual_accuracy, base_accuracy, "Damaged control should reduce accuracy")
-
-# ============================================================================
 # FUNCTIONAL PURITY TESTS
 # ============================================================================
 
@@ -292,32 +257,7 @@ func create_test_ship_with_weapon(cooldown: float) -> Dictionary:
 				"cooldown_remaining": cooldown
 			}
 		],
-		"internals": [
-			{
-				"component_id": "power_core",
-				"type": "power",
-				"position_offset": Vector2(0, 0),
-				"max_health": 50,
-				"current_health": 50,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"weapon_power": 0.5},
-					"on_destroyed": {"weapon_power": 0.0}
-				}
-			},
-			{
-				"component_id": "control",
-				"type": "control",
-				"position_offset": Vector2(0, 0),
-				"max_health": 40,
-				"current_health": 40,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"accuracy": 0.7},
-					"on_destroyed": {"accuracy": 0.3}
-				}
-			}
-		]
+		"internals": []
 	}
 
 func create_test_ship_with_limited_arc() -> Dictionary:
@@ -342,24 +282,6 @@ func create_test_ship_with_multiple_weapons() -> Dictionary:
 		},
 		"cooldown_remaining": 0.0
 	})
-	return ship
-
-func create_test_ship_with_damaged_power() -> Dictionary:
-	var ship = create_test_ship_with_weapon(0.0)
-	ship.internals[0].status = "damaged"  # Power core
-	ship.internals[0].current_health = 10
-	return ship
-
-func create_test_ship_with_destroyed_power() -> Dictionary:
-	var ship = create_test_ship_with_weapon(0.0)
-	ship.internals[0].status = "destroyed"  # Power core
-	ship.internals[0].current_health = 0
-	return ship
-
-func create_test_ship_with_damaged_control() -> Dictionary:
-	var ship = create_test_ship_with_weapon(0.0)
-	ship.internals[1].status = "damaged"  # Control
-	ship.internals[1].current_health = 10
 	return ship
 
 func create_test_target(pos: Vector2) -> Dictionary:

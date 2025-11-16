@@ -352,37 +352,10 @@ static func calculate_projectile_velocity(direction: Vector2, speed: float) -> V
 # ============================================================================
 
 static func calculate_final_damage(base_damage: int, ship_data: Dictionary) -> int:
-	return int(base_damage * get_power_modifier(ship_data))
+	return base_damage
 
 static func calculate_final_accuracy(base_accuracy: float, ship_data: Dictionary) -> float:
-	return base_accuracy * get_accuracy_modifier(ship_data)
-
-static func get_power_modifier(ship_data: Dictionary) -> float:
-	var power_core = find_component_by_type(ship_data.internals, "power")
-	return get_component_power_modifier(power_core)
-
-static func get_accuracy_modifier(ship_data: Dictionary) -> float:
-	var control = find_component_by_type(ship_data.internals, "control")
-	return get_component_accuracy_modifier(control)
-
-static func find_component_by_type(internals: Array, component_type: String) -> Dictionary:
-	return internals.filter(func(c): return c.type == component_type).reduce(func(a, b): return b, {})
-
-static func get_component_power_modifier(component: Dictionary) -> float:
-	if component.is_empty():
-		return 1.0
-	match component.status:
-		"destroyed": return 0.0
-		"damaged": return component.effect_on_ship.on_damaged.get("weapon_power", 1.0)
-		_: return 1.0
-
-static func get_component_accuracy_modifier(component: Dictionary) -> float:
-	if component.is_empty():
-		return 1.0
-	match component.status:
-		"destroyed": return 0.3
-		"damaged": return component.effect_on_ship.on_damaged.get("accuracy", 1.0)
-		_: return 1.0
+	return base_accuracy
 
 # ============================================================================
 # PUBLIC QUERY FUNCTIONS
@@ -395,10 +368,9 @@ static func get_fireable_weapons(ship_data: Dictionary, target: Dictionary) -> A
 
 static func calculate_hit_probability(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> float:
 	var base = weapon.stats.accuracy
-	var accuracy_mod = get_accuracy_modifier(ship_data)
 	var range_factor = calculate_range_factor(ship_data.position, target.position, weapon.stats.range)
 	var velocity_factor = calculate_velocity_factor(target)
-	return base * accuracy_mod * range_factor * velocity_factor
+	return base * range_factor * velocity_factor
 
 static func calculate_range_factor(from: Vector2, to: Vector2, max_range: float) -> float:
 	var distance = calculate_distance(from, to)
