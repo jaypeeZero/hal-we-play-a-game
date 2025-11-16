@@ -54,7 +54,8 @@ static func create_projectile(fire_command: Dictionary, team: int) -> Dictionary
 		target_id = fire_command.get("target_id", ""),
 		team = team,
 		lifetime = 0.0,
-		max_lifetime = 10.0
+		max_lifetime = 10.0,
+		weapon_size = fire_command.get("weapon_size", 1)
 	}
 
 ## Spawn projectiles from fire commands - returns Array of projectile_data

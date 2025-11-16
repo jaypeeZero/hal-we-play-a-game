@@ -10,21 +10,21 @@ extends RefCounted
 # ============================================================================
 
 ## Resolve a projectile hit - returns {ship_data: Dictionary, hit_result: Dictionary}
-static func resolve_hit(ship_data: Dictionary, hit_position: Vector2, damage: int, projectile_angle: float) -> Dictionary:
+static func resolve_hit(ship_data: Dictionary, hit_position: Vector2, damage: int, projectile_angle: float, weapon_size: int = 999) -> Dictionary:
 	var hit_angle = calculate_hit_angle(ship_data, hit_position)
 	var section = find_armor_section_at_angle(ship_data, hit_angle)
 
 	if section.is_empty():
 		return create_miss_result(ship_data)
 
-	return apply_damage_to_ship(ship_data, section, hit_position, damage, hit_angle)
+	return apply_damage_to_ship(ship_data, section, hit_position, damage, hit_angle, weapon_size)
 
 # ============================================================================
 # HIT RESOLUTION
 # ============================================================================
 
-static func apply_damage_to_ship(ship_data: Dictionary, section: Dictionary, hit_pos: Vector2, damage: int, hit_angle: float) -> Dictionary:
-	var armor_result = apply_damage_to_armor(section, damage)
+static func apply_damage_to_ship(ship_data: Dictionary, section: Dictionary, hit_pos: Vector2, damage: int, hit_angle: float, weapon_size: int) -> Dictionary:
+	var armor_result = apply_damage_to_armor(section, damage, weapon_size)
 	var updated_ship = replace_armor_section(ship_data, armor_result.get("section"))
 
 	if not armor_result.get("penetrated"):
@@ -38,7 +38,22 @@ static func apply_damage_to_ship(ship_data: Dictionary, section: Dictionary, hit
 # ARMOR DAMAGE - Pure Functions
 # ============================================================================
 
-static func apply_damage_to_armor(section: Dictionary, damage: int) -> Dictionary:
+static func apply_damage_to_armor(section: Dictionary, damage: int, weapon_size: int) -> Dictionary:
+	# Check if weapon size can damage this armor size
+	# Rule: weapon can damage armor if armor_size <= weapon_size + 1
+	var armor_size = section.get("size", 1)
+	var can_damage = armor_size <= weapon_size + 1
+
+	if not can_damage:
+		# Weapon cannot damage this armor - treat as if armor absorbed all damage
+		return {
+			"section": section,
+			"armor_damaged": 0,
+			"remaining_damage": 0,
+			"penetrated": false,
+			"size_blocked": true
+		}
+
 	if has_armor_remaining(section):
 		return damage_armor_section(section, damage)
 	else:

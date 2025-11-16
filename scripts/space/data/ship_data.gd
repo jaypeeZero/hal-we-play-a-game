@@ -99,7 +99,7 @@ static func _create_fighter_template() -> Dictionary:
 				"arc": {"start": -90, "end": 90},  # front 180 degrees
 				"max_armor": 25,
 				"current_armor": 25,
-				"size": 10
+				"size": 1
 			},
 			{
 				"section_id": "back",
@@ -107,7 +107,7 @@ static func _create_fighter_template() -> Dictionary:
 				"arc": {"start": 90, "end": 270},  # back 180 degrees
 				"max_armor": 20,
 				"current_armor": 20,
-				"size": 10
+				"size": 1
 			}
 		],
 		"internals": [
@@ -150,7 +150,8 @@ static func _create_fighter_template() -> Dictionary:
 					"rate_of_fire": 5.0,  # shots per second
 					"projectile_speed": 600,
 					"range": 800,
-					"accuracy": 0.85
+					"accuracy": 0.85,
+					"size": 1
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
@@ -183,7 +184,7 @@ static func _create_corvette_template() -> Dictionary:
 				"arc": {"start": -60, "end": 60},  # front 120 degrees
 				"max_armor": 100,
 				"current_armor": 100,
-				"size": 14
+				"size": 2
 			},
 			{
 				"section_id": "middle",
@@ -191,7 +192,7 @@ static func _create_corvette_template() -> Dictionary:
 				"arc": {"start": 60, "end": 300},  # middle 240 degrees (sides)
 				"max_armor": 90,
 				"current_armor": 90,
-				"size": 16
+				"size": 2
 			},
 			{
 				"section_id": "back",
@@ -199,7 +200,7 @@ static func _create_corvette_template() -> Dictionary:
 				"arc": {"start": 300, "end": 420},  # back 120 degrees (wraps around)
 				"max_armor": 70,
 				"current_armor": 70,
-				"size": 14
+				"size": 2
 			}
 		],
 		"internals": [
@@ -255,7 +256,8 @@ static func _create_corvette_template() -> Dictionary:
 					"rate_of_fire": 2.0,
 					"projectile_speed": 500,
 					"range": 1000,
-					"accuracy": 0.80
+					"accuracy": 0.80,
+					"size": 2
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
@@ -271,7 +273,8 @@ static func _create_corvette_template() -> Dictionary:
 					"rate_of_fire": 2.0,
 					"projectile_speed": 500,
 					"range": 1000,
-					"accuracy": 0.80
+					"accuracy": 0.80,
+					"size": 2
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
@@ -304,7 +307,7 @@ static func _create_capital_template() -> Dictionary:
 				"arc": {"start": 300, "end": 360},  # front left 60 degrees
 				"max_armor": 180,
 				"current_armor": 180,
-				"size": 18
+				"size": 3
 			},
 			{
 				"section_id": "front_right",
@@ -312,7 +315,7 @@ static func _create_capital_template() -> Dictionary:
 				"arc": {"start": 0, "end": 60},  # front right 60 degrees
 				"max_armor": 180,
 				"current_armor": 180,
-				"size": 18
+				"size": 3
 			},
 			{
 				"section_id": "middle_right",
@@ -320,7 +323,7 @@ static func _create_capital_template() -> Dictionary:
 				"arc": {"start": 60, "end": 120},  # right side 60 degrees
 				"max_armor": 150,
 				"current_armor": 150,
-				"size": 20
+				"size": 3
 			},
 			{
 				"section_id": "back_right",
@@ -328,7 +331,7 @@ static func _create_capital_template() -> Dictionary:
 				"arc": {"start": 120, "end": 180},  # back right 60 degrees
 				"max_armor": 120,
 				"current_armor": 120,
-				"size": 18
+				"size": 3
 			},
 			{
 				"section_id": "back_left",
@@ -336,7 +339,7 @@ static func _create_capital_template() -> Dictionary:
 				"arc": {"start": 180, "end": 240},  # back left 60 degrees
 				"max_armor": 120,
 				"current_armor": 120,
-				"size": 18
+				"size": 3
 			},
 			{
 				"section_id": "middle_left",
@@ -344,7 +347,7 @@ static func _create_capital_template() -> Dictionary:
 				"arc": {"start": 240, "end": 300},  # left side 60 degrees
 				"max_armor": 150,
 				"current_armor": 150,
-				"size": 20
+				"size": 3
 			}
 		],
 		"internals": [
@@ -400,7 +403,8 @@ static func _create_capital_template() -> Dictionary:
 					"rate_of_fire": 0.5,
 					"projectile_speed": 450,
 					"range": 1500,
-					"accuracy": 0.75
+					"accuracy": 0.75,
+					"size": 3
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
@@ -416,7 +420,8 @@ static func _create_capital_template() -> Dictionary:
 					"rate_of_fire": 0.5,
 					"projectile_speed": 450,
 					"range": 1500,
-					"accuracy": 0.75
+					"accuracy": 0.75,
+					"size": 3
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
@@ -432,7 +437,8 @@ static func _create_capital_template() -> Dictionary:
 					"rate_of_fire": 2.0,
 					"projectile_speed": 500,
 					"range": 1000,
-					"accuracy": 0.80
+					"accuracy": 0.80,
+					"size": 3
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
@@ -448,7 +454,8 @@ static func _create_capital_template() -> Dictionary:
 					"rate_of_fire": 2.0,
 					"projectile_speed": 500,
 					"range": 1000,
-					"accuracy": 0.80
+					"accuracy": 0.80,
+					"size": 3
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
@@ -464,7 +471,8 @@ static func _create_capital_template() -> Dictionary:
 					"rate_of_fire": 12.0,  # Fast firing for anti-fighter
 					"projectile_speed": 700,  # Faster projectiles
 					"range": 600,  # Shorter range, close defense
-					"accuracy": 0.70  # Lower accuracy due to rapid fire
+					"accuracy": 0.70,  # Lower accuracy due to rapid fire
+					"size": 3
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
@@ -480,7 +488,8 @@ static func _create_capital_template() -> Dictionary:
 					"rate_of_fire": 12.0,  # Fast firing for anti-fighter
 					"projectile_speed": 700,  # Faster projectiles
 					"range": 600,  # Shorter range, close defense
-					"accuracy": 0.70  # Lower accuracy due to rapid fire
+					"accuracy": 0.70,  # Lower accuracy due to rapid fire
+					"size": 3
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
