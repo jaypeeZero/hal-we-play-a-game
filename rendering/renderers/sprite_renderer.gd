@@ -164,145 +164,103 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	return container
 
 ## Build fighter - elongated triangle like MatrixRenderer
-## Front section: pointy nose, Back section: wider tail
+## ARMOR ONLY (for now - verifying shape)
 func _build_fighter_from_parts(container: Node2D, tint: Color) -> void:
-	# Fighter is small, elongated triangle
-	# Use small/medium spaceParts to build pointy front and wider back
+	# Fighter: elongated triangle shape
+	# Front: pointy nose, Back: wider tail
 
-	# NOSE (front section) - narrow pointy part
-	var nose = _create_sprite("spaceParts_004")  # Narrow long part (26x84)
+	# FRONT ARMOR - narrow pointy nose
+	var nose = _create_sprite("spaceParts_004")  # Narrow (26x84)
 	if nose:
-		nose.position = Vector2(0, -20)  # Forward position
+		nose.position = Vector2(0, -18)
 		nose.modulate = tint
-		nose.rotation = 0  # Point up
 		container.add_child(nose)
 
-	# MID BODY - slightly wider
-	var mid = _create_sprite("spaceParts_005")  # Medium part (36x79)
-	if mid:
-		mid.position = Vector2(0, 5)
-		mid.modulate = tint
-		container.add_child(mid)
-
-	# TAIL (back section) - wider base
-	var tail_left = _create_sprite("spaceParts_057")  # Small wing part
-	if tail_left:
-		tail_left.position = Vector2(-8, 20)
-		tail_left.modulate = tint
-		container.add_child(tail_left)
-
-	var tail_right = _create_sprite("spaceParts_057")  # Small wing part
-	if tail_right:
-		tail_right.position = Vector2(8, 20)
-		tail_right.modulate = tint
-		container.add_child(tail_right)
+	# BACK ARMOR - wider tail section
+	var tail = _create_sprite("spaceParts_005")  # Medium (36x79)
+	if tail:
+		tail.position = Vector2(0, 12)
+		tail.modulate = tint
+		container.add_child(tail)
 
 ## Build corvette - hammerhead front, thin body, thick rear like MatrixRenderer
+## ARMOR ONLY (for now - verifying shape)
 func _build_corvette_from_parts(container: Node2D, tint: Color) -> void:
-	# HAMMERHEAD FRONT - wide horizontal piece
-	var hammer_left = _create_sprite("spaceParts_087")  # Wide flat part (36x22)
-	if hammer_left:
-		hammer_left.position = Vector2(-15, -25)
-		hammer_left.modulate = tint
-		hammer_left.rotation = PI / 2  # Rotate to horizontal
-		container.add_child(hammer_left)
+	# Corvette: hammerhead front, thin body, thick oval rear
 
-	var hammer_right = _create_sprite("spaceParts_087")  # Wide flat part
-	if hammer_right:
-		hammer_right.position = Vector2(15, -25)
-		hammer_right.modulate = tint
-		hammer_right.rotation = PI / 2  # Rotate to horizontal
-		container.add_child(hammer_right)
+	# FRONT ARMOR - wide hammerhead
+	var hammer = _create_sprite("spaceParts_088")  # Wide flat (58x28)
+	if hammer:
+		hammer.position = Vector2(0, -28)
+		hammer.modulate = tint
+		hammer.rotation = PI / 2  # Horizontal
+		container.add_child(hammer)
 
-	# THIN BODY - narrow middle section
-	var body_upper = _create_sprite("spaceParts_004")  # Narrow part (26x84)
-	if body_upper:
-		body_upper.position = Vector2(0, -5)
-		body_upper.modulate = tint
-		container.add_child(body_upper)
+	# MIDDLE ARMOR - thin body
+	var body = _create_sprite("spaceParts_004")  # Narrow (26x84)
+	if body:
+		body.position = Vector2(0, 0)
+		body.modulate = tint
+		container.add_child(body)
 
-	# THICK REAR - wider engine section
-	var rear = _create_sprite("spaceParts_014")  # Wider part (50x67)
+	# BACK ARMOR - thick rear
+	var rear = _create_sprite("spaceParts_014")  # Wide (50x67)
 	if rear:
-		rear.position = Vector2(0, 25)
+		rear.position = Vector2(0, 28)
 		rear.modulate = tint
 		container.add_child(rear)
 
-	# Rear wings
-	var rear_left = _create_sprite("spaceParts_061")  # Small accent
-	if rear_left:
-		rear_left.position = Vector2(-18, 30)
-		rear_left.modulate = tint
-		container.add_child(rear_left)
-
-	var rear_right = _create_sprite("spaceParts_061")  # Small accent
-	if rear_right:
-		rear_right.position = Vector2(18, 30)
-		rear_right.modulate = tint
-		container.add_child(rear_right)
-
 ## Build capital - Star Destroyer triangle like MatrixRenderer
+## ARMOR ONLY (for now - verifying shape)
 func _build_capital_from_parts(container: Node2D, tint: Color) -> void:
-	# Capital is 3x longer, builds a triangle from nose to wide back
+	# Capital: large triangle, 3x corvette length
+	# Narrow nose widening to broad back
 
-	# NOSE - single narrow point
+	# FRONT ARMOR - narrow nose
 	var nose = _create_sprite("spaceParts_004")  # Narrow (26x84)
 	if nose:
-		nose.position = Vector2(0, -60)
+		nose.position = Vector2(0, -70)
 		nose.modulate = tint
 		container.add_child(nose)
 
-	# FRONT SECTIONS - narrow widening
+	# FRONT-MID ARMOR - widening
 	var front_left = _create_sprite("spaceParts_007")  # Medium narrow (32x86)
 	if front_left:
-		front_left.position = Vector2(-12, -30)
+		front_left.position = Vector2(-15, -35)
 		front_left.modulate = tint
 		container.add_child(front_left)
 
 	var front_right = _create_sprite("spaceParts_007")
 	if front_right:
-		front_right.position = Vector2(12, -30)
+		front_right.position = Vector2(15, -35)
 		front_right.modulate = tint
 		container.add_child(front_right)
 
-	# MIDDLE SECTIONS - wider
+	# MIDDLE ARMOR - wider
 	var mid_left = _create_sprite("spaceParts_002")  # Medium (41x71)
 	if mid_left:
-		mid_left.position = Vector2(-25, 0)
+		mid_left.position = Vector2(-30, 0)
 		mid_left.modulate = tint
 		container.add_child(mid_left)
 
 	var mid_right = _create_sprite("spaceParts_002")
 	if mid_right:
-		mid_right.position = Vector2(25, 0)
+		mid_right.position = Vector2(30, 0)
 		mid_right.modulate = tint
 		container.add_child(mid_right)
 
-	# BACK SECTIONS - widest parts
+	# BACK ARMOR - widest
 	var back_left = _create_sprite("spaceParts_014")  # Wide (50x67)
 	if back_left:
-		back_left.position = Vector2(-40, 30)
+		back_left.position = Vector2(-45, 35)
 		back_left.modulate = tint
 		container.add_child(back_left)
 
 	var back_right = _create_sprite("spaceParts_014")
 	if back_right:
-		back_right.position = Vector2(40, 30)
+		back_right.position = Vector2(45, 35)
 		back_right.modulate = tint
 		container.add_child(back_right)
-
-	# WING TIPS - outermost edges
-	var wing_left = _create_sprite("spaceParts_041")  # Large part (59x66)
-	if wing_left:
-		wing_left.position = Vector2(-55, 35)
-		wing_left.modulate = tint
-		container.add_child(wing_left)
-
-	var wing_right = _create_sprite("spaceParts_041")
-	if wing_right:
-		wing_right.position = Vector2(55, 35)
-		wing_right.modulate = tint
-		container.add_child(wing_right)
 
 ## Create projectile visual using sprite
 func _create_projectile_visual(entity: IRenderable) -> Node2D:
