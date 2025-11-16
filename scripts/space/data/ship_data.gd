@@ -123,6 +123,19 @@ static func _create_fighter_template() -> Dictionary:
 					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
 					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
 				}
+			},
+			{
+				"component_id": "control",
+				"type": "control",
+				"section_id": "front",
+				"position_offset": Vector2(0, -12),
+				"max_health": 20,
+				"current_health": 20,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {},
+					"on_destroyed": {}
+				}
 			}
 		],
 		"weapons": [
@@ -192,16 +205,55 @@ static func _create_corvette_template() -> Dictionary:
 		],
 		"internals": [
 			{
-				"component_id": "engines",
+				"component_id": "engine_left",
 				"type": "engine",
 				"section_id": "back",
-				"position_offset": Vector2(0, 10),
+				"position_offset": Vector2(-8, 20),
 				"max_health": 60,
 				"current_health": 60,
 				"status": "operational",
 				"effect_on_ship": {
 					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
 					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+				}
+			},
+			{
+				"component_id": "engine_right",
+				"type": "engine",
+				"section_id": "back",
+				"position_offset": Vector2(8, 20),
+				"max_health": 60,
+				"current_health": 60,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
+					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+				}
+			},
+			{
+				"component_id": "control",
+				"type": "control",
+				"section_id": "middle",
+				"position_offset": Vector2(0, 0),
+				"max_health": 50,
+				"current_health": 50,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {},
+					"on_destroyed": {}
+				}
+			},
+			{
+				"component_id": "power",
+				"type": "power",
+				"section_id": "middle",
+				"position_offset": Vector2(0, -5),
+				"max_health": 50,
+				"current_health": 50,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {},
+					"on_destroyed": {}
 				}
 			}
 		],
@@ -313,16 +365,81 @@ static func _create_capital_template() -> Dictionary:
 		],
 		"internals": [
 			{
-				"component_id": "engines_main",
+				"component_id": "engine_left_outer",
 				"type": "engine",
-				"section_id": "back_left",
-				"position_offset": Vector2(-5, 20),
+				"section_id": "back_L",
+				"position_offset": Vector2(-35, 25),
 				"max_health": 150,
 				"current_health": 150,
 				"status": "operational",
 				"effect_on_ship": {
 					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
 					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+				}
+			},
+			{
+				"component_id": "engine_left_inner",
+				"type": "engine",
+				"section_id": "back_L",
+				"position_offset": Vector2(-15, 25),
+				"max_health": 150,
+				"current_health": 150,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
+					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+				}
+			},
+			{
+				"component_id": "engine_right_inner",
+				"type": "engine",
+				"section_id": "back_R",
+				"position_offset": Vector2(15, 25),
+				"max_health": 150,
+				"current_health": 150,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
+					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+				}
+			},
+			{
+				"component_id": "engine_right_outer",
+				"type": "engine",
+				"section_id": "back_R",
+				"position_offset": Vector2(35, 25),
+				"max_health": 150,
+				"current_health": 150,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
+					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+				}
+			},
+			{
+				"component_id": "control",
+				"type": "control",
+				"section_id": "mid_L",
+				"position_offset": Vector2(-15, -45),
+				"max_health": 120,
+				"current_health": 120,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {},
+					"on_destroyed": {}
+				}
+			},
+			{
+				"component_id": "power",
+				"type": "power",
+				"section_id": "mid_R",
+				"position_offset": Vector2(15, -45),
+				"max_health": 120,
+				"current_health": 120,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {},
+					"on_destroyed": {}
 				}
 			}
 		],
