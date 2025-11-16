@@ -22,6 +22,17 @@ var status_effects: Array[String] = []
 ## Each element: {"section_id": String, "armor_percent": float, "internal_percent": float}
 var section_damage: Array[Dictionary] = []
 
+## Physicalized components for visual representation
+## Each element: {
+##   "component_id": String,
+##   "component_type": String (engine, weapon, control, power),
+##   "visual_type": String (for different component appearances),
+##   "position_offset": Vector2,
+##   "rotation": float (for turrets),
+##   "status": String (operational, damaged, destroyed)
+## }
+var components: Array[Dictionary] = []
+
 # ===== TYPE-SAFE HELPER METHODS =====
 func has_flag(flag: String) -> bool:
 	return flag in state_flags
@@ -44,7 +55,8 @@ func to_dict() -> Dictionary:
 		"facing_direction": facing_direction,
 		"state_flags": state_flags,
 		"status_effects": status_effects,
-		"section_damage": section_damage
+		"section_damage": section_damage,
+		"components": components
 	}
 
 static func from_dict(data: Dictionary) -> EntityState:
@@ -61,5 +73,8 @@ static func from_dict(data: Dictionary) -> EntityState:
 
 	var section_arr = data.get("section_damage", [])
 	state.section_damage.assign(section_arr)
+
+	var components_arr = data.get("components", [])
+	state.components.assign(components_arr)
 
 	return state

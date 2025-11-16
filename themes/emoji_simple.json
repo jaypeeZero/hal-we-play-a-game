@@ -255,6 +255,62 @@
       "bounds": [30, 30],
       "size": 0.75,
       "collision_radius_override": 15.0
+    },
+
+    "component_engine": {
+      "renderer_type": "label",
+      "emoji": "🔵",
+      "font_size": 12,
+      "bounds": [16, 16],
+      "size": 0.3
+    },
+
+    "component_control": {
+      "renderer_type": "label",
+      "emoji": "🟡",
+      "font_size": 10,
+      "bounds": [14, 14],
+      "size": 0.25
+    },
+
+    "component_power_core": {
+      "renderer_type": "label",
+      "emoji": "🟠",
+      "font_size": 10,
+      "bounds": [14, 14],
+      "size": 0.25
+    },
+
+    "component_light_weapon": {
+      "renderer_type": "label",
+      "emoji": "⚫",
+      "font_size": 8,
+      "bounds": [12, 12],
+      "size": 0.2
+    },
+
+    "component_medium_turret": {
+      "renderer_type": "label",
+      "emoji": "🔘",
+      "font_size": 10,
+      "bounds": [14, 14],
+      "size": 0.25
+    },
+
+    "component_heavy_turret": {
+      "renderer_type": "label",
+      "emoji": "⚪",
+      "font_size": 12,
+      "bounds": [16, 16],
+      "size": 0.3
+    },
+
+    "component_gatling_turret": {
+      "renderer_type": "label",
+      "emoji": "⚫",
+      "font_size": 10,
+      "bounds": [14, 14],
+      "size": 0.25
     }
   },
 

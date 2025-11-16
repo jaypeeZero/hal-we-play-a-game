@@ -110,7 +110,54 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 			"internal_percent": internal_percent
 		})
 
+	# Add physicalized components (internals + weapons)
+	for internal in ship_data.internals:
+		state.components.append({
+			"component_id": internal.component_id,
+			"component_type": internal.type,
+			"visual_type": _get_internal_visual_type(internal.type, ship_data.type),
+			"position_offset": internal.position_offset,
+			"rotation": 0.0,
+			"status": internal.status
+		})
+
+	for weapon in ship_data.weapons:
+		state.components.append({
+			"component_id": weapon.weapon_id,
+			"component_type": "weapon",
+			"visual_type": _get_weapon_visual_type(weapon.type),
+			"position_offset": weapon.position_offset,
+			"rotation": weapon.get("facing", 0.0),
+			"status": "operational"  # Weapons don't have damage status currently
+		})
+
 	return state
+
+## Map internal component types to visual types
+func _get_internal_visual_type(internal_type: String, ship_class: String) -> String:
+	match internal_type:
+		"engine":
+			return "engine"
+		"control":
+			return "control"
+		"power":
+			return "power_core"
+		_:
+			return "generic_internal"
+
+## Map weapon types to visual types
+func _get_weapon_visual_type(weapon_type: String) -> String:
+	match weapon_type:
+		"light_cannon":
+			return "light_weapon"
+		"medium_cannon":
+			return "medium_turret"
+		"heavy_cannon":
+			return "heavy_turret"
+		"gatling_gun":
+			return "gatling_turret"
+		_:
+			return "generic_weapon"
 
 ## IRenderable implementation
 func get_entity_id() -> String:
