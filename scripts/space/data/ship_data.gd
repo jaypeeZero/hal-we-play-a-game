@@ -112,19 +112,6 @@ static func _create_fighter_template() -> Dictionary:
 		],
 		"internals": [
 			{
-				"component_id": "cockpit",
-				"type": "control",
-				"section_id": "front",
-				"position_offset": Vector2(0, -3),
-				"max_health": 20,
-				"current_health": 20,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"turn_rate": 0.6, "accuracy": 0.7},
-					"on_destroyed": {"ai_disabled": true}
-				}
-			},
-			{
 				"component_id": "engine",
 				"type": "engine",
 				"section_id": "back",
@@ -204,32 +191,6 @@ static func _create_corvette_template() -> Dictionary:
 			}
 		],
 		"internals": [
-			{
-				"component_id": "power_core",
-				"type": "power",
-				"section_id": "front",
-				"position_offset": Vector2(0, -8),
-				"max_health": 50,
-				"current_health": 50,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"weapon_power": 0.5},
-					"on_destroyed": {"disabled": true}
-				}
-			},
-			{
-				"component_id": "bridge",
-				"type": "control",
-				"section_id": "middle",
-				"position_offset": Vector2(0, 0),
-				"max_health": 40,
-				"current_health": 40,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"turn_rate": 0.5, "accuracy": 0.7},
-					"on_destroyed": {"ai_disabled": true}
-				}
-			},
 			{
 				"component_id": "engines",
 				"type": "engine",
@@ -351,32 +312,6 @@ static func _create_capital_template() -> Dictionary:
 			}
 		],
 		"internals": [
-			{
-				"component_id": "power_core",
-				"type": "power",
-				"section_id": "front_left",
-				"position_offset": Vector2(-5, -12),
-				"max_health": 200,
-				"current_health": 200,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"weapon_power": 0.5},
-					"on_destroyed": {"disabled": true}
-				}
-			},
-			{
-				"component_id": "bridge",
-				"type": "control",
-				"section_id": "front_right",
-				"position_offset": Vector2(5, -8),
-				"max_health": 100,
-				"current_health": 100,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"turn_rate": 0.5, "accuracy": 0.7},
-					"on_destroyed": {"ai_disabled": true}
-				}
-			},
 			{
 				"component_id": "engines_main",
 				"type": "engine",

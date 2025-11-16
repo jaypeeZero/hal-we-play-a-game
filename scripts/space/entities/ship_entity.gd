@@ -110,17 +110,19 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 			"internal_percent": internal_percent
 		})
 
-	# Add physicalized components (internals + weapons)
+	# Add physicalized components (only engines - weapons are visual only)
 	for internal in ship_data.internals:
-		state.components.append({
-			"component_id": internal.component_id,
-			"component_type": internal.type,
-			"visual_type": _get_internal_visual_type(internal.type, ship_data.type),
-			"position_offset": internal.position_offset,
-			"rotation": 0.0,
-			"status": internal.status
-		})
+		if internal.type == "engine":
+			state.components.append({
+				"component_id": internal.component_id,
+				"component_type": "engine",
+				"visual_type": "engine",
+				"position_offset": internal.position_offset,
+				"rotation": 0.0,
+				"status": internal.status
+			})
 
+	# Add weapons as visual-only components (not physicalized)
 	for weapon in ship_data.weapons:
 		state.components.append({
 			"component_id": weapon.weapon_id,
@@ -128,22 +130,10 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 			"visual_type": _get_weapon_visual_type(weapon.type),
 			"position_offset": weapon.position_offset,
 			"rotation": weapon.get("facing", 0.0),
-			"status": "operational"  # Weapons don't have damage status currently
+			"status": "operational"
 		})
 
 	return state
-
-## Map internal component types to visual types
-func _get_internal_visual_type(internal_type: String, ship_class: String) -> String:
-	match internal_type:
-		"engine":
-			return "engine"
-		"control":
-			return "control"
-		"power":
-			return "power_core"
-		_:
-			return "generic_internal"
 
 ## Map weapon types to visual types
 func _get_weapon_visual_type(weapon_type: String) -> String:

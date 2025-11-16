@@ -686,96 +686,132 @@ func _create_component_visual(component_data: Dictionary, base_color: Color) -> 
 	var container = Node2D.new()
 	container.name = "Component_" + component_data.component_id
 
-	# Create component shape based on type
-	var polygon = Polygon2D.new()
-	polygon.name = "ComponentBody"
-
-	# Size and color based on component type
-	var size = _get_component_size(component_type)
-	var color = _get_component_color(visual_type, base_color)
-
-	# Create shape based on component type
 	if component_type == "weapon":
-		# Weapons: small rectangles (turrets)
-		polygon.polygon = PackedVector2Array([
-			Vector2(-size * 0.4, -size),
-			Vector2(size * 0.4, -size),
-			Vector2(size * 0.3, size * 0.5),
-			Vector2(-size * 0.3, size * 0.5)
-		])
+		# Weapons: elongated guns/turrets (visual only)
+		_create_weapon_visual(container, visual_type, base_color)
 	elif component_type == "engine":
-		# Engines: diamond shape at back
-		polygon.polygon = PackedVector2Array([
-			Vector2(0, -size * 0.5),
-			Vector2(size * 0.7, 0),
-			Vector2(0, size * 0.5),
-			Vector2(-size * 0.7, 0)
-		])
-	else:
-		# Control, power: circles
-		var points = PackedVector2Array()
-		var segments = 8
-		for i in range(segments):
-			var angle = (float(i) / segments) * TAU
-			points.append(Vector2(cos(angle), sin(angle)) * size)
-		polygon.polygon = points
-
-	polygon.color = color
-	container.add_child(polygon)
-
-	# Add glow for engines and power cores
-	if component_type in ["engine", "power"]:
-		var light = PointLight2D.new()
-		light.name = "ComponentGlow"
-		light.enabled = true
-		light.texture_scale = 0.2
-		light.energy = 0.4
-		light.color = color
-		container.add_child(light)
+		# Engines: show thrust effect
+		_create_engine_visual(container, base_color)
 
 	return container
 
-## Get size for component type
-func _get_component_size(component_type: String) -> float:
-	match component_type:
-		"engine":
-			return 6.0
-		"control":
-			return 3.0
-		"power":
-			return 4.0
-		"weapon":
-			return 4.0
-		_:
-			return 3.0
+## Create weapon visual (elongated gun or turret)
+func _create_weapon_visual(container: Node2D, visual_type: String, base_color: Color) -> void:
+	var color = base_color.lightened(0.2)
 
-## Get color for component type
-func _get_component_color(visual_type: String, base_color: Color) -> Color:
+	# Determine if it's a turret (medium/heavy/gatling) or fixed gun (light)
+	var is_turret = visual_type in ["medium_turret", "heavy_turret", "gatling_turret"]
+
+	if is_turret:
+		# Turret: oval body with gun barrel
+		var turret_size = _get_weapon_size(visual_type)
+
+		# Oval turret base
+		var turret_body = Polygon2D.new()
+		turret_body.name = "TurretBody"
+		var points = PackedVector2Array()
+		var segments = 12
+		for i in range(segments):
+			var angle = (float(i) / segments) * TAU
+			# Oval: wider than tall
+			points.append(Vector2(cos(angle) * turret_size * 1.2, sin(angle) * turret_size * 0.8))
+		turret_body.polygon = points
+		turret_body.color = color.darkened(0.2)
+		container.add_child(turret_body)
+
+		# Gun barrel (elongated rectangle pointing up/forward)
+		var barrel = Polygon2D.new()
+		barrel.name = "GunBarrel"
+		var barrel_length = turret_size * 2.5
+		var barrel_width = turret_size * 0.4
+		barrel.polygon = PackedVector2Array([
+			Vector2(-barrel_width, 0),
+			Vector2(barrel_width, 0),
+			Vector2(barrel_width * 0.7, -barrel_length),
+			Vector2(-barrel_width * 0.7, -barrel_length)
+		])
+		barrel.color = color
+		container.add_child(barrel)
+
+		# Add outline
+		var outline = Line2D.new()
+		outline.name = "TurretOutline"
+		for point in points:
+			outline.add_point(point)
+		outline.add_point(points[0])
+		outline.default_color = color.lightened(0.3)
+		outline.width = 1.5
+		container.add_child(outline)
+
+	else:
+		# Fixed gun: simple elongated barrel
+		var gun_length = 15.0
+		var gun_width = 2.5
+
+		var barrel = Polygon2D.new()
+		barrel.name = "GunBarrel"
+		barrel.polygon = PackedVector2Array([
+			Vector2(-gun_width, 0),
+			Vector2(gun_width, 0),
+			Vector2(gun_width * 0.6, -gun_length),
+			Vector2(-gun_width * 0.6, -gun_length)
+		])
+		barrel.color = color
+		container.add_child(barrel)
+
+## Create engine visual with thrust effect
+func _create_engine_visual(container: Node2D, base_color: Color) -> void:
+	# Engine is not visible itself - only thrust is shown
+	# Thrust: orange diamond pointing backward
+	var thrust = Polygon2D.new()
+	thrust.name = "Thrust"
+
+	var thrust_size = 12.0
+	thrust.polygon = PackedVector2Array([
+		Vector2(0, 0),  # Point at engine
+		Vector2(-thrust_size * 0.5, thrust_size * 0.8),  # Left side
+		Vector2(0, thrust_size * 1.8),  # Tip (pointing back)
+		Vector2(thrust_size * 0.5, thrust_size * 0.8)  # Right side
+	])
+	thrust.color = Color("FF8C00")  # Dark orange
+	container.add_child(thrust)
+
+	# Add glow to thrust
+	var light = PointLight2D.new()
+	light.name = "ThrustGlow"
+	light.position = Vector2(0, thrust_size)
+	light.enabled = true
+	light.texture_scale = 0.3
+	light.energy = 0.6
+	light.color = Color("FF8C00")
+	container.add_child(light)
+
+## Get weapon size based on type
+func _get_weapon_size(visual_type: String) -> float:
 	match visual_type:
-		"engine":
-			return Color("00BFFF")  # Deep sky blue for engines
-		"control":
-			return Color("FFFF00")  # Yellow for control
-		"power_core":
-			return Color("FF8C00")  # Dark orange for power
-		"light_weapon", "medium_turret", "heavy_turret", "gatling_turret":
-			return base_color.lightened(0.3)  # Lighter version of ship color
+		"heavy_turret":
+			return 8.0
+		"medium_turret":
+			return 6.0
+		"gatling_turret":
+			return 5.0
 		_:
-			return base_color
+			return 4.0
 
-## Update component visual based on status
+## Update component visual based on status (engines only - weapons don't take damage)
 func _update_component_status(component_visual: Node2D, status: String) -> void:
-	var body = component_visual.get_node_or_null("ComponentBody")
-	if not body:
-		return
+	var thrust = component_visual.get_node_or_null("Thrust")
+	if not thrust:
+		return  # Not an engine
 
+	# Modify thrust color/intensity based on engine status
 	match status:
 		"operational":
-			body.modulate = Color.WHITE
+			thrust.modulate = Color.WHITE
 		"damaged":
-			body.modulate = Color("FFA500")  # Orange for damaged
+			thrust.modulate = Color(1.0, 0.6, 0.0)  # Dimmer orange for damaged
 		"destroyed":
-			body.modulate = Color(0.3, 0.3, 0.3)  # Dark gray for destroyed
+			thrust.modulate = Color(0.2, 0.2, 0.2)  # Almost invisible for destroyed
 
 ## Get color based on damage percent
 func _get_damage_color(percent: float) -> Color:
