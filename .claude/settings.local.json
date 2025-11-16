@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gtest=test_damage_resolver.gd -gexit:*)",
+      "Bash(./test.sh:*)",
+      "Bash(godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gtest=test_damage_resolver.gd -gexit:*)"
     ],
     "deny": [],
     "ask": []

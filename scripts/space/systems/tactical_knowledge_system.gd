@@ -10,7 +10,7 @@ extends RefCounted
 # ============================================================================
 
 # PERFORMANCE TOGGLE - Set to false to disable knowledge queries entirely
-static var enable_knowledge_queries: bool = true  # ENABLED for functioning system
+static var enable_knowledge_queries: bool = true  # Enabled for testing
 
 # Query cache to avoid re-computing same queries
 static var _query_cache: Dictionary = {}
@@ -231,7 +231,7 @@ static func query_knowledge(situation: String, role: int, top_k: int = 3) -> Arr
 		var pattern = knowledge_base[pattern_id]
 
 		# Filter by role (or include general patterns)
-		if pattern["role"] != role:
+		if pattern.role != role:
 			continue
 
 		var score = calculate_relevance_score(situation, pattern)
@@ -239,8 +239,8 @@ static func query_knowledge(situation: String, role: int, top_k: int = 3) -> Arr
 			scored_patterns.append({
 				"pattern_id": pattern_id,
 				"score": score,
-				"content": pattern["content"],
-				"tags": pattern["tags"]
+				"content": pattern.content,
+				"tags": pattern.tags
 			})
 
 	# Sort by score descending
@@ -260,7 +260,7 @@ static func query_knowledge(situation: String, role: int, top_k: int = 3) -> Arr
 ## Simple BM25-style scoring: term matching with tag boosting
 static func calculate_relevance_score(query: String, pattern: Dictionary) -> float:
 	var query_terms = tokenize(query)
-	var pattern_terms = tokenize(pattern["text"])
+	var pattern_terms = tokenize(pattern.text)
 
 	if query_terms.is_empty():
 		return 0.0
@@ -274,13 +274,13 @@ static func calculate_relevance_score(query: String, pattern: Dictionary) -> flo
 	# Base score: match ratio
 	var base_score = float(matches) / float(query_terms.size())
 
-	# Tag boost: if query contains pattern tags, boost relevance
-	var tag_boost = 1.0
-	for tag in pattern["tags"]:
+	# Tag boost: if query contains pattern tags, add bonus (additive not multiplicative)
+	var tag_bonus = 0.0
+	for tag in pattern.tags:
 		if tag in query.to_lower():
-			tag_boost += 0.3
+			tag_bonus += 0.2  # Each matching tag adds 0.2 to score
 
-	return base_score * tag_boost
+	return base_score + tag_bonus
 
 ## Tokenize text into lowercase words
 static func tokenize(text: String) -> Array:
@@ -329,7 +329,7 @@ static func get_patterns_for_role(role: int) -> Array:
 	var patterns = []
 	for pattern_id in knowledge_base:
 		var pattern = knowledge_base[pattern_id]
-		if pattern["role"] == role:
+		if pattern.role == role:
 			patterns.append({
 				"id": pattern_id,
 				"pattern": pattern
