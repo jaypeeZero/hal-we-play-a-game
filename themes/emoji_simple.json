@@ -259,58 +259,58 @@
 
     "component_engine": {
       "renderer_type": "label",
-      "emoji": "🔵",
-      "font_size": 12,
-      "bounds": [16, 16],
-      "size": 0.3
+      "emoji": "🔥",
+      "font_size": 28,
+      "bounds": [40, 40],
+      "size": 1.0
     },
 
     "component_control": {
       "renderer_type": "label",
-      "emoji": "🟡",
-      "font_size": 10,
-      "bounds": [14, 14],
-      "size": 0.25
+      "emoji": "🧠",
+      "font_size": 24,
+      "bounds": [36, 36],
+      "size": 0.9
     },
 
     "component_power_core": {
       "renderer_type": "label",
-      "emoji": "🟠",
-      "font_size": 10,
-      "bounds": [14, 14],
-      "size": 0.25
+      "emoji": "⚡",
+      "font_size": 24,
+      "bounds": [36, 36],
+      "size": 0.9
     },
 
     "component_light_weapon": {
       "renderer_type": "label",
-      "emoji": "⚫",
-      "font_size": 8,
-      "bounds": [12, 12],
-      "size": 0.2
+      "emoji": "🔫",
+      "font_size": 20,
+      "bounds": [32, 32],
+      "size": 0.75
     },
 
     "component_medium_turret": {
       "renderer_type": "label",
-      "emoji": "🔘",
-      "font_size": 10,
-      "bounds": [14, 14],
-      "size": 0.25
+      "emoji": "💣",
+      "font_size": 24,
+      "bounds": [36, 36],
+      "size": 0.9
     },
 
     "component_heavy_turret": {
       "renderer_type": "label",
-      "emoji": "⚪",
-      "font_size": 12,
-      "bounds": [16, 16],
-      "size": 0.3
+      "emoji": "💥",
+      "font_size": 32,
+      "bounds": [48, 48],
+      "size": 1.2
     },
 
     "component_gatling_turret": {
       "renderer_type": "label",
-      "emoji": "⚫",
-      "font_size": 10,
-      "bounds": [14, 14],
-      "size": 0.25
+      "emoji": "⚙️",
+      "font_size": 22,
+      "bounds": [34, 34],
+      "size": 0.8
     }
   },
 
