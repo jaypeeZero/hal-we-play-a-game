@@ -6,9 +6,20 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 
 func _input(event: InputEvent) -> void:
+	# ESC always toggles pause
 	if event.is_action_pressed("ui_cancel"):
 		toggle_pause()
 		get_viewport().set_input_as_handled()
+		return
+
+	# Spacebar toggles pause when menu is visible OR when game is running (not initial pause)
+	# Check if game is running by checking if we're NOT paused OR if menu is visible
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
+		# Only handle if menu is visible (user wants to unpause)
+		# OR if game is running and not initially paused (user wants to pause)
+		if visible or not get_tree().paused:
+			toggle_pause()
+			get_viewport().set_input_as_handled()
 
 func toggle_pause() -> void:
 	if visible:

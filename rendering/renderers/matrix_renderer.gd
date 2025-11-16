@@ -4,12 +4,13 @@ class_name MatrixRenderer extends IVisualRenderer
 ## Renders ships as geometric shapes with Matrix green aesthetic
 
 # Matrix color palette
-const COLOR_PRIMARY_GLOW = Color("00FF41")  # Signature Matrix green
+const COLOR_PRIMARY_GLOW = Color("00FF41")  # Signature Matrix green - Team 0
 const COLOR_SOFT_GLOW = Color("36BA01")     # Edge highlights
 const COLOR_DIM = Color("009A22")           # Inactive elements
 const COLOR_HIGHLIGHT = Color("80CE87")     # Cursor/sparks
 const COLOR_ERROR = Color("FF003C")         # Damage/warning
 const COLOR_BACKGROUND = Color("0D0D0D")    # Deep black
+const COLOR_TEAM1 = Color("CCCCCC")         # Grey/White - Team 1
 
 var _theme: IVisualTheme = null
 var _entity_visuals: Dictionary = {}  # entity_id -> Dictionary of visual nodes
@@ -98,7 +99,8 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	# Determine size and shape based on ship type
 	var ship_type = visual_type.replace("ship_", "")
 	var size = 20.0
-	var color = COLOR_PRIMARY_GLOW
+	# Set color based on team: Green for Team 0, Grey/White for Team 1
+	var color = COLOR_PRIMARY_GLOW if ship_data.get("team", 0) == 0 else COLOR_TEAM1
 	var sections = {}
 
 	match ship_type:
@@ -121,8 +123,8 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	if ship_data.has("team"):
 		_add_team_indicator(container, ship_data.team)
 
-	# Add glow effect
-	_add_glow_effect(container)
+	# Add glow effect with team-appropriate color
+	_add_glow_effect(container, color)
 
 	return container
 
@@ -542,20 +544,20 @@ func _add_team_indicator(container: Node2D, team: int) -> void:
 	indicator.polygon = points
 	indicator.position = Vector2(0, -20)
 
-	# Team colors
-	indicator.color = COLOR_PRIMARY_GLOW if team == 0 else COLOR_ERROR
+	# Team colors: Green for Team 0, Grey/White for Team 1
+	indicator.color = COLOR_PRIMARY_GLOW if team == 0 else COLOR_TEAM1
 
 	container.add_child(indicator)
 
 ## Add glow effect
-func _add_glow_effect(container: Node2D) -> void:
+func _add_glow_effect(container: Node2D, glow_color: Color = COLOR_PRIMARY_GLOW) -> void:
 	# Add a PointLight2D for glow
 	var light = PointLight2D.new()
 	light.name = "Glow"
 	light.enabled = true
 	light.texture_scale = 0.5
 	light.energy = 0.5
-	light.color = COLOR_PRIMARY_GLOW
+	light.color = glow_color
 	container.add_child(light)
 
 ## Create projectile visual

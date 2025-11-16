@@ -23,6 +23,9 @@ var _target_zoom: Vector2
 var _target_position: Vector2
 
 func _ready() -> void:
+	# Set default zoom to be zoomed out by 3 steps (0.7 instead of 1.0)
+	zoom = Vector2(0.7, 0.7)
+
 	# Store initial camera state
 	_initial_position = position
 	_initial_zoom = zoom
