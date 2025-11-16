@@ -18,7 +18,7 @@ godot scenes/space_battle.tscn
 
 Space Battle Tactics is a real-time tactical combat game where you command fleets of spaceships. Each ship has:
 - **Sectional Armor**: Armor that can be destroyed piece by piece, allowing projectiles to penetrate
-- **Internal Components**: Power cores, engines, and bridges that affect ship performance when damaged
+- **Internal Components**: Engines that affect ship performance when damaged
 - **Projectile Weapons**: Realistic ballistic weapons with human reaction times
 - **Realistic Physics**: Ships have mass, acceleration, and turn rates
 
@@ -77,8 +77,6 @@ After pressing a spawn key, click on the battlefield to place the ship(s).
 4. If armor destroyed, remaining damage penetrates to internals
 
 #### Internal Components
-- **Power Core** (Front): Powers weapons. Damaged = 50% weapon power. Destroyed = ship disabled
-- **Bridge** (Middle): Controls ship. Damaged = 50% turn rate, 70% accuracy. Destroyed = AI disabled
 - **Engines** (Rear): Propulsion. Damaged = 60% speed/accel. Destroyed = 10% speed (drifting)
 
 ### Weapon System
@@ -94,7 +92,6 @@ After pressing a spawn key, click on the battlefield to place the ship(s).
 - Base weapon accuracy
 - Distance penalty (up to 30% at max range)
 - Target velocity penalty (up to 50% for fast targets)
-- Ship control system status (damaged bridge reduces accuracy)
 
 ### Realistic Speeds
 
@@ -162,10 +159,10 @@ This creates realistic engagement times and allows for tactical maneuvering.
 
     "internals": [
         {
-            "component_id": "bridge",
-            "type": "control",
-            "max_health": 40,
-            "current_health": 40,
+            "component_id": "engine",
+            "type": "engine",
+            "max_health": 60,
+            "current_health": 60,
             "status": "operational"
         }
     ],

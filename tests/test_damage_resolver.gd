@@ -233,20 +233,7 @@ func create_test_ship_with_armor(armor_value: int) -> Dictionary:
 				"current_armor": armor_value
 			}
 		],
-		"internals": [
-			{
-				"component_id": "test_component",
-				"type": "control",
-				"position_offset": Vector2(0, 0),
-				"max_health": 50,
-				"current_health": 50,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {},
-					"on_destroyed": {}
-				}
-			}
-		]
+		"internals": []
 	})
 
 func create_test_ship_with_multiple_sections() -> Dictionary:
@@ -257,9 +244,7 @@ func create_test_ship_with_multiple_sections() -> Dictionary:
 			{"section_id": "left", "arc": {"start": 45, "end": 135}, "max_armor": 40, "current_armor": 40},
 			{"section_id": "right", "arc": {"start": 225, "end": 315}, "max_armor": 40, "current_armor": 40}
 		],
-		"internals": [
-			{"component_id": "comp1", "type": "control", "position_offset": Vector2(0, 0), "max_health": 30, "current_health": 30, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}}
-		]
+		"internals": []
 	})
 
 func create_test_ship_with_components() -> Dictionary:
@@ -281,25 +266,7 @@ func create_test_ship_with_multiple_components() -> Dictionary:
 			{"section_id": "front", "arc": {"start": -180, "end": 180}, "max_armor": 50, "current_armor": 50}
 		],
 		"internals": [
-			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 10), "max_health": 30, "current_health": 30, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}},
-			{
-				"component_id": "control",
-				"type": "control",
-				"position_offset": Vector2(0, -5),
-				"max_health": 25,
-				"current_health": 25,
-				"status": "operational",
-				"effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}
-			},
-			{
-				"component_id": "power",
-				"type": "power",
-				"position_offset": Vector2(0, 0),
-				"max_health": 40,
-				"current_health": 40,
-				"status": "operational",
-				"effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}
-			}
+			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 10), "max_health": 30, "current_health": 30, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}}
 		]
 	})
 
