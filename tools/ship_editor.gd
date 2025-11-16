@@ -65,8 +65,8 @@ func _draw_ship(ship_data: Dictionary) -> void:
 	var center = ship_canvas.size / 2.0
 	var scale_factor = 2.0  # Scale up for visibility
 
-	# Determine ship type from class_name
-	var ship_type = ship_data.get("class_name", "fighter")
+	# Determine ship type from type field
+	var ship_type = ship_data.get("type", "fighter")
 
 	# Draw hull shape based on ship type (ARMOR ONLY)
 	_draw_hull_shape(ship_type, ship_data, center, scale_factor)
