@@ -14,6 +14,7 @@ const COLOR_TEAM1 = Color("CCCCCC")         # Grey/White - Team 1
 
 var _theme: IVisualTheme = null
 var _entity_visuals: Dictionary = {}  # entity_id -> Dictionary of visual nodes
+var _component_visuals: Dictionary = {}  # entity_id -> Dictionary[component_id -> Node]
 
 func initialize(theme: IVisualTheme) -> void:
 	_theme = theme
@@ -58,6 +59,10 @@ func detach_from_entity(entity: IRenderable) -> void:
 			visual.root.queue_free()
 		_entity_visuals.erase(entity_id)
 
+	# Clean up component visuals
+	if _component_visuals.has(entity_id):
+		_component_visuals.erase(entity_id)
+
 func update_state(entity_id: String, state: EntityState) -> void:
 	if not _entity_visuals.has(entity_id):
 		return
@@ -73,6 +78,10 @@ func update_state(entity_id: String, state: EntityState) -> void:
 		# Fallback to overall health color
 		_update_health_color(visual, state.health_percent)
 
+	# Update component visuals if present
+	if state.components.size() > 0:
+		_update_components(entity_id, state.components, visual.root)
+
 	# Update based on state flags
 	if state.has_flag("destroyed"):
 		_show_destruction_effect(visual)
@@ -85,6 +94,7 @@ func cleanup() -> void:
 	for entity_id in _entity_visuals:
 		detach_from_entity(_entity_visuals[entity_id].entity)
 	_entity_visuals.clear()
+	_component_visuals.clear()
 
 ## Create ship visual
 func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
@@ -119,8 +129,9 @@ func _create_ship_visual(entity: IRenderable, visual_type: String) -> Node2D:
 	# Store sections in container metadata for later retrieval
 	container.set_meta("sections", sections)
 
-	# Add team indicator
+	# Add team indicator and store team in metadata
 	if ship_data.has("team"):
+		container.set_meta("team", ship_data.team)
 		_add_team_indicator(container, ship_data.team)
 
 	# Add glow effect with team-appropriate color
@@ -618,6 +629,153 @@ func _create_fallback_visual() -> Node2D:
 	container.add_child(polygon)
 
 	return container
+
+## Update component visuals based on state
+func _update_components(entity_id: String, components: Array[Dictionary], parent_node: Node2D) -> void:
+	# Initialize component visuals dictionary for this entity if needed
+	if entity_id not in _component_visuals:
+		_component_visuals[entity_id] = {}
+
+	var component_dict: Dictionary = _component_visuals[entity_id]
+	var current_component_ids: Array = []
+
+	# Get team color from parent (ship)
+	var team_color = COLOR_PRIMARY_GLOW  # Default green
+	if parent_node.has_meta("team"):
+		var team = parent_node.get_meta("team")
+		team_color = COLOR_PRIMARY_GLOW if team == 0 else COLOR_TEAM1
+
+	# Create or update components
+	for component_data in components:
+		var component_id: String = component_data.component_id
+		current_component_ids.append(component_id)
+
+		# Create component visual if it doesn't exist
+		if component_id not in component_dict:
+			var component_visual = _create_component_visual(component_data, team_color)
+			if component_visual:
+				parent_node.add_child(component_visual)
+				component_dict[component_id] = component_visual
+
+		# Update component position and rotation
+		if component_id in component_dict:
+			var component_visual: Node2D = component_dict[component_id]
+			if is_instance_valid(component_visual):
+				component_visual.position = component_data.position_offset
+				component_visual.rotation = component_data.rotation
+
+				# Update visual based on status
+				_update_component_status(component_visual, component_data.status)
+
+	# Remove components that no longer exist
+	var to_remove: Array = []
+	for component_id in component_dict.keys():
+		if component_id not in current_component_ids:
+			to_remove.append(component_id)
+
+	for component_id in to_remove:
+		if is_instance_valid(component_dict[component_id]):
+			component_dict[component_id].queue_free()
+		component_dict.erase(component_id)
+
+## Create visual node for a component
+func _create_component_visual(component_data: Dictionary, base_color: Color) -> Node2D:
+	var visual_type: String = component_data.visual_type
+	var component_type: String = component_data.component_type
+
+	var container = Node2D.new()
+	container.name = "Component_" + component_data.component_id
+
+	# Create component shape based on type
+	var polygon = Polygon2D.new()
+	polygon.name = "ComponentBody"
+
+	# Size and color based on component type
+	var size = _get_component_size(component_type)
+	var color = _get_component_color(visual_type, base_color)
+
+	# Create shape based on component type
+	if component_type == "weapon":
+		# Weapons: small rectangles (turrets)
+		polygon.polygon = PackedVector2Array([
+			Vector2(-size * 0.4, -size),
+			Vector2(size * 0.4, -size),
+			Vector2(size * 0.3, size * 0.5),
+			Vector2(-size * 0.3, size * 0.5)
+		])
+	elif component_type == "engine":
+		# Engines: diamond shape at back
+		polygon.polygon = PackedVector2Array([
+			Vector2(0, -size * 0.5),
+			Vector2(size * 0.7, 0),
+			Vector2(0, size * 0.5),
+			Vector2(-size * 0.7, 0)
+		])
+	else:
+		# Control, power: circles
+		var points = PackedVector2Array()
+		var segments = 8
+		for i in range(segments):
+			var angle = (float(i) / segments) * TAU
+			points.append(Vector2(cos(angle), sin(angle)) * size)
+		polygon.polygon = points
+
+	polygon.color = color
+	container.add_child(polygon)
+
+	# Add glow for engines and power cores
+	if component_type in ["engine", "power"]:
+		var light = PointLight2D.new()
+		light.name = "ComponentGlow"
+		light.enabled = true
+		light.texture_scale = 0.2
+		light.energy = 0.4
+		light.color = color
+		container.add_child(light)
+
+	return container
+
+## Get size for component type
+func _get_component_size(component_type: String) -> float:
+	match component_type:
+		"engine":
+			return 6.0
+		"control":
+			return 3.0
+		"power":
+			return 4.0
+		"weapon":
+			return 4.0
+		_:
+			return 3.0
+
+## Get color for component type
+func _get_component_color(visual_type: String, base_color: Color) -> Color:
+	match visual_type:
+		"engine":
+			return Color("00BFFF")  # Deep sky blue for engines
+		"control":
+			return Color("FFFF00")  # Yellow for control
+		"power_core":
+			return Color("FF8C00")  # Dark orange for power
+		"light_weapon", "medium_turret", "heavy_turret", "gatling_turret":
+			return base_color.lightened(0.3)  # Lighter version of ship color
+		_:
+			return base_color
+
+## Update component visual based on status
+func _update_component_status(component_visual: Node2D, status: String) -> void:
+	var body = component_visual.get_node_or_null("ComponentBody")
+	if not body:
+		return
+
+	match status:
+		"operational":
+			body.modulate = Color.WHITE
+		"damaged":
+			body.modulate = Color("FFA500")  # Orange for damaged
+		"destroyed":
+			body.modulate = Color(0.3, 0.3, 0.3)  # Dark gray for destroyed
 
 ## Get color based on damage percent
 func _get_damage_color(percent: float) -> Color:
