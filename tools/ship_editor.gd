@@ -21,11 +21,21 @@ var current_ship_data: Dictionary = {}
 var selected_component: Dictionary = {}
 var selected_component_type: String = ""
 
+# Drag state for engines
+var dragging_engine: Dictionary = {}
+var dragging_engine_index: int = -1
+var drag_visual: Control = null
+var drag_tween: Tween = null
+var scale_factor: float = 2.0  # Store for coordinate conversion
+
 func _ready() -> void:
 	_setup_dropdown()
 	ship_type_dropdown.item_selected.connect(_on_ship_type_selected)
 
 	print("Ship Editor loaded")
+
+func _on_back_button_pressed() -> void:
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 func _setup_dropdown() -> void:
 	ship_type_dropdown.clear()
@@ -77,7 +87,7 @@ func _draw_ship(ship_data: Dictionary) -> void:
 
 	# Center point for drawing
 	var center = ship_canvas.size / 2.0
-	var scale_factor = 2.0  # Scale up for visibility
+	scale_factor = 2.0  # Scale up for visibility
 
 	# Determine ship type from type field
 	var ship_type = ship_data.get("type", "fighter")
@@ -85,11 +95,16 @@ func _draw_ship(ship_data: Dictionary) -> void:
 	# Draw hull shape based on ship type (ARMOR ONLY)
 	_draw_hull_shape(ship_type, ship_data, center, scale_factor)
 
-	# # Draw internal components
-	for internal in ship_data.get("internals", []):
-		_draw_internal_component(internal, center, scale_factor)
+	# Draw internal components (separate engines from others)
+	var internals = ship_data.get("internals", [])
+	for i in range(internals.size()):
+		var internal = internals[i]
+		if internal.get("type") == "engine":
+			_draw_engine_component(internal, i, center, scale_factor)
+		else:
+			_draw_internal_component(internal, center, scale_factor)
 
-	# # Draw weapons
+	# Draw weapons
 	for weapon in ship_data.get("weapons", []):
 		_draw_weapon(weapon, center, scale_factor)
 
@@ -211,6 +226,104 @@ func _draw_internal_component(internal: Dictionary, center: Vector2, scale: floa
 	label.position = pos + Vector2(8, -8)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ship_canvas.add_child(label)
+
+func _draw_engine_component(engine: Dictionary, engine_index: int, center: Vector2, scale: float) -> void:
+	# Draw engine as a draggable green circle
+	var offset = engine.get("position_offset", Vector2.ZERO) * scale
+	var rotated_offset = HullShapes.rotate_90(offset)
+	var pos = center + rotated_offset
+
+	# Create container for the engine visual (will be animated during drag)
+	var engine_container = Control.new()
+	engine_container.name = "Engine_" + str(engine_index)
+	engine_container.position = pos - Vector2(8, 8)
+	engine_container.custom_minimum_size = Vector2(16, 16)
+	engine_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	ship_canvas.add_child(engine_container)
+
+	# Draw the engine circle
+	var circle = Control.new()
+	circle.position = Vector2(3, 3)
+	circle.custom_minimum_size = Vector2(10, 10)
+	circle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	circle.draw.connect(func():
+		circle.draw_circle(Vector2(5, 5), 5, COLOR_ENGINE)
+		circle.draw_arc(Vector2(5, 5), 5, 0, TAU, 12, COLOR_ENGINE.lightened(0.3), 1.5)
+	)
+	engine_container.add_child(circle)
+
+	# Add label
+	var label = Label.new()
+	label.text = "E"
+	label.add_theme_color_override("font_color", COLOR_ENGINE)
+	label.position = Vector2(16, 0)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	engine_container.add_child(label)
+
+	# Connect mouse input for drag-and-drop
+	engine_container.gui_input.connect(_on_engine_gui_input.bind(engine, engine_index, engine_container))
+
+func _on_engine_gui_input(event: InputEvent, engine: Dictionary, engine_index: int, container: Control) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				# Start dragging
+				dragging_engine = engine
+				dragging_engine_index = engine_index
+				drag_visual = container
+				selected_component = engine
+				selected_component_type = "engine"
+				_update_properties_display()
+				print("Started dragging engine " + str(engine_index))
+			else:
+				# Stop dragging and finalize position
+				if dragging_engine_index == engine_index:
+					_finalize_engine_position(container)
+					dragging_engine = {}
+					dragging_engine_index = -1
+					drag_visual = null
+					print("Stopped dragging engine " + str(engine_index))
+	elif event is InputEventMouseMotion:
+		if dragging_engine_index == engine_index and drag_visual:
+			# Move engine to mouse position with animation
+			var target_pos = ship_canvas.get_local_mouse_position() - Vector2(8, 8)
+			_animate_engine_to_position(container, target_pos)
+
+func _animate_engine_to_position(container: Control, target_pos: Vector2) -> void:
+	# Kill any existing tween
+	if drag_tween and drag_tween.is_valid():
+		drag_tween.kill()
+
+	# Create smooth animation tween
+	drag_tween = create_tween()
+	drag_tween.set_trans(Tween.TRANS_EXPO)
+	drag_tween.set_ease(Tween.EASE_OUT)
+	drag_tween.tween_property(container, "position", target_pos, 0.1)
+
+func _finalize_engine_position(container: Control) -> void:
+	if dragging_engine_index < 0:
+		return
+
+	# Convert screen position back to ship data coordinates
+	var center = ship_canvas.size / 2.0
+	var screen_pos = container.position + Vector2(8, 8)  # Center of the container
+
+	# Reverse the coordinate transformation
+	var offset_from_center = screen_pos - center
+	# Reverse rotate_90: original rotate_90(point) = Vector2(-point.y, point.x)
+	# To reverse: Vector2(offset.y, -offset.x)
+	var unrotated_offset = Vector2(offset_from_center.y, -offset_from_center.x)
+	var unscaled_offset = unrotated_offset / scale_factor
+
+	# Update the engine's position_offset in current_ship_data
+	var internals = current_ship_data.get("internals", [])
+	if dragging_engine_index < internals.size():
+		internals[dragging_engine_index]["position_offset"] = unscaled_offset
+		# Also update the reference
+		dragging_engine["position_offset"] = unscaled_offset
+		selected_component = dragging_engine
+		_update_properties_display()
+		print("Engine " + str(dragging_engine_index) + " moved to offset: " + str(unscaled_offset))
 
 func _draw_weapon(weapon: Dictionary, center: Vector2, scale: float) -> void:
 	# Draw weapon as a small rectangle at offset position with rotation
