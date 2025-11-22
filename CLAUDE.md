@@ -30,14 +30,6 @@ After creating new GDScript files with `class_name`, you MUST run this command t
 godot --headless --import
 ```
 
-**CRITICAL - Godot UID Files:**
-When creating ANY new `.gd` file, Godot automatically generates a corresponding `.gd.uid` file.
-- ALWAYS include BOTH the `.gd` file AND its `.gd.uid` file together
-- The `.gd.uid` file contains the unique identifier Godot uses to track the script
-- Missing `.gd.uid` files cause Godot to break scene references and resource loading
-- After creating a new script, verify the `.gd.uid` file exists
-- If you create a script and the `.gd.uid` is missing, run `godot --headless --import` to generate it
-
 ## Programming Principles
 
 When working on this codebase:
@@ -53,6 +45,7 @@ When working on this codebase:
 - Prioritize readability and maintainability over premature optimization
 - Use Godot's signal system for loose coupling between components
 - Warnings when compiling code are just unresolved errors, don't leave them around
+- Do NOT retain "fallback" or "legacy" code unless the user specifies.
 
 ## Architecture
 
