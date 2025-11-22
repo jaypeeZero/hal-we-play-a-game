@@ -135,11 +135,13 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 
 	# Calculate thrust state from pilot control
 	# MUST match the physics logic in movement_system.gd:apply_space_physics()
+	# NOTE: Ship sprites point UP at rotation 0, so visual forward = Vector2(sin(r), -cos(r))
 	var pilot_state = ship_data.get("_pilot_state", {})
 	if pilot_state.has("thrust_active") and pilot_state.thrust_active:
 		var desired_heading = pilot_state.get("desired_heading", ship_data.rotation)
-		var desired_thrust_direction = Vector2(cos(desired_heading), sin(desired_heading))
-		var ship_facing = Vector2(cos(ship_data.rotation), sin(ship_data.rotation))
+		# Use visual forward direction (sprites point UP at rotation 0)
+		var desired_thrust_direction = Vector2(sin(desired_heading), -cos(desired_heading))
+		var ship_facing = Vector2(sin(ship_data.rotation), -cos(ship_data.rotation))
 
 		# Calculate angle between ship facing and desired thrust direction
 		var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
