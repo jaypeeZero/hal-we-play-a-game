@@ -4,9 +4,9 @@ class_name FighterPilotAI
 ## FighterPilotAI - Simple, straightforward fighter pilot behavior
 ##
 ## Distance-based speed control:
-## - Far away: full speed approach until 50% distance
-## - Mid range: slow down, turn to adjust approach
-## - Close range: small adjustments for tight maneuvers (orbits, weaves, loops)
+## - Far away (>500): full speed approach
+## - Mid range (150-500): slow approach, try to get behind enemy
+## - Close range (<150): tight maneuvering (orbits, weaves, loops)
 ##
 ## Combat behavior:
 ## - vs Fighters: get behind enemy, adjust for movement, formation flying
@@ -14,7 +14,8 @@ class_name FighterPilotAI
 ## - vs Corvettes/Capitals (many fighters): coordinated group runs
 
 ## Configuration constants
-const APPROACH_THRESHOLD = 0.5  # Start slowing at 50% distance
+const FAR_RANGE = 500.0  # Distance beyond which we use full speed approach
+const MID_RANGE = 300.0  # Mid range threshold for tactical maneuvering
 const CLOSE_RANGE = 150.0  # Distance for tight maneuvering
 const SAFE_DISTANCE_VS_CAPITAL = 400.0  # Stay at distance vs big ships
 const GROUP_RUN_THRESHOLD = 4  # Number of fighters needed for coordinated runs
@@ -92,7 +93,7 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	var maneuver_type = ""
 	var target_id = target_ship.get("ship_id", "")
 
-	if distance > _get_50_percent_distance(my_pos, target_pos, target_ship):
+	if distance > FAR_RANGE:
 		# Far away - approach at full speed
 		maneuver_type = "pursue_full_speed"
 	elif distance > CLOSE_RANGE:
@@ -173,22 +174,6 @@ static func _make_fighter_vs_capital_decision(crew_data: Dictionary, ship_data: 
 	}
 
 	return decision
-
-## Calculate 50% distance threshold (accounting for target movement)
-static func _get_50_percent_distance(my_pos: Vector2, target_pos: Vector2, target_ship: Dictionary) -> float:
-	var base_distance = my_pos.distance_to(target_pos)
-	var target_velocity = target_ship.get("velocity", Vector2.ZERO)
-
-	# If target is moving toward us, threshold is closer
-	# If target is moving away, threshold is farther
-	var direction_to_target = (target_pos - my_pos).normalized()
-	var target_approach_speed = target_velocity.dot(direction_to_target)
-
-	# Adjust threshold based on relative motion
-	var adjusted_distance = base_distance * APPROACH_THRESHOLD
-	adjusted_distance += target_approach_speed * 2.0  # Factor in 2 seconds of motion
-
-	return max(adjusted_distance, CLOSE_RANGE)
 
 ## Check if we're behind the target
 static func _am_i_behind_target(my_ship: Dictionary, target_ship: Dictionary) -> bool:

@@ -229,8 +229,8 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 	var ship_data = _find_ship_by_id(ship_id, all_ships)
 
 	if ship_data.is_empty():
-		# Fallback to idle if no ship
-		return make_idle_decision(crew_data, game_time)
+		# Fallback to balanced decision if no ship data available
+		return make_balanced_pilot_decision(crew_data, context, game_time)
 
 	# Use FighterPilotAI to make decision
 	var decision = FighterPilotAI.make_decision(crew_data, ship_data, all_ships, all_crew, game_time)
