@@ -37,6 +37,10 @@ static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictiona
 				"current_situation": ""  # Text summary for knowledge queries
 			}
 		},
+		"combat_state": {
+			"locked_target_id": "",  # For rookie target fixation
+			"lock_start_time": 0.0
+		},
 		"orders": {
 			"received": null,  # order from superior
 			"current": null,  # what they're doing now

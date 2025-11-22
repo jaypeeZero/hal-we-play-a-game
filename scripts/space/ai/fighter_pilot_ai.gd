@@ -98,7 +98,21 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	# Check for incoming collision threat
 	var on_collision_course = _is_on_collision_course(ship_data, target_ship)
 
-	if skill < 0.3:
+	# Check if enemy is behind me (disadvantageous position)
+	var enemy_behind_me = _am_i_in_front_of_target(ship_data, target_ship)
+
+	if enemy_behind_me:
+		# Panic behavior when disadvantaged - varies by skill
+		if skill < 0.3:
+			# Rookie panic: fly straight (worst choice - easy target)
+			maneuver_type = "pursue_full_speed"
+		elif skill < 0.6:
+			# Average panic: hard turn (predictable but better)
+			maneuver_type = "evasive_turn"
+		else:
+			# Skilled: break and scissors (unpredictable)
+			maneuver_type = "defensive_break"
+	elif skill < 0.3:
 		# Rookie: only knows pursue_full_speed, ignores collision warnings
 		maneuver_type = "pursue_full_speed"
 	elif skill < 0.6:
@@ -213,6 +227,24 @@ static func _am_i_behind_target(my_ship: Dictionary, target_ship: Dictionary) ->
 	var angle_diff = rad_to_deg(target_facing.angle_to(to_me))
 
 	# Behind is 180 degrees +/- tolerance
+	return abs(abs(angle_diff) - 180.0) < BEHIND_ANGLE_TOLERANCE
+
+## Check if target is behind me (I'm in front of target - disadvantageous position)
+static func _am_i_in_front_of_target(my_ship: Dictionary, target_ship: Dictionary) -> bool:
+	var my_pos = my_ship.get("position", Vector2.ZERO)
+	var target_pos = target_ship.get("position", Vector2.ZERO)
+	var my_rotation = my_ship.get("rotation", 0.0)
+
+	# Vector from me to target
+	var to_target = (target_pos - my_pos).normalized()
+
+	# My facing direction
+	var my_facing = Vector2(cos(my_rotation), sin(my_rotation))
+
+	# If target is behind me, angle between my facing and vector to target should be ~180 degrees
+	var angle_diff = rad_to_deg(my_facing.angle_to(to_target))
+
+	# In front means target is behind (180 degrees +/- tolerance)
 	return abs(abs(angle_diff) - 180.0) < BEHIND_ANGLE_TOLERANCE
 
 ## Calculate position behind target (for pursuit)
@@ -370,25 +402,41 @@ static func _count_nearby_friendly_fighters(my_ship: Dictionary, all_ships: Arra
 
 ## Find best target from awareness
 static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String:
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
 	var awareness = crew_data.get("awareness", {})
 	var threats = awareness.get("threats", [])
 	var opportunities = awareness.get("opportunities", [])
+
+	# Rookie: stick with current target if valid and alive (target fixation)
+	if skill < 0.3:
+		var locked_target = crew_data.get("combat_state", {}).get("locked_target_id", "")
+		if locked_target != "" and _is_ship_valid(locked_target, all_ships):
+			return locked_target  # Tunnel vision - don't re-evaluate
+
+	# Normal target selection for average+ pilots
+	var selected_target = ""
 
 	# Prefer threats (enemy fighters)
 	if not threats.is_empty():
 		var threat = threats[0]
 		if threat is Dictionary:
-			return threat.get("id", "")
-		return threat
+			selected_target = threat.get("id", "")
+		else:
+			selected_target = threat
 
 	# Fall back to opportunities
-	if not opportunities.is_empty():
+	if selected_target == "" and not opportunities.is_empty():
 		var opportunity = opportunities[0]
 		if opportunity is Dictionary:
-			return opportunity.get("id", "")
-		return opportunity
+			selected_target = opportunity.get("id", "")
+		else:
+			selected_target = opportunity
 
-	return ""
+	# Lock in target for rookies (for next decision cycle)
+	if skill < 0.3 and selected_target != "":
+		crew_data.get("combat_state", {})["locked_target_id"] = selected_target
+
+	return selected_target
 
 ## Get ship by ID
 static func _get_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
@@ -396,6 +444,11 @@ static func _get_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
 		if ship.get("ship_id", "") == ship_id:
 			return ship
 	return {}
+
+## Check if a ship is valid (exists and is alive)
+static func _is_ship_valid(ship_id: String, all_ships: Array) -> bool:
+	var ship = _get_ship_by_id(ship_id, all_ships)
+	return not ship.is_empty() and ship.get("status", "") != "destroyed"
 
 ## Make idle decision
 static func _make_idle_decision(crew_data: Dictionary, game_time: float) -> Dictionary:

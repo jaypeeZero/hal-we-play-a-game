@@ -297,6 +297,10 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 			return calculate_tight_pursuit(ship_data, target, nearby_ships, obstacles)
 		"dogfight_maneuver":
 			return calculate_dogfight_maneuver(ship_data, target, nearby_ships, obstacles)
+		"evasive_turn":
+			return calculate_evasive_turn(ship_data, target, nearby_ships, obstacles)
+		"defensive_break":
+			return calculate_defensive_break(ship_data, target, nearby_ships, obstacles)
 		"group_run_approach":
 			return calculate_group_run_approach(ship_data, target, nearby_ships, obstacles)
 		"group_run_attack":
@@ -453,6 +457,59 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 		"thrust_active": should_thrust,
 		"is_braking": should_brake,
 		"engagement_range": 150.0,
+		"current_distance": distance
+	}
+
+## Evasive turn - hard turn in one direction (predictable panic evasion)
+static func calculate_evasive_turn(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Hard turn away from target - 30° turn rate is predictable
+	var away_from_target = -to_target.normalized()
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+
+	# Always turn the same direction (predictable) - use sign of time for consistency
+	var turn_direction = 1 if fmod(Time.get_ticks_msec() / 500.0, 2.0) < 1.0 else -1
+	var evasion_direction = (away_from_target + perpendicular * turn_direction * 0.5).normalized()
+
+	var desired_heading = direction_to_heading(evasion_direction)
+
+	# Full speed evasion
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": true,
+		"is_braking": false,
+		"engagement_range": 300.0,
+		"current_distance": distance
+	}
+
+## Defensive break - sharp alternating turns (skilled evasion)
+static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Alternating sharp turns in opposite directions - unpredictable
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+
+	# Switch directions frequently (every 200ms) - hard to predict
+	var break_phase = fmod(Time.get_ticks_msec() / 200.0, 2.0)
+	var break_direction = 1 if break_phase < 1.0 else -1
+
+	# Move away while turning
+	var away_from_target = -to_target.normalized()
+	var evasion_direction = (away_from_target + perpendicular * break_direction).normalized()
+
+	var desired_heading = direction_to_heading(evasion_direction)
+
+	# Aggressive evasion with bursts
+	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.8
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": false,
+		"engagement_range": 300.0,
 		"current_distance": distance
 	}
 
@@ -716,13 +773,13 @@ static func create_braking_control(ship_data: Dictionary, desired_heading: float
 static func get_engagement_range(ship_data: Dictionary) -> float:
 	match ship_data.type:
 		"fighter":
-			return 250.0  # Fighters engage at closer range
+			return 450.0  # Fighters engage at closer range
 		"corvette":
-			return 350.0  # Corvettes at medium range
+			return 3500.0  # Corvettes at medium range
 		"capital":
-			return 500.0  # Capital ships engage from far away
+			return 6000.0  # Capital ships engage from far away
 		_:
-			return 300.0  # Default
+			return 1000.0  # Default
 
 ## Calculate collision avoidance vector from nearby ships
 static func calculate_collision_avoidance(ship_data: Dictionary, nearby_ships: Array) -> Vector2:
