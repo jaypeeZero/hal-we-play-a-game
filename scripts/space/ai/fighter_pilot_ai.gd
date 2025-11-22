@@ -82,16 +82,16 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	var target_pos = target_ship.get("position", Vector2.ZERO)
 	var distance = my_pos.distance_to(target_pos)
 
+	# Get skill early - needed for prediction accuracy
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+
 	# Try to get behind the enemy
-	var behind_position = _calculate_behind_position(target_ship)
+	var behind_position = _calculate_behind_position(target_ship, skill)
 	var is_behind = _am_i_behind_target(ship_data, target_ship)
 
 	# Check formation status with wingmates
 	var wingmates = _find_wingmates(crew_data, all_crew, all_ships)
 	var formation_offset = _calculate_formation_offset(crew_data, wingmates, all_ships)
-
-	# Decide maneuver based on skill level and distance
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
 	var maneuver_type = ""
 	var target_id = target_ship.get("ship_id", "")
 
@@ -216,7 +216,7 @@ static func _am_i_behind_target(my_ship: Dictionary, target_ship: Dictionary) ->
 	return abs(abs(angle_diff) - 180.0) < BEHIND_ANGLE_TOLERANCE
 
 ## Calculate position behind target (for pursuit)
-static func _calculate_behind_position(target_ship: Dictionary) -> Vector2:
+static func _calculate_behind_position(target_ship: Dictionary, skill: float = 0.5) -> Vector2:
 	var target_pos = target_ship.get("position", Vector2.ZERO)
 	var target_rotation = target_ship.get("rotation", 0.0)
 	var target_velocity = target_ship.get("velocity", Vector2.ZERO)
@@ -224,8 +224,13 @@ static func _calculate_behind_position(target_ship: Dictionary) -> Vector2:
 	# Position behind target, accounting for velocity
 	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * CLOSE_RANGE
 
-	# Lead the position if target is moving
-	var predicted_pos = target_pos + target_velocity * 0.5
+	# Prediction lookahead scales with skill
+	# Rookie (0.0): 0.1s ahead
+	# Average (0.5): 0.3s ahead
+	# Skilled (1.0): 0.8s ahead
+	var prediction_time = lerp(0.1, 0.8, skill)
+
+	var predicted_pos = target_pos + target_velocity * prediction_time
 
 	return predicted_pos + behind_offset
 
