@@ -381,8 +381,10 @@ static func make_gunner_decision(crew_data: Dictionary, game_time: float) -> Dic
 	if not crew_data.awareness.opportunities.is_empty():
 		return make_target_selection_decision(crew_data, game_time)
 
-	# No targets available
-	return {"crew_data": crew_data}
+	# No targets available - schedule next decision check
+	var updated = crew_data.duplicate(true)
+	updated.next_decision_time = game_time + randf_range(1.0, 2.0)
+	return {"crew_data": updated}
 
 ## Execute target order from captain
 static func execute_gunner_order(crew_data: Dictionary, game_time: float) -> Dictionary:
@@ -391,6 +393,8 @@ static func execute_gunner_order(crew_data: Dictionary, game_time: float) -> Dic
 
 	updated.orders.current = order
 	updated.orders.received = null
+	# When executing captain's order, re-decide frequently (spray mode if captain ordered it)
+	updated.next_decision_time = game_time + 0.1
 
 	return {
 		"crew_data": updated,
@@ -420,6 +424,16 @@ static func make_target_selection_decision(crew_data: Dictionary, game_time: flo
 
 	var decision = create_fire_decision(updated, target.id, game_time)
 	updated.orders.current = decision
+
+	# Gatling gun behavior: if multiple targets in range, fire frequently (spray-and-pray)
+	# This creates continuous suppressive fire against multiple threats
+	var target_count = crew_data.awareness.opportunities.size()
+	if target_count >= 2:
+		# Multiple targets = spray fire mode, re-decide very quickly
+		updated.next_decision_time = game_time + 0.1  # Fire every 0.1s, cycling targets
+	else:
+		# Single target = deliberate targeting, normal decision cycle
+		updated.next_decision_time = game_time + randf_range(0.5, 1.0)
 
 	return {"crew_data": updated, "decision": decision}
 

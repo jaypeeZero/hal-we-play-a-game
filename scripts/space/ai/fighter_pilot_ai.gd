@@ -14,13 +14,14 @@ class_name FighterPilotAI
 ## - vs Corvettes/Capitals (many fighters): coordinated group runs
 
 ## Configuration constants
-const FAR_RANGE = 500.0  # Distance beyond which we use full speed approach
-const MID_RANGE = 300.0  # Mid range threshold for tactical maneuvering
-const CLOSE_RANGE = 150.0  # Distance for tight maneuvering
-const SAFE_DISTANCE_VS_CAPITAL = 400.0  # Stay at distance vs big ships
+const FAR_RANGE = 5000.0  # Distance beyond which we use full speed approach
+const MID_RANGE = 1000.0  # Mid range threshold for tactical maneuvering
+const CLOSE_RANGE = 650.0  # Distance for tight maneuvering
+const SAFE_DISTANCE_VS_CAPITAL = 2500.0  # Stay at distance vs big ships
 const GROUP_RUN_THRESHOLD = 4  # Number of fighters needed for coordinated runs
-const FORMATION_SPACING = 100.0  # Distance to maintain from wingmates
-const BEHIND_ANGLE_TOLERANCE = 30.0  # Degrees - "behind" the enemy
+const FORMATION_SPACING = 50.0  # Distance to maintain from wingmates
+const BEHIND_ANGLE_TOLERANCE = 20.0  # Degrees - "behind" the enemy
+const COLLISION_DETECTION_RANGE = 2000.0
 
 ## Wingmate formation constants
 const FORMATION_DISTANCE = 80.0  # Ideal distance between wingmates
@@ -539,9 +540,9 @@ static func _is_on_collision_course(my_ship: Dictionary, target_ship: Dictionary
 	var to_target = target_pos - my_pos
 	var distance = to_target.length()
 
-	# If already very close, collision imminent
-	if distance < CLOSE_RANGE:
-		return true
+	# If within collision detection range, check for closing velocity
+	if distance > COLLISION_DETECTION_RANGE:
+		return false  # Too far away to be a threat
 
 	# Calculate relative velocity (closing speed)
 	var relative_velocity = target_velocity - my_velocity
