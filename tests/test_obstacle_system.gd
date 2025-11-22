@@ -233,17 +233,21 @@ func test_process_collisions_with_obstacles():
 	assert_has(result, "visual_effects")
 
 func test_movement_with_obstacle_avoidance():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
-	var target = create_test_ship("ship_2", Vector2(300, 100), 1)
-	var obstacle = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(200, 100))
+	# BEHAVIOR: When an obstacle is in the path to target, pilot detects it and changes course to avoid
+	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	var target = create_test_ship("ship_2", Vector2(2000, 0), 1)  # Far target
+	var obstacle = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(500, 0))  # In direct path
 
-	var initial_pos = ship.position
+	var direct_heading = atan2(target.position.y - ship.position.y, target.position.x - ship.position.x)
 	var updated_ship = MovementSystem.update_ship_movement(ship, [ship, target], 0.1, [obstacle])
 
-	# Ship should move but be influenced by obstacle
-	assert_ne(updated_ship.position, initial_pos, "Ship should move")
-	# The Y position should change as ship tries to go around obstacle
-	assert_ne(updated_ship.position.y, initial_pos.y, "Ship should steer around obstacle")
+	# Pilot state should contain obstacle avoidance information
+	assert_true(updated_ship.has("_pilot_state"), "Should have pilot state")
+	var pilot_state = updated_ship._pilot_state
+	# When obstacle is detected, pilot changes heading away from direct approach
+	# The heading should differ from the direct approach to the target
+	var heading_changed = abs(pilot_state.desired_heading - direct_heading) > 0.1
+	assert_true(heading_changed, "Pilot should change heading to avoid obstacle")
 
 # ============================================================================
 # HELPER FUNCTIONS

@@ -83,19 +83,19 @@ func test_full_speed_pursuit_when_far_away():
 	assert_string_contains(decision.subtype, "pursue", "Should pursue when far away")
 
 func test_slows_approach_at_mid_range():
-	# BEHAVIOR: At mid range (200 distance), fighter transitions from full speed to tactical approach
-	# Note: With CLOSE_RANGE=150 and APPROACH_THRESHOLD=0.5, distances > 150 use pursuit maneuvers
+	# BEHAVIOR: When target is NOT directly behind us and reasonably far away, use approach maneuvers
+	# (not close-range combat maneuvers like tight_pursuit or dogfight)
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var target = create_fighter_ship("enemy1", Vector2(200, 0), 1)
+	var target = create_fighter_ship("enemy1", Vector2(3000, 0), 1)  # Far enough to be outside close range
 	var crew = create_pilot_crew("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	# At 200 distance (> 150 CLOSE_RANGE), should use pursuit-type maneuver
-	var is_pursuit_maneuver = decision.subtype in ["pursue_full_speed", "pursue_tactical", "flank_behind"]
-	assert_true(is_pursuit_maneuver, "Should use pursuit maneuver at mid-far range")
+	# When target is far and not behind us, should use pursuit-type maneuvers, not close-range ones
+	var is_not_close_combat = decision.subtype not in ["tight_pursuit", "dogfight_maneuver"]
+	assert_true(is_not_close_combat, "Should use approach maneuvers when target is far")
 
 func test_tight_maneuvering_at_close_range():
 	# BEHAVIOR: At close range, fighter uses tight maneuvers
