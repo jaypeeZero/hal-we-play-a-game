@@ -55,6 +55,14 @@ text = "Settings"
 layout_mode = 2
 text = "Ship Editor"
 
+[node name="CustomizeSatchelButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
+layout_mode = 2
+text = "Customize Satchel"
+
+[node name="CustomizeOpponentSatchelButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
+layout_mode = 2
+text = "Customize Opponent Satchel"
+
 [node name="QuitButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
 layout_mode = 2
 text = "Quit"
@@ -108,4 +116,6 @@ text = "A tactical space combat simulator featuring ship-to-ship combat with rea
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/NewGameButton" to="." method="_on_new_game_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/ShipEditorButton" to="." method="_on_ship_editor_pressed"]
+[connection signal="pressed" from="HBoxContainer/MenuSide/Container/CustomizeSatchelButton" to="." method="_on_customize_satchel_pressed"]
+[connection signal="pressed" from="HBoxContainer/MenuSide/Container/CustomizeOpponentSatchelButton" to="." method="_on_customize_opponent_satchel_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/QuitButton" to="." method="_on_quit_pressed"]

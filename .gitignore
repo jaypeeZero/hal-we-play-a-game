@@ -2,6 +2,10 @@
 .godot/
 .nomedia
 
+# User-specific loadouts (created on save)
+player_loadout.json
+opponent_loadout.json
+
 # Godot-specific ignores
 .import/
 export.cfg
