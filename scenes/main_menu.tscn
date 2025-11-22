@@ -47,6 +47,10 @@ size_flags_vertical = 3
 layout_mode = 2
 text = "New Game"
 
+[node name="EditFleetsButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
+layout_mode = 2
+text = "Edit Fleets"
+
 [node name="SettingsButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
 layout_mode = 2
 text = "Settings"
@@ -106,6 +110,7 @@ text = "A tactical space combat simulator featuring ship-to-ship combat with rea
 • Watch the battle unfold!"
 
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/NewGameButton" to="." method="_on_new_game_pressed"]
+[connection signal="pressed" from="HBoxContainer/MenuSide/Container/EditFleetsButton" to="." method="_on_edit_fleets_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/ShipEditorButton" to="." method="_on_ship_editor_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/QuitButton" to="." method="_on_quit_pressed"]

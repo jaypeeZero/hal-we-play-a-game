@@ -5,6 +5,10 @@ func _on_new_game_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/space_battle.tscn")
 
 
+func _on_edit_fleets_pressed() -> void:
+	get_tree().change_scene_to_file("res://scenes/fleet_editor.tscn")
+
+
 func _on_settings_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/settings_menu.tscn")
 
