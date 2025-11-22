@@ -116,8 +116,10 @@ func test_threat_prioritization():
 func test_pilot_makes_evasive_decision():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
 	crew.assigned_to = "ship_1"
+	# Give crew a superior so they're treated as corvette/multi-crew (uses evade/pursue subtypes)
+	crew.command_chain.superior = "captain_1"
 
-	# Add multiple threats (solo fighter outnumbered should evade)
+	# Add multiple threats (outnumbered should evade)
 	crew.awareness.threats = [
 		{"id": "enemy_1", "type": "ship", "_threat_priority": 150.0},
 		{"id": "enemy_2", "type": "ship", "_threat_priority": 140.0}
@@ -133,6 +135,8 @@ func test_pilot_makes_evasive_decision():
 func test_pilot_makes_pursuit_decision():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
 	crew.assigned_to = "ship_1"
+	# Give crew a superior so they're treated as corvette/multi-crew (uses evade/pursue subtypes)
+	crew.command_chain.superior = "captain_1"
 
 	# Add an opportunity, no threats
 	crew.awareness.opportunities = [

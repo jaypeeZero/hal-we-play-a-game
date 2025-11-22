@@ -250,7 +250,7 @@ func create_test_ship_with_multiple_sections() -> Dictionary:
 func create_test_ship_with_components() -> Dictionary:
 	return _base_test_ship("fighter", {
 		"armor_sections": [
-			{"section_id": "front", "arc": {"start": -180, "end": 180}, "max_armor": 20, "current_armor": 20}
+			{"section_id": "front", "arc": {"start": 0, "end": 360}, "max_armor": 20, "current_armor": 20}
 		],
 		"internals": [
 			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 5), "max_health": 25, "current_health": 25, "status": "operational", "effect_on_ship": {"on_damaged": {"max_speed": 0.7}, "on_destroyed": {"max_speed": 0.2}}}
@@ -263,10 +263,12 @@ func create_test_ship_with_engine() -> Dictionary:
 func create_test_ship_with_multiple_components() -> Dictionary:
 	return _base_test_ship("fighter", {
 		"armor_sections": [
-			{"section_id": "front", "arc": {"start": -180, "end": 180}, "max_armor": 50, "current_armor": 50}
+			{"section_id": "front", "arc": {"start": 0, "end": 360}, "max_armor": 50, "current_armor": 50}
 		],
 		"internals": [
-			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 10), "max_health": 30, "current_health": 30, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}}
+			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 10), "max_health": 30, "current_health": 30, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}},
+			{"component_id": "reactor", "type": "reactor", "position_offset": Vector2(0, 0), "max_health": 40, "current_health": 40, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}},
+			{"component_id": "weapon", "type": "weapon", "position_offset": Vector2(0, -10), "max_health": 20, "current_health": 20, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}}
 		]
 	})
 
