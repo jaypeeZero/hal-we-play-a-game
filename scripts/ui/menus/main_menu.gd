@@ -9,6 +9,10 @@ func _on_edit_fleets_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/fleet_editor.tscn")
 
 
+func _on_roguelite_pressed() -> void:
+	get_tree().change_scene_to_file("res://scenes/roguelite_map.tscn")
+
+
 func _on_settings_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/settings_menu.tscn")
 
