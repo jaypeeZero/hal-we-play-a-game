@@ -1,0 +1,220 @@
+[gd_scene load_steps=2 format=3 uid="uid://bv2fleet3d1t0r"]
+
+[ext_resource type="Script" path="res://scripts/ui/menus/fleet_editor.gd" id="1_fleet_editor"]
+
+[node name="FleetEditor" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_fleet_editor")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.15, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="HeaderBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+text = "Edit Fleets"
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Back"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="FleetsContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 40
+
+[node name="Team0Panel" type="PanelContainer" parent="MarginContainer/VBoxContainer/FleetsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Team0VBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Team0Header" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.3, 0.8, 0.3, 1)
+text = "TEAM 0 (Player)"
+horizontal_alignment = 1
+
+[node name="Team0Ships" type="VBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="FighterRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="FighterLabel" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships/FighterRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Fighters"
+
+[node name="Team0FighterSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships/FighterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 20.0
+value = 1.0
+
+[node name="CorvetteRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="CorvetteLabel" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships/CorvetteRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Corvettes"
+
+[node name="Team0CorvetteSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships/CorvetteRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 10.0
+value = 0.0
+
+[node name="CapitalRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="CapitalLabel" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships/CapitalRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Capital Ships"
+
+[node name="Team0CapitalSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships/CapitalRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 5.0
+value = 0.0
+
+[node name="VSeparator" type="VSeparator" parent="MarginContainer/VBoxContainer/FleetsContainer"]
+layout_mode = 2
+
+[node name="Team1Panel" type="PanelContainer" parent="MarginContainer/VBoxContainer/FleetsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Team1VBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Team1Header" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.8, 0.3, 0.3, 1)
+text = "TEAM 1 (Enemy)"
+horizontal_alignment = 1
+
+[node name="Team1Ships" type="VBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="FighterRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="FighterLabel" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/FighterRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Fighters"
+
+[node name="Team1FighterSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/FighterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 20.0
+value = 1.0
+
+[node name="CorvetteRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="CorvetteLabel" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/CorvetteRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Corvettes"
+
+[node name="Team1CorvetteSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/CorvetteRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 10.0
+value = 0.0
+
+[node name="CapitalRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="CapitalLabel" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/CapitalRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Capital Ships"
+
+[node name="Team1CapitalSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/CapitalRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 5.0
+value = 0.0
+
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ButtonBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="SaveButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 40)
+layout_mode = 2
+text = "Save Fleets"
+
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[connection signal="pressed" from="MarginContainer/VBoxContainer/HeaderBar/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonBar/SaveButton" to="." method="_on_save_pressed"]
