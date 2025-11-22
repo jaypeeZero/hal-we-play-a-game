@@ -35,7 +35,16 @@ static func update_crew_awareness(crew_data: Dictionary, ships: Array, projectil
 
 ## Gather all entities visible to this crew member
 static func gather_visible_entities(own_ship: Dictionary, crew_data: Dictionary, ships: Array, projectiles: Array) -> Array:
-	var range_sq = crew_data.stats.awareness_range * crew_data.stats.awareness_range
+	var base_range = crew_data.stats.awareness_range
+
+	# Awareness skill modifies effective detection range
+	# 0.0 awareness = 70% range
+	# 0.5 awareness = 100% range
+	# 1.0 awareness = 130% range
+	var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
+	var effective_range = base_range * (0.7 + awareness * 0.6)
+	var range_sq = effective_range * effective_range
+
 	var position = own_ship.position
 
 	var visible = []
@@ -100,7 +109,15 @@ static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew
 		.map(func(e): return add_threat_priority(e, own_ship, crew_data)) \
 		.filter(func(e): return e._threat_priority > 0.0)
 	threats.sort_custom(func(a, b): return a._threat_priority > b._threat_priority)
-	return threats
+
+	# Limit number of threats tracked based on situational awareness
+	var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
+	# Max threats scales with awareness
+	# 0.0 awareness = 1 threat
+	# 0.5 awareness = 2-3 threats
+	# 1.0 awareness = 4+ threats
+	var max_threats = int(1 + awareness * 4)
+	return threats.slice(0, min(max_threats, threats.size()))
 
 ## Calculate threat priority for an entity
 static func add_threat_priority(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> Dictionary:
@@ -174,7 +191,11 @@ static func identify_opportunities(visible_entities: Array, own_ship: Dictionary
 		.map(func(e): return add_opportunity_score(e, own_ship, crew_data)) \
 		.filter(func(e): return e._opportunity_score > 0.0)
 	opportunities.sort_custom(func(a, b): return a._opportunity_score > b._opportunity_score)
-	return opportunities
+
+	# Limit number of opportunities tracked (same as threats)
+	var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
+	var max_opportunities = int(1 + awareness * 4)
+	return opportunities.slice(0, min(max_opportunities, opportunities.size()))
 
 ## Add opportunity score to entity
 static func add_opportunity_score(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> Dictionary:

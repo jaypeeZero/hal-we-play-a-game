@@ -68,7 +68,15 @@ static func _generate_stats_for_role(role: Role, skill_level: float) -> Dictiona
 		"awareness_range": role_modifiers.awareness_range,
 		"decision_time": _calculate_decision_time(skill_level, role_modifiers.decision_base),
 		"stress": 0.0,  # Increases in combat, reduces performance
-		"fatigue": 0.0  # Increases over time
+		"fatigue": 0.0,  # Increases over time
+		# NEW: Discrete skills (each 0.0-1.0)
+		"skills": {
+			"situational_awareness": skill_level,  # Detection, threat tracking
+			"aggression": skill_level,             # Engagement distance, closing behavior
+			"composure": skill_level,              # Performance under pressure
+			"anticipation": skill_level,           # Target prediction accuracy
+			"marksmanship": skill_level            # Weapon accuracy
+		}
 	}
 
 ## Get role-specific modifiers
@@ -270,3 +278,75 @@ static func get_role_name(role: Role) -> String:
 		Role.SQUADRON_LEADER: return "Squadron Leader"
 		Role.FLEET_COMMANDER: return "Fleet Commander"
 		_: return "Unknown"
+
+## Create crew member with varied discrete skills (±0.15 variance from base)
+static func create_crew_member_with_varied_skills(role: Role, skill_level: float = 0.5) -> Dictionary:
+	var crew = create_crew_member(role, skill_level)
+
+	# Generate varied discrete skills around the base skill_level
+	var skill_names = ["situational_awareness", "aggression", "composure", "anticipation", "marksmanship"]
+	for skill_name in skill_names:
+		var variance = randf_range(-0.15, 0.15)
+		crew.stats.skills[skill_name] = clamp(skill_level + variance, 0.0, 1.0)
+
+	return crew
+
+## Create pilot archetype with specific skill profile
+static func create_pilot_archetype(archetype: String, skill_level: float = 0.5) -> Dictionary:
+	var crew = create_crew_member_with_varied_skills(Role.PILOT, skill_level)
+	var skills = crew.stats.skills
+
+	match archetype:
+		"aggressive_ace":
+			skills["aggression"] = 0.9
+			skills["composure"] = 0.7
+			skills["anticipation"] = clamp(skill_level + 0.1, 0.0, 1.0)
+			skills["situational_awareness"] = clamp(skill_level + 0.05, 0.0, 1.0)
+		"calculating_ace":
+			skills["aggression"] = 0.4
+			skills["anticipation"] = 0.95
+			skills["situational_awareness"] = 0.9
+			skills["composure"] = clamp(skill_level + 0.1, 0.0, 1.0)
+		"survivor":
+			skills["composure"] = 0.95
+			skills["situational_awareness"] = 0.9
+			skills["aggression"] = 0.3
+			skills["anticipation"] = clamp(skill_level + 0.1, 0.0, 1.0)
+		"hot_head":
+			skills["aggression"] = 0.95
+			skills["composure"] = 0.2
+			skills["anticipation"] = 0.3
+			skills["marksmanship"] = clamp(skill_level + 0.15, 0.0, 1.0)
+		_:
+			pass  # Use varied skills as generated
+
+	return crew
+
+## Create a fighter squadron with varied pilot archetypes
+static func create_fighter_squadron_with_archetypes(skill_level: float = 0.5) -> Array:
+	var all_crew = []
+	var ranks = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"]
+	var archetypes = ["calculating_ace", "aggressive_ace", "survivor", "hot_head", "aggressive_ace", "survivor"]
+
+	# Create 6 fighters with distinct archetypes
+	for i in range(6):
+		var pilot = create_pilot_archetype(archetypes[i], skill_level)
+		pilot.squadron_rank = i  # 0 = Alpha (leader), 5 = Zeta (lowest)
+		pilot.squadron_role = ranks[i]
+		pilot.callsign = ranks[i]
+
+		# Wingman pairs: (Alpha, Beta), (Gamma, Delta), (Epsilon, Zeta)
+		pilot.wingman_pair = int(i / 2)  # 0, 0, 1, 1, 2, 2
+
+		# Leader is the first pilot (Alpha)
+		if i == 0:
+			pilot.is_squadron_leader = true
+		else:
+			pilot.is_squadron_leader = false
+			# All non-leaders report to the current leader (Alpha initially)
+			pilot.command_chain.superior = all_crew[0].crew_id
+			all_crew[0].command_chain.subordinates.append(pilot.crew_id)
+
+		all_crew.append(pilot)
+
+	return all_crew

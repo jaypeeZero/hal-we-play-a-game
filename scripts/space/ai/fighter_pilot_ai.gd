@@ -84,9 +84,24 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 
 	# Get skill early - needed for prediction accuracy
 	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var anticipation = crew_data.get("stats", {}).get("skills", {}).get("anticipation", skill)
+	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", skill)
+
+	# Dynamic distance thresholds based on aggression
+	# Aggressive (1.0): closer thresholds (close faster)
+	# Cautious (0.0): farther thresholds (stay distant)
+	var far_range = FAR_RANGE * (1.4 - aggression * 0.8)
+	# aggression 0.0 = 140% FAR_RANGE (hangs back)
+	# aggression 0.5 = 100% FAR_RANGE (normal)
+	# aggression 1.0 = 60% FAR_RANGE (charges in)
+
+	var close_range = CLOSE_RANGE * (1.2 - aggression * 0.4)
+	# aggression 0.0 = 120% CLOSE_RANGE (stays distant)
+	# aggression 0.5 = 100% CLOSE_RANGE (normal)
+	# aggression 1.0 = 80% CLOSE_RANGE (presses in)
 
 	# Try to get behind the enemy
-	var behind_position = _calculate_behind_position(target_ship, skill)
+	var behind_position = _calculate_behind_position(target_ship, anticipation)
 	var is_behind = _am_i_behind_target(ship_data, target_ship)
 
 	# Check formation status with wingmates
@@ -102,37 +117,45 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	var enemy_behind_me = _am_i_in_front_of_target(ship_data, target_ship)
 
 	if enemy_behind_me:
-		# Panic behavior when disadvantaged - varies by skill
-		if skill < 0.3:
-			# Rookie panic: fly straight (worst choice - easy target)
+		# Panic behavior when disadvantaged - varies by composure and stress
+		var composure = crew_data.get("stats", {}).get("skills", {}).get("composure", skill)
+		var stress = crew_data.get("stats", {}).get("stress", 0.0)
+
+		# Effective composure degrades under stress
+		# At stress 0.5: composure is halved
+		# At stress 1.0: composure is zero
+		var effective_composure = composure * (1.0 - stress * 0.5)
+
+		if effective_composure < 0.3:
+			# Panic - fly straight (worst choice - easy target)
 			maneuver_type = "pursue_full_speed"
-		elif skill < 0.6:
-			# Average panic: hard turn (predictable but better)
+		elif effective_composure < 0.6:
+			# Basic evasion - hard turn (predictable but better)
 			maneuver_type = "evasive_turn"
 		else:
-			# Skilled: break and scissors (unpredictable)
+			# Skilled evasion - break and scissors (unpredictable)
 			maneuver_type = "defensive_break"
 	elif skill < 0.3:
 		# Rookie: only knows pursue_full_speed, ignores collision warnings
 		maneuver_type = "pursue_full_speed"
 	elif skill < 0.6:
 		# Average: pursue_full_speed + tight_pursuit, still ignores collision warnings
-		if distance > FAR_RANGE:
+		if distance > far_range:
 			maneuver_type = "pursue_full_speed"
 		elif is_behind:
 			# Can do tight pursuit when already behind
-			maneuver_type = "pursue_tactical" if distance > CLOSE_RANGE else "tight_pursuit"
+			maneuver_type = "pursue_tactical" if distance > close_range else "tight_pursuit"
 		else:
 			# Can't flank, just chase
 			maneuver_type = "pursue_full_speed"
 	else:
 		# Skilled (>= 0.6): full tactical repertoire + collision awareness
-		if on_collision_course and distance > CLOSE_RANGE:
+		if on_collision_course and distance > close_range:
 			# Detect incoming collision and dodge sideways to orbit the target
 			maneuver_type = "dodge_and_weave"
-		elif distance > FAR_RANGE:
+		elif distance > far_range:
 			maneuver_type = "pursue_full_speed"
-		elif distance > CLOSE_RANGE:
+		elif distance > close_range:
 			# Mid range - slow approach, try to get behind
 			maneuver_type = "pursue_tactical" if is_behind else "flank_behind"
 		else:
@@ -248,7 +271,8 @@ static func _am_i_in_front_of_target(my_ship: Dictionary, target_ship: Dictionar
 	return abs(abs(angle_diff) - 180.0) < BEHIND_ANGLE_TOLERANCE
 
 ## Calculate position behind target (for pursuit)
-static func _calculate_behind_position(target_ship: Dictionary, skill: float = 0.5) -> Vector2:
+## Now uses anticipation skill with error margin for low-skill pilots
+static func _calculate_behind_position(target_ship: Dictionary, anticipation: float = 0.5) -> Vector2:
 	var target_pos = target_ship.get("position", Vector2.ZERO)
 	var target_rotation = target_ship.get("rotation", 0.0)
 	var target_velocity = target_ship.get("velocity", Vector2.ZERO)
@@ -256,15 +280,20 @@ static func _calculate_behind_position(target_ship: Dictionary, skill: float = 0
 	# Position behind target, accounting for velocity
 	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * CLOSE_RANGE
 
-	# Prediction lookahead scales with skill
-	# Rookie (0.0): 0.1s ahead
-	# Average (0.5): 0.3s ahead
-	# Skilled (1.0): 0.8s ahead
-	var prediction_time = lerp(0.1, 0.8, skill)
+	# Prediction lookahead scales with anticipation skill
+	# 0.0 anticipation = 0.1s ahead
+	# 0.5 anticipation = 0.3s ahead
+	# 1.0 anticipation = 0.8s ahead
+	var prediction_time = lerp(0.1, 0.8, anticipation)
 
 	var predicted_pos = target_pos + target_velocity * prediction_time
 
-	return predicted_pos + behind_offset
+	# Low anticipation adds prediction error (missing where target actually is)
+	var error_magnitude = (1.0 - anticipation) * 100.0  # 0-100 units of error
+	var error_angle = randf_range(0, TAU)
+	var error_offset = Vector2(cos(error_angle), sin(error_angle)) * error_magnitude
+
+	return predicted_pos + behind_offset + error_offset
 
 ## Get squadron leader's target
 static func _get_squadron_leader_target(crew_data: Dictionary, all_crew: Array) -> String:
