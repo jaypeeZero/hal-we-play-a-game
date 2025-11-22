@@ -134,9 +134,9 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 		})
 
 	# Calculate thrust state from pilot control
+	# MUST match the physics logic in movement_system.gd:apply_space_physics()
 	var pilot_state = ship_data.get("_pilot_state", {})
 	if pilot_state.has("thrust_active") and pilot_state.thrust_active:
-		# Calculate thrust direction and determine which thrusters are firing
 		var desired_heading = pilot_state.get("desired_heading", ship_data.rotation)
 		var desired_thrust_direction = Vector2(cos(desired_heading), sin(desired_heading))
 		var ship_facing = Vector2(cos(ship_data.rotation), sin(ship_data.rotation))
@@ -144,14 +144,18 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 		# Calculate angle between ship facing and desired thrust direction
 		var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
 
-		# Determine which thrusters are firing
-		if thrust_angle_diff < PI / 4:  # Within 45° of forward - main engines
+		# Engine visuals match physics: thrust only when aligned, always in ship_facing direction
+		if pilot_state.get("is_braking", false):
+			# Braking: main engines fire (facing opposite to velocity)
 			state.is_main_engine_firing = true
 			state.maneuvering_thrust_direction = Vector2.ZERO
-		else:  # Lateral or reverse - maneuvering thrusters
-			state.is_main_engine_firing = false
-			# Store thrust direction in local (ship) space for debug visualization
-			state.maneuvering_thrust_direction = desired_thrust_direction
+		elif thrust_angle_diff < PI / 4:  # Within 45° of forward - main engines
+			state.is_main_engine_firing = true
+			state.maneuvering_thrust_direction = Vector2.ZERO
+		elif thrust_angle_diff < PI / 2:  # Within 90° - reduced thrust, still forward
+			state.is_main_engine_firing = true  # Engines still firing, just at reduced power
+			state.maneuvering_thrust_direction = Vector2.ZERO
+		# Beyond 90° - no thrust, ship is turning (engines not firing)
 
 	return state
 

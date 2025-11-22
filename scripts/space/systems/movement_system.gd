@@ -794,30 +794,34 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	)
 
 	# Apply thrust if pilot wants to thrust
+	# CRITICAL: Thrust is ALWAYS applied in the direction the ship is FACING
+	# Engines are at the BACK of the ship, so they push the ship FORWARD
 	var thrust_vector = Vector2.ZERO
 	if pilot_control.thrust_active:
-		# Calculate thrust direction (where the ship wants to go)
-		var desired_thrust_direction = Vector2(cos(pilot_control.desired_heading), sin(pilot_control.desired_heading))
+		# Ship facing direction - this is where thrust actually goes
 		var ship_facing = Vector2(cos(new_rotation), sin(new_rotation))
 
-		# Calculate angle between ship facing and desired thrust direction
+		# Calculate angle between ship facing and desired heading
+		var desired_thrust_direction = Vector2(cos(pilot_control.desired_heading), sin(pilot_control.desired_heading))
 		var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
 
-		# Determine which thrusters to use based on angle
-		# CRITICAL: Braking uses FULL MAIN ENGINE POWER regardless of angle!
-		# Forward arc (±45°): main engines at full power
-		# Lateral arc (45°-135°): maneuvering thrusters (30% power)
-		# Reverse arc (135°-180°): reverse thrusters (30% power)
-		var acceleration_to_use: float
+		# Only thrust when reasonably aligned with desired heading
+		# Ships must turn to face their target before they can effectively thrust
+		var acceleration_to_use: float = 0.0
 		if pilot_control.get("is_braking", false):
-			# BRAKING: Use full main engine power (100%) to stop quickly
+			# BRAKING: Thrust opposite to velocity to slow down
+			# Ship should be facing opposite to velocity direction
 			acceleration_to_use = ship_data.stats.acceleration
-		elif thrust_angle_diff < PI / 4:  # Within 45° of forward
+		elif thrust_angle_diff < PI / 4:  # Within 45° of desired heading
+			# Main engines at full power - ship is facing roughly the right way
 			acceleration_to_use = ship_data.stats.acceleration
-		else:  # Lateral or reverse (normal maneuvering)
+		elif thrust_angle_diff < PI / 2:  # Within 90° - partial thrust
+			# Reduced thrust when not fully aligned
 			acceleration_to_use = ship_data.stats.get("lateral_acceleration", ship_data.stats.acceleration * 0.3)
+		# Beyond 90° - no thrust, ship needs to turn first
 
-		thrust_vector = desired_thrust_direction * acceleration_to_use * delta
+		# Thrust is ALWAYS in ship_facing direction (engines push from behind)
+		thrust_vector = ship_facing * acceleration_to_use * delta
 
 	# Update velocity with thrust (no drag in space!)
 	var new_velocity = ship_data.velocity + thrust_vector
