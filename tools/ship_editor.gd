@@ -5,7 +5,11 @@ extends Control
 @onready var ship_type_dropdown: OptionButton = $HBoxContainer/VBoxContainer/ShipTypeDropdown
 @onready var ship_info_label: Label = $HBoxContainer/VBoxContainer/ShipInfoLabel
 @onready var ship_canvas: Control = $HBoxContainer/VBoxContainer/ShipCanvas
-@onready var properties_label: Label = $HBoxContainer/PropertiesPanel/PropertiesScrollContainer/PropertiesLabel
+@onready var properties_container: VBoxContainer = $HBoxContainer/PropertiesPanel/PropertiesScrollContainer/PropertiesContainer
+@onready var properties_label: Label = $HBoxContainer/PropertiesPanel/PropertiesScrollContainer/PropertiesContainer/PropertiesLabel
+
+# Path for saving custom ship configurations
+const CUSTOM_SHIPS_PATH = "user://custom_ships/"
 
 # Ship types available in the game
 const SHIP_TYPES = ["fighter", "corvette", "capital"]
@@ -21,12 +25,16 @@ var current_ship_data: Dictionary = {}
 var selected_component: Dictionary = {}
 var selected_component_type: String = ""
 
-# Drag state for engines
-var dragging_engine: Dictionary = {}
-var dragging_engine_index: int = -1
+# Drag state for components (engines and weapons)
+var dragging_component: Dictionary = {}
+var dragging_component_index: int = -1
+var dragging_component_type: String = ""  # "engine" or "weapon"
 var drag_visual: Control = null
 var drag_tween: Tween = null
 var scale_factor: float = 2.0  # Store for coordinate conversion
+
+# Track selected component index for editing
+var selected_component_index: int = -1
 
 func _ready() -> void:
 	_setup_dropdown()
@@ -104,9 +112,10 @@ func _draw_ship(ship_data: Dictionary) -> void:
 		else:
 			_draw_internal_component(internal, center, scale_factor)
 
-	# Draw weapons
-	for weapon in ship_data.get("weapons", []):
-		_draw_weapon(weapon, center, scale_factor)
+	# Draw weapons (with index for dragging)
+	var weapons = ship_data.get("weapons", [])
+	for i in range(weapons.size()):
+		_draw_weapon_component(weapons[i], i, center, scale_factor)
 
 	print("Ship drawn (ARMOR ONLY): " + ship_type + " with " +
 		str(ship_data.get("armor_sections", []).size()) + " armor sections")
@@ -261,35 +270,38 @@ func _draw_engine_component(engine: Dictionary, engine_index: int, center: Vecto
 	engine_container.add_child(label)
 
 	# Connect mouse input for drag-and-drop
-	engine_container.gui_input.connect(_on_engine_gui_input.bind(engine, engine_index, engine_container))
+	engine_container.gui_input.connect(_on_component_drag_input.bind(engine, engine_index, "engine", engine_container))
 
-func _on_engine_gui_input(event: InputEvent, engine: Dictionary, engine_index: int, container: Control) -> void:
+func _on_component_drag_input(event: InputEvent, component: Dictionary, component_index: int, component_type: String, container: Control) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				# Start dragging
-				dragging_engine = engine
-				dragging_engine_index = engine_index
+				dragging_component = component
+				dragging_component_index = component_index
+				dragging_component_type = component_type
 				drag_visual = container
-				selected_component = engine
-				selected_component_type = "engine"
+				selected_component = component
+				selected_component_type = component_type
+				selected_component_index = component_index
 				_update_properties_display()
-				print("Started dragging engine " + str(engine_index))
+				print("Started dragging " + component_type + " " + str(component_index))
 			else:
 				# Stop dragging and finalize position
-				if dragging_engine_index == engine_index:
-					_finalize_engine_position(container)
-					dragging_engine = {}
-					dragging_engine_index = -1
+				if dragging_component_index == component_index and dragging_component_type == component_type:
+					_finalize_component_position(container)
+					dragging_component = {}
+					dragging_component_index = -1
+					dragging_component_type = ""
 					drag_visual = null
-					print("Stopped dragging engine " + str(engine_index))
+					print("Stopped dragging " + component_type + " " + str(component_index))
 	elif event is InputEventMouseMotion:
-		if dragging_engine_index == engine_index and drag_visual:
-			# Move engine to mouse position with animation
+		if dragging_component_index == component_index and dragging_component_type == component_type and drag_visual:
+			# Move component to mouse position with animation
 			var target_pos = ship_canvas.get_local_mouse_position() - Vector2(8, 8)
-			_animate_engine_to_position(container, target_pos)
+			_animate_component_to_position(container, target_pos)
 
-func _animate_engine_to_position(container: Control, target_pos: Vector2) -> void:
+func _animate_component_to_position(container: Control, target_pos: Vector2) -> void:
 	# Kill any existing tween
 	if drag_tween and drag_tween.is_valid():
 		drag_tween.kill()
@@ -300,8 +312,8 @@ func _animate_engine_to_position(container: Control, target_pos: Vector2) -> voi
 	drag_tween.set_ease(Tween.EASE_OUT)
 	drag_tween.tween_property(container, "position", target_pos, 0.1)
 
-func _finalize_engine_position(container: Control) -> void:
-	if dragging_engine_index < 0:
+func _finalize_component_position(container: Control) -> void:
+	if dragging_component_index < 0:
 		return
 
 	# Convert screen position back to ship data coordinates
@@ -315,49 +327,59 @@ func _finalize_engine_position(container: Control) -> void:
 	var unrotated_offset = Vector2(offset_from_center.y, -offset_from_center.x)
 	var unscaled_offset = unrotated_offset / scale_factor
 
-	# Update the engine's position_offset in current_ship_data
-	var internals = current_ship_data.get("internals", [])
-	if dragging_engine_index < internals.size():
-		internals[dragging_engine_index]["position_offset"] = unscaled_offset
-		# Also update the reference
-		dragging_engine["position_offset"] = unscaled_offset
-		selected_component = dragging_engine
-		_update_properties_display()
-		print("Engine " + str(dragging_engine_index) + " moved to offset: " + str(unscaled_offset))
+	# Update the component's position_offset in current_ship_data
+	if dragging_component_type == "engine":
+		var internals = current_ship_data.get("internals", [])
+		if dragging_component_index < internals.size():
+			internals[dragging_component_index]["position_offset"] = unscaled_offset
+	elif dragging_component_type == "weapon":
+		var weapons = current_ship_data.get("weapons", [])
+		if dragging_component_index < weapons.size():
+			weapons[dragging_component_index]["position_offset"] = unscaled_offset
 
-func _draw_weapon(weapon: Dictionary, center: Vector2, scale: float) -> void:
-	# Draw weapon as a small rectangle at offset position with rotation
+	# Update the reference
+	dragging_component["position_offset"] = unscaled_offset
+	selected_component = dragging_component
+	_update_properties_display()
+	print(dragging_component_type.capitalize() + " " + str(dragging_component_index) + " moved to offset: " + str(unscaled_offset))
+
+func _draw_weapon_component(weapon: Dictionary, weapon_index: int, center: Vector2, scale: float) -> void:
+	# Draw weapon as a draggable red rectangle at offset position
 	var offset = weapon.get("position_offset", Vector2.ZERO) * scale
 	var rotated_offset = HullShapes.rotate_90(offset)
 	var pos = center + rotated_offset
 	var facing = weapon.get("facing", 0.0)
 
-	# Create clickable button for weapon
-	var button = Button.new()
-	button.position = pos - Vector2(8, 12)
-	button.custom_minimum_size = Vector2(16, 24)
-	button.flat = true
-	button.pressed.connect(_on_component_clicked.bind(weapon, "weapon"))
-	ship_canvas.add_child(button)
+	# Create container for the weapon visual (will be animated during drag)
+	var weapon_container = Control.new()
+	weapon_container.name = "Weapon_" + str(weapon_index)
+	weapon_container.position = pos - Vector2(8, 8)
+	weapon_container.custom_minimum_size = Vector2(16, 16)
+	weapon_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	ship_canvas.add_child(weapon_container)
 
+	# Draw the weapon rectangle
 	var rect = Control.new()
-	rect.position = pos - Vector2(4, 8)
+	rect.position = Vector2(4, 0)
 	rect.custom_minimum_size = Vector2(8, 16)
 	rect.rotation = facing
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.draw.connect(func():
-		rect.draw_rect(Rect2(0, 0, 8, 16), Color.TRANSPARENT, false, 1.5)
-		rect.draw_rect(Rect2(1, 1, 6, 14), COLOR_WEAPON, false, 1.5)
+		rect.draw_rect(Rect2(0, 0, 8, 16), COLOR_WEAPON, false, 1.5)
+		rect.draw_rect(Rect2(1, 1, 6, 14), COLOR_WEAPON.darkened(0.3), true)
 	)
-	ship_canvas.add_child(rect)
+	weapon_container.add_child(rect)
 
 	# Add label
 	var label = Label.new()
 	label.text = "W"
 	label.add_theme_color_override("font_color", COLOR_WEAPON)
-	label.position = pos + Vector2(10, -8)
+	label.position = Vector2(16, 0)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ship_canvas.add_child(label)
+	weapon_container.add_child(label)
+
+	# Connect mouse input for drag-and-drop
+	weapon_container.gui_input.connect(_on_component_drag_input.bind(weapon, weapon_index, "weapon", weapon_container))
 
 ## Handle component click
 func _on_component_clicked(component_data: Dictionary, component_type: String) -> void:
@@ -366,41 +388,256 @@ func _on_component_clicked(component_data: Dictionary, component_type: String) -
 	_update_properties_display()
 	print("Selected " + component_type + ": " + str(component_data))
 
-## Update the properties panel with selected component data
+## Update the properties panel with editable form elements
 func _update_properties_display() -> void:
+	# Clear existing form elements (except the label)
+	for child in properties_container.get_children():
+		if child != properties_label:
+			child.queue_free()
+
 	if selected_component.is_empty():
 		properties_label.text = "Click on a component to view its properties"
 		return
 
-	var props_text = "=== " + selected_component_type.to_upper() + " ===\n\n"
+	properties_label.text = "=== " + selected_component_type.to_upper() + " ==="
 
-	# Display all properties recursively
-	props_text += _format_properties(selected_component, 0)
+	# Create editable form fields for each property
+	_create_property_fields(selected_component, "", 0)
 
-	properties_label.text = props_text
+## Create editable form fields for component properties
+func _create_property_fields(data: Dictionary, path_prefix: String, indent_level: int) -> void:
+	for key in data.keys():
+		var value = data[key]
+		var full_path = path_prefix + key if path_prefix.is_empty() else path_prefix + "." + key
 
-## Recursively format properties for display
-func _format_properties(data: Variant, indent_level: int) -> String:
-	var result = ""
-	var indent = "  ".repeat(indent_level)
+		if value is Dictionary:
+			# Create a section header for nested dictionaries
+			var header = Label.new()
+			header.text = "  ".repeat(indent_level) + str(key) + ":"
+			header.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+			properties_container.add_child(header)
+			_create_property_fields(value, full_path, indent_level + 1)
+		elif value is Array:
+			# Skip arrays for now (complex to edit)
+			var header = Label.new()
+			header.text = "  ".repeat(indent_level) + str(key) + ": [array]"
+			header.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+			properties_container.add_child(header)
+		elif value is Vector2:
+			# Create Vector2 editor with X and Y fields
+			_create_vector2_field(key, value, full_path, indent_level)
+		elif value is float or value is int:
+			# Create number editor
+			_create_number_field(key, value, full_path, indent_level)
+		elif value is String:
+			# Create text editor
+			_create_text_field(key, value, full_path, indent_level)
+		elif value is bool:
+			# Create checkbox
+			_create_bool_field(key, value, full_path, indent_level)
+		else:
+			# Display as read-only label for other types
+			var label = Label.new()
+			label.text = "  ".repeat(indent_level) + str(key) + ": " + str(value)
+			label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+			properties_container.add_child(label)
 
-	if data is Dictionary:
-		for key in data.keys():
-			var value = data[key]
-			if value is Dictionary or value is Array:
-				result += indent + str(key) + ":\n"
-				result += _format_properties(value, indent_level + 1)
-			else:
-				result += indent + str(key) + ": " + str(value) + "\n"
-	elif data is Array:
-		for i in range(data.size()):
-			var value = data[i]
-			if value is Dictionary or value is Array:
-				result += indent + "[" + str(i) + "]:\n"
-				result += _format_properties(value, indent_level + 1)
-			else:
-				result += indent + "[" + str(i) + "]: " + str(value) + "\n"
+func _create_vector2_field(key: String, value: Vector2, path: String, indent: int) -> void:
+	var container = HBoxContainer.new()
+
+	var label = Label.new()
+	label.text = "  ".repeat(indent) + str(key) + ":"
+	label.custom_minimum_size.x = 80
+	container.add_child(label)
+
+	var x_label = Label.new()
+	x_label.text = "X:"
+	container.add_child(x_label)
+
+	var x_edit = SpinBox.new()
+	x_edit.min_value = -1000
+	x_edit.max_value = 1000
+	x_edit.step = 0.5
+	x_edit.value = value.x
+	x_edit.custom_minimum_size.x = 60
+	x_edit.value_changed.connect(_on_vector2_x_changed.bind(path))
+	container.add_child(x_edit)
+
+	var y_label = Label.new()
+	y_label.text = "Y:"
+	container.add_child(y_label)
+
+	var y_edit = SpinBox.new()
+	y_edit.min_value = -1000
+	y_edit.max_value = 1000
+	y_edit.step = 0.5
+	y_edit.value = value.y
+	y_edit.custom_minimum_size.x = 60
+	y_edit.value_changed.connect(_on_vector2_y_changed.bind(path))
+	container.add_child(y_edit)
+
+	properties_container.add_child(container)
+
+func _create_number_field(key: String, value: Variant, path: String, indent: int) -> void:
+	var container = HBoxContainer.new()
+
+	var label = Label.new()
+	label.text = "  ".repeat(indent) + str(key) + ":"
+	label.custom_minimum_size.x = 120
+	container.add_child(label)
+
+	var edit = SpinBox.new()
+	edit.min_value = -10000
+	edit.max_value = 10000
+	edit.step = 1 if value is int else 0.1
+	edit.value = value
+	edit.custom_minimum_size.x = 80
+	edit.value_changed.connect(_on_number_changed.bind(path))
+	container.add_child(edit)
+
+	properties_container.add_child(container)
+
+func _create_text_field(key: String, value: String, path: String, indent: int) -> void:
+	var container = HBoxContainer.new()
+
+	var label = Label.new()
+	label.text = "  ".repeat(indent) + str(key) + ":"
+	label.custom_minimum_size.x = 120
+	container.add_child(label)
+
+	var edit = LineEdit.new()
+	edit.text = value
+	edit.custom_minimum_size.x = 120
+	edit.text_changed.connect(_on_text_changed.bind(path))
+	container.add_child(edit)
+
+	properties_container.add_child(container)
+
+func _create_bool_field(key: String, value: bool, path: String, indent: int) -> void:
+	var container = HBoxContainer.new()
+
+	var label = Label.new()
+	label.text = "  ".repeat(indent) + str(key) + ":"
+	label.custom_minimum_size.x = 120
+	container.add_child(label)
+
+	var check = CheckBox.new()
+	check.button_pressed = value
+	check.toggled.connect(_on_bool_changed.bind(path))
+	container.add_child(check)
+
+	properties_container.add_child(container)
+
+## Property change handlers
+func _on_vector2_x_changed(new_value: float, path: String) -> void:
+	var current = _get_value_at_path(selected_component, path)
+	if current is Vector2:
+		var new_vec = Vector2(new_value, current.y)
+		_set_value_at_path(selected_component, path, new_vec)
+		_update_component_in_ship_data()
+		_draw_ship(current_ship_data)
+
+func _on_vector2_y_changed(new_value: float, path: String) -> void:
+	var current = _get_value_at_path(selected_component, path)
+	if current is Vector2:
+		var new_vec = Vector2(current.x, new_value)
+		_set_value_at_path(selected_component, path, new_vec)
+		_update_component_in_ship_data()
+		_draw_ship(current_ship_data)
+
+func _on_number_changed(new_value: float, path: String) -> void:
+	_set_value_at_path(selected_component, path, new_value)
+	_update_component_in_ship_data()
+
+func _on_text_changed(new_value: String, path: String) -> void:
+	_set_value_at_path(selected_component, path, new_value)
+	_update_component_in_ship_data()
+
+func _on_bool_changed(new_value: bool, path: String) -> void:
+	_set_value_at_path(selected_component, path, new_value)
+	_update_component_in_ship_data()
+
+## Get value at dot-separated path in dictionary
+func _get_value_at_path(data: Dictionary, path: String) -> Variant:
+	var keys = path.split(".")
+	var current: Variant = data
+	for key in keys:
+		if current is Dictionary and current.has(key):
+			current = current[key]
+		else:
+			return null
+	return current
+
+## Set value at dot-separated path in dictionary
+func _set_value_at_path(data: Dictionary, path: String, value: Variant) -> void:
+	var keys = path.split(".")
+	var current: Variant = data
+	for i in range(keys.size() - 1):
+		var key = keys[i]
+		if current is Dictionary and current.has(key):
+			current = current[key]
+		else:
+			return
+	if current is Dictionary:
+		current[keys[keys.size() - 1]] = value
+
+## Update the component in ship data after property changes
+func _update_component_in_ship_data() -> void:
+	if selected_component_type == "engine" and selected_component_index >= 0:
+		var internals = current_ship_data.get("internals", [])
+		if selected_component_index < internals.size():
+			internals[selected_component_index] = selected_component
+	elif selected_component_type == "weapon" and selected_component_index >= 0:
+		var weapons = current_ship_data.get("weapons", [])
+		if selected_component_index < weapons.size():
+			weapons[selected_component_index] = selected_component
+	elif selected_component_type == "armor":
+		var armor_sections = current_ship_data.get("armor_sections", [])
+		for i in range(armor_sections.size()):
+			if armor_sections[i].get("section_id") == selected_component.get("section_id"):
+				armor_sections[i] = selected_component
+				break
+
+## Save ship configuration to file
+func _on_save_button_pressed() -> void:
+	if current_ship_data.is_empty():
+		print("No ship data to save")
+		return
+
+	_ensure_custom_ships_dir()
+
+	var ship_type = current_ship_data.get("type", "unknown")
+	var file_path = CUSTOM_SHIPS_PATH + ship_type + "_custom.json"
+
+	# Convert ship data to JSON (need to handle Vector2 serialization)
+	var save_data = _serialize_ship_data(current_ship_data)
+	var json_string = JSON.stringify(save_data, "\t")
+
+	var file = FileAccess.open(file_path, FileAccess.WRITE)
+	if file:
+		file.store_string(json_string)
+		file.close()
+		print("Ship configuration saved to: " + file_path)
 	else:
-		result += indent + str(data) + "\n"
+		print("ERROR: Could not save ship configuration")
 
-	return result
+func _ensure_custom_ships_dir() -> void:
+	if not DirAccess.dir_exists_absolute(CUSTOM_SHIPS_PATH):
+		DirAccess.make_dir_recursive_absolute(CUSTOM_SHIPS_PATH)
+
+## Serialize ship data for JSON (convert Vector2 to dict)
+func _serialize_ship_data(data: Variant) -> Variant:
+	if data is Dictionary:
+		var result = {}
+		for key in data.keys():
+			result[key] = _serialize_ship_data(data[key])
+		return result
+	elif data is Array:
+		var result = []
+		for item in data:
+			result.append(_serialize_ship_data(item))
+		return result
+	elif data is Vector2:
+		return {"_type": "Vector2", "x": data.x, "y": data.y}
+	else:
+		return data

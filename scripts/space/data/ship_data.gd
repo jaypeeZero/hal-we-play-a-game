@@ -6,8 +6,18 @@ extends RefCounted
 
 static var _next_ship_id: int = 0
 
-## Get ship template by type
+# Path for custom ship configurations saved by Ship Editor
+const CUSTOM_SHIPS_PATH = "user://custom_ships/"
+
+## Get ship template by type (checks for custom config first)
 static func get_ship_template(ship_type: String) -> Dictionary:
+	# Check for custom configuration first
+	var custom_template = _load_custom_template(ship_type)
+	if not custom_template.is_empty():
+		print("Loaded custom " + ship_type + " configuration")
+		return custom_template
+
+	# Fall back to default templates
 	match ship_type:
 		"fighter":
 			return _create_fighter_template()
@@ -17,6 +27,52 @@ static func get_ship_template(ship_type: String) -> Dictionary:
 			return _create_capital_template()
 		_:
 			return {}
+
+## Load custom ship template from file if it exists
+static func _load_custom_template(ship_type: String) -> Dictionary:
+	var file_path = CUSTOM_SHIPS_PATH + ship_type + "_custom.json"
+
+	if not FileAccess.file_exists(file_path):
+		return {}
+
+	var file = FileAccess.open(file_path, FileAccess.READ)
+	if not file:
+		return {}
+
+	var json_string = file.get_as_text()
+	file.close()
+
+	var json = JSON.new()
+	var error = json.parse(json_string)
+	if error != OK:
+		print("ERROR: Failed to parse custom ship config: " + json.get_error_message())
+		return {}
+
+	var data = json.get_data()
+	if data is Dictionary:
+		return _deserialize_ship_data(data)
+
+	return {}
+
+## Deserialize ship data from JSON (convert Vector2 dicts back to Vector2)
+static func _deserialize_ship_data(data: Variant) -> Variant:
+	if data is Dictionary:
+		# Check if this is a serialized Vector2
+		if data.has("_type") and data["_type"] == "Vector2":
+			return Vector2(data.get("x", 0.0), data.get("y", 0.0))
+
+		# Otherwise recursively deserialize
+		var result = {}
+		for key in data.keys():
+			result[key] = _deserialize_ship_data(data[key])
+		return result
+	elif data is Array:
+		var result = []
+		for item in data:
+			result.append(_deserialize_ship_data(item))
+		return result
+	else:
+		return data
 
 ## Create a ship instance from template with crew
 static func create_ship_instance(ship_type: String, team: int, position: Vector2, create_crew: bool = false, crew_skill: float = 0.5) -> Dictionary:
