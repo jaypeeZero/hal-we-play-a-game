@@ -7,7 +7,8 @@ func _ready() -> void:
 	add_child(bridge)
 
 	# Initialize with sprite renderer (uses Kenny sprite sheet)
-	var sprite_renderer = SpriteRenderer.new()
+	# var sprite_renderer = SpriteRenderer.new()
+	var renderer = Renderer78.new()
 	var theme = JsonTheme.load_from_file("res://themes/emoji_simple.json")  # Fallback, not used by SpriteRenderer
 	bridge.set_renderer(sprite_renderer, theme)
 
