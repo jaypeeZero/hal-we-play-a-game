@@ -10,7 +10,7 @@ func _ready() -> void:
 	# var sprite_renderer = SpriteRenderer.new()
 	var renderer = Renderer78.new()
 	var theme = JsonTheme.load_from_file("res://themes/emoji_simple.json")  # Fallback, not used by SpriteRenderer
-	bridge.set_renderer(sprite_renderer, theme)
+	bridge.set_renderer(renderer, theme)
 
 	# Log via GameLogger if available, otherwise use print
 	var logger = get_node_or_null("/root/GameLogger")
