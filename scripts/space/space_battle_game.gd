@@ -505,7 +505,9 @@ func _execute_squadron_spawn(spawn_position: Vector2) -> void:
 
 	# Create squadron crew structure if AI enabled
 	if ENABLE_CREW_AI and ship_ids.size() == 6:
-		var squadron_crew = CrewData.create_fighter_squadron(0.7)
+		# Team 0: Ace pilots (skill 1.0), Team 1: Rookie pilots (skill 0.0)
+		var squadron_skill = 1.0 if team == 0 else 0.0
+		var squadron_crew = CrewData.create_fighter_squadron(squadron_skill)
 
 		# Assign each crew member to their ship
 		for i in range(6):
@@ -539,7 +541,7 @@ func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
 
 	# Create crew for this ship (if AI enabled)
 	if ENABLE_CREW_AI:
-		_create_crew_for_ship(ship_data.ship_id, ship_type)
+		_create_crew_for_ship(ship_data.ship_id, ship_type, team)
 
 	# Emit signal
 	ship_spawned.emit(ship_data.ship_id)
@@ -1036,7 +1038,12 @@ func _emit_damage_events(hits: Array) -> void:
 				})
 
 ## Create and assign crew to a ship
-func _create_crew_for_ship(ship_id: String, ship_type: String) -> void:
+func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> void:
+	# Determine crew skill based on team (extreme values for testing)
+	# Team 0: Ace pilots (skill 1.0) - best possible
+	# Team 1: Rookie pilots (skill 0.0) - worst possible
+	var base_skill = 1.0 if team == 0 else 0.0
+
 	# Determine crew size based on ship type
 	var weapon_count = 1  # Default
 	var new_crew = []
@@ -1044,13 +1051,13 @@ func _create_crew_for_ship(ship_id: String, ship_type: String) -> void:
 	match ship_type:
 		"fighter":
 			# Solo pilot for fighters
-			new_crew = CrewData.create_solo_fighter_crew(0.7)
+			new_crew = CrewData.create_solo_fighter_crew(base_skill)
 		"corvette":
 			weapon_count = 2
-			new_crew = CrewData.create_ship_crew(weapon_count, 0.6)
+			new_crew = CrewData.create_ship_crew(weapon_count, base_skill)
 		"capital":
 			weapon_count = 4
-			new_crew = CrewData.create_ship_crew(weapon_count, 0.8)
+			new_crew = CrewData.create_ship_crew(weapon_count, base_skill)
 
 	# Assign crew to ship and add to index
 	for crew_member in new_crew:
