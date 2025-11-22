@@ -7,6 +7,28 @@ extends RefCounted
 ## Following functional programming principles
 
 # ============================================================================
+# COORDINATE SYSTEM NOTES
+# ============================================================================
+# Ship sprites are drawn pointing UP (Y-negative) at rotation 0.
+# Godot's standard rotation 0 = facing RIGHT (X-positive).
+#
+# To make ships visually face a direction, we need:
+#   heading = direction.angle() + PI/2
+#
+# To get the direction a ship is visually facing:
+#   visual_forward = Vector2(sin(rotation), -cos(rotation))
+#
+# This offset (PI/2) is applied throughout this file.
+
+## Convert a direction vector to a heading angle that makes the ship VISUALLY face that direction
+static func direction_to_heading(direction: Vector2) -> float:
+	return direction.angle() + PI / 2
+
+## Get the visual forward direction of a ship from its rotation
+static func get_visual_forward(rotation: float) -> Vector2:
+	return Vector2(sin(rotation), -cos(rotation))
+
+# ============================================================================
 # MAIN API - Returns new ship_data with updated position/velocity
 # ============================================================================
 
@@ -175,18 +197,18 @@ static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary, n
 	# Determine heading based on what we're doing
 	if is_braking and ship_data.velocity.length() > 10.0:
 		# Point opposite to velocity to brake
-		desired_heading = ship_data.velocity.angle() + PI
+		desired_heading = direction_to_heading(-ship_data.velocity.normalized())
 	elif has_collision_threat and distance > min_safe_distance:
 		# Point toward avoidance direction
-		desired_heading = to_desired.angle()
+		desired_heading = direction_to_heading(to_desired)
 		should_thrust = true
 	else:
 		# Point toward desired position for maneuvering
 		if to_desired.length() > 10.0:
-			desired_heading = to_desired.angle()
+			desired_heading = direction_to_heading(to_desired)
 		else:
 			# At desired position, face the target
-			desired_heading = to_target.angle()
+			desired_heading = direction_to_heading(to_target)
 
 	# Check if we're going too fast toward target
 	var closing_speed = velocity_toward_target
@@ -196,7 +218,7 @@ static func calculate_pilot_control(ship_data: Dictionary, target: Dictionary, n
 		is_braking = true
 		should_thrust = false
 		if ship_data.velocity.length() > 10.0:
-			desired_heading = ship_data.velocity.angle() + PI
+			desired_heading = direction_to_heading(-ship_data.velocity.normalized())
 
 	return {
 		"desired_heading": desired_heading,
@@ -236,7 +258,7 @@ static func calculate_evasion_control(ship_data: Dictionary, threat: Dictionary,
 			else:
 				retreat_direction = (retreat_direction + ship_avoidance.normalized()).normalized()
 
-		desired_heading = retreat_direction.angle()
+		desired_heading = direction_to_heading(retreat_direction)
 		should_thrust = true
 	else:
 		# At safe distance - maintain position with evasive drift
@@ -244,11 +266,11 @@ static func calculate_evasion_control(ship_data: Dictionary, threat: Dictionary,
 		var to_drift = drift_position - ship_data.position
 
 		if to_drift.length() > 10.0:
-			desired_heading = to_drift.angle()
+			desired_heading = direction_to_heading(to_drift)
 			should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.5
 		else:
 			# At good position, face away from threat
-			desired_heading = direction_from_threat.angle()
+			desired_heading = direction_to_heading(direction_from_threat)
 			should_thrust = false
 
 	return {
@@ -296,7 +318,7 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 ## Pursue at full speed - far away approach
 static func calculate_pursue_full_speed(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
-	var desired_heading = to_target.angle()
+	var desired_heading = direction_to_heading(to_target)
 
 	# DART AND DASH: Check if we need to brake and change direction
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
@@ -324,7 +346,7 @@ static func calculate_pursue_tactical(ship_data: Dictionary, target: Dictionary,
 	var predicted_pos = target.position + target_velocity * 0.5
 
 	var to_predicted = predicted_pos - ship_data.position
-	var desired_heading = to_predicted.angle()
+	var desired_heading = direction_to_heading(to_predicted)
 
 	# DART AND DASH: Brake if changing direction significantly
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
@@ -353,7 +375,7 @@ static func calculate_flank_behind(ship_data: Dictionary, target: Dictionary, ne
 		behind_position = target.position + behind_offset
 
 	var to_behind = behind_position - ship_data.position
-	var desired_heading = to_behind.angle()
+	var desired_heading = direction_to_heading(to_behind)
 
 	# DART AND DASH: Sharp turns to get behind enemy
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
@@ -379,7 +401,7 @@ static func calculate_tight_pursuit(ship_data: Dictionary, target: Dictionary, n
 
 	var to_desired = desired_pos - ship_data.position
 	var distance = to_desired.length()
-	var desired_heading = to_desired.angle()
+	var desired_heading = direction_to_heading(to_desired)
 
 	# DART AND DASH: Quick corrections to stay on target's tail
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
@@ -411,13 +433,13 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 
 	var desired_pos = target.position + weave_offset
 	var to_desired = desired_pos - ship_data.position
-	var desired_heading = to_desired.angle()
+	var desired_heading = direction_to_heading(to_desired)
 
 	# DART AND DASH: Very aggressive direction changes for dogfighting
 	# Use tighter threshold for course correction (30 degrees instead of 45)
 	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 	if current_velocity.length() > 40.0:
-		var current_heading = current_velocity.angle()
+		var current_heading = direction_to_heading(current_velocity)
 		var heading_diff = abs(angle_difference(current_heading, desired_heading))
 		if heading_diff > PI / 6.0:  # 30 degrees - tighter for dogfighting
 			return create_braking_control(ship_data, desired_heading, distance)
@@ -438,7 +460,7 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 static func calculate_group_run_approach(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var formation_offset = ship_data.get("orders", {}).get("formation_offset", Vector2.ZERO)
 	var to_target = target.position - ship_data.position + formation_offset
-	var desired_heading = to_target.angle()
+	var desired_heading = direction_to_heading(to_target)
 
 	# DART AND DASH: Brake for formation adjustments
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
@@ -457,7 +479,7 @@ static func calculate_group_run_approach(ship_data: Dictionary, target: Dictiona
 static func calculate_group_run_attack(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
-	var desired_heading = to_target.angle()
+	var desired_heading = direction_to_heading(to_target)
 
 	# DART AND DASH: Line up the attack run
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
@@ -485,7 +507,7 @@ static func calculate_group_run_swing_around(ship_data: Dictionary, target: Dict
 	var swing_out_pos = target.position + perpendicular * 500.0
 
 	var to_swing = swing_out_pos - ship_data.position
-	var desired_heading = to_swing.angle()
+	var desired_heading = direction_to_heading(to_swing)
 
 	# DART AND DASH: Hard brake to swing around quickly
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
@@ -503,7 +525,7 @@ static func calculate_group_run_swing_around(ship_data: Dictionary, target: Dict
 ## Evasive retreat - get away from big ship
 static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var away_from_target = (ship_data.position - target.position).normalized()
-	var desired_heading = away_from_target.angle()
+	var desired_heading = direction_to_heading(away_from_target)
 
 	# Add weave to dodge - quick darts side to side
 	var perpendicular = Vector2(-away_from_target.y, away_from_target.x)
@@ -512,12 +534,12 @@ static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary,
 
 	var desired_pos = ship_data.position + away_from_target * 300.0 + weave_offset
 	var to_desired = desired_pos - ship_data.position
-	desired_heading = to_desired.angle()
+	desired_heading = direction_to_heading(to_desired)
 
 	# DART AND DASH: Sharp evasive maneuvers
 	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 	if current_velocity.length() > 40.0:
-		var current_heading = current_velocity.angle()
+		var current_heading = direction_to_heading(current_velocity)
 		var heading_diff = abs(angle_difference(current_heading, desired_heading))
 		if heading_diff > PI / 5.0:  # 36 degrees - quick evasion threshold
 			return create_braking_control(ship_data, desired_heading, to_desired.length())
@@ -540,7 +562,7 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 	var approach_pos = target.position + perpendicular * 200.0
 
 	var to_approach = approach_pos - ship_data.position
-	var desired_heading = to_approach.angle()
+	var desired_heading = direction_to_heading(to_approach)
 
 	# Half speed approach
 	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.5
@@ -568,12 +590,12 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 
 	var desired_pos = target.position + orbit_offset + weave_offset
 	var to_desired = desired_pos - ship_data.position
-	var desired_heading = to_desired.angle()
+	var desired_heading = direction_to_heading(to_desired)
 
 	# DART AND DASH: Quick direction changes while dodging
 	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 	if current_velocity.length() > 50.0:
-		var current_heading = current_velocity.angle()
+		var current_heading = direction_to_heading(current_velocity)
 		var heading_diff = abs(angle_difference(current_heading, desired_heading))
 		if heading_diff > PI / 4.5:  # ~40 degrees
 			return create_braking_control(ship_data, desired_heading, distance)
@@ -602,7 +624,7 @@ static func calculate_rejoin_wingman(ship_data: Dictionary, target: Dictionary, 
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var to_formation = formation_pos - my_pos
 	var distance = to_formation.length()
-	var desired_heading = to_formation.angle()
+	var desired_heading = direction_to_heading(to_formation)
 
 	# Get lead's velocity to match when close
 	var lead_velocity = target.get("velocity", Vector2.ZERO)
@@ -633,7 +655,7 @@ static func calculate_rejoin_wingman(ship_data: Dictionary, target: Dictionary, 
 
 		# If very close, try to match lead's heading too
 		if distance < 40.0 and lead_velocity.length() > 10.0:
-			desired_heading = lead_velocity.angle()
+			desired_heading = direction_to_heading(lead_velocity)
 
 	return {
 		"desired_heading": desired_heading,
@@ -654,7 +676,7 @@ static func check_needs_braking(ship_data: Dictionary, desired_heading: float) -
 		return false
 
 	# Calculate angle difference between current velocity and desired heading
-	var current_heading = current_velocity.angle()
+	var current_heading = direction_to_heading(current_velocity)
 	var heading_diff = abs(angle_difference(current_heading, desired_heading))
 
 	# If we need to turn more than 45 degrees and we're moving fast, brake first
@@ -668,7 +690,7 @@ static func create_braking_control(ship_data: Dictionary, desired_heading: float
 	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 
 	# Point opposite to current velocity for maximum braking
-	var brake_heading = current_velocity.angle() + PI
+	var brake_heading = direction_to_heading(-current_velocity.normalized())
 
 	return {
 		"desired_heading": brake_heading,
@@ -794,30 +816,34 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	)
 
 	# Apply thrust if pilot wants to thrust
+	# CRITICAL: Thrust is ALWAYS applied in the direction the ship VISUALLY FACES
+	# Engines are at the BACK of the ship, so they push the ship FORWARD
 	var thrust_vector = Vector2.ZERO
 	if pilot_control.thrust_active:
-		# Calculate thrust direction (where the ship wants to go)
-		var desired_thrust_direction = Vector2(cos(pilot_control.desired_heading), sin(pilot_control.desired_heading))
-		var ship_facing = Vector2(cos(new_rotation), sin(new_rotation))
+		# Ship visual facing direction (where the nose points, not raw rotation)
+		var ship_facing = get_visual_forward(new_rotation)
 
-		# Calculate angle between ship facing and desired thrust direction
+		# Calculate angle between ship facing and desired visual direction
+		var desired_thrust_direction = get_visual_forward(pilot_control.desired_heading)
 		var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
 
-		# Determine which thrusters to use based on angle
-		# CRITICAL: Braking uses FULL MAIN ENGINE POWER regardless of angle!
-		# Forward arc (±45°): main engines at full power
-		# Lateral arc (45°-135°): maneuvering thrusters (30% power)
-		# Reverse arc (135°-180°): reverse thrusters (30% power)
-		var acceleration_to_use: float
+		# Only thrust when reasonably aligned with desired heading
+		# Ships must turn to face their target before they can effectively thrust
+		var acceleration_to_use: float = 0.0
 		if pilot_control.get("is_braking", false):
-			# BRAKING: Use full main engine power (100%) to stop quickly
+			# BRAKING: Thrust opposite to velocity to slow down
+			# Ship should be facing opposite to velocity direction
 			acceleration_to_use = ship_data.stats.acceleration
-		elif thrust_angle_diff < PI / 4:  # Within 45° of forward
+		elif thrust_angle_diff < PI / 4:  # Within 45° of desired heading
+			# Main engines at full power - ship is facing roughly the right way
 			acceleration_to_use = ship_data.stats.acceleration
-		else:  # Lateral or reverse (normal maneuvering)
+		elif thrust_angle_diff < PI / 2:  # Within 90° - partial thrust
+			# Reduced thrust when not fully aligned
 			acceleration_to_use = ship_data.stats.get("lateral_acceleration", ship_data.stats.acceleration * 0.3)
+		# Beyond 90° - no thrust, ship needs to turn first
 
-		thrust_vector = desired_thrust_direction * acceleration_to_use * delta
+		# Thrust is ALWAYS in ship_facing direction (engines push from behind)
+		thrust_vector = ship_facing * acceleration_to_use * delta
 
 	# Update velocity with thrust (no drag in space!)
 	var new_velocity = ship_data.velocity + thrust_vector
