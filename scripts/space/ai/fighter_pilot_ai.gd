@@ -349,11 +349,17 @@ static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String
 
 	# Prefer threats (enemy fighters)
 	if not threats.is_empty():
-		return threats[0]
+		var threat = threats[0]
+		if threat is Dictionary:
+			return threat.get("id", "")
+		return threat
 
 	# Fall back to opportunities
 	if not opportunities.is_empty():
-		return opportunities[0]
+		var opportunity = opportunities[0]
+		if opportunity is Dictionary:
+			return opportunity.get("id", "")
+		return opportunity
 
 	return ""
 
