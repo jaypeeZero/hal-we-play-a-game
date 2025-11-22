@@ -85,7 +85,7 @@ static func _get_role_modifiers(role: Role) -> Dictionary:
 		Role.CAPTAIN:
 			return {
 				"reaction_base": 0.3,  # Don't need twitch reflexes
-				"decision_base": 0.5,  # More complex decisions
+				"decision_base": 1.0,  # More complex decisions
 				"awareness_range": 1200.0  # Broader tactical view
 			}
 		Role.SQUADRON_LEADER:
