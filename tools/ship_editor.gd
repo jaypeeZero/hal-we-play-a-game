@@ -1,6 +1,7 @@
 extends Control
 
 ## Ship Editor UI - Visual tool for composing ships from sprite parts
+## Uses shared HullShapeDrawer for consistent visuals with 78Renderer
 
 @onready var ship_type_dropdown: OptionButton = $HBoxContainer/VBoxContainer/ShipTypeDropdown
 @onready var ship_info_label: Label = $HBoxContainer/VBoxContainer/ShipInfoLabel
@@ -14,11 +15,11 @@ const CUSTOM_SHIPS_PATH = "user://custom_ships/"
 # Ship types available in the game
 const SHIP_TYPES = ["fighter", "corvette", "capital"]
 
-# Component colors - color-coded by type
-const COLOR_ARMOR = Color(0.3, 0.6, 1.0)       # Blue - armor sections
-const COLOR_INTERNAL = Color(1.0, 0.5, 0.2)   # Orange - internal components
-const COLOR_WEAPON = Color(1.0, 0.3, 0.3)     # Red - weapons
-const COLOR_ENGINE = Color(0.3, 1.0, 0.5)     # Green - engines
+# Use shared colors from HullShapeDrawer
+const COLOR_ARMOR = HullShapeDrawer.COLOR_ARMOR
+const COLOR_INTERNAL = HullShapeDrawer.COLOR_INTERNAL
+const COLOR_WEAPON = HullShapeDrawer.COLOR_WEAPON
+const COLOR_ENGINE = HullShapeDrawer.COLOR_ENGINE
 
 # Current ship data and selected component
 var current_ship_data: Dictionary = {}
