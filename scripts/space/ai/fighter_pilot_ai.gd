@@ -89,25 +89,45 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	var wingmates = _find_wingmates(crew_data, all_crew, all_ships)
 	var formation_offset = _calculate_formation_offset(crew_data, wingmates, all_ships)
 
-	# Decide maneuver based on distance and position
+	# Decide maneuver based on skill level and distance
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
 	var maneuver_type = ""
 	var target_id = target_ship.get("ship_id", "")
 
-	if distance > FAR_RANGE:
-		# Far away - approach at full speed
+	# Check for incoming collision threat
+	var on_collision_course = _is_on_collision_course(ship_data, target_ship)
+
+	if skill < 0.3:
+		# Rookie: only knows pursue_full_speed, ignores collision warnings
 		maneuver_type = "pursue_full_speed"
-	elif distance > CLOSE_RANGE:
-		# Mid range - slow approach, try to get behind
-		if is_behind:
-			maneuver_type = "pursue_tactical"
+	elif skill < 0.6:
+		# Average: pursue_full_speed + tight_pursuit, still ignores collision warnings
+		if distance > FAR_RANGE:
+			maneuver_type = "pursue_full_speed"
+		elif is_behind:
+			# Can do tight pursuit when already behind
+			maneuver_type = "pursue_tactical" if distance > CLOSE_RANGE else "tight_pursuit"
 		else:
-			maneuver_type = "flank_behind"
+			# Can't flank, just chase
+			maneuver_type = "pursue_full_speed"
 	else:
-		# Close range - tight maneuvering
-		if is_behind:
-			maneuver_type = "tight_pursuit"
+		# Skilled (>= 0.6): full tactical repertoire + collision awareness
+		if on_collision_course and distance > CLOSE_RANGE:
+			# Detect incoming collision and dodge sideways to orbit the target
+			maneuver_type = "dodge_and_weave"
+		elif distance > FAR_RANGE:
+			maneuver_type = "pursue_full_speed"
+		elif distance > CLOSE_RANGE:
+			# Mid range - slow approach, try to get behind
+			maneuver_type = "pursue_tactical" if is_behind else "flank_behind"
 		else:
-			maneuver_type = "dogfight_maneuver"
+			# Close range - tight maneuvering
+			maneuver_type = "tight_pursuit" if is_behind else "dogfight_maneuver"
+
+	# Calculate evasion direction for dodge maneuvers
+	var evasion_direction = 0
+	if maneuver_type == "dodge_and_weave":
+		evasion_direction = _calculate_evasion_direction(ship_data, target_ship)
 
 	# Apply formation offset if we have wingmates
 	var decision = {
@@ -120,7 +140,8 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 		"delay": crew_data.get("stats", {}).get("reaction_time", 0.1),
 		"timestamp": game_time,
 		"formation_offset": formation_offset,
-		"behind_position": behind_position
+		"behind_position": behind_position,
+		"evasion_direction": evasion_direction
 	}
 
 	return decision
@@ -502,3 +523,62 @@ static func _make_rejoin_wingman_decision(crew_data: Dictionary, ship_data: Dict
 		"delay": 0.3,  # Check frequently when rejoining
 		"timestamp": game_time
 	}
+
+# ============================================================================
+# COLLISION DETECTION & EVASION
+# ============================================================================
+
+## Detect if we're on a collision course with target
+## Returns true if closing distance and distance is short enough
+static func _is_on_collision_course(my_ship: Dictionary, target_ship: Dictionary) -> bool:
+	var my_pos = my_ship.get("position", Vector2.ZERO)
+	var target_pos = target_ship.get("position", Vector2.ZERO)
+	var my_velocity = my_ship.get("velocity", Vector2.ZERO)
+	var target_velocity = target_ship.get("velocity", Vector2.ZERO)
+
+	var to_target = target_pos - my_pos
+	var distance = to_target.length()
+
+	# If already very close, collision imminent
+	if distance < CLOSE_RANGE:
+		return true
+
+	# Calculate relative velocity (closing speed)
+	var relative_velocity = target_velocity - my_velocity
+	var closing_speed = relative_velocity.dot(to_target.normalized())
+
+	# If relative velocity vector is pointing toward closing (positive dot product)
+	# and both ships are moving, it's a collision course
+	if closing_speed > 50.0:  # Threshold to avoid false positives from slow drift
+		return true
+
+	return false
+
+## Calculate which direction to evade (1 = right, -1 = left)
+## Skilled pilots pick a deliberate side based on tactical advantage
+static func _calculate_evasion_direction(my_ship: Dictionary, target_ship: Dictionary) -> int:
+	var my_pos = my_ship.get("position", Vector2.ZERO)
+	var target_pos = target_ship.get("position", Vector2.ZERO)
+	var my_velocity = my_ship.get("velocity", Vector2.ZERO)
+	var target_velocity = target_ship.get("velocity", Vector2.ZERO)
+
+	var to_target = target_pos - my_pos
+
+	# Calculate perpendicular vector (right side of approach vector)
+	var perpendicular_right = Vector2(-to_target.y, to_target.x).normalized()
+
+	# Check which side the target is moving toward
+	# Evade to the OPPOSITE side to get behind them
+	var target_lateral_movement = target_velocity.dot(perpendicular_right)
+
+	# If target is drifting right, we go left (and vice versa)
+	# This sets us up to end up behind them after the pass
+	if target_lateral_movement > 10.0:
+		return -1  # Go left
+	elif target_lateral_movement < -10.0:
+		return 1   # Go right
+	else:
+		# Target not drifting laterally - pick based on our own velocity
+		# Evade in the direction we're already slightly moving
+		var my_lateral = my_velocity.dot(perpendicular_right)
+		return 1 if my_lateral >= 0 else -1

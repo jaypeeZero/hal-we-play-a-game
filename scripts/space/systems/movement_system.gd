@@ -580,13 +580,25 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
-	# Orbit around target with weave pattern - quick darts
-	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var orbit_phase = fmod(Time.get_ticks_msec() / 1500.0, 2.0 * PI)  # Faster orbit
-	var weave_phase = fmod(Time.get_ticks_msec() / 500.0, 2.0)  # Faster weave
+	# Get evasion direction from orders (1 = right, -1 = left, 0 = time-based fallback)
+	var evasion_dir = ship_data.get("orders", {}).get("evasion_direction", 0)
 
-	var orbit_offset = perpendicular * 400.0
-	var weave_offset = to_target.normalized() * sin(weave_phase * PI) * 80.0  # Tighter weave
+	# Calculate perpendicular vector (right side of approach vector)
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+
+	# Use deliberate evasion direction if set, otherwise fall back to time-based
+	var orbit_offset: Vector2
+	if evasion_dir != 0:
+		# Deliberate evasion - skilled pilot picks a side and commits
+		orbit_offset = perpendicular * evasion_dir * 400.0
+	else:
+		# Fallback to time-based oscillation (legacy behavior)
+		var orbit_phase = fmod(Time.get_ticks_msec() / 1500.0, 2.0 * PI)
+		orbit_offset = perpendicular * sin(orbit_phase) * 400.0
+
+	# Weave pattern - slight in/out movement while orbiting
+	var weave_phase = fmod(Time.get_ticks_msec() / 500.0, 2.0)
+	var weave_offset = to_target.normalized() * sin(weave_phase * PI) * 80.0
 
 	var desired_pos = target.position + orbit_offset + weave_offset
 	var to_desired = desired_pos - ship_data.position
