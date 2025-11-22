@@ -15,11 +15,11 @@ const CUSTOM_SHIPS_PATH = "user://custom_ships/"
 # Ship types available in the game
 const SHIP_TYPES = ["fighter", "corvette", "capital"]
 
-# Use shared colors from HullShapeDrawer
-const COLOR_ARMOR = HullShapeDrawer.COLOR_ARMOR
-const COLOR_INTERNAL = HullShapeDrawer.COLOR_INTERNAL
-const COLOR_WEAPON = HullShapeDrawer.COLOR_WEAPON
-const COLOR_ENGINE = HullShapeDrawer.COLOR_ENGINE
+# Component colors - must match HullShapeDrawer for visual consistency
+const COLOR_ARMOR = Color(0.3, 0.6, 1.0)       # Blue - armor sections
+const COLOR_INTERNAL = Color(1.0, 0.5, 0.2)   # Orange - internal components
+const COLOR_WEAPON = Color(1.0, 0.3, 0.3)     # Red - weapons
+const COLOR_ENGINE = Color(0.3, 1.0, 0.5)     # Green - engines
 
 # Current ship data and selected component
 var current_ship_data: Dictionary = {}
