@@ -11,9 +11,14 @@ extends RefCounted
 
 ## Update all crew members and generate their decisions
 ## EVENT-DRIVEN: Only processes crew when next_decision_time is reached
+## Now includes dynamic wing formation for fighters
 static func update_all_crew(crew_list: Array, delta: float, game_time: float, ships: Array = []) -> Dictionary:
 	var updated_crew = []
 	var decisions = []
+
+	# DYNAMIC WING SYSTEM: Form wings once per update cycle
+	# Wings are based on proximity - nearby same-team fighters form pairs/threes
+	var wings = WingFormationSystem.form_wings(ships, crew_list)
 
 	for crew in crew_list:
 		# EVENT-DRIVEN: Only process if it's time to think!
@@ -23,19 +28,20 @@ static func update_all_crew(crew_list: Array, delta: float, game_time: float, sh
 			updated_crew.append(updated)
 			continue
 
-		# Time to make a decision
-		var result = update_crew_member(crew, delta, game_time, ships, crew_list)
+		# Time to make a decision - pass wings for fighter coordination
+		var result = update_crew_member(crew, delta, game_time, ships, crew_list, wings)
 		updated_crew.append(result.crew_data)
 		if result.has("decision"):
 			decisions.append(result.decision)
 
 	return {
 		"crew_list": updated_crew,
-		"decisions": decisions
+		"decisions": decisions,
+		"wings": wings  # Return wings for debugging/visualization
 	}
 
 ## Update single crew member and generate decision
-static func update_crew_member(crew_data: Dictionary, delta: float, game_time: float, ships: Array = [], crew_list: Array = []) -> Dictionary:
+static func update_crew_member(crew_data: Dictionary, delta: float, game_time: float, ships: Array = [], crew_list: Array = [], wings: Array = []) -> Dictionary:
 	# Update stress/fatigue
 	var updated = update_crew_state(crew_data, delta)
 
@@ -48,7 +54,7 @@ static func update_crew_member(crew_data: Dictionary, delta: float, game_time: f
 	# Make role-based decision
 	match updated.role:
 		CrewData.Role.PILOT:
-			return make_pilot_decision(updated, game_time, ships, crew_list)
+			return make_pilot_decision(updated, game_time, ships, crew_list, wings)
 		CrewData.Role.GUNNER:
 			return make_gunner_decision(updated, game_time)
 		CrewData.Role.CAPTAIN:
@@ -103,13 +109,14 @@ static func calculate_decision_delay(crew_data: Dictionary) -> float:
 # ============================================================================
 
 ## Pilot makes tactical maneuvering decisions
-static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = []) -> Dictionary:
+static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = [], wings: Array = []) -> Dictionary:
 	# Check for orders from captain - ALWAYS respect superior orders
 	if crew_data.orders.received != null:
 		return execute_pilot_order(crew_data, game_time)
 
-	# Analyze tactical context
+	# Analyze tactical context (include wings for fighter coordination)
 	var context = analyze_tactical_context(crew_data, ships, crew_list)
+	context["wings"] = wings  # Add wings to context for fighter decisions
 
 	# Make ship-type-specific decision
 	# Note: We need to determine ship type from awareness or crew data
@@ -219,10 +226,12 @@ static func make_pursuit_decision(crew_data: Dictionary, game_time: float) -> Di
 	return {"crew_data": updated, "decision": decision}
 
 ## Fighter pilot decision - uses FighterPilotAI for advanced tactics
+## Now uses dynamic wing formation system for coordinated flight
 static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
-	# Get all ships and crew from context
+	# Get all ships, crew, and wings from context
 	var all_ships = context.get("all_ships", [])
 	var all_crew = context.get("all_crew", [])
+	var wings = context.get("wings", [])  # Dynamic wing formations
 
 	# Get the ship this crew is assigned to
 	var ship_id = crew_data.get("assigned_to", "")
@@ -232,8 +241,9 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 		# Fallback to balanced decision if no ship data available
 		return make_balanced_pilot_decision(crew_data, context, game_time)
 
-	# Use FighterPilotAI to make decision
-	var decision = FighterPilotAI.make_decision(crew_data, ship_data, all_ships, all_crew, game_time)
+	# Use FighterPilotAI to make decision - now with wing formations!
+	# Wings enable Lead/Wingman coordination based on proximity
+	var decision = FighterPilotAI.make_decision(crew_data, ship_data, all_ships, all_crew, game_time, wings)
 
 	# Wrap decision in standard format
 	var updated = crew_data.duplicate(true)
@@ -257,6 +267,12 @@ static func _get_fighter_decision_delay(maneuver_subtype: String) -> float:
 			return randf_range(0.3, 0.6)  # Quick updates for dynamic maneuvers
 		"pursue_full_speed", "group_run_approach":
 			return randf_range(0.7, 1.0)  # Less frequent for straightforward approach
+		"wing_rejoin":
+			return randf_range(0.2, 0.4)  # Frequent updates when rejoining lead
+		"wing_follow":
+			return randf_range(0.4, 0.7)  # Moderate updates when following lead
+		"wing_engage":
+			return randf_range(0.2, 0.4)  # Frequent updates when engaging with wing
 		"idle":
 			return randf_range(2.0, 4.0)  # Slow when idle
 		_:

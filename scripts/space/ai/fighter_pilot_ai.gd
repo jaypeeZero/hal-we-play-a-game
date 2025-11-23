@@ -1,12 +1,22 @@
 extends RefCounted
 class_name FighterPilotAI
 
-## FighterPilotAI - Simple, straightforward fighter pilot behavior
+## FighterPilotAI - Fighter pilot behavior with dynamic wing system
+##
+## Wing Formation System:
+## - Fighters dynamically form Wing-Pairs (2) or Wing-Threes (3) based on proximity
+## - Highest-skilled pilot in proximity becomes Lead
+## - Lead makes ALL targeting and movement decisions
+## - Wingmen's job: stick with Lead (behind & to side), fire at Lead's target
+##
+## Skill Impact:
+## - Lead skill affects: target selection, maneuver quality, prediction accuracy
+## - Wingman skill affects: formation tightness, reaction speed, anticipation
 ##
 ## Distance-based speed control:
-## - Far away (>500): full speed approach
-## - Mid range (150-500): slow approach, try to get behind enemy
-## - Close range (<150): tight maneuvering (orbits, weaves, loops)
+## - Far away (>5000): full speed approach
+## - Mid range (1500-5000): slow approach, try to get behind enemy
+## - Close range (<800): tight maneuvering (orbits, weaves, loops)
 ##
 ## Combat behavior:
 ## - vs Fighters: get behind enemy, adjust for movement, formation flying
@@ -30,8 +40,23 @@ const FORMATION_BROKEN_DISTANCE = 150.0  # Distance at which formation is consid
 const FORMATION_ANGLE_OFFSET = 45.0  # Degrees - wingman stays at 45° behind and to the side
 
 ## Main decision function - called by CrewAISystem
-static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
-	# WINGMATE FORMATION: Check formation status FIRST - TOP PRIORITY
+## Now uses dynamic wing formation system
+static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float, wings: Array = []) -> Dictionary:
+	# DYNAMIC WING SYSTEM: Check if we're in a wing and what role
+	var wing_info = WingFormationSystem.get_wing_info(crew_data.get("crew_id", ""), wings)
+
+	if not wing_info.is_empty():
+		var role = wing_info.get("role", "")
+
+		if role == "wingman":
+			# WINGMAN: Primary job is stick with Lead, secondary is fire at Lead's target
+			return _make_wingman_decision(crew_data, ship_data, wing_info, all_ships, all_crew, game_time)
+		elif role == "lead":
+			# LEAD: Make all tactical decisions for the wing
+			return _make_lead_decision(crew_data, ship_data, wing_info, all_ships, all_crew, game_time)
+
+	# NOT IN A WING: Fall back to solo/squadron behavior
+	# WINGMATE FORMATION (legacy): Check formation status FIRST - TOP PRIORITY
 	# If we're a wingman and formation is broken, rejoin before engaging targets
 	var is_wingman = _is_wingman_role(crew_data, all_crew)
 	if is_wingman:
@@ -76,6 +101,275 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 		decision = _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
 
 	return decision
+
+# ============================================================================
+# DYNAMIC WING SYSTEM - LEAD DECISIONS
+# ============================================================================
+
+## Lead makes all targeting and maneuvering decisions for the wing
+## Skill heavily influences decision quality
+static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wing_info: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
+	var wing = wing_info.get("wing", {})
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var skills = crew_data.get("stats", {}).get("skills", {})
+
+	# LEAD TARGET SELECTION: Skill affects quality
+	var target_id = _find_best_target_for_wing(crew_data, wing, all_ships, all_crew)
+
+	if target_id == "":
+		return _make_idle_decision(crew_data, game_time)
+
+	var target_ship = _get_ship_by_id(target_id, all_ships)
+	if target_ship.is_empty():
+		return _make_idle_decision(crew_data, game_time)
+
+	# Determine combat behavior based on target type
+	var target_type = target_ship.get("type", "fighter")
+	var decision = {}
+
+	if target_type == "fighter":
+		decision = _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
+	elif target_type == "corvette" or target_type == "capital":
+		decision = _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
+	else:
+		decision = _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
+
+	# Mark this as a lead decision so wingmen know to follow
+	decision["is_wing_lead"] = true
+	decision["wing_id"] = wing.get("lead_crew_id", "")
+
+	return decision
+
+## Find best target for the wing - Lead's skill affects selection quality
+static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, all_ships: Array, all_crew: Array) -> String:
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var situational_awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", skill)
+	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", skill)
+
+	var awareness = crew_data.get("awareness", {})
+	var threats = awareness.get("threats", [])
+	var opportunities = awareness.get("opportunities", [])
+
+	# Low skill lead: Target fixation (stick with current target even if bad)
+	if skill < 0.3:
+		var locked_target = crew_data.get("combat_state", {}).get("locked_target_id", "")
+		if locked_target != "" and _is_ship_valid(locked_target, all_ships):
+			return locked_target
+
+	# Build list of potential targets with scores
+	var targets_with_scores = []
+
+	for ship in all_ships:
+		var ship_team = ship.get("team", -1)
+		var my_team = wing.get("team", -1)
+		if ship_team == my_team or ship_team < 0:
+			continue  # Same team or invalid
+		if ship.get("status", "") != "operational":
+			continue
+
+		var ship_id = ship.get("ship_id", "")
+		var score = _calculate_target_score(crew_data, ship, all_ships, all_crew)
+		targets_with_scores.append({"id": ship_id, "score": score})
+
+	if targets_with_scores.is_empty():
+		return ""
+
+	# High skill lead: Pick best target
+	# Low skill lead: Pick somewhat randomly (poor assessment)
+	if skill >= 0.6:
+		# Sort by score, pick best
+		targets_with_scores.sort_custom(func(a, b): return a.score > b.score)
+		return targets_with_scores[0].id
+	elif skill >= 0.3:
+		# Pick from top 3
+		targets_with_scores.sort_custom(func(a, b): return a.score > b.score)
+		var max_idx = mini(3, targets_with_scores.size())
+		return targets_with_scores[randi() % max_idx].id
+	else:
+		# Low skill: Random target (poor assessment)
+		return targets_with_scores[randi() % targets_with_scores.size()].id
+
+## Calculate target score based on lead's skills
+static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array) -> float:
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var my_ship_id = crew_data.get("assigned_ship_id", "")
+	var my_ship = _get_ship_by_id(my_ship_id, all_ships)
+	var my_pos = my_ship.get("position", Vector2.ZERO) if not my_ship.is_empty() else Vector2.ZERO
+
+	var target_pos = target_ship.get("position", Vector2.ZERO)
+	var distance = my_pos.distance_to(target_pos)
+
+	var score = 0.0
+
+	# Closer targets score higher (easier to engage)
+	score += max(0, 5000 - distance) / 500.0  # Up to 10 points for close targets
+
+	# Damaged targets score higher (easier kills) - only high skill leads notice this
+	if skill >= 0.5:
+		var hull = target_ship.get("stats", {}).get("hull", {})
+		var hull_current = hull.get("current", 100)
+		var hull_max = hull.get("max", 100)
+		var damage_ratio = 1.0 - (float(hull_current) / float(hull_max))
+		score += damage_ratio * 5.0  # Up to 5 points for damaged targets
+
+	# Targets already engaged by friendlies score higher (concentrate fire)
+	# Only medium+ skill leads coordinate this well
+	if skill >= 0.4:
+		var friendly_count = _count_friendlies_engaging(target_ship.get("ship_id", ""), all_crew)
+		score += friendly_count * 2.0  # 2 points per friendly already engaging
+
+	# Targets that are a threat (facing us) score higher - situational awareness
+	var situational_awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", skill)
+	if situational_awareness >= 0.5:
+		var target_rotation = target_ship.get("rotation", 0.0)
+		var target_facing = Vector2(cos(target_rotation), sin(target_rotation))
+		var to_me = (my_pos - target_pos).normalized()
+		var facing_angle = abs(target_facing.angle_to(to_me))
+		if facing_angle < deg_to_rad(45):  # Target is facing us
+			score += 3.0  # Priority threat
+
+	return score
+
+## Count how many friendlies are engaging a target
+static func _count_friendlies_engaging(target_id: String, all_crew: Array) -> int:
+	var count = 0
+	for crew in all_crew:
+		var orders = crew.get("orders", {}).get("current", {})
+		if orders.get("target_id", "") == target_id:
+			count += 1
+	return count
+
+# ============================================================================
+# DYNAMIC WING SYSTEM - WINGMAN DECISIONS
+# ============================================================================
+
+## Wingman's primary job: stick with Lead, secondary: fire at Lead's target
+## Skill affects how well they maintain formation
+static func _make_wingman_decision(crew_data: Dictionary, ship_data: Dictionary, wing_info: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
+	var wing = wing_info.get("wing", {})
+	var position_side = wing_info.get("position_side", 1)
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+
+	var lead_ship_id = wing.get("lead_ship_id", "")
+	var lead_ship = _get_ship_by_id(lead_ship_id, all_ships)
+
+	if lead_ship.is_empty() or lead_ship.get("status", "") != "operational":
+		# Lead is gone - fall back to solo behavior
+		return _make_solo_fallback_decision(crew_data, ship_data, all_ships, all_crew, game_time)
+
+	# Check if we're in formation with Lead
+	var in_formation = WingFormationSystem.is_in_formation(ship_data, lead_ship, skill)
+
+	if not in_formation:
+		# PRIORITY #1: Rejoin Lead
+		return _make_wing_rejoin_decision(crew_data, ship_data, lead_ship, position_side, skill, game_time)
+
+	# In formation - follow Lead's target and maneuvers
+	var lead_target_id = WingFormationSystem.get_lead_target(wing, all_crew)
+	var lead_maneuver = WingFormationSystem.get_lead_maneuver(wing, all_crew)
+
+	if lead_target_id == "":
+		# Lead has no target - maintain formation while idle
+		return _make_wing_follow_decision(crew_data, ship_data, lead_ship, position_side, skill, "", game_time)
+
+	var target_ship = _get_ship_by_id(lead_target_id, all_ships)
+	if target_ship.is_empty():
+		return _make_wing_follow_decision(crew_data, ship_data, lead_ship, position_side, skill, "", game_time)
+
+	# Engage Lead's target while maintaining formation
+	return _make_wing_engage_decision(crew_data, ship_data, lead_ship, target_ship, position_side, skill, lead_maneuver, game_time)
+
+## Wingman rejoins Lead when out of formation
+static func _make_wing_rejoin_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, position_side: int, skill: float, game_time: float) -> Dictionary:
+	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill)
+
+	# Decision frequency based on skill - high skill checks more often
+	var delay = lerp(0.5, 0.2, skill)
+
+	return {
+		"type": "maneuver",
+		"subtype": "wing_rejoin",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": lead_ship.get("ship_id", ""),
+		"formation_position": formation_pos,
+		"position_side": position_side,
+		"skill_factor": skill,
+		"delay": delay,
+		"timestamp": game_time,
+		"is_wingman": true
+	}
+
+## Wingman follows Lead while idle (no target)
+static func _make_wing_follow_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, position_side: int, skill: float, lead_maneuver: String, game_time: float) -> Dictionary:
+	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill)
+
+	# Delay based on skill
+	var delay = lerp(0.8, 0.3, skill)
+
+	return {
+		"type": "maneuver",
+		"subtype": "wing_follow",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": lead_ship.get("ship_id", ""),
+		"formation_position": formation_pos,
+		"position_side": position_side,
+		"lead_maneuver": lead_maneuver,
+		"skill_factor": skill,
+		"delay": delay,
+		"timestamp": game_time,
+		"is_wingman": true
+	}
+
+## Wingman engages Lead's target while trying to maintain formation
+static func _make_wing_engage_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, target_ship: Dictionary, position_side: int, skill: float, lead_maneuver: String, game_time: float) -> Dictionary:
+	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill)
+	var target_id = target_ship.get("ship_id", "")
+
+	# High skill wingman balances formation with engagement
+	# Low skill wingman may break formation to chase target
+	var formation_priority = skill  # 0.0 = ignores formation, 1.0 = tight formation
+
+	# Decision frequency - more frequent when engaging
+	var delay = lerp(0.4, 0.2, skill)
+
+	return {
+		"type": "maneuver",
+		"subtype": "wing_engage",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": target_id,
+		"lead_ship_id": lead_ship.get("ship_id", ""),
+		"formation_position": formation_pos,
+		"position_side": position_side,
+		"lead_maneuver": lead_maneuver,
+		"formation_priority": formation_priority,
+		"skill_factor": skill,
+		"delay": delay,
+		"timestamp": game_time,
+		"is_wingman": true
+	}
+
+## Fallback to solo behavior when Lead is lost
+static func _make_solo_fallback_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
+	var target_id = _find_best_target(crew_data, all_ships)
+
+	if target_id == "":
+		return _make_idle_decision(crew_data, game_time)
+
+	var target_ship = _get_ship_by_id(target_id, all_ships)
+	if target_ship.is_empty():
+		return _make_idle_decision(crew_data, game_time)
+
+	var target_type = target_ship.get("type", "fighter")
+
+	if target_type == "fighter":
+		return _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
+	elif target_type == "corvette" or target_type == "capital":
+		return _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
+	else:
+		return _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
 
 ## Fighter vs Fighter combat
 static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
