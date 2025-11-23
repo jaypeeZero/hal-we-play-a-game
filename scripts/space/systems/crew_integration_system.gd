@@ -43,45 +43,37 @@ static func apply_decision_to_ship(ship_data: Dictionary, decision: Dictionary, 
 # ============================================================================
 
 ## Apply pilot's maneuver decision
+## All fighter maneuvers use "fight_" prefix and are handled generically
+## This prevents bugs when adding new maneuvers
 static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary, crew_data: Dictionary) -> Dictionary:
 	var updated = ship_data.duplicate(true)
+	var subtype = decision.get("subtype", "")
 
-	# Update ship's orders based on pilot decision
-	match decision.get("subtype"):
-		"evade":
-			updated.orders.current_order = "evade"
-			updated.orders.threat_id = decision.get("target_id")
-		"pursue":
-			updated.orders.current_order = "engage"
-			updated.orders.target_id = decision.get("target_id")
-		# FighterPilotAI maneuver types - all treated as specialized engage orders
-		"pursue_full_speed", "pursue_tactical", "flank_behind", "tight_pursuit", "dogfight_maneuver":
-			updated.orders.current_order = "fighter_engage"
-			updated.orders.target_id = decision.get("target_id")
-			updated.orders.maneuver_subtype = decision.get("subtype")
-			updated.orders.formation_offset = decision.get("formation_offset", Vector2.ZERO)
-			updated.orders.behind_position = decision.get("behind_position", Vector2.ZERO)
-		"group_run_approach", "group_run_attack", "group_run_swing_around":
-			updated.orders.current_order = "fighter_engage"
-			updated.orders.target_id = decision.get("target_id")
-			updated.orders.maneuver_subtype = decision.get("subtype")
-			updated.orders.nearby_fighters = decision.get("nearby_fighters", 0)
-		"evasive_retreat", "cautious_approach", "dodge_and_weave":
-			updated.orders.current_order = "fighter_engage"
-			updated.orders.target_id = decision.get("target_id")
-			updated.orders.maneuver_subtype = decision.get("subtype")
-			updated.orders.nearby_fighters = decision.get("nearby_fighters", 0)
-			updated.orders.evasion_direction = decision.get("evasion_direction", 0)
-		"rejoin_wingman":
-			updated.orders.current_order = "fighter_engage"
-			updated.orders.target_id = decision.get("target_id")  # Lead ship ID
-			updated.orders.maneuver_subtype = decision.get("subtype")
-			updated.orders.formation_position = decision.get("formation_position", Vector2.ZERO)
-		"idle":
-			updated.orders.current_order = ""
-			updated.orders.target_id = ""
-		_:
-			pass
+	# Handle special non-fighter cases
+	if subtype == "evade":
+		updated.orders.current_order = "evade"
+		updated.orders.threat_id = decision.get("target_id")
+	elif subtype == "pursue":
+		updated.orders.current_order = "engage"
+		updated.orders.target_id = decision.get("target_id")
+	elif subtype == "idle":
+		updated.orders.current_order = ""
+		updated.orders.target_id = ""
+	elif subtype.begins_with("fight_"):
+		# ALL fighter maneuvers (fight_*) - pass through everything automatically
+		# This ensures new maneuvers don't get forgotten
+		updated.orders.current_order = "fighter_engage"
+		updated.orders.target_id = decision.get("target_id", "")
+		updated.orders.maneuver_subtype = subtype
+		# Copy ALL optional fields - new fields automatically pass through
+		updated.orders.formation_offset = decision.get("formation_offset", Vector2.ZERO)
+		updated.orders.behind_position = decision.get("behind_position", Vector2.ZERO)
+		updated.orders.nearby_fighters = decision.get("nearby_fighters", 0)
+		updated.orders.evasion_direction = decision.get("evasion_direction", 0)
+		updated.orders.formation_position = decision.get("formation_position", Vector2.ZERO)
+		updated.orders.lateral_thrust = decision.get("lateral_thrust", 0)
+		updated.orders.position_side = decision.get("position_side", 0)
+		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
 
 	# Apply crew skill modifiers to ship stats
 	if crew_data and crew_data.has("stats"):

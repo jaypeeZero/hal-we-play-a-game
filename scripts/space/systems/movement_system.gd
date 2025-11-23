@@ -287,41 +287,41 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 
 	# Route to appropriate maneuver calculation
 	match maneuver_subtype:
-		"pursue_full_speed":
+		"fight_pursue_full_speed":
 			return calculate_pursue_full_speed(ship_data, target, nearby_ships, obstacles)
-		"pursue_tactical":
+		"fight_pursue_tactical":
 			return calculate_pursue_tactical(ship_data, target, nearby_ships, obstacles)
-		"flank_behind":
+		"fight_flank_behind":
 			return calculate_flank_behind(ship_data, target, nearby_ships, obstacles)
-		"tight_pursuit":
+		"fight_tight_pursuit":
 			return calculate_tight_pursuit(ship_data, target, nearby_ships, obstacles)
-		"dogfight_maneuver":
+		"fight_dogfight_maneuver":
 			return calculate_dogfight_maneuver(ship_data, target, nearby_ships, obstacles)
-		"evasive_turn":
+		"fight_evasive_turn":
 			return calculate_evasive_turn(ship_data, target, nearby_ships, obstacles)
-		"defensive_break":
+		"fight_defensive_break":
 			return calculate_defensive_break(ship_data, target, nearby_ships, obstacles)
-		"lateral_break":
+		"fight_lateral_break":
 			return calculate_lateral_break(ship_data, target, nearby_ships, obstacles)
-		"group_run_approach":
+		"fight_group_run_approach":
 			return calculate_group_run_approach(ship_data, target, nearby_ships, obstacles)
-		"group_run_attack":
+		"fight_group_run_attack":
 			return calculate_group_run_attack(ship_data, target, nearby_ships, obstacles)
-		"group_run_swing_around":
+		"fight_group_run_swing_around":
 			return calculate_group_run_swing_around(ship_data, target, nearby_ships, obstacles)
-		"evasive_retreat":
+		"fight_evasive_retreat":
 			return calculate_evasive_retreat(ship_data, target, nearby_ships, obstacles)
-		"cautious_approach":
+		"fight_cautious_approach":
 			return calculate_cautious_approach(ship_data, target, nearby_ships, obstacles)
-		"dodge_and_weave":
+		"fight_dodge_and_weave":
 			return calculate_dodge_and_weave(ship_data, target, nearby_ships, obstacles)
-		"rejoin_wingman":
+		"fight_rejoin_wingman":
 			return calculate_rejoin_wingman(ship_data, target, nearby_ships, obstacles)
-		"wing_rejoin":
+		"fight_wing_rejoin":
 			return calculate_wing_rejoin(ship_data, target, nearby_ships, obstacles)
-		"wing_follow":
+		"fight_wing_follow":
 			return calculate_wing_follow(ship_data, target, nearby_ships, obstacles)
-		"wing_engage":
+		"fight_wing_engage":
 			return calculate_wing_engage(ship_data, target, nearby_ships, obstacles)
 		_:
 			# Fallback to standard pilot control
@@ -525,8 +525,8 @@ static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary,
 	}
 
 ## Lateral break - for head-on collision avoidance
-## Turn 90 degrees perpendicular and accelerate to zoom past the enemy
-## Unlike dodge_and_weave, this doesn't try to orbit - just gets out of the way fast
+## Uses LATERAL THRUST to slide perpendicular to LOS while maintaining facing
+## Based on optimal evasion math: maximize LOS rotation rate by accelerating perpendicular to LOS
 static func calculate_lateral_break(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
@@ -534,26 +534,27 @@ static func calculate_lateral_break(ship_data: Dictionary, target: Dictionary, n
 	# Get committed evasion direction from orders (1 = right, -1 = left)
 	var evasion_dir = ship_data.get("orders", {}).get("evasion_direction", 0)
 	if evasion_dir == 0:
-		# Fallback: pick based on current lateral velocity
+		# Fallback: pick based on current lateral velocity relative to LOS
 		var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 		var lateral_vel = ship_data.get("velocity", Vector2.ZERO).dot(perpendicular)
 		evasion_dir = 1 if lateral_vel >= 0 else -1
 
-	# Calculate perpendicular direction (90 degrees to approach vector)
-	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+	# KEY INSIGHT: Keep facing the target (can still shoot), but SLIDE perpendicular
+	# This maximizes LOS rotation rate while maintaining offensive capability
+	var desired_heading = direction_to_heading(to_target)
 
-	# Go purely perpendicular - don't try to point at target at all
-	# This maximizes lateral separation speed
-	var escape_direction = perpendicular * evasion_dir
-	var desired_heading = direction_to_heading(escape_direction)
+	# Use lateral thrust to slide perpendicular to LOS
+	# This is the physics-optimal evasion: perpendicular acceleration to LOS
+	var lateral_thrust = evasion_dir
 
-	# Full throttle - speed is survival
-	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.95
+	# Maintain forward speed too - don't slow down
+	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.8
 
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": should_thrust,
 		"is_braking": false,
+		"lateral_thrust": lateral_thrust,  # NEW: slide perpendicular while facing target
 		"engagement_range": 400.0,
 		"current_distance": distance
 	}
@@ -1164,14 +1165,16 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		delta
 	)
 
+	# Ship visual facing direction (where the nose points)
+	var ship_facing = get_visual_forward(new_rotation)
+
 	# Apply thrust if pilot wants to thrust
-	# CRITICAL: Thrust is ALWAYS applied in the direction the ship VISUALLY FACES
+	# CRITICAL: Main thrust is ALWAYS applied in the direction the ship VISUALLY FACES
 	# Engines are at the BACK of the ship, so they push the ship FORWARD
 	var thrust_vector = Vector2.ZERO
-	if pilot_control.thrust_active:
-		# Ship visual facing direction (where the nose points, not raw rotation)
-		var ship_facing = get_visual_forward(new_rotation)
+	var maneuvering_direction = Vector2.ZERO
 
+	if pilot_control.thrust_active:
 		# Calculate angle between ship facing and desired visual direction
 		var desired_thrust_direction = get_visual_forward(pilot_control.desired_heading)
 		var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
@@ -1188,11 +1191,22 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 			acceleration_to_use = ship_data.stats.acceleration
 		elif thrust_angle_diff < PI / 2:  # Within 90° - partial thrust
 			# Reduced thrust when not fully aligned
-			acceleration_to_use = ship_data.stats.get("lateral_acceleration", ship_data.stats.acceleration * 0.3)
+			acceleration_to_use = ship_data.stats.acceleration * 0.3
 		# Beyond 90° - no thrust, ship needs to turn first
 
 		# Thrust is ALWAYS in ship_facing direction (engines push from behind)
 		thrust_vector = ship_facing * acceleration_to_use * delta
+
+	# LATERAL THRUST: Maneuvering thrusters allow sliding perpendicular to facing
+	# This is the key to skilled evasion - change LOS without rotating
+	var lateral_thrust_dir = pilot_control.get("lateral_thrust", 0)  # -1 left, +1 right
+	if lateral_thrust_dir != 0:
+		# Perpendicular to ship facing (90° rotation)
+		var perpendicular = Vector2(-ship_facing.y, ship_facing.x)
+		# Lateral acceleration is weaker than main engines
+		var lateral_accel = ship_data.stats.acceleration * ship_data.stats.get("lateral_acceleration", 0.3)
+		thrust_vector += perpendicular * lateral_accel * lateral_thrust_dir * delta
+		maneuvering_direction = perpendicular * lateral_thrust_dir
 
 	# Update velocity with thrust (no drag in space!)
 	var new_velocity = ship_data.velocity + thrust_vector
@@ -1208,7 +1222,8 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		velocity = new_velocity,
 		position = new_position,
 		rotation = new_rotation,
-		_pilot_state = pilot_control  # Store for debugging/visualization
+		_pilot_state = pilot_control,  # Store for debugging/visualization
+		_maneuvering_thrust_direction = maneuvering_direction  # For thruster visualization
 	})
 
 ## Ships in space maintain velocity (Newton's first law)

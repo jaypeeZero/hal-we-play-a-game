@@ -94,7 +94,7 @@ func test_slows_approach_at_mid_range():
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
 	# When target is far and not behind us, should use pursuit-type maneuvers, not close-range ones
-	var is_not_close_combat = decision.subtype not in ["tight_pursuit", "dogfight_maneuver"]
+	var is_not_close_combat = decision.subtype not in ["fight_tight_pursuit", "fight_dogfight_maneuver"]
 	assert_true(is_not_close_combat, "Should use approach maneuvers when target is far")
 
 func test_tight_maneuvering_at_close_range():
@@ -107,7 +107,7 @@ func test_tight_maneuvering_at_close_range():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	var is_close_combat = decision.subtype in ["tight_pursuit", "dogfight_maneuver", "flank_behind"]
+	var is_close_combat = decision.subtype in ["fight_tight_pursuit", "fight_dogfight_maneuver", "fight_flank_behind"]
 	assert_true(is_close_combat, "Should use tight maneuvering at close range")
 
 # ============================================================================
@@ -157,7 +157,7 @@ func test_stays_at_distance_vs_capital_ships():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, capital], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	var is_defensive = decision.subtype in ["dodge_and_weave", "cautious_approach", "evasive_retreat"]
+	var is_defensive = decision.subtype in ["fight_dodge_and_weave", "fight_cautious_approach", "fight_evasive_retreat"]
 	assert_true(is_defensive, "Should use defensive maneuvers vs capital ships")
 
 func test_dodge_and_weave_vs_corvettes():
@@ -171,7 +171,7 @@ func test_dodge_and_weave_vs_corvettes():
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
 	# Should use evasive tactics when solo vs larger ship
-	assert_ne(decision.subtype, "pursue_full_speed", "Should not charge capital ships alone")
+	assert_ne(decision.subtype, "fight_pursue_full_speed", "Should not charge capital ships alone")
 
 func test_group_runs_with_multiple_fighters():
 	# BEHAVIOR: With many fighters, coordinate group runs vs capitals
@@ -238,7 +238,7 @@ func test_movement_system_handles_fighter_engage():
 	var target = create_fighter_ship("enemy1", Vector2(300, 0), 1)
 
 	# Set up fighter_engage order with various subtypes
-	var subtypes = ["pursue_full_speed", "dogfight_maneuver", "dodge_and_weave", "group_run_attack"]
+	var subtypes = ["fight_pursue_full_speed", "fight_dogfight_maneuver", "fight_dodge_and_weave", "fight_group_run_attack"]
 
 	for subtype in subtypes:
 		ship.orders.current_order = "fighter_engage"
@@ -310,3 +310,87 @@ func test_full_integration_group_run():
 			group_run_count += 1
 
 	assert_gt(group_run_count, 0, "At least some fighters should coordinate group runs")
+
+# ============================================================================
+# COLLISION DETECTION AND LATERAL THRUST TESTS
+# ============================================================================
+
+func test_collision_detection_head_on_approach():
+	# BEHAVIOR: Two ships flying toward each other should detect collision course
+	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	my_ship.velocity = Vector2(200, 0)  # Flying right
+	my_ship.rotation = 0.0
+
+	var enemy = create_fighter_ship("enemy1", Vector2(1500, 0), 1)
+	enemy.velocity = Vector2(-200, 0)  # Flying left (toward us)
+	enemy.rotation = PI
+
+	# Use the collision detection function directly
+	var is_collision = FighterPilotAI._is_on_collision_course(my_ship, enemy)
+
+	assert_true(is_collision, "Should detect head-on collision course when both ships approaching")
+
+func test_collision_detection_not_triggered_when_diverging():
+	# BEHAVIOR: Ships moving apart should NOT trigger collision detection
+	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	my_ship.velocity = Vector2(-200, 0)  # Flying left (away from enemy)
+
+	var enemy = create_fighter_ship("enemy1", Vector2(1500, 0), 1)
+	enemy.velocity = Vector2(200, 0)  # Flying right (away from us)
+
+	var is_collision = FighterPilotAI._is_on_collision_course(my_ship, enemy)
+
+	assert_false(is_collision, "Should NOT detect collision when ships diverging")
+
+func test_skilled_pilot_chooses_lateral_break_on_collision():
+	# BEHAVIOR: Skilled pilot facing head-on collision should choose lateral_break
+	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	my_ship.velocity = Vector2(200, 0)
+	my_ship.rotation = 0.0
+
+	var enemy = create_fighter_ship("enemy1", Vector2(1500, 0), 1)
+	enemy.velocity = Vector2(-200, 0)
+	enemy.rotation = PI
+
+	var crew = create_pilot_crew("pilot1", "fighter1")
+	crew.stats.skill = 0.8  # Skilled pilot
+	crew.awareness.threats = ["enemy1"]
+
+	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, enemy], [crew], game_time)
+
+	assert_eq(decision.subtype, "fight_lateral_break", "Skilled pilot should choose lateral_break on head-on collision")
+
+func test_lateral_break_returns_lateral_thrust():
+	# BEHAVIOR: lateral_break maneuver should return lateral_thrust in pilot_control
+	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	my_ship.velocity = Vector2(200, 0)
+	my_ship.orders = {"evasion_direction": 1}  # Evade right
+
+	var enemy = create_fighter_ship("enemy1", Vector2(1000, 0), 1)
+
+	var pilot_control = MovementSystem.calculate_lateral_break(my_ship, enemy, [], [])
+
+	assert_has(pilot_control, "lateral_thrust", "lateral_break should return lateral_thrust")
+	assert_ne(pilot_control.lateral_thrust, 0, "lateral_thrust should be non-zero")
+
+func test_lateral_thrust_physics_applies_perpendicular_acceleration():
+	# BEHAVIOR: lateral_thrust should apply acceleration perpendicular to facing
+	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	ship.velocity = Vector2(0, -100)  # Moving up (same as facing)
+	ship.rotation = 0.0  # Facing up: get_visual_forward(0) = Vector2(0, -1)
+	ship.stats.acceleration = 100.0
+	ship.stats.lateral_acceleration = 0.3  # 30% of main engine
+
+	var pilot_control = {
+		"desired_heading": 0.0,
+		"thrust_active": false,  # No main thrust
+		"lateral_thrust": 1  # Thrust right (perpendicular to facing)
+	}
+
+	var result = MovementSystem.apply_space_physics(ship, pilot_control, 1.0)
+
+	# Ship faces (0, -1) "up", perpendicular right is (1, 0)
+	# Lateral thrust right should add positive X velocity
+	# Expected: lateral_accel = 100 * 0.3 = 30, so velocity.x should increase by ~30
+	assert_gt(result.velocity.x, 0, "Lateral thrust right should add positive X velocity")
+	assert_almost_eq(result.velocity.x, 30.0, 1.0, "Lateral thrust should apply correct acceleration")

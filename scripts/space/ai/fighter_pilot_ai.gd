@@ -288,7 +288,7 @@ static func _make_wing_rejoin_decision(crew_data: Dictionary, ship_data: Diction
 
 	return {
 		"type": "maneuver",
-		"subtype": "wing_rejoin",
+		"subtype": "fight_wing_rejoin",
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": lead_ship.get("ship_id", ""),
@@ -309,7 +309,7 @@ static func _make_wing_follow_decision(crew_data: Dictionary, ship_data: Diction
 
 	return {
 		"type": "maneuver",
-		"subtype": "wing_follow",
+		"subtype": "fight_wing_follow",
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": lead_ship.get("ship_id", ""),
@@ -336,7 +336,7 @@ static func _make_wing_engage_decision(crew_data: Dictionary, ship_data: Diction
 
 	return {
 		"type": "maneuver",
-		"subtype": "wing_engage",
+		"subtype": "fight_wing_engage",
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": target_id,
@@ -423,44 +423,44 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 
 		if effective_composure < 0.3:
 			# Panic - fly straight (worst choice - easy target)
-			maneuver_type = "pursue_full_speed"
+			maneuver_type = "fight_pursue_full_speed"
 		elif effective_composure < 0.6:
 			# Basic evasion - hard turn (predictable but better)
-			maneuver_type = "evasive_turn"
+			maneuver_type = "fight_evasive_turn"
 		else:
 			# Skilled evasion - break and scissors (unpredictable)
-			maneuver_type = "defensive_break"
+			maneuver_type = "fight_defensive_break"
 	elif skill < 0.3:
 		# Rookie: only knows pursue_full_speed, ignores collision warnings
-		maneuver_type = "pursue_full_speed"
+		maneuver_type = "fight_pursue_full_speed"
 	elif skill < 0.6:
 		# Average: pursue_full_speed + tight_pursuit, still ignores collision warnings
 		if distance > far_range:
-			maneuver_type = "pursue_full_speed"
+			maneuver_type = "fight_pursue_full_speed"
 		elif is_behind:
 			# Can do tight pursuit when already behind
-			maneuver_type = "pursue_tactical" if distance > close_range else "tight_pursuit"
+			maneuver_type = "fight_pursue_tactical" if distance > close_range else "fight_tight_pursuit"
 		else:
 			# Can't flank, just chase
-			maneuver_type = "pursue_full_speed"
+			maneuver_type = "fight_pursue_full_speed"
 	else:
 		# Skilled (>= 0.6): full tactical repertoire + collision awareness
 		if on_collision_course and distance > close_range:
 			# Detect head-on collision - break perpendicular and accelerate past
 			# Don't try to orbit, just get out of the way fast
-			maneuver_type = "lateral_break"
+			maneuver_type = "fight_lateral_break"
 		elif distance > far_range:
-			maneuver_type = "pursue_full_speed"
+			maneuver_type = "fight_pursue_full_speed"
 		elif distance > close_range:
 			# Mid range - slow approach, try to get behind
-			maneuver_type = "pursue_tactical" if is_behind else "flank_behind"
+			maneuver_type = "fight_pursue_tactical" if is_behind else "fight_flank_behind"
 		else:
 			# Close range - tight maneuvering
-			maneuver_type = "tight_pursuit" if is_behind else "dogfight_maneuver"
+			maneuver_type = "fight_tight_pursuit" if is_behind else "fight_dogfight_maneuver"
 
 	# Calculate evasion direction for dodge maneuvers
 	var evasion_direction = 0
-	if maneuver_type in ["dodge_and_weave", "lateral_break"]:
+	if maneuver_type in ["fight_dodge_and_weave", "fight_lateral_break"]:
 		evasion_direction = _calculate_evasion_direction(ship_data, target_ship)
 
 	# Apply formation offset if we have wingmates
@@ -497,24 +497,24 @@ static func _make_fighter_vs_capital_decision(crew_data: Dictionary, ship_data: 
 		# Group run tactics
 		if distance > SAFE_DISTANCE_VS_CAPITAL:
 			# Approach for run
-			maneuver_type = "group_run_approach"
+			maneuver_type = "fight_group_run_approach"
 		elif distance > CLOSE_RANGE:
 			# Execute attack run
-			maneuver_type = "group_run_attack"
+			maneuver_type = "fight_group_run_attack"
 		else:
 			# Too close, swing around
-			maneuver_type = "group_run_swing_around"
+			maneuver_type = "fight_group_run_swing_around"
 	else:
 		# Solo/small group tactics - stay at distance, pot-shots
 		if distance < SAFE_DISTANCE_VS_CAPITAL * 0.7:
 			# Too close, evade
-			maneuver_type = "evasive_retreat"
+			maneuver_type = "fight_evasive_retreat"
 		elif distance > SAFE_DISTANCE_VS_CAPITAL * 1.3:
 			# Too far, close in
-			maneuver_type = "cautious_approach"
+			maneuver_type = "fight_cautious_approach"
 		else:
 			# Good range, dodge and weave
-			maneuver_type = "dodge_and_weave"
+			maneuver_type = "fight_dodge_and_weave"
 
 	var decision = {
 		"type": "maneuver",
@@ -900,7 +900,7 @@ static func _make_rejoin_wingman_decision(crew_data: Dictionary, ship_data: Dict
 
 	return {
 		"type": "maneuver",
-		"subtype": "rejoin_wingman",
+		"subtype": "fight_rejoin_wingman",
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": partner_ship.get("ship_id", ""),  # Target is the lead ship
