@@ -46,6 +46,7 @@ When working on this codebase:
 - Use Godot's signal system for loose coupling between components
 - Warnings when compiling code are just unresolved errors, don't leave them around
 - Do NOT retain "fallback" or "legacy" code unless the user specifies.
+- Do NOT use hard-coded numbers, define CONSTANTS with descriptive names
 
 ## Architecture
 
