@@ -600,10 +600,9 @@ func _spawn_initial_squadrons() -> void:
 
 ## Spawn all ships for a team based on fleet configuration
 func _spawn_fleet_for_team(fleet: Dictionary, team: int, base_x: float) -> void:
-	var ship_types := ["fighter", "corvette", "capital"]
 	var total_ships := 0
 
-	for ship_type in ship_types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		total_ships += fleet.get(ship_type, 0)
 
 	if total_ships == 0:
@@ -613,7 +612,7 @@ func _spawn_fleet_for_team(fleet: Dictionary, team: int, base_x: float) -> void:
 	var vertical_spacing := _battlefield_size.y / (total_ships + 1)
 	var current_index := 0
 
-	for ship_type in ship_types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var count: int = fleet.get(ship_type, 0)
 		for i in range(count):
 			current_index += 1

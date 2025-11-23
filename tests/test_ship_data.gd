@@ -25,15 +25,19 @@ func test_can_retrieve_capital_template():
 	assert_false(template.is_empty(), "Capital template should be retrievable")
 	assert_eq(template.type, "capital")
 
+func test_can_retrieve_heavy_fighter_template():
+	var template = ShipData.get_ship_template("heavy_fighter")
+
+	assert_false(template.is_empty(), "Heavy Fighter template should be retrievable")
+	assert_eq(template.type, "heavy_fighter")
+
 func test_invalid_ship_type_returns_empty():
 	var template = ShipData.get_ship_template("invalid_type")
 
 	assert_true(template.is_empty(), "Invalid ship type should return empty dictionary")
 
 func test_templates_have_required_components():
-	var types = ["fighter", "corvette", "capital"]
-
-	for ship_type in types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		assert_has(template, "stats", ship_type + " should have stats")
 		assert_has(template, "armor_sections", ship_type + " should have armor sections")
@@ -41,9 +45,7 @@ func test_templates_have_required_components():
 		assert_has(template, "weapons", ship_type + " should have weapons")
 
 func test_templates_have_movement_stats():
-	var types = ["fighter", "corvette", "capital"]
-
-	for ship_type in types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		assert_has(template.stats, "max_speed")
 		assert_has(template.stats, "acceleration")
@@ -115,6 +117,17 @@ func test_fighter_gets_pilot_crew():
 			has_pilot = true
 			break
 	assert_true(has_pilot, "Fighter crew should include a pilot")
+
+func test_heavy_fighter_gets_pilot_crew():
+	var ship = ShipData.create_ship_instance("heavy_fighter", 0, Vector2(0, 0), true)
+
+	assert_gt(ship.crew.size(), 0, "Heavy Fighter should have crew")
+	var has_pilot = false
+	for crew_member in ship.crew:
+		if crew_member.role == CrewData.Role.PILOT:
+			has_pilot = true
+			break
+	assert_true(has_pilot, "Heavy Fighter crew should include a pilot")
 
 func test_corvette_gets_full_crew():
 	var ship = ShipData.create_ship_instance("corvette", 0, Vector2(0, 0), true)
@@ -195,16 +208,12 @@ func test_missing_weapons_fails_validation():
 # ============================================================================
 
 func test_all_templates_have_armor_sections():
-	var types = ["fighter", "corvette", "capital"]
-
-	for ship_type in types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		assert_gt(template.armor_sections.size(), 0, ship_type + " should have armor sections")
 
 func test_all_armor_sections_have_arcs():
-	var types = ["fighter", "corvette", "capital"]
-
-	for ship_type in types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		for section in template.armor_sections:
 			assert_has(section, "arc", "Armor section should have arc")
@@ -212,31 +221,23 @@ func test_all_armor_sections_have_arcs():
 			assert_has(section.arc, "end", "Arc should have end")
 
 func test_all_templates_have_internal_components():
-	var types = ["fighter", "corvette", "capital"]
-
-	for ship_type in types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		assert_gt(template.internals.size(), 0, ship_type + " should have internal components")
 
 func test_all_internal_components_have_effects():
-	var types = ["fighter", "corvette", "capital"]
-
-	for ship_type in types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		for component in template.internals:
 			assert_has(component, "effect_on_ship", "Component should have effect_on_ship")
 
 func test_all_templates_have_weapons():
-	var types = ["fighter", "corvette", "capital"]
-
-	for ship_type in types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		assert_gt(template.weapons.size(), 0, ship_type + " should have weapons")
 
 func test_all_weapons_have_stats():
-	var types = ["fighter", "corvette", "capital"]
-
-	for ship_type in types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		for weapon in template.weapons:
 			assert_has(weapon, "stats", "Weapon should have stats")
@@ -265,6 +266,32 @@ func test_fighter_more_agile_than_corvette():
 	var corvette = ShipData.get_ship_template("corvette")
 
 	assert_gt(fighter.stats.turn_rate, corvette.stats.turn_rate, "Fighter should turn faster than corvette")
+
+func test_heavy_fighter_slower_than_fighter():
+	var fighter = ShipData.get_ship_template("fighter")
+	var heavy_fighter = ShipData.get_ship_template("heavy_fighter")
+
+	assert_gt(fighter.stats.max_speed, heavy_fighter.stats.max_speed, "Fighter should be faster than heavy fighter")
+
+func test_heavy_fighter_faster_than_corvette():
+	var heavy_fighter = ShipData.get_ship_template("heavy_fighter")
+	var corvette = ShipData.get_ship_template("corvette")
+
+	assert_gt(heavy_fighter.stats.max_speed, corvette.stats.max_speed, "Heavy fighter should be faster than corvette")
+
+func test_heavy_fighter_more_armored_than_fighter():
+	var fighter = ShipData.get_ship_template("fighter")
+	var heavy_fighter = ShipData.get_ship_template("heavy_fighter")
+
+	var fighter_armor = 0
+	for section in fighter.armor_sections:
+		fighter_armor += section.max_armor
+
+	var hf_armor = 0
+	for section in heavy_fighter.armor_sections:
+		hf_armor += section.max_armor
+
+	assert_gt(hf_armor, fighter_armor, "Heavy fighter should have more armor than fighter")
 
 func test_corvette_has_more_weapons_than_fighter():
 	var fighter = ShipData.get_ship_template("fighter")

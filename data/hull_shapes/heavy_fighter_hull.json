@@ -1,0 +1,26 @@
+{
+	"ship_type": "heavy_fighter",
+	"base_size": 25.0,
+	"description": "Stockier triangle - wider body with reinforced front",
+	"sections": [
+		{
+			"section_id": "front",
+			"points": [
+				{"x": 0.0, "y": -30.0},
+				{"x": -10.0, "y": 0.0},
+				{"x": 10.0, "y": 0.0},
+				{"x": 0.0, "y": -30.0}
+			]
+		},
+		{
+			"section_id": "back",
+			"points": [
+				{"x": -10.0, "y": 0.0},
+				{"x": -8.0, "y": 12.0},
+				{"x": 8.0, "y": 12.0},
+				{"x": 10.0, "y": 0.0},
+				{"x": -10.0, "y": 0.0}
+			]
+		}
+	]
+}

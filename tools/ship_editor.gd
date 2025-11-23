@@ -12,9 +12,6 @@ extends Control
 # Path for saving custom ship configurations
 const CUSTOM_SHIPS_PATH = "user://custom_ships/"
 
-# Ship types available in the game
-const SHIP_TYPES = ["fighter", "corvette", "capital"]
-
 # Component colors - must match HullShapeDrawer for visual consistency
 const COLOR_ARMOR = Color(0.3, 0.6, 1.0)       # Blue - armor sections
 const COLOR_INTERNAL = Color(1.0, 0.5, 0.2)   # Orange - internal components
@@ -48,11 +45,11 @@ func _on_back_button_pressed() -> void:
 
 func _setup_dropdown() -> void:
 	ship_type_dropdown.clear()
-	for ship_type in SHIP_TYPES:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		ship_type_dropdown.add_item(ship_type.capitalize())
 
 func _on_ship_type_selected(index: int) -> void:
-	var ship_type = SHIP_TYPES[index]
+	var ship_type = FleetDataManager.SHIP_TYPES[index]
 	print("\n=== Ship Type Selected: " + ship_type + " ===")
 
 	# Load ship data from ShipData definitions

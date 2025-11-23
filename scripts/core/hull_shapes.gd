@@ -10,9 +10,7 @@ static var _hull_data: Dictionary = {}
 static func load_hull_shapes() -> void:
 	_hull_data.clear()
 
-	var ship_types = ["fighter", "corvette", "capital"]
-
-	for ship_type in ship_types:
+	for ship_type in FleetDataManager.SHIP_TYPES:
 		var path = "res://data/hull_shapes/" + ship_type + "_hull.json"
 		var hull = _load_hull_json(path)
 		if hull:

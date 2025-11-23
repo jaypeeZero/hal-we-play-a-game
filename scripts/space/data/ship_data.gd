@@ -20,6 +20,8 @@ static func get_ship_template(ship_type: String) -> Dictionary:
 	match ship_type:
 		"fighter":
 			return _create_fighter_template()
+		"heavy_fighter":
+			return _create_heavy_fighter_template()
 		"corvette":
 			return _create_corvette_template()
 		"capital":
@@ -101,6 +103,12 @@ static func create_crew_for_ship(ship_data: Dictionary, skill_level: float = 0.5
 	match ship_data.type:
 		"fighter":
 			# Solo pilot for fighters
+			var crew = CrewData.create_solo_fighter_crew(skill_level)
+			for member in crew:
+				member.assigned_to = ship_data.ship_id
+			return crew
+		"heavy_fighter":
+			# Solo pilot for heavy fighters (same as regular fighter)
 			var crew = CrewData.create_solo_fighter_crew(skill_level)
 			for member in crew:
 				member.assigned_to = ship_data.ship_id
@@ -532,6 +540,78 @@ static func _create_capital_template() -> Dictionary:
 					"range": 600,  # Shorter range, close defense
 					"accuracy": 0.70,  # Lower accuracy due to rapid fire
 					"size": 3
+				},
+				"cooldown_remaining": 0.0,
+				"operator_id": null
+			}
+		],
+		"orders": {
+			"current_order": "engage",
+			"target_id": null,
+			"patrol_points": []
+		}
+	}
+
+## Heavy Fighter template - slow fighter, heavy armor, high damage
+static func _create_heavy_fighter_template() -> Dictionary:
+	return {
+		"type": "heavy_fighter",
+		"name": "Heavy Fighter",
+		"stats": {
+			"max_speed": 200.0,
+			"acceleration": 60.0,
+			"lateral_acceleration": 0.2,
+			"turn_rate": 2.0,
+			"mass": 80.0,
+			"size": 25.0
+		},
+		"armor_sections": [
+			{
+				"section_id": "front",
+				"position_offset": Vector2(0, -12),
+				"arc": {"start": -90, "end": 90},
+				"max_armor": 50,
+				"current_armor": 50,
+				"size": 2
+			},
+			{
+				"section_id": "back",
+				"position_offset": Vector2(0, 12),
+				"arc": {"start": 90, "end": 270},
+				"max_armor": 40,
+				"current_armor": 40,
+				"size": 2
+			}
+		],
+		"internals": [
+			{
+				"component_id": "engine",
+				"type": "engine",
+				"section_id": "back",
+				"position_offset": Vector2(0, 10),
+				"max_health": 40,
+				"current_health": 40,
+				"status": "operational",
+				"effect_on_ship": {
+					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
+					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+				}
+			}
+		],
+		"weapons": [
+			{
+				"weapon_id": "guns",
+				"type": "medium_cannon",
+				"position_offset": Vector2(0, -8),
+				"facing": 0.0,
+				"arc": {"min": -15, "max": 15},
+				"stats": {
+					"damage": 12,
+					"rate_of_fire": 3.0,
+					"projectile_speed": 550,
+					"range": 900,
+					"accuracy": 0.80,
+					"size": 2
 				},
 				"cooldown_remaining": 0.0,
 				"operator_id": null
