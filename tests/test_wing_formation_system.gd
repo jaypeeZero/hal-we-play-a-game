@@ -88,7 +88,7 @@ func test_form_wings_ignores_distant_fighters():
 	# Fighters too far apart should not form a wing
 	var ships = [
 		create_test_fighter("ship_1", 0, Vector2(0, 0)),
-		create_test_fighter("ship_2", 0, Vector2(1000, 0))  # Beyond 500 units
+		create_test_fighter("ship_2", 0, Vector2(2000, 0))  # Beyond 1000 units
 	]
 	var crew = [
 		create_test_crew("crew_1", "ship_1"),
@@ -247,10 +247,10 @@ func test_calculate_wing_position_reasonable_distance():
 	var position = WingFormationSystem.calculate_wing_position(lead_ship, 1, 0.5)
 
 	# Wingman should be at a reasonable distance from lead (not on top, not too far)
-	# Base distance is ~100 units, with skill modifier and prediction
+	# Base distance is ~200 units, with skill modifier and prediction
 	var distance = lead_ship.position.distance_to(position)
-	assert_true(distance > 50, "Wingman should not be on top of lead")
-	assert_true(distance < 250, "Wingman should not be too far from lead")
+	assert_true(distance > 100, "Wingman should not be on top of lead")
+	assert_true(distance < 500, "Wingman should not be too far from lead")
 
 
 func test_calculate_wing_position_skill_affects_distance():
@@ -352,7 +352,7 @@ func test_should_wing_break_too_far():
 	}
 	var ships = [
 		create_test_fighter("ship_1", 0, Vector2(0, 0)),
-		create_test_fighter("ship_2", 0, Vector2(2000, 0))  # Beyond WING_BREAK_RANGE (1800)
+		create_test_fighter("ship_2", 0, Vector2(4000, 0))  # Beyond WING_BREAK_RANGE (3600)
 	]
 
 	var should_break = WingFormationSystem.should_wing_break(wing, ships)

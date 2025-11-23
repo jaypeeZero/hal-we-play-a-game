@@ -151,7 +151,7 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 	var opportunities = awareness.get("opportunities", [])
 
 	# Low skill lead: Target fixation (stick with current target even if bad)
-	if skill < 0.3:
+	if skill < WingConstants.LEAD_TARGET_FIXATION_SKILL:
 		var locked_target = crew_data.get("combat_state", {}).get("locked_target_id", "")
 		if locked_target != "" and _is_ship_valid(locked_target, all_ships):
 			return locked_target
@@ -176,11 +176,11 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 
 	# High skill lead: Pick best target
 	# Low skill lead: Pick somewhat randomly (poor assessment)
-	if skill >= 0.6:
+	if skill >= WingConstants.LEAD_PICK_BEST_SKILL:
 		# Sort by score, pick best
 		targets_with_scores.sort_custom(func(a, b): return a.score > b.score)
 		return targets_with_scores[0].id
-	elif skill >= 0.3:
+	elif skill >= WingConstants.LEAD_PICK_TOP_THREE_SKILL:
 		# Pick from top 3
 		targets_with_scores.sort_custom(func(a, b): return a.score > b.score)
 		var max_idx = mini(3, targets_with_scores.size())
@@ -202,31 +202,31 @@ static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictiona
 	var score = 0.0
 
 	# Closer targets score higher (easier to engage)
-	score += max(0, 5000 - distance) / 500.0  # Up to 10 points for close targets
+	score += max(0, WingConstants.TARGET_SCORE_DISTANCE_MAX - distance) / WingConstants.TARGET_SCORE_DISTANCE_DIVISOR
 
 	# Damaged targets score higher (easier kills) - only high skill leads notice this
-	if skill >= 0.5:
+	if skill >= WingConstants.LEAD_NOTICE_DAMAGED_SKILL:
 		var hull = target_ship.get("stats", {}).get("hull", {})
 		var hull_current = hull.get("current", 100)
 		var hull_max = hull.get("max", 100)
 		var damage_ratio = 1.0 - (float(hull_current) / float(hull_max))
-		score += damage_ratio * 5.0  # Up to 5 points for damaged targets
+		score += damage_ratio * WingConstants.TARGET_SCORE_DAMAGED_WEIGHT
 
 	# Targets already engaged by friendlies score higher (concentrate fire)
 	# Only medium+ skill leads coordinate this well
-	if skill >= 0.4:
+	if skill >= WingConstants.LEAD_COORDINATE_FIRE_SKILL:
 		var friendly_count = _count_friendlies_engaging(target_ship.get("ship_id", ""), all_crew)
-		score += friendly_count * 2.0  # 2 points per friendly already engaging
+		score += friendly_count * WingConstants.TARGET_SCORE_FRIENDLY_ENGAGING_WEIGHT
 
 	# Targets that are a threat (facing us) score higher - situational awareness
 	var situational_awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", skill)
-	if situational_awareness >= 0.5:
+	if situational_awareness >= WingConstants.LEAD_NOTICE_THREATS_SKILL:
 		var target_rotation = target_ship.get("rotation", 0.0)
 		var target_facing = Vector2(cos(target_rotation), sin(target_rotation))
 		var to_me = (my_pos - target_pos).normalized()
 		var facing_angle = abs(target_facing.angle_to(to_me))
-		if facing_angle < deg_to_rad(45):  # Target is facing us
-			score += 3.0  # Priority threat
+		if facing_angle < deg_to_rad(WingConstants.TARGET_SCORE_THREAT_FACING_ANGLE):
+			score += WingConstants.TARGET_SCORE_THREAT_FACING_WEIGHT
 
 	return score
 

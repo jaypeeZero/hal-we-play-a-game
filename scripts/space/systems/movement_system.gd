@@ -767,8 +767,7 @@ static func calculate_wing_rejoin(ship_data: Dictionary, target: Dictionary, nea
 	var lead_velocity = target.get("velocity", Vector2.ZERO)
 
 	# Skill affects how aggressively they course correct
-	# High skill: tighter thresholds, faster corrections
-	var brake_threshold = lerp(PI / 3.0, PI / 5.0, skill_factor)  # 60° to 36°
+	var brake_threshold = lerp(WingConstants.REJOIN_BRAKE_ANGLE_LOW_SKILL, WingConstants.REJOIN_BRAKE_ANGLE_HIGH_SKILL, skill_factor)
 
 	# DART AND DASH: Brake if we need to change direction significantly
 	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
@@ -783,8 +782,8 @@ static func calculate_wing_rejoin(ship_data: Dictionary, target: Dictionary, nea
 	var should_brake: bool = false
 
 	# High skill wingman approaches faster but brakes earlier
-	var far_threshold = lerp(150.0, 100.0, skill_factor)
-	var close_threshold = lerp(80.0, 50.0, skill_factor)
+	var far_threshold = lerp(WingConstants.REJOIN_FAR_THRESHOLD_LOW_SKILL, WingConstants.REJOIN_FAR_THRESHOLD_HIGH_SKILL, skill_factor)
+	var close_threshold = lerp(WingConstants.REJOIN_CLOSE_THRESHOLD_LOW_SKILL, WingConstants.REJOIN_CLOSE_THRESHOLD_HIGH_SKILL, skill_factor)
 
 	if distance > far_threshold:
 		# Far from formation - full speed approach
@@ -799,17 +798,17 @@ static func calculate_wing_rejoin(ship_data: Dictionary, target: Dictionary, nea
 		# Close to formation position - match lead's velocity
 		var speed_diff = current_velocity.length() - lead_velocity.length()
 		should_brake = speed_diff > 20.0
-		should_thrust = speed_diff < -10.0 or distance > 40.0
+		should_thrust = speed_diff < -10.0 or distance > WingConstants.REJOIN_MATCH_HEADING_DISTANCE / 2.0
 
 		# If very close, match lead's heading
-		if distance < 40.0 and lead_velocity.length() > 10.0:
+		if distance < WingConstants.REJOIN_MATCH_HEADING_DISTANCE / 2.0 and lead_velocity.length() > 10.0:
 			desired_heading = direction_to_heading(lead_velocity)
 
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": should_thrust,
 		"is_braking": should_brake,
-		"engagement_range": 80.0,
+		"engagement_range": WingConstants.REJOIN_MATCH_HEADING_DISTANCE,
 		"current_distance": distance
 	}
 
@@ -830,7 +829,7 @@ static func calculate_wing_follow(ship_data: Dictionary, target: Dictionary, nea
 	# When following, primarily match lead's velocity and heading
 	var desired_heading: float
 
-	if distance > 60.0:
+	if distance > WingConstants.FOLLOW_HEAD_TOWARD_DISTANCE:
 		# Too far - head toward formation position
 		desired_heading = direction_to_heading(to_formation)
 	elif lead_velocity.length() > 10.0:
@@ -838,7 +837,7 @@ static func calculate_wing_follow(ship_data: Dictionary, target: Dictionary, nea
 		desired_heading = direction_to_heading(lead_velocity)
 	else:
 		# Lead is stopped/slow - face formation position
-		desired_heading = direction_to_heading(to_formation) if distance > 20.0 else ship_data.get("rotation", 0.0)
+		desired_heading = direction_to_heading(to_formation) if distance > WingConstants.FOLLOW_FACE_FORMATION_DISTANCE else ship_data.get("rotation", 0.0)
 
 	# Speed matching - stay with lead
 	var my_velocity = ship_data.get("velocity", Vector2.ZERO)
@@ -847,22 +846,22 @@ static func calculate_wing_follow(ship_data: Dictionary, target: Dictionary, nea
 	var should_thrust = false
 	var should_brake = false
 
-	if distance > 80.0:
+	if distance > WingConstants.FOLLOW_TOO_FAR_DISTANCE:
 		# Too far behind - speed up
 		should_thrust = true
-	elif distance < 30.0 and speed_diff > 20.0:
+	elif distance < WingConstants.FOLLOW_TOO_CLOSE_DISTANCE and speed_diff > 20.0:
 		# Too close and going faster - slow down
 		should_brake = true
 	else:
 		# Maintain formation speed
-		should_thrust = speed_diff < -15.0
-		should_brake = speed_diff > 30.0
+		should_thrust = speed_diff < WingConstants.FOLLOW_SPEED_DIFF_THRUST
+		should_brake = speed_diff > WingConstants.FOLLOW_SPEED_DIFF_BRAKE
 
 	return {
 		"desired_heading": desired_heading,
 		"thrust_active": should_thrust,
 		"is_braking": should_brake,
-		"engagement_range": 100.0,
+		"engagement_range": WingConstants.FOLLOW_HEAD_TOWARD_DISTANCE,
 		"current_distance": distance
 	}
 
@@ -901,24 +900,24 @@ static func calculate_wing_engage(ship_data: Dictionary, target: Dictionary, nea
 	var effective_formation_priority = formation_priority
 
 	# If way out of formation, increase formation priority
-	if formation_distance > 150.0:
+	if formation_distance > WingConstants.ENGAGE_FORMATION_PRIORITY_INCREASE_DISTANCE:
 		effective_formation_priority = min(1.0, formation_priority + 0.3)
 
 	# If target is very close, can reduce formation priority slightly
-	if target_distance < 400.0 and formation_distance < 100.0:
+	if target_distance < WingConstants.ENGAGE_TARGET_CLOSE_DISTANCE and formation_distance < WingConstants.ENGAGE_FORMATION_CLOSE_DISTANCE:
 		effective_formation_priority = max(0.3, formation_priority - 0.2)
 
 	# Calculate blended desired position
 	# High skill/priority: Stay closer to formation
 	# Low skill/priority: Chase target more independently
-	var attack_offset = to_target.normalized() * min(target_distance * 0.5, 200.0)
+	var attack_offset = to_target.normalized() * min(target_distance * 0.5, WingConstants.ENGAGE_ATTACK_OFFSET_MAX)
 	var blended_target = formation_pos.lerp(my_pos + attack_offset, 1.0 - effective_formation_priority)
 
 	var to_blended = blended_target - my_pos
 	var desired_heading = direction_to_heading(to_blended) if to_blended.length() > 10.0 else direction_to_heading(to_target)
 
 	# For targeting, face the actual target when close enough
-	if target_distance < 600.0 and formation_distance < 120.0:
+	if target_distance < WingConstants.ENGAGE_FACE_TARGET_DISTANCE and formation_distance < WingConstants.ENGAGE_FACE_TARGET_FORMATION_DISTANCE:
 		desired_heading = direction_to_heading(to_target)
 
 	# Speed control
@@ -929,7 +928,7 @@ static func calculate_wing_engage(ship_data: Dictionary, target: Dictionary, nea
 	var should_brake = false
 
 	# Match lead's general speed when in formation
-	if formation_distance < 100.0:
+	if formation_distance < WingConstants.ENGAGE_SPEED_MATCH_FORMATION_DISTANCE:
 		var speed_diff = my_velocity.length() - lead_velocity.length()
 		should_brake = speed_diff > 40.0
 		should_thrust = speed_diff < 0 or target_distance > 500.0
@@ -938,7 +937,7 @@ static func calculate_wing_engage(ship_data: Dictionary, target: Dictionary, nea
 	if my_velocity.length() > 40.0:
 		var current_heading = direction_to_heading(my_velocity)
 		var heading_diff = abs(angle_difference(current_heading, desired_heading))
-		var brake_threshold = lerp(PI / 3.5, PI / 5.0, skill_factor)
+		var brake_threshold = lerp(WingConstants.ENGAGE_BRAKE_ANGLE_LOW_SKILL, WingConstants.ENGAGE_BRAKE_ANGLE_HIGH_SKILL, skill_factor)
 		if heading_diff > brake_threshold:
 			return create_braking_control(ship_data, desired_heading, target_distance)
 
@@ -946,7 +945,7 @@ static func calculate_wing_engage(ship_data: Dictionary, target: Dictionary, nea
 		"desired_heading": desired_heading,
 		"thrust_active": should_thrust,
 		"is_braking": should_brake,
-		"engagement_range": 400.0,
+		"engagement_range": WingConstants.ENGAGE_ATTACK_OFFSET_MAX,
 		"current_distance": target_distance,
 		"formation_distance": formation_distance
 	}
@@ -963,19 +962,18 @@ static func _calculate_default_wing_position(lead_ship: Dictionary, position_sid
 	else:
 		lead_heading = lead_ship.get("rotation", 0.0)
 
-	# Position behind and to the side (135° = 45° behind lateral)
-	var angle_offset = deg_to_rad(135.0) * position_side
+	# Position behind and to the side
+	var angle_offset = deg_to_rad(WingConstants.POSITION_ANGLE) * position_side
 	var formation_angle = lead_heading + PI + angle_offset
 
 	# Distance varies by skill - high skill stays tighter
-	var base_distance = 100.0
-	var skill_modifier = lerp(1.3, 0.8, skill_factor)
-	var actual_distance = base_distance * skill_modifier
+	var skill_modifier = lerp(WingConstants.POSITION_SKILL_FAR_MODIFIER, WingConstants.POSITION_SKILL_CLOSE_MODIFIER, skill_factor)
+	var actual_distance = WingConstants.POSITION_DISTANCE * skill_modifier
 
 	var formation_offset = Vector2(cos(formation_angle), sin(formation_angle)) * actual_distance
 
 	# Predict lead's position
-	var prediction_time = lerp(0.2, 0.5, skill_factor)
+	var prediction_time = lerp(WingConstants.POSITION_PREDICTION_MIN, WingConstants.POSITION_PREDICTION_MAX, skill_factor)
 	var predicted_lead_pos = lead_pos + lead_velocity * prediction_time
 
 	return predicted_lead_pos + formation_offset

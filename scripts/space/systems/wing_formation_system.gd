@@ -10,12 +10,8 @@ extends RefCounted
 ## Wing Types:
 ## - Wing-Pair: 1 Lead + 1 Wingman
 ## - Wing-Three: 1 Lead + 2 Wingmen (for odd numbers)
-
-## Configuration constants
-const WING_FORMATION_RANGE = 500.0  # Distance within which fighters form wings
-const WING_BREAK_RANGE = 1800.0  # Distance at which wing breaks apart
-const WING_POSITION_DISTANCE = 100.0  # Ideal distance from Lead
-const WING_POSITION_ANGLE = 135.0  # Degrees behind Lead (45° behind, to the side)
+##
+## All constants defined in WingConstants
 
 ## Form wings from available fighters on a team
 ## Returns array of wing dictionaries
@@ -146,7 +142,7 @@ static func _find_nearby_unassigned(lead_fighter: Dictionary, all_fighters: Arra
 		var pos = fighter.ship.get("position", Vector2.ZERO)
 		var distance = lead_pos.distance_to(pos)
 
-		if distance <= WING_FORMATION_RANGE:
+		if distance <= WingConstants.FORMATION_RANGE:
 			nearby.append(fighter)
 
 	# Sort by skill (prefer higher-skilled wingmen)
@@ -172,7 +168,7 @@ static func should_wing_break(wing: Dictionary, all_ships: Array) -> bool:
 			continue  # This wingman is gone, check others
 
 		var wm_pos = wm_ship.get("position", Vector2.ZERO)
-		if lead_pos.distance_to(wm_pos) > WING_BREAK_RANGE:
+		if lead_pos.distance_to(wm_pos) > WingConstants.BREAK_RANGE:
 			return true  # Wingman too far
 
 	return false
@@ -213,22 +209,22 @@ static func calculate_wing_position(lead_ship: Dictionary, position_side: int, w
 
 	# Calculate position behind and to the side
 	# High skill wingman stays tighter, low skill has more variance
-	var angle_offset = deg_to_rad(WING_POSITION_ANGLE) * position_side
+	var angle_offset = deg_to_rad(WingConstants.POSITION_ANGLE) * position_side
 	var formation_angle = lead_heading + PI + angle_offset  # Behind and to the side
 
 	# Distance varies by skill - high skill stays closer
-	var skill_distance_modifier = lerp(1.3, 0.8, wingman_skill)  # 0.0 skill = 130%, 1.0 skill = 80%
-	var actual_distance = WING_POSITION_DISTANCE * skill_distance_modifier
+	var skill_distance_modifier = lerp(WingConstants.POSITION_SKILL_FAR_MODIFIER, WingConstants.POSITION_SKILL_CLOSE_MODIFIER, wingman_skill)
+	var actual_distance = WingConstants.POSITION_DISTANCE * skill_distance_modifier
 
 	var formation_offset = Vector2(cos(formation_angle), sin(formation_angle)) * actual_distance
 
 	# Predict lead's future position based on velocity
 	# High skill wingman anticipates better
-	var prediction_time = lerp(0.2, 0.6, wingman_skill)
+	var prediction_time = lerp(WingConstants.POSITION_PREDICTION_MIN, WingConstants.POSITION_PREDICTION_MAX, wingman_skill)
 	var predicted_lead_pos = lead_pos + lead_velocity * prediction_time
 
 	# Add some error for low-skill wingmen (they don't anticipate as well)
-	var error_magnitude = (1.0 - wingman_skill) * 30.0  # 0-30 units of error
+	var error_magnitude = (1.0 - wingman_skill) * WingConstants.POSITION_ERROR_MAX
 	var error_angle = randf_range(0, TAU)
 	var error_offset = Vector2(cos(error_angle), sin(error_angle)) * error_magnitude
 
@@ -240,12 +236,12 @@ static func is_in_formation(wingman_ship: Dictionary, lead_ship: Dictionary, win
 	var actual_pos = wingman_ship.get("position", Vector2.ZERO)
 
 	# Tolerance is higher for low-skill wingmen
-	var tolerance = lerp(150.0, 80.0, wingman_skill)  # 0.0 skill = 150 units, 1.0 skill = 80 units
+	var tolerance = lerp(WingConstants.IN_FORMATION_TOLERANCE_LOW_SKILL, WingConstants.IN_FORMATION_TOLERANCE_HIGH_SKILL, wingman_skill)
 
 	var lead_pos = lead_ship.get("position", Vector2.ZERO)
 	var distance_to_lead = actual_pos.distance_to(lead_pos)
 
-	return distance_to_lead <= tolerance + WING_POSITION_DISTANCE
+	return distance_to_lead <= tolerance + WingConstants.POSITION_DISTANCE
 
 ## Get ship by ID helper
 static func _get_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
