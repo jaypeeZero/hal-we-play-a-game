@@ -59,6 +59,9 @@ var _crew_events: Array = []  # Events to process this frame
 var _crew_index: Dictionary = {}  # crew_id -> crew_data (O(1) lookup)
 const ENABLE_CREW_AI = true  # Re-enabled with proper event architecture
 
+# Wing formation state
+var _previous_wings: Array = []  # Previous frame's wings for loyalty preservation
+
 func _ready() -> void:
 	# Allow processing when paused (for initial unpause)
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
@@ -171,10 +174,15 @@ func _process(delta: float) -> void:
 
 	# Spawn visual effects from physical collisions
 	for collision_event in physics_collision_result.collision_events:
-		if collision_event.damage > 5.0:  # Only show effect for significant impacts
+		# Get damage amount (ship-obstacle has 'damage', ship-ship has 'damage1' and 'damage2')
+		var damage = collision_event.get("damage", 0.0)
+		if damage == 0.0:  # Ship-ship collision
+			damage = max(collision_event.get("damage1", 0.0), collision_event.get("damage2", 0.0))
+
+		if damage > 5.0:  # Only show effect for significant impacts
 			var effect = VisualEffectSystem.create_effect(
 				"effect_impact",
-				collision_event.position,
+				collision_event.get("position", Vector2.ZERO),
 				0.4
 			)
 			_spawn_visual_effect(effect)
@@ -774,8 +782,9 @@ func _update_crew_ai_systems(delta: float) -> void:
 	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
 
 	# Form wings and update ship visual data with wing colors
-	var wings = WingFormationSystem.form_wings(_ships, _crew_list)
+	var wings = WingFormationSystem.form_wings(_ships, _crew_list, _previous_wings)
 	_update_ship_wing_colors(wings)
+	_previous_wings = wings  # Store for next frame's loyalty preservation
 
 	# EVENT-DRIVEN: Only process crew events, don't poll all crew
 	_process_crew_events(_crew_events, delta, game_time)

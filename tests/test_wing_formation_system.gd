@@ -415,3 +415,102 @@ func test_get_lead_maneuver():
 	var maneuver = WingFormationSystem.get_lead_maneuver(wing, crew)
 
 	assert_eq(maneuver, "flank_behind", "Should retrieve lead's maneuver")
+
+
+# =============================================================================
+# WING LOYALTY TESTS - Preserve memberships across frames
+# =============================================================================
+
+func test_wing_loyalty_maintains_pair_when_drifting_apart():
+	# Initial formation
+	var ships = [
+		create_test_fighter("ship_1", 0, Vector2(0, 0)),
+		create_test_fighter("ship_2", 0, Vector2(100, 0))
+	]
+	var crew = [
+		create_test_crew("crew_1", "ship_1", 0.7),
+		create_test_crew("crew_2", "ship_2", 0.5)
+	]
+
+	# Frame 1: Form initial wing pair
+	var wings_frame1 = WingFormationSystem.form_wings(ships, crew)
+	assert_eq(wings_frame1.size(), 1, "Should form one wing pair")
+	var initial_lead_id = wings_frame1[0].lead_ship_id
+	var initial_wingman_id = wings_frame1[0].wingmen[0].ship_id
+
+	# Frame 2: Ships drift apart (but within BREAK_RANGE)
+	ships[1]["position"] = Vector2(800, 800)  # 1131 units away, beyond FORMATION_RANGE but within BREAK_RANGE
+
+	# Form wings with previous wings passed in
+	var wings_frame2 = WingFormationSystem.form_wings(ships, crew, wings_frame1)
+
+	# They should still be together
+	assert_eq(wings_frame2.size(), 1, "Wing pair should be maintained")
+	assert_eq(wings_frame2[0].lead_ship_id, initial_lead_id, "Lead should stay the same")
+	assert_eq(wings_frame2[0].wingmen[0].ship_id, initial_wingman_id, "Wingman should stay loyal to lead")
+
+
+func test_wing_loyalty_breaks_when_beyond_break_range():
+	# Initial formation
+	var ships = [
+		create_test_fighter("ship_1", 0, Vector2(0, 0)),
+		create_test_fighter("ship_2", 0, Vector2(100, 0))
+	]
+	var crew = [
+		create_test_crew("crew_1", "ship_1", 0.7),
+		create_test_crew("crew_2", "ship_2", 0.5)
+	]
+
+	var wings_frame1 = WingFormationSystem.form_wings(ships, crew)
+
+	# Ships separate beyond BREAK_RANGE
+	ships[1]["position"] = Vector2(4000, 0)
+
+	var wings_frame2 = WingFormationSystem.form_wings(ships, crew, wings_frame1)
+
+	# Wing should break
+	assert_eq(wings_frame2.size(), 0, "Wing should break when beyond break range")
+
+
+func test_solo_fighter_finds_new_wing():
+	# Three fighters: pair + solo
+	var ships = [
+		create_test_fighter("ship_1", 0, Vector2(0, 0)),
+		create_test_fighter("ship_2", 0, Vector2(100, 0)),
+		create_test_fighter("ship_3", 0, Vector2(1000, 1000))  # Solo, far away
+	]
+	var crew = [
+		create_test_crew("crew_1", "ship_1", 0.8),
+		create_test_crew("crew_2", "ship_2", 0.5),
+		create_test_crew("crew_3", "ship_3", 0.6)
+	]
+
+	# Frame 1: Form initial wings
+	var wings_frame1 = WingFormationSystem.form_wings(ships, crew)
+	assert_eq(wings_frame1.size(), 1, "Should form one pair (solo too far)")
+
+	# Frame 2: Solo fighter moves closer to the pair
+	ships[2]["position"] = Vector2(150, 50)  # Close to the pair now
+
+	var wings_frame2 = WingFormationSystem.form_wings(ships, crew, wings_frame1)
+
+	# Now should form a wing-three (existing pair plus solo)
+	assert_eq(wings_frame2.size(), 1, "Should still be one wing")
+	assert_eq(wings_frame2[0].wing_type, "three", "Should form a wing-three when solo joins")
+	assert_eq(wings_frame2[0].wingmen.size(), 2, "Should have two wingmen")
+
+
+func test_solo_fighter_stays_solo_when_no_nearby_wings():
+	# Multiple isolated fighters that can't form wings
+	var ships = [
+		create_test_fighter("ship_1", 0, Vector2(0, 0)),
+		create_test_fighter("ship_2", 0, Vector2(2000, 0))  # Too far
+	]
+	var crew = [
+		create_test_crew("crew_1", "ship_1", 0.5),
+		create_test_crew("crew_2", "ship_2", 0.5)
+	]
+
+	var wings = WingFormationSystem.form_wings(ships, crew)
+
+	assert_eq(wings.size(), 0, "Isolated fighters should not form wings")

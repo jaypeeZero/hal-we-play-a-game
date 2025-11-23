@@ -30,17 +30,69 @@ static var _next_color_index: int = 0
 
 ## Form wings from available fighters on a team
 ## Returns array of wing dictionaries
-static func form_wings(all_ships: Array, all_crew: Array) -> Array:
+## Previous wings are used to preserve existing memberships
+static func form_wings(all_ships: Array, all_crew: Array, previous_wings: Array = []) -> Array:
 	var wings = []
 	var assigned_ship_ids = {}  # Track which ships are already in a wing
 
 	# Get all operational fighters grouped by team
 	var fighters_by_team = _group_fighters_by_team(all_ships, all_crew)
 
-	# For each team, form wings from nearby fighters
+	# First pass: Keep existing valid wings (that haven't broken)
+	for old_wing in previous_wings:
+		if not should_wing_break(old_wing, all_ships):
+			# Wing is still valid - keep all members
+			wings.append(old_wing)
+			assigned_ship_ids[old_wing.get("lead_ship_id", "")] = true
+			for wingman in old_wing.get("wingmen", []):
+				assigned_ship_ids[wingman.get("ship_id", "")] = true
+
+	# Second pass: Allow solo fighters to join nearby existing wings
 	for team in fighters_by_team.keys():
 		var team_fighters = fighters_by_team[team]
-		var team_wings = _form_team_wings(team_fighters, assigned_ship_ids)
+		var solo_fighters = team_fighters.filter(func(f): return not assigned_ship_ids.has(f.ship.get("ship_id", "")))
+
+		# Try to add solo fighters to nearby existing wings
+		var remaining_solo = []
+		for solo_fighter in solo_fighters:
+			var added_to_wing = false
+
+			# Look for a nearby existing wing that can accept this fighter
+			for wing in wings:
+				if wing.get("team", -1) != team:
+					continue  # Different team
+
+				# Check if wing can accept more wingmen
+				if wing.get("wingmen", []).size() >= 2:
+					continue  # Already has max wingmen
+
+				# Check distance to lead
+				var lead_pos = _get_ship_by_id(wing.get("lead_ship_id", ""), all_ships).get("position", Vector2.ZERO)
+				var solo_pos = solo_fighter.ship.get("position", Vector2.ZERO)
+				if lead_pos.distance_to(solo_pos) <= WingConstants.FORMATION_RANGE:
+					# Add to this wing
+					wing.wingmen.append({
+						"ship_id": solo_fighter.ship.get("ship_id", ""),
+						"crew_id": solo_fighter.crew.get("crew_id", ""),
+						"skill": solo_fighter.crew.get("stats", {}).get("skill", 0.5),
+						"position_side": 1 if wing.get("wingmen", []).size() == 0 else -1
+					})
+					assigned_ship_ids[solo_fighter.ship.get("ship_id", "")] = true
+
+					# Update wing type if now has 2 wingmen
+					if wing.get("wingmen", []).size() == 2:
+						wing["wing_type"] = "three"
+					else:
+						wing["wing_type"] = "pair"
+
+					added_to_wing = true
+					break
+
+			if not added_to_wing:
+				remaining_solo.append(solo_fighter)
+
+		# Third pass: Form new wings only from remaining solo fighters
+		var team_wings = _form_team_wings(remaining_solo, assigned_ship_ids)
 		wings.append_array(team_wings)
 
 	return wings
