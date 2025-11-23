@@ -2,78 +2,84 @@ class_name ShipData
 extends RefCounted
 
 ## Pure data container and factory for ship instances
-## Provides templates for Fighter, Corvette, and Capital ships
+## Templates loaded from JSON files in data/ship_templates/
 
 static var _next_ship_id: int = 0
+static var _templates: Dictionary = {}
 
-# Path for custom ship configurations saved by Ship Editor
-const CUSTOM_SHIPS_PATH = "user://custom_ships/"
+const TEMPLATES_PATH = "res://data/ship_templates/"
 
-## Get ship template by type (checks for custom config first)
+## Get ship template by type (loads from JSON)
 static func get_ship_template(ship_type: String) -> Dictionary:
-	# Check for custom configuration first
-	var custom_template = _load_custom_template(ship_type)
-	if not custom_template.is_empty():
-		return custom_template
+	# Load templates if not already loaded
+	if _templates.is_empty():
+		_load_all_templates()
 
-	# Fall back to default templates
-	match ship_type:
-		"fighter":
-			return _create_fighter_template()
-		"heavy_fighter":
-			return _create_heavy_fighter_template()
-		"corvette":
-			return _create_corvette_template()
-		"capital":
-			return _create_capital_template()
-		_:
-			return {}
+	if not _templates.has(ship_type):
+		return {}
 
-## Load custom ship template from file if it exists
-static func _load_custom_template(ship_type: String) -> Dictionary:
-	var file_path = CUSTOM_SHIPS_PATH + ship_type + "_custom.json"
+	# Return a deep copy so modifications don't affect the cached template
+	return _templates[ship_type].duplicate(true)
 
+## Load all ship templates from JSON files
+static func _load_all_templates() -> void:
+	_templates.clear()
+
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		var path = TEMPLATES_PATH + ship_type + ".json"
+		var template = _load_template_json(path)
+		if not template.is_empty():
+			_templates[ship_type] = template
+
+## Load a single template from JSON file
+static func _load_template_json(file_path: String) -> Dictionary:
 	if not FileAccess.file_exists(file_path):
+		push_error("Ship template file not found: " + file_path)
 		return {}
 
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
+		push_error("Could not open ship template file: " + file_path)
 		return {}
 
-	var json_string = file.get_as_text()
+	var json_text = file.get_as_text()
 	file.close()
 
 	var json = JSON.new()
-	var error = json.parse(json_string)
+	var error = json.parse(json_text)
 	if error != OK:
-		print("ERROR: Failed to parse custom ship config: " + json.get_error_message())
+		push_error("Failed to parse ship template JSON: " + file_path + " at line " + str(json.get_error_line()))
 		return {}
 
 	var data = json.get_data()
+
+	# Convert all position_offset dictionaries to Vector2
+	return _convert_vectors(data)
+
+## Recursively convert {x, y} dictionaries to Vector2
+static func _convert_vectors(data: Variant) -> Variant:
 	if data is Dictionary:
-		return _deserialize_ship_data(data)
+		# Check if this is a position_offset dict (has x and y, no other keys)
+		if data.has("x") and data.has("y") and data.size() == 2:
+			return Vector2(data.x, data.y)
 
-	return {}
-
-## Deserialize ship data from JSON (convert Vector2 dicts back to Vector2)
-static func _deserialize_ship_data(data: Variant) -> Variant:
-	if data is Dictionary:
-		# Check if this is a serialized Vector2
-		if data.has("_type") and data["_type"] == "Vector2":
-			return Vector2(data.get("x", 0.0), data.get("y", 0.0))
-
-		# Otherwise recursively deserialize
+		# Otherwise recurse into dictionary
 		var result = {}
 		for key in data.keys():
-			result[key] = _deserialize_ship_data(data[key])
+			result[key] = _convert_vectors(data[key])
 		return result
 	elif data is Array:
 		var result = []
 		for item in data:
-			result.append(_deserialize_ship_data(item))
+			result.append(_convert_vectors(item))
 		return result
 	else:
 		return data
+
+## Force reload templates (useful after Ship Editor saves)
+static func reload_templates() -> void:
+	_templates.clear()
+	_load_all_templates()
 
 ## Create a ship instance from template with crew
 static func create_ship_instance(ship_type: String, team: int, position: Vector2, create_crew: bool = false, crew_skill: float = 0.5) -> Dictionary:
@@ -108,8 +114,8 @@ static func create_crew_for_ship(ship_data: Dictionary, skill_level: float = 0.5
 				member.assigned_to = ship_data.ship_id
 			return crew
 		"heavy_fighter":
-			# Solo pilot for heavy fighters (same as regular fighter)
-			var crew = CrewData.create_solo_fighter_crew(skill_level)
+			# Pilot + gunner for heavy fighters (rear turret defense)
+			var crew = CrewData.create_heavy_fighter_crew(skill_level)
 			for member in crew:
 				member.assigned_to = ship_data.ship_id
 			return crew
@@ -141,485 +147,3 @@ static func validate_ship_data(data: Dictionary) -> bool:
 	if not data.has("internals"): return false
 	if not data.has("weapons"): return false
 	return true
-
-## Fighter template - fast, weak armor, low damage
-static func _create_fighter_template() -> Dictionary:
-	return {
-		"type": "fighter",
-		"name": "Fighter",
-		"stats": {
-			"max_speed": 300.0,
-			"acceleration": 100.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 0.3,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
-			"turn_rate": 3.0,  # radians per second
-			"mass": 50.0,
-			"size": 15.0  # visual/collision size
-		},
-		"armor_sections": [
-			{
-				"section_id": "front",
-				"position_offset": Vector2(0, -8),
-				"arc": {"start": -90, "end": 90},  # front 180 degrees
-				"max_armor": 25,
-				"current_armor": 25,
-				"size": 1
-			},
-			{
-				"section_id": "back",
-				"position_offset": Vector2(0, 8),
-				"arc": {"start": 90, "end": 270},  # back 180 degrees
-				"max_armor": 20,
-				"current_armor": 20,
-				"size": 1
-			}
-		],
-		"internals": [
-			{
-				"component_id": "engine",
-				"type": "engine",
-				"section_id": "back",
-				"position_offset": Vector2(0, 6),
-				"max_health": 25,
-				"current_health": 25,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-				}
-			}
-		],
-		"weapons": [
-			{
-				"weapon_id": "guns",
-				"type": "light_cannon",
-				"position_offset": Vector2(0, -5),
-				"facing": 0.0,
-				"arc": {"min": -20, "max": 20},  # degrees
-				"stats": {
-					"damage": 5,
-					"rate_of_fire": 5.0,  # shots per second
-					"projectile_speed": 600,
-					"range": 800,
-					"accuracy": 0.85,
-					"size": 1
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			}
-		],
-		"orders": {
-			"current_order": "engage",
-			"target_id": null,
-			"patrol_points": []
-		}
-	}
-
-## Corvette template - medium speed, heavy armor, medium damage
-static func _create_corvette_template() -> Dictionary:
-	return {
-		"type": "corvette",
-		"name": "Corvette",
-		"stats": {
-			"max_speed": 150.0,
-			"acceleration": 50.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 0.15,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
-			"turn_rate": 1.5,
-			"mass": 200.0,
-			"size": 90.0
-		},
-		"armor_sections": [
-			{
-				"section_id": "front",
-				"position_offset": Vector2(0, -15),
-				"arc": {"start": -60, "end": 60},  # front 120 degrees
-				"max_armor": 100,
-				"current_armor": 100,
-				"size": 2
-			},
-			{
-				"section_id": "middle",
-				"position_offset": Vector2(0, 0),
-				"arc": {"start": 60, "end": 300},  # middle 240 degrees (sides)
-				"max_armor": 90,
-				"current_armor": 90,
-				"size": 2
-			},
-			{
-				"section_id": "back",
-				"position_offset": Vector2(0, 15),
-				"arc": {"start": 300, "end": 420},  # back 120 degrees (wraps around)
-				"max_armor": 70,
-				"current_armor": 70,
-				"size": 2
-			}
-		],
-		"internals": [
-			{
-				"component_id": "engine_left",
-				"type": "engine",
-				"section_id": "back",
-				"position_offset": Vector2(-8, 20),
-				"max_health": 60,
-				"current_health": 60,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-				}
-			},
-			{
-				"component_id": "engine_right",
-				"type": "engine",
-				"section_id": "back",
-				"position_offset": Vector2(8, 20),
-				"max_health": 60,
-				"current_health": 60,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-				}
-			}
-		],
-		"weapons": [
-			{
-				"weapon_id": "turret_1",
-				"type": "medium_cannon",
-				"position_offset": Vector2(-8, -5),
-				"facing": 0.0,
-				"arc": {"min": -90, "max": 90},
-				"stats": {
-					"damage": 15,
-					"rate_of_fire": 2.0,
-					"projectile_speed": 500,
-					"range": 1000,
-					"accuracy": 0.80,
-					"size": 2
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			},
-			{
-				"weapon_id": "turret_2",
-				"type": "medium_cannon",
-				"position_offset": Vector2(8, -5),
-				"facing": 0.0,
-				"arc": {"min": -90, "max": 90},
-				"stats": {
-					"damage": 15,
-					"rate_of_fire": 2.0,
-					"projectile_speed": 500,
-					"range": 1000,
-					"accuracy": 0.80,
-					"size": 2
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			}
-		],
-		"orders": {
-			"current_order": "engage",
-			"target_id": null,
-			"patrol_points": []
-		}
-	}
-
-## Capital template - slow, very heavy armor, high damage
-static func _create_capital_template() -> Dictionary:
-	return {
-		"type": "capital",
-		"name": "Capital Ship",
-		"stats": {
-			"max_speed": 80.0,
-			"acceleration": 20.0,  # Forward thrust (main engines)
-			"lateral_acceleration": 0.05,  # Lateral/reverse thrust (maneuvering thrusters) - 1%
-			"turn_rate": 0.5,
-			"mass": 1000.0,
-			"size": 150.0
-		},
-		"armor_sections": [
-			{
-				"section_id": "front_left",
-				"position_offset": Vector2(-10, -20),
-				"arc": {"start": 300, "end": 360},  # front left 60 degrees
-				"max_armor": 180,
-				"current_armor": 180,
-				"size": 3
-			},
-			{
-				"section_id": "front_right",
-				"position_offset": Vector2(10, -20),
-				"arc": {"start": 0, "end": 60},  # front right 60 degrees
-				"max_armor": 180,
-				"current_armor": 180,
-				"size": 3
-			},
-			{
-				"section_id": "middle_right",
-				"position_offset": Vector2(20, 0),
-				"arc": {"start": 60, "end": 120},  # right side 60 degrees
-				"max_armor": 150,
-				"current_armor": 150,
-				"size": 3
-			},
-			{
-				"section_id": "back_right",
-				"position_offset": Vector2(10, 20),
-				"arc": {"start": 120, "end": 180},  # back right 60 degrees
-				"max_armor": 120,
-				"current_armor": 120,
-				"size": 3
-			},
-			{
-				"section_id": "back_left",
-				"position_offset": Vector2(-10, 20),
-				"arc": {"start": 180, "end": 240},  # back left 60 degrees
-				"max_armor": 120,
-				"current_armor": 120,
-				"size": 3
-			},
-			{
-				"section_id": "middle_left",
-				"position_offset": Vector2(-20, 0),
-				"arc": {"start": 240, "end": 300},  # left side 60 degrees
-				"max_armor": 150,
-				"current_armor": 150,
-				"size": 3
-			}
-		],
-		"internals": [
-			{
-				"component_id": "engine_left_outer",
-				"type": "engine",
-				"section_id": "back_L",
-				"position_offset": Vector2(-35, 25),
-				"max_health": 150,
-				"current_health": 150,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-				}
-			},
-			{
-				"component_id": "engine_left_inner",
-				"type": "engine",
-				"section_id": "back_L",
-				"position_offset": Vector2(-15, 25),
-				"max_health": 150,
-				"current_health": 150,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-				}
-			},
-			{
-				"component_id": "engine_right_inner",
-				"type": "engine",
-				"section_id": "back_R",
-				"position_offset": Vector2(15, 25),
-				"max_health": 150,
-				"current_health": 150,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-				}
-			},
-			{
-				"component_id": "engine_right_outer",
-				"type": "engine",
-				"section_id": "back_R",
-				"position_offset": Vector2(35, 25),
-				"max_health": 150,
-				"current_health": 150,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-				}
-			}
-		],
-		"weapons": [
-			{
-				"weapon_id": "turret_1",
-				"type": "heavy_cannon",
-				"position_offset": Vector2(-15, -10),
-				"facing": 0.0,
-				"arc": {"min": -120, "max": 120},
-				"stats": {
-					"damage": 50,
-					"rate_of_fire": 0.5,
-					"projectile_speed": 450,
-					"range": 1500,
-					"accuracy": 0.75,
-					"size": 3
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			},
-			{
-				"weapon_id": "turret_2",
-				"type": "heavy_cannon",
-				"position_offset": Vector2(15, -10),
-				"facing": 0.0,
-				"arc": {"min": -120, "max": 120},
-				"stats": {
-					"damage": 50,
-					"rate_of_fire": 0.5,
-					"projectile_speed": 450,
-					"range": 1500,
-					"accuracy": 0.75,
-					"size": 3
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			},
-			{
-				"weapon_id": "turret_3",
-				"type": "medium_cannon",
-				"position_offset": Vector2(-12, 5),
-				"facing": 0.0,
-				"arc": {"min": -90, "max": 90},
-				"stats": {
-					"damage": 15,
-					"rate_of_fire": 2.0,
-					"projectile_speed": 500,
-					"range": 1000,
-					"accuracy": 0.80,
-					"size": 3
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			},
-			{
-				"weapon_id": "turret_4",
-				"type": "medium_cannon",
-				"position_offset": Vector2(12, 5),
-				"facing": 0.0,
-				"arc": {"min": -90, "max": 90},
-				"stats": {
-					"damage": 15,
-					"rate_of_fire": 2.0,
-					"projectile_speed": 500,
-					"range": 1000,
-					"accuracy": 0.80,
-					"size": 3
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			},
-			{
-				"weapon_id": "gatling_1",
-				"type": "gatling_gun",
-				"position_offset": Vector2(-20, 0),
-				"facing": 0.0,
-				"arc": {"min": -180, "max": 180},  # Full 360° coverage for point defense
-				"stats": {
-					"damage": 3,
-					"rate_of_fire": 12.0,  # Fast firing for anti-fighter
-					"projectile_speed": 700,  # Faster projectiles
-					"range": 600,  # Shorter range, close defense
-					"accuracy": 0.70,  # Lower accuracy due to rapid fire
-					"size": 3
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			},
-			{
-				"weapon_id": "gatling_2",
-				"type": "gatling_gun",
-				"position_offset": Vector2(20, 0),
-				"facing": 0.0,
-				"arc": {"min": -180, "max": 180},  # Full 360° coverage for point defense
-				"stats": {
-					"damage": 3,
-					"rate_of_fire": 12.0,  # Fast firing for anti-fighter
-					"projectile_speed": 700,  # Faster projectiles
-					"range": 600,  # Shorter range, close defense
-					"accuracy": 0.70,  # Lower accuracy due to rapid fire
-					"size": 3
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			}
-		],
-		"orders": {
-			"current_order": "engage",
-			"target_id": null,
-			"patrol_points": []
-		}
-	}
-
-## Heavy Fighter template - slow fighter, heavy armor, high damage
-static func _create_heavy_fighter_template() -> Dictionary:
-	return {
-		"type": "heavy_fighter",
-		"name": "Heavy Fighter",
-		"stats": {
-			"max_speed": 200.0,
-			"acceleration": 60.0,
-			"lateral_acceleration": 0.2,
-			"turn_rate": 2.0,
-			"mass": 80.0,
-			"size": 25.0
-		},
-		"armor_sections": [
-			{
-				"section_id": "front",
-				"position_offset": Vector2(0, -12),
-				"arc": {"start": -90, "end": 90},
-				"max_armor": 50,
-				"current_armor": 50,
-				"size": 2
-			},
-			{
-				"section_id": "back",
-				"position_offset": Vector2(0, 12),
-				"arc": {"start": 90, "end": 270},
-				"max_armor": 40,
-				"current_armor": 40,
-				"size": 2
-			}
-		],
-		"internals": [
-			{
-				"component_id": "engine",
-				"type": "engine",
-				"section_id": "back",
-				"position_offset": Vector2(0, 10),
-				"max_health": 40,
-				"current_health": 40,
-				"status": "operational",
-				"effect_on_ship": {
-					"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-					"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-				}
-			}
-		],
-		"weapons": [
-			{
-				"weapon_id": "guns",
-				"type": "medium_cannon",
-				"position_offset": Vector2(0, -8),
-				"facing": 0.0,
-				"arc": {"min": -15, "max": 15},
-				"stats": {
-					"damage": 12,
-					"rate_of_fire": 3.0,
-					"projectile_speed": 550,
-					"range": 900,
-					"accuracy": 0.80,
-					"size": 2
-				},
-				"cooldown_remaining": 0.0,
-				"operator_id": null
-			}
-		],
-		"orders": {
-			"current_order": "engage",
-			"target_id": null,
-			"patrol_points": []
-		}
-	}

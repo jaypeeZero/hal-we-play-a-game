@@ -1064,6 +1064,9 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> voi
 		"fighter":
 			# Solo pilot for fighters
 			new_crew = CrewData.create_solo_fighter_crew(base_skill)
+		"heavy_fighter":
+			# Pilot + gunner for heavy fighters (rear turret defense)
+			new_crew = CrewData.create_heavy_fighter_crew(base_skill)
 		"corvette":
 			weapon_count = 2
 			new_crew = CrewData.create_ship_crew(weapon_count, base_skill)

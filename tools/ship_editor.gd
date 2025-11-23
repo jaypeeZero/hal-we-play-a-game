@@ -9,8 +9,8 @@ extends Control
 @onready var properties_container: VBoxContainer = $HBoxContainer/PropertiesPanel/PropertiesScrollContainer/PropertiesContainer
 @onready var properties_label: Label = $HBoxContainer/PropertiesPanel/PropertiesScrollContainer/PropertiesContainer/PropertiesLabel
 
-# Path for saving custom ship configurations
-const CUSTOM_SHIPS_PATH = "user://custom_ships/"
+# Path for saving ship templates (source directory)
+const TEMPLATES_PATH = "res://data/ship_templates/"
 
 # Component colors - must match HullShapeDrawer for visual consistency
 const COLOR_ARMOR = Color(0.3, 0.6, 1.0)       # Blue - armor sections
@@ -596,34 +596,34 @@ func _update_component_in_ship_data() -> void:
 				armor_sections[i] = selected_component
 				break
 
-## Save ship configuration to file
+## Save ship configuration to source JSON file
 func _on_save_button_pressed() -> void:
 	if current_ship_data.is_empty():
 		print("No ship data to save")
 		return
 
-	_ensure_custom_ships_dir()
-
 	var ship_type = current_ship_data.get("type", "unknown")
-	var file_path = CUSTOM_SHIPS_PATH + ship_type + "_custom.json"
+
+	# Get absolute path to source file
+	var res_path = TEMPLATES_PATH + ship_type + ".json"
+	var absolute_path = ProjectSettings.globalize_path(res_path)
 
 	# Convert ship data to JSON (need to handle Vector2 serialization)
 	var save_data = _serialize_ship_data(current_ship_data)
 	var json_string = JSON.stringify(save_data, "\t")
 
-	var file = FileAccess.open(file_path, FileAccess.WRITE)
+	var file = FileAccess.open(absolute_path, FileAccess.WRITE)
 	if file:
 		file.store_string(json_string)
 		file.close()
-		print("Ship configuration saved to: " + file_path)
+		print("Ship template saved to: " + absolute_path)
+
+		# Reload templates so changes take effect immediately
+		ShipData.reload_templates()
 	else:
-		print("ERROR: Could not save ship configuration")
+		print("ERROR: Could not save ship template to: " + absolute_path)
 
-func _ensure_custom_ships_dir() -> void:
-	if not DirAccess.dir_exists_absolute(CUSTOM_SHIPS_PATH):
-		DirAccess.make_dir_recursive_absolute(CUSTOM_SHIPS_PATH)
-
-## Serialize ship data for JSON (convert Vector2 to dict)
+## Serialize ship data for JSON (convert Vector2 to {x, y} dict)
 func _serialize_ship_data(data: Variant) -> Variant:
 	if data is Dictionary:
 		var result = {}
@@ -636,6 +636,6 @@ func _serialize_ship_data(data: Variant) -> Variant:
 			result.append(_serialize_ship_data(item))
 		return result
 	elif data is Vector2:
-		return {"_type": "Vector2", "x": data.x, "y": data.y}
+		return {"x": data.x, "y": data.y}
 	else:
 		return data

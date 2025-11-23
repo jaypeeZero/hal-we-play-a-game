@@ -1,0 +1,107 @@
+{
+	"type": "corvette",
+	"name": "Corvette",
+	"stats": {
+		"max_speed": 150.0,
+		"acceleration": 50.0,
+		"lateral_acceleration": 0.15,
+		"turn_rate": 1.5,
+		"mass": 200.0,
+		"size": 90.0
+	},
+	"armor_sections": [
+		{
+			"section_id": "front",
+			"position_offset": {"x": 0, "y": -15},
+			"arc": {"start": -60, "end": 60},
+			"max_armor": 100,
+			"current_armor": 100,
+			"size": 2
+		},
+		{
+			"section_id": "middle",
+			"position_offset": {"x": 0, "y": 0},
+			"arc": {"start": 60, "end": 300},
+			"max_armor": 90,
+			"current_armor": 90,
+			"size": 2
+		},
+		{
+			"section_id": "back",
+			"position_offset": {"x": 0, "y": 15},
+			"arc": {"start": 300, "end": 420},
+			"max_armor": 70,
+			"current_armor": 70,
+			"size": 2
+		}
+	],
+	"internals": [
+		{
+			"component_id": "engine_left",
+			"type": "engine",
+			"section_id": "back",
+			"position_offset": {"x": -8, "y": 20},
+			"max_health": 60,
+			"current_health": 60,
+			"status": "operational",
+			"effect_on_ship": {
+				"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
+				"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+			}
+		},
+		{
+			"component_id": "engine_right",
+			"type": "engine",
+			"section_id": "back",
+			"position_offset": {"x": 8, "y": 20},
+			"max_health": 60,
+			"current_health": 60,
+			"status": "operational",
+			"effect_on_ship": {
+				"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
+				"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
+			}
+		}
+	],
+	"weapons": [
+		{
+			"weapon_id": "turret_1",
+			"type": "medium_cannon",
+			"position_offset": {"x": -8, "y": -5},
+			"facing": 0.0,
+			"arc": {"min": -90, "max": 90},
+			"stats": {
+				"damage": 15,
+				"rate_of_fire": 2.0,
+				"projectile_speed": 500,
+				"range": 1000,
+				"accuracy": 0.80,
+				"size": 2
+			},
+			"cooldown_remaining": 0.0,
+			"operator_id": null
+		},
+		{
+			"weapon_id": "turret_2",
+			"type": "medium_cannon",
+			"position_offset": {"x": 8, "y": -5},
+			"facing": 0.0,
+			"arc": {"min": -90, "max": 90},
+			"stats": {
+				"damage": 15,
+				"rate_of_fire": 2.0,
+				"projectile_speed": 500,
+				"range": 1000,
+				"accuracy": 0.80,
+				"size": 2
+			},
+			"cooldown_remaining": 0.0,
+			"operator_id": null
+		}
+	],
+	"orders": {
+		"current_order": "engage",
+		"target_id": null,
+		"patrol_points": []
+	}
+}

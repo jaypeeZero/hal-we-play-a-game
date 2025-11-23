@@ -129,6 +129,41 @@ func test_heavy_fighter_gets_pilot_crew():
 			break
 	assert_true(has_pilot, "Heavy Fighter crew should include a pilot")
 
+func test_heavy_fighter_has_two_weapons():
+	var template = ShipData.get_ship_template("heavy_fighter")
+
+	assert_eq(template.weapons.size(), 2, "Heavy Fighter should have 2 weapons (forward cannon + rear turret)")
+
+func test_heavy_fighter_has_rear_turret():
+	var template = ShipData.get_ship_template("heavy_fighter")
+
+	var has_rear_turret = false
+	for weapon in template.weapons:
+		if weapon.weapon_id == "rear_turret":
+			has_rear_turret = true
+			# Verify it's rear-facing (facing = PI)
+			assert_almost_eq(weapon.facing, PI, 0.01, "Rear turret should face backward (PI radians)")
+			break
+	assert_true(has_rear_turret, "Heavy Fighter should have a rear turret")
+
+func test_heavy_fighter_has_two_crew():
+	var ship = ShipData.create_ship_instance("heavy_fighter", 0, Vector2(0, 0), true)
+
+	assert_eq(ship.crew.size(), 2, "Heavy Fighter should have 2 crew (pilot + gunner)")
+
+func test_heavy_fighter_has_pilot_and_gunner():
+	var ship = ShipData.create_ship_instance("heavy_fighter", 0, Vector2(0, 0), true)
+
+	var has_pilot = false
+	var has_gunner = false
+	for crew_member in ship.crew:
+		if crew_member.role == CrewData.Role.PILOT:
+			has_pilot = true
+		elif crew_member.role == CrewData.Role.GUNNER:
+			has_gunner = true
+	assert_true(has_pilot, "Heavy Fighter should have a pilot")
+	assert_true(has_gunner, "Heavy Fighter should have a gunner for the rear turret")
+
 func test_corvette_gets_full_crew():
 	var ship = ShipData.create_ship_instance("corvette", 0, Vector2(0, 0), true)
 

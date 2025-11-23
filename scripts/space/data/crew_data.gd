@@ -135,6 +135,22 @@ static func create_solo_fighter_crew(skill_level: float = 0.5) -> Array:
 	# Solo pilot makes their own decisions (no superior)
 	return [pilot]
 
+## Create a heavy fighter crew (pilot + gunner, pilot has higher skill)
+## The pilot commands the ship and forward weapons
+## The gunner operates the rear turret for defensive coverage
+static func create_heavy_fighter_crew(skill_level: float = 0.5) -> Array:
+	# Pilot gets the base skill level (they should be the better pilot)
+	var pilot = create_crew_member(Role.PILOT, skill_level)
+
+	# Gunner gets slightly lower skill (90% of pilot)
+	var gunner = create_crew_member(Role.GUNNER, skill_level * 0.9)
+
+	# Gunner reports to pilot (pilot is in command of this small craft)
+	gunner.command_chain.superior = pilot.crew_id
+	pilot.command_chain.subordinates.append(gunner.crew_id)
+
+	return [pilot, gunner]
+
 ## Create a fighter squadron (6 fighters in 3 wingman pairs)
 ## Squadron Leader (Alpha) decides targets, others follow
 ## Leadership succession: Alpha -> Beta -> Gamma -> Delta -> Epsilon -> Zeta

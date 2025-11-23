@@ -1,0 +1,132 @@
+{
+	"angular_velocity": 0.0,
+	"armor_sections": [
+		{
+			"arc": {
+				"end": 90.0,
+				"start": -90.0
+			},
+			"current_armor": 50.0,
+			"max_armor": 50.0,
+			"position_offset": {
+				"x": 0.0,
+				"y": -12.0
+			},
+			"section_id": "front",
+			"size": 2.0
+		},
+		{
+			"arc": {
+				"end": 270.0,
+				"start": 90.0
+			},
+			"current_armor": 40.0,
+			"max_armor": 40.0,
+			"position_offset": {
+				"x": 0.0,
+				"y": 12.0
+			},
+			"section_id": "back",
+			"size": 2.0
+		}
+	],
+	"internals": [
+		{
+			"component_id": "engine",
+			"current_health": 40.0,
+			"effect_on_ship": {
+				"on_damaged": {
+					"acceleration": 0.5,
+					"max_speed": 0.6
+				},
+				"on_destroyed": {
+					"acceleration": 0.1,
+					"max_speed": 0.1
+				}
+			},
+			"max_health": 40.0,
+			"position_offset": {
+				"x": 0.067352294921875,
+				"y": 10.8163299560547
+			},
+			"section_id": "back",
+			"status": "operational",
+			"type": "engine"
+		}
+	],
+	"name": "Heavy Fighter",
+	"orders": {
+		"current_order": "engage",
+		"patrol_points": [],
+		"target_id": null
+	},
+	"position": {
+		"x": 0.0,
+		"y": 0.0
+	},
+	"rotation": 0.0,
+	"ship_id": "ship_0",
+	"stats": {
+		"acceleration": 60.0,
+		"lateral_acceleration": 0.2,
+		"mass": 80.0,
+		"max_speed": 200.0,
+		"size": 25.0,
+		"turn_rate": 2.0
+	},
+	"status": "operational",
+	"team": 0,
+	"type": "heavy_fighter",
+	"velocity": {
+		"x": 0.0,
+		"y": 0.0
+	},
+	"weapons": [
+		{
+			"arc": {
+				"max": 15.0,
+				"min": -15.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": -1.67227172851562,
+				"y": -12.6938781738281
+			},
+			"stats": {
+				"accuracy": 0.8,
+				"damage": 12.0,
+				"projectile_speed": 550.0,
+				"range": 900.0,
+				"rate_of_fire": 3.0,
+				"size": 2.0
+			},
+			"type": "medium_cannon",
+			"weapon_id": "guns"
+		},
+		{
+			"arc": {
+				"max": 135.0,
+				"min": -135.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 3.14159265359,
+			"operator_id": null,
+			"position_offset": {
+				"x": 7.02581787109375,
+				"y": -3.11564636230469
+			},
+			"stats": {
+				"accuracy": 0.65,
+				"damage": 3.0,
+				"projectile_speed": 700.0,
+				"range": 500.0,
+				"rate_of_fire": 10.0,
+				"size": 2.0
+			},
+			"type": "gatling_gun",
+			"weapon_id": "rear_turret"
+		}
+	]
+}
