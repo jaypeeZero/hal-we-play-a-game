@@ -3,10 +3,12 @@ extends Control
 ## Fleet Editor UI - Allows players to configure the ships for each team
 
 @onready var _team0_fighter: SpinBox = %Team0FighterSpinBox
+@onready var _team0_heavy_fighter: SpinBox = %Team0HeavyFighterSpinBox
 @onready var _team0_corvette: SpinBox = %Team0CorvetteSpinBox
 @onready var _team0_capital: SpinBox = %Team0CapitalSpinBox
 
 @onready var _team1_fighter: SpinBox = %Team1FighterSpinBox
+@onready var _team1_heavy_fighter: SpinBox = %Team1HeavyFighterSpinBox
 @onready var _team1_corvette: SpinBox = %Team1CorvetteSpinBox
 @onready var _team1_capital: SpinBox = %Team1CapitalSpinBox
 
@@ -22,10 +24,12 @@ func _load_fleet_data() -> void:
 	var team1_fleet := FleetDataManager.load_fleet(1)
 
 	_team0_fighter.value = team0_fleet.get("fighter", 1)
+	_team0_heavy_fighter.value = team0_fleet.get("heavy_fighter", 0)
 	_team0_corvette.value = team0_fleet.get("corvette", 0)
 	_team0_capital.value = team0_fleet.get("capital", 0)
 
 	_team1_fighter.value = team1_fleet.get("fighter", 1)
+	_team1_heavy_fighter.value = team1_fleet.get("heavy_fighter", 0)
 	_team1_corvette.value = team1_fleet.get("corvette", 0)
 	_team1_capital.value = team1_fleet.get("capital", 0)
 
@@ -33,6 +37,7 @@ func _load_fleet_data() -> void:
 func _get_team0_fleet() -> Dictionary:
 	return {
 		"fighter": int(_team0_fighter.value),
+		"heavy_fighter": int(_team0_heavy_fighter.value),
 		"corvette": int(_team0_corvette.value),
 		"capital": int(_team0_capital.value)
 	}
@@ -41,6 +46,7 @@ func _get_team0_fleet() -> Dictionary:
 func _get_team1_fleet() -> Dictionary:
 	return {
 		"fighter": int(_team1_fighter.value),
+		"heavy_fighter": int(_team1_heavy_fighter.value),
 		"corvette": int(_team1_corvette.value),
 		"capital": int(_team1_capital.value)
 	}

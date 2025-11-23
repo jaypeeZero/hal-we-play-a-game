@@ -102,7 +102,8 @@ static func _group_fighters_by_team(all_ships: Array, all_crew: Array) -> Dictio
 	var grouped = {}
 
 	for ship in all_ships:
-		if ship.get("type", "") != "fighter":
+		var ship_type = ship.get("type", "")
+		if ship_type != "fighter" and ship_type != "heavy_fighter":
 			continue
 		if ship.get("status", "") != "operational":
 			continue

@@ -166,6 +166,8 @@ static func calculate_ship_threat(ship: Dictionary) -> float:
 	match ship.get("ship_type", ""):
 		"fighter":
 			threat += 30.0  # Fast and aggressive
+		"heavy_fighter":
+			threat += 45.0  # Between fighter (30) and corvette (50)
 		"corvette":
 			threat += 50.0  # Moderate threat
 		"capital":

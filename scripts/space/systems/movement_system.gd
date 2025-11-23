@@ -1055,6 +1055,8 @@ static func get_engagement_range(ship_data: Dictionary) -> float:
 	match ship_data.type:
 		"fighter":
 			return 600.0  # Fighters engage at weapons range, not point-blank
+		"heavy_fighter":
+			return 700.0  # Slightly longer range than regular fighter
 		"corvette":
 			return 3500.0  # Corvettes at medium range
 		"capital":

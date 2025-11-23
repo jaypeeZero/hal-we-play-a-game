@@ -93,7 +93,7 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 	var target_type = target_ship.get("type", "fighter")
 	var decision = {}
 
-	if target_type == "fighter":
+	if target_type == "fighter" or target_type == "heavy_fighter":
 		decision = _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 	elif target_type == "corvette" or target_type == "capital":
 		decision = _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
@@ -127,7 +127,7 @@ static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wi
 	var target_type = target_ship.get("type", "fighter")
 	var decision = {}
 
-	if target_type == "fighter":
+	if target_type == "fighter" or target_type == "heavy_fighter":
 		decision = _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 	elif target_type == "corvette" or target_type == "capital":
 		decision = _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
@@ -364,7 +364,7 @@ static func _make_solo_fallback_decision(crew_data: Dictionary, ship_data: Dicti
 
 	var target_type = target_ship.get("type", "fighter")
 
-	if target_type == "fighter":
+	if target_type == "fighter" or target_type == "heavy_fighter":
 		return _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 	elif target_type == "corvette" or target_type == "capital":
 		return _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
@@ -640,7 +640,8 @@ static func _find_wingmates(crew_data: Dictionary, all_crew: Array, all_ships: A
 			continue
 		if ship.get("team", -1) != my_team:
 			continue
-		if ship.get("type", "") != "fighter":
+		var ship_type = ship.get("type", "")
+		if ship_type != "fighter" and ship_type != "heavy_fighter":
 			continue
 		if ship.get("status", "") != "operational":
 			continue
@@ -716,7 +717,8 @@ static func _count_nearby_friendly_fighters(my_ship: Dictionary, all_ships: Arra
 			continue
 		if ship.get("team", -1) != my_team:
 			continue
-		if ship.get("type", "") != "fighter":
+		var ship_type = ship.get("type", "")
+		if ship_type != "fighter" and ship_type != "heavy_fighter":
 			continue
 		if ship.get("status", "") != "operational":
 			continue

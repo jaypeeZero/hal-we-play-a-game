@@ -167,6 +167,7 @@ static func calculate_distance_priority(from: Vector2, to: Vector2) -> float:
 static func calculate_type_priority(ship_type: String) -> float:
 	var priorities = {
 		"fighter": 100.0,
+		"heavy_fighter": 90.0,  # High priority but slightly less than fighter
 		"corvette": 50.0,
 		"capital": 25.0
 	}
