@@ -13,6 +13,21 @@ extends RefCounted
 ##
 ## All constants defined in WingConstants
 
+## Distinct colors for wing visualization (high saturation, good visibility)
+const WING_COLORS: Array[Color] = [
+	Color(1.0, 0.4, 0.4),    # Red
+	Color(0.4, 0.6, 1.0),    # Blue
+	Color(1.0, 0.8, 0.2),    # Yellow
+	Color(0.6, 0.4, 1.0),    # Purple
+	Color(1.0, 0.5, 0.2),    # Orange
+	Color(0.4, 1.0, 0.8),    # Cyan
+	Color(1.0, 0.4, 0.8),    # Pink
+	Color(0.5, 1.0, 0.5),    # Lime
+]
+
+## Track next color index for assignment
+static var _next_color_index: int = 0
+
 ## Form wings from available fighters on a team
 ## Returns array of wing dictionaries
 static func form_wings(all_ships: Array, all_crew: Array) -> Array:
@@ -62,7 +77,8 @@ static func _group_fighters_by_team(all_ships: Array, all_crew: Array) -> Dictio
 ## Find crew assigned to a ship
 static func _find_crew_for_ship(ship_id: String, all_crew: Array) -> Dictionary:
 	for crew in all_crew:
-		if crew.get("assigned_ship_id", "") == ship_id:
+		# Check both assigned_ship_id and assigned_to (for compatibility)
+		if crew.get("assigned_ship_id", "") == ship_id or crew.get("assigned_to", "") == ship_id:
 			return crew
 	return {}
 
@@ -98,7 +114,8 @@ static func _form_team_wings(team_fighters: Array, assigned_ship_ids: Dictionary
 			"lead_skill": fighter.crew.get("stats", {}).get("skill", 0.5),
 			"wingmen": [],
 			"wing_type": "pair",  # Will be updated if 3
-			"team": fighter.ship.get("team", -1)
+			"team": fighter.ship.get("team", -1),
+			"wing_color": _get_next_wing_color()
 		}
 		assigned_ship_ids[ship_id] = true
 
@@ -271,3 +288,16 @@ static func get_lead_maneuver(wing: Dictionary, all_crew: Array) -> String:
 			return orders.get("subtype", "")
 
 	return ""
+
+## Get next wing color (cycles through available colors)
+static func _get_next_wing_color() -> Color:
+	var color = WING_COLORS[_next_color_index % WING_COLORS.size()]
+	_next_color_index += 1
+	return color
+
+## Get all ship IDs in a wing (lead + wingmen)
+static func get_wing_ship_ids(wing: Dictionary) -> Array:
+	var ship_ids = [wing.get("lead_ship_id", "")]
+	for wingman in wing.get("wingmen", []):
+		ship_ids.append(wingman.get("ship_id", ""))
+	return ship_ids

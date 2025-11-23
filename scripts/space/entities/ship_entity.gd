@@ -159,6 +159,9 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 			state.maneuvering_thrust_direction = Vector2.ZERO
 		# Beyond 90° - no thrust, ship is turning (engines not firing)
 
+	# Wing color for visualization (set by game loop from wing formation)
+	state.wing_color = ship_data.get("_wing_color", Color.TRANSPARENT)
+
 	return state
 
 ## Map weapon types to visual types

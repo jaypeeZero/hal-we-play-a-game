@@ -773,6 +773,10 @@ func _update_crew_ai_systems(delta: float) -> void:
 	# Process command chain (information flows up, orders flow down)
 	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
 
+	# Form wings and update ship visual data with wing colors
+	var wings = WingFormationSystem.form_wings(_ships, _crew_list)
+	_update_ship_wing_colors(wings)
+
 	# EVENT-DRIVEN: Only process crew events, don't poll all crew
 	_process_crew_events(_crew_events, delta, game_time)
 	_crew_events.clear()
@@ -1080,6 +1084,23 @@ func _remove_crew_for_ship(ship_id: String) -> void:
 
 	if crew_to_remove.size() > 0:
 		print("Removed %d crew members from destroyed ship %s" % [crew_to_remove.size(), ship_id])
+
+## Update ship data with wing colors for visualization
+func _update_ship_wing_colors(wings: Array) -> void:
+	# First, clear all wing colors (ships not in a wing)
+	for ship in _ships:
+		ship["_wing_color"] = Color.TRANSPARENT
+
+	# Then, set wing colors for ships that are in a wing
+	for wing in wings:
+		var wing_color = wing.get("wing_color", Color.TRANSPARENT)
+		var ship_ids = WingFormationSystem.get_wing_ship_ids(wing)
+
+		for ship_id in ship_ids:
+			for ship in _ships:
+				if ship.get("ship_id", "") == ship_id:
+					ship["_wing_color"] = wing_color
+					break
 
 ## Check for squadron leader deaths and promote next in line
 func _check_squadron_leadership_succession() -> void:

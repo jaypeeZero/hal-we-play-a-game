@@ -67,6 +67,9 @@ func update_state(entity_id: String, state: EntityState) -> void:
 	if state.has_flag("destroyed"):
 		_show_destruction_effect(visual)
 
+	# Update wing circle visual
+	_update_wing_circle(visual.root, state.wing_color)
+
 func play_animation(entity_id: String, request: AnimationRequest) -> void:
 	# Animations handled by state changes in this renderer
 	pass
@@ -224,3 +227,36 @@ func _show_destruction_effect(visual: Dictionary) -> void:
 	var tween = root.create_tween()
 	tween.tween_property(root, "modulate", Color.RED, 0.1)
 	tween.tween_property(root, "modulate:a", 0.0, 0.9)
+
+## Update wing circle visual based on wing color
+func _update_wing_circle(parent_node: Node2D, wing_color: Color) -> void:
+	var wing_circle = parent_node.get_node_or_null("WingCircle")
+
+	# If no wing (transparent color), hide/remove circle
+	if wing_color.a < 0.01:
+		if wing_circle:
+			wing_circle.visible = false
+		return
+
+	# Create wing circle if it doesn't exist
+	if not wing_circle:
+		wing_circle = Line2D.new()
+		wing_circle.name = "WingCircle"
+		wing_circle.width = 2.0
+		wing_circle.closed = true
+
+		# Create circle points
+		var points = PackedVector2Array()
+		var segments = 24
+		for i in range(segments):
+			var angle = (float(i) / segments) * TAU
+			points.append(Vector2(cos(angle), sin(angle)) * 35.0)
+		wing_circle.points = points
+
+		# Add behind other visuals (z_index or add first)
+		wing_circle.z_index = -1
+		parent_node.add_child(wing_circle)
+
+	# Update color and visibility
+	wing_circle.default_color = wing_color
+	wing_circle.visible = true

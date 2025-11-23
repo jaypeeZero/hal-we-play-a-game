@@ -12,6 +12,10 @@ const COLOR_ERROR = Color("FF003C")         # Damage/warning
 const COLOR_BACKGROUND = Color("0D0D0D")    # Deep black
 const COLOR_TEAM1 = Color("CCCCCC")         # Grey/White - Team 1
 
+# Wing circle visual constants
+const WING_CIRCLE_RADIUS: float = 35.0
+const WING_CIRCLE_LINE_WIDTH: float = 2.0
+
 var _theme: IVisualTheme = null
 var _entity_visuals: Dictionary = {}  # entity_id -> Dictionary of visual nodes
 var _component_visuals: Dictionary = {}  # entity_id -> Dictionary[component_id -> Node]
@@ -85,6 +89,9 @@ func update_state(entity_id: String, state: EntityState) -> void:
 	# Update based on state flags
 	if state.has_flag("destroyed"):
 		_show_destruction_effect(visual)
+
+	# Update wing circle visual
+	_update_wing_circle(visual.root, state.wing_color)
 
 func play_animation(entity_id: String, request: AnimationRequest) -> void:
 	# Animations handled by state changes in this renderer
@@ -936,3 +943,36 @@ func _show_destruction_effect(visual: Dictionary) -> void:
 	# Fade out
 	var tween = root.create_tween()
 	tween.tween_property(root, "modulate:a", 0.0, 1.0)
+
+## Update wing circle visual based on wing color
+func _update_wing_circle(parent_node: Node2D, wing_color: Color) -> void:
+	var wing_circle = parent_node.get_node_or_null("WingCircle")
+
+	# If no wing (transparent color), hide/remove circle
+	if wing_color.a < 0.01:
+		if wing_circle:
+			wing_circle.visible = false
+		return
+
+	# Create wing circle if it doesn't exist
+	if not wing_circle:
+		wing_circle = Line2D.new()
+		wing_circle.name = "WingCircle"
+		wing_circle.width = WING_CIRCLE_LINE_WIDTH
+		wing_circle.closed = true
+
+		# Create circle points
+		var points = PackedVector2Array()
+		var segments = 24
+		for i in range(segments):
+			var angle = (float(i) / segments) * TAU
+			points.append(Vector2(cos(angle), sin(angle)) * WING_CIRCLE_RADIUS)
+		wing_circle.points = points
+
+		# Add behind other visuals (z_index or add first)
+		wing_circle.z_index = -1
+		parent_node.add_child(wing_circle)
+
+	# Update color and visibility
+	wing_circle.default_color = wing_color
+	wing_circle.visible = true
