@@ -9,7 +9,8 @@ extends GutTest
 
 func test_weapon_fires_when_ready():
 	var ship = create_test_ship_with_weapon(0.0)  # No cooldown
-	var target = create_test_target(Vector2(300, 0))
+	# Ship at rotation 0 visually faces UP (negative Y), so target must be above
+	var target = create_test_target(Vector2(0, -300))
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
@@ -33,12 +34,13 @@ func test_cooldown_decreases_over_time():
 
 func test_cooldown_set_after_firing():
 	var ship = create_test_ship_with_weapon(0.0)
-	var target = create_test_target(Vector2(300, 0))
+	# Ship at rotation 0 visually faces UP (negative Y)
+	var target = create_test_target(Vector2(0, -300))
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
-	if result.fire_commands.size() > 0:
-		assert_gt(result.ship_data.weapons[0].cooldown_remaining, 0.0, "Cooldown should be set after firing")
+	assert_gt(result.fire_commands.size(), 0, "Weapon should fire")
+	assert_gt(result.ship_data.weapons[0].cooldown_remaining, 0.0, "Cooldown should be set after firing")
 
 func test_cooldown_cannot_go_negative():
 	var ship = create_test_ship_with_weapon(0.5)
@@ -53,13 +55,14 @@ func test_cooldown_cannot_go_negative():
 
 func test_weapon_selects_closest_target():
 	var ship = create_test_ship_with_weapon(0.0)
-	var close_target = create_test_target(Vector2(200, 0))
-	var far_target = create_test_target(Vector2(600, 0))
+	# Ship at rotation 0 visually faces UP (negative Y)
+	var close_target = create_test_target(Vector2(0, -200))
+	var far_target = create_test_target(Vector2(0, -600))
 
 	var result = WeaponSystem.update_weapons(ship, [far_target, close_target], 0.1)
 
-	if result.fire_commands.size() > 0:
-		assert_eq(result.fire_commands[0].target_id, close_target.ship_id, "Should target closest enemy")
+	assert_gt(result.fire_commands.size(), 0, "Weapon should fire")
+	assert_eq(result.fire_commands[0].target_id, close_target.ship_id, "Should target closest enemy")
 
 func test_weapon_ignores_out_of_range_targets():
 	var ship = create_test_ship_with_weapon(0.0)
@@ -144,41 +147,44 @@ func test_destroyed_ship_does_not_fire():
 
 func test_fire_command_includes_required_fields():
 	var ship = create_test_ship_with_weapon(0.0)
-	var target = create_test_target(Vector2(300, 0))
+	# Ship at rotation 0 visually faces UP (negative Y)
+	var target = create_test_target(Vector2(0, -300))
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
-	if result.fire_commands.size() > 0:
-		var command = result.fire_commands[0]
-		assert_has(command, "type")
-		assert_has(command, "ship_id")
-		assert_has(command, "weapon_id")
-		assert_has(command, "spawn_position")
-		assert_has(command, "direction")
-		assert_has(command, "velocity")
-		assert_has(command, "damage")
-		assert_has(command, "target_id")
+	assert_gt(result.fire_commands.size(), 0, "Weapon should fire")
+	var command = result.fire_commands[0]
+	assert_has(command, "type")
+	assert_has(command, "ship_id")
+	assert_has(command, "weapon_id")
+	assert_has(command, "spawn_position")
+	assert_has(command, "direction")
+	assert_has(command, "velocity")
+	assert_has(command, "damage")
+	assert_has(command, "target_id")
 
 func test_fire_command_direction_is_normalized():
 	var ship = create_test_ship_with_weapon(0.0)
-	var target = create_test_target(Vector2(300, 0))
+	# Ship at rotation 0 visually faces UP (negative Y)
+	var target = create_test_target(Vector2(0, -300))
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
-	if result.fire_commands.size() > 0:
-		var direction = result.fire_commands[0].direction
-		var length = direction.length()
-		assert_almost_eq(length, 1.0, 0.1, "Fire direction should be normalized")
+	assert_gt(result.fire_commands.size(), 0, "Weapon should fire")
+	var direction = result.fire_commands[0].direction
+	var length = direction.length()
+	assert_almost_eq(length, 1.0, 0.1, "Fire direction should be normalized")
 
 func test_fire_command_targets_correct_enemy():
 	var ship = create_test_ship_with_weapon(0.0)
-	var target = create_test_target(Vector2(300, 0))
+	# Ship at rotation 0 visually faces UP (negative Y)
+	var target = create_test_target(Vector2(0, -300))
 	target.ship_id = "enemy_123"
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
-	if result.fire_commands.size() > 0:
-		assert_eq(result.fire_commands[0].target_id, "enemy_123", "Fire command should target correct enemy")
+	assert_gt(result.fire_commands.size(), 0, "Weapon should fire")
+	assert_eq(result.fire_commands[0].target_id, "enemy_123", "Fire command should target correct enemy")
 
 # ============================================================================
 # FUNCTIONAL PURITY TESTS

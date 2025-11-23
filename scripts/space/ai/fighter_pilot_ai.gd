@@ -15,11 +15,12 @@ class_name FighterPilotAI
 
 ## Configuration constants
 const FAR_RANGE = 5000.0  # Distance beyond which we use full speed approach
-const MID_RANGE = 1000.0  # Mid range threshold for tactical maneuvering
-const CLOSE_RANGE = 650.0  # Distance for tight maneuvering
+const MID_RANGE = 1500.0  # Mid range threshold for tactical maneuvering
+const CLOSE_RANGE = 800.0  # Distance for tight maneuvering (ideal weapons range)
+const MIN_COMBAT_RANGE = 300.0  # Minimum safe combat distance - don't get closer than this
 const SAFE_DISTANCE_VS_CAPITAL = 2500.0  # Stay at distance vs big ships
 const GROUP_RUN_THRESHOLD = 4  # Number of fighters needed for coordinated runs
-const FORMATION_SPACING = 50.0  # Distance to maintain from wingmates
+const FORMATION_SPACING = 80.0  # Distance to maintain from wingmates
 const BEHIND_ANGLE_TOLERANCE = 20.0  # Degrees - "behind" the enemy
 const COLLISION_DETECTION_RANGE = 2000.0
 
@@ -277,8 +278,10 @@ static func _calculate_behind_position(target_ship: Dictionary, anticipation: fl
 	var target_rotation = target_ship.get("rotation", 0.0)
 	var target_velocity = target_ship.get("velocity", Vector2.ZERO)
 
-	# Position behind target, accounting for velocity
-	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * CLOSE_RANGE
+	# Position behind target at ideal weapons range (not too close!)
+	# Use halfway between MIN_COMBAT_RANGE and CLOSE_RANGE for good firing position
+	var ideal_distance = (MIN_COMBAT_RANGE + CLOSE_RANGE) / 2.0  # ~550 units
+	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * ideal_distance
 
 	# Prediction lookahead scales with anticipation skill
 	# 0.0 anticipation = 0.1s ahead

@@ -271,7 +271,13 @@ static func calculate_angle_from_direction(direction: Vector2) -> float:
 	return direction.angle()
 
 static func calculate_weapon_world_angle(ship_rotation: float, weapon_facing: float) -> float:
-	return ship_rotation + weapon_facing
+	# COORDINATE SYSTEM: Ship sprites point UP (Y-negative) at rotation 0
+	# Movement system uses: heading = direction.angle() + PI/2
+	# So ship_rotation is offset by PI/2 from standard Godot angles
+	# The visual forward direction is: Vector2(sin(rotation), -cos(rotation))
+	# Which equals: Vector2.from_angle(rotation - PI/2)
+	# So weapon world angle = ship_rotation - PI/2 + weapon_facing
+	return ship_rotation - PI / 2 + weapon_facing
 
 static func normalize_angle_degrees(angle_deg: float) -> float:
 	var normalized = fmod(angle_deg, 360.0)

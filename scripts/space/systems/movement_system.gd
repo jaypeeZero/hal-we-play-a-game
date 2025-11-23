@@ -399,8 +399,9 @@ static func calculate_tight_pursuit(ship_data: Dictionary, target: Dictionary, n
 	var target_rotation = target.get("rotation", 0.0)
 	var target_velocity = target.get("velocity", Vector2.ZERO)
 
-	# Stay behind target at close range
-	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 120.0
+	# Stay behind target at weapons range - not too close!
+	# 400 units is far enough to maneuver but close enough to hit
+	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 400.0
 	var desired_pos = target.position + behind_offset + target_velocity * 0.3
 
 	var to_desired = desired_pos - ship_data.position
@@ -425,17 +426,19 @@ static func calculate_tight_pursuit(ship_data: Dictionary, target: Dictionary, n
 		"current_distance": distance
 	}
 
-## Dogfight maneuver - tight weaving and loops
+## Dogfight maneuver - weaving at combat range
 static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
-	# Weave pattern - add perpendicular offset
+	# Weave pattern at medium-close range - don't get too close!
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)  # Faster weaving
-	var weave_offset = perpendicular * sin(weave_phase * PI) * 60.0  # Tighter weave
+	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)
+	var weave_offset = perpendicular * sin(weave_phase * PI) * 150.0  # Wider weave
 
-	var desired_pos = target.position + weave_offset
+	# Maintain minimum combat range - orbit at ~400 units, not right on top of target
+	var range_offset = to_target.normalized() * max(0, distance - 400.0)
+	var desired_pos = target.position + weave_offset - range_offset * 0.5
 	var to_desired = desired_pos - ship_data.position
 	var desired_heading = direction_to_heading(to_desired)
 
@@ -773,7 +776,7 @@ static func create_braking_control(ship_data: Dictionary, desired_heading: float
 static func get_engagement_range(ship_data: Dictionary) -> float:
 	match ship_data.type:
 		"fighter":
-			return 450.0  # Fighters engage at closer range
+			return 600.0  # Fighters engage at weapons range, not point-blank
 		"corvette":
 			return 3500.0  # Corvettes at medium range
 		"capital":
