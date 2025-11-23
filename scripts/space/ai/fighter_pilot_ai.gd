@@ -446,8 +446,9 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	else:
 		# Skilled (>= 0.6): full tactical repertoire + collision awareness
 		if on_collision_course and distance > close_range:
-			# Detect incoming collision and dodge sideways to orbit the target
-			maneuver_type = "dodge_and_weave"
+			# Detect head-on collision - break perpendicular and accelerate past
+			# Don't try to orbit, just get out of the way fast
+			maneuver_type = "lateral_break"
 		elif distance > far_range:
 			maneuver_type = "pursue_full_speed"
 		elif distance > close_range:
@@ -459,7 +460,7 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 
 	# Calculate evasion direction for dodge maneuvers
 	var evasion_direction = 0
-	if maneuver_type == "dodge_and_weave":
+	if maneuver_type in ["dodge_and_weave", "lateral_break"]:
 		evasion_direction = _calculate_evasion_direction(ship_data, target_ship)
 
 	# Apply formation offset if we have wingmates
@@ -928,12 +929,12 @@ static func _is_on_collision_course(my_ship: Dictionary, target_ship: Dictionary
 	if distance > COLLISION_DETECTION_RANGE:
 		return false  # Too far away to be a threat
 
-	# Calculate relative velocity (closing speed)
-	var relative_velocity = target_velocity - my_velocity
+	# Calculate relative velocity (how fast we're closing)
+	# my_velocity - target_velocity gives positive dot product when approaching
+	var relative_velocity = my_velocity - target_velocity
 	var closing_speed = relative_velocity.dot(to_target.normalized())
 
-	# If relative velocity vector is pointing toward closing (positive dot product)
-	# and both ships are moving, it's a collision course
+	# Positive closing_speed means we're approaching each other
 	if closing_speed > 50.0:  # Threshold to avoid false positives from slow drift
 		return true
 

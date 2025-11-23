@@ -14,7 +14,6 @@ static func get_ship_template(ship_type: String) -> Dictionary:
 	# Check for custom configuration first
 	var custom_template = _load_custom_template(ship_type)
 	if not custom_template.is_empty():
-		print("Loaded custom " + ship_type + " configuration")
 		return custom_template
 
 	# Fall back to default templates

@@ -301,6 +301,8 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 			return calculate_evasive_turn(ship_data, target, nearby_ships, obstacles)
 		"defensive_break":
 			return calculate_defensive_break(ship_data, target, nearby_ships, obstacles)
+		"lateral_break":
+			return calculate_lateral_break(ship_data, target, nearby_ships, obstacles)
 		"group_run_approach":
 			return calculate_group_run_approach(ship_data, target, nearby_ships, obstacles)
 		"group_run_attack":
@@ -519,6 +521,40 @@ static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary,
 		"thrust_active": should_thrust,
 		"is_braking": false,
 		"engagement_range": 300.0,
+		"current_distance": distance
+	}
+
+## Lateral break - for head-on collision avoidance
+## Turn 90 degrees perpendicular and accelerate to zoom past the enemy
+## Unlike dodge_and_weave, this doesn't try to orbit - just gets out of the way fast
+static func calculate_lateral_break(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Get committed evasion direction from orders (1 = right, -1 = left)
+	var evasion_dir = ship_data.get("orders", {}).get("evasion_direction", 0)
+	if evasion_dir == 0:
+		# Fallback: pick based on current lateral velocity
+		var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+		var lateral_vel = ship_data.get("velocity", Vector2.ZERO).dot(perpendicular)
+		evasion_dir = 1 if lateral_vel >= 0 else -1
+
+	# Calculate perpendicular direction (90 degrees to approach vector)
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+
+	# Go purely perpendicular - don't try to point at target at all
+	# This maximizes lateral separation speed
+	var escape_direction = perpendicular * evasion_dir
+	var desired_heading = direction_to_heading(escape_direction)
+
+	# Full throttle - speed is survival
+	var should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.95
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": false,
+		"engagement_range": 400.0,
 		"current_distance": distance
 	}
 
