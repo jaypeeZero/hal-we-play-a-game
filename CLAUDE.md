@@ -21,30 +21,26 @@ godot scenes/space_battle.tscn
 
 **Running tests:**
 ```bash
-godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gexit
+`./test.sh` or `godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gexit`
 ```
 
-**Adding new scripts:**
-After creating new GDScript files with `class_name`, you MUST run this command to register them:
-```bash
-godot --headless --import
-```
 
 ## Programming Principles
 
 When working on this codebase:
 - Keep code simple - code is the enemy
-- Prioritize a working, maintainable system over anything else
-- Write the minimum code necessary to solve the problem
-- Favor simple solutions over clever ones
 - Delete code whenever possible rather than adding complexity
+- Prioritize a working, maintainable system over anything else
+- Favor simple solutions over clever ones
 - Follow Godot best practices and naming conventions
-- Use GDScript as the primary language unless specific performance needs require C#
 - Implement clean separation between game logic, UI, and data
 - Design systems to be modular and easily testable
 - Prioritize readability and maintainability over premature optimization
 - Use Godot's signal system for loose coupling between components
 - Warnings when compiling code are just unresolved errors, don't leave them around
+
+## Avoid
+
 - Do NOT retain "fallback" or "legacy" code unless the user specifies.
 - Do NOT use hard-coded numbers, define CONSTANTS with descriptive names
 
