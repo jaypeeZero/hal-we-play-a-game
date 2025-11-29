@@ -105,8 +105,8 @@ func _generate_node_type(row_idx: int, total_rows: int) -> NodeType:
 
 func _generate_connections() -> void:
 	for row_idx in range(_map_nodes.size() - 1):
-		var current_row := _map_nodes[row_idx]
-		var next_row := _map_nodes[row_idx + 1]
+		var current_row: Array = _map_nodes[row_idx]
+		var next_row: Array = _map_nodes[row_idx + 1]
 
 		# Each node in current row connects to at least one node in next row
 		for node in current_row:
@@ -135,7 +135,7 @@ func _generate_connections() -> void:
 
 			if not has_connection:
 				# Connect from a random node in current row
-				var source_idx := randi() % current_row.size()
+				var source_idx: int = randi() % current_row.size()
 				_connections.append({
 					"from_id": current_row[source_idx]["id"],
 					"to_id": next_node["id"]
@@ -170,7 +170,7 @@ func _build_ui() -> void:
 
 	# Build rows from bottom to top (visually the map goes upward)
 	for row_idx in range(_map_nodes.size() - 1, -1, -1):
-		var row := _map_nodes[row_idx]
+		var row: Array = _map_nodes[row_idx]
 
 		var row_container := HBoxContainer.new()
 		row_container.alignment = BoxContainer.ALIGNMENT_CENTER
