@@ -83,17 +83,23 @@ func test_crew_awareness_detects_enemy():
 	assert_eq(updated.awareness.threats.size(), 1, "Enemy is a threat")
 
 func test_crew_awareness_range_limits():
-	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.5)
-	crew.assigned_to = "ship_1"
-	crew.stats.awareness_range = 500.0
-
 	var own_ship = create_test_ship("ship_1", Vector2(0, 0), 0)
-	var near_enemy = create_test_ship("ship_2", Vector2(300, 0), 1)
-	var far_enemy = create_test_ship("ship_3", Vector2(1000, 0), 1)
+	var close_enemy = create_test_ship("ship_2", Vector2(400, 0), 1)
+	var mid_enemy = create_test_ship("ship_3", Vector2(950, 0), 1)
+	var far_enemy = create_test_ship("ship_4", Vector2(3000, 0), 1)
 
-	var updated = InformationSystem.update_crew_awareness(crew, [own_ship, near_enemy, far_enemy], [], 0.0)
+	# Test low awareness (0.1)
+	var low_awareness_crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.1)
+	low_awareness_crew.assigned_to = "ship_1"
+	var updated_low = InformationSystem.update_crew_awareness(low_awareness_crew, [own_ship, close_enemy, mid_enemy, far_enemy], [], 0.0)
 
-	assert_eq(updated.awareness.known_entities.size(), 1, "Only detects enemy within range")
+	# Test high awareness (0.9)
+	var high_awareness_crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.9)
+	high_awareness_crew.assigned_to = "ship_1"
+	var updated_high = InformationSystem.update_crew_awareness(high_awareness_crew, [own_ship, close_enemy, mid_enemy, far_enemy], [], 0.0)
+
+	# High awareness should detect MORE entities than low awareness
+	assert_gt(updated_high.awareness.known_entities.size(), updated_low.awareness.known_entities.size())
 
 func test_threat_prioritization():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.5)

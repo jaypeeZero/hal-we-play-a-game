@@ -1260,17 +1260,8 @@ static func create_braking_control(ship_data: Dictionary, desired_heading: float
 
 ## Get engagement range based on ship type (naval-style combat distances)
 static func get_engagement_range(ship_data: Dictionary) -> float:
-	match ship_data.type:
-		"fighter":
-			return 600.0  # Fighters engage close for dogfighting
-		"heavy_fighter":
-			return 800.0  # Slightly longer range than regular fighter
-		"corvette":
-			return 1200.0  # Corvettes at close-medium range
-		"capital":
-			return 3000.0  # Capital ships engage from distance
-		_:
-			return 1000.0  # Default
+	# All engagement ranges derived from weapon data, not hardcoded
+	return CombatRangeCalculator.get_base_engagement_range(ship_data)
 
 ## Calculate collision avoidance vector from nearby ships
 static func calculate_collision_avoidance(ship_data: Dictionary, nearby_ships: Array) -> Vector2:

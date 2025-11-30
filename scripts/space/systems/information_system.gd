@@ -49,10 +49,9 @@ static func gather_visible_entities(own_ship: Dictionary, crew_data: Dictionary,
 			if ship.ship_id != own_ship.ship_id and is_ship_visible(ship):
 				visible.append(create_entity_info(ship, "ship"))
 	else:
-		# Pilots have limited range awareness
-		var base_range = crew_data.stats.awareness_range
+		# Pilots have limited range awareness derived from their ship's weapon range
 		var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
-		var effective_range = base_range * (0.7 + awareness * 0.6)
+		var effective_range = CombatRangeCalculator.get_detection_range(own_ship, awareness)
 		var range_sq = effective_range * effective_range
 
 		for ship in ships:
@@ -62,9 +61,8 @@ static func gather_visible_entities(own_ship: Dictionary, crew_data: Dictionary,
 
 	# Check projectiles (if role cares about them)
 	if should_track_projectiles(crew_data.role):
-		var base_range = crew_data.stats.awareness_range
 		var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
-		var effective_range = base_range * (0.7 + awareness * 0.6)
+		var effective_range = CombatRangeCalculator.get_detection_range(own_ship, awareness)
 		var range_sq = effective_range * effective_range
 
 		for projectile in projectiles:

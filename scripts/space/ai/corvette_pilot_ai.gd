@@ -22,10 +22,7 @@ class_name CorvettePilotAI
 ## Maneuver types: pursue, evade, broadside, kite, retreat
 
 ## Configuration constants
-const ENGAGE_RANGE_BASE = 2500.0      # Base distance for engagement
-const EVASION_RANGE_BASE = 1500.0     # Base distance to start evading
 const SAFE_DISTANCE_VS_FIGHTERS = 1000.0  # Keep away from fighter swarms
-const BROADSIDE_OPTIMAL_DISTANCE = 1200.0  # Best range for broadside fire
 const PANIC_THRESHOLD_BASE = 0.6       # Hull % at which to panic
 const FORMATION_SPACING = 150.0        # Distance to maintain from wingmates
 
@@ -81,7 +78,8 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 		var opportunity_distance = _get_distance_to_target(ship_data, top_opportunity)
 
 		# Decide on maneuver based on distance and skills
-		if opportunity_distance < BROADSIDE_OPTIMAL_DISTANCE + (helmsmanship * 500.0):
+		var broadside_distance = CombatRangeCalculator.get_broadside_optimal_distance(ship_data)
+		if opportunity_distance < broadside_distance + (helmsmanship * 500.0):
 			# Close enough for broadside
 			if helmsmanship >= 0.6:
 				return _make_broadside_decision(crew_data, ship_data, top_opportunity, game_time)
@@ -96,7 +94,8 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 ## Pursue target with distance scaling by aggression
 static func _make_pursue_decision(crew_data: Dictionary, ship_data: Dictionary, target: Dictionary, aggression: float, game_time: float) -> Dictionary:
 	var effective_skill = _calculate_effective_skill(crew_data)
-	var engage_range = ENGAGE_RANGE_BASE * (0.5 + aggression)  # 1250-3750
+	var base_engage_range = CombatRangeCalculator.get_base_engagement_range(ship_data)
+	var engage_range = base_engage_range * (0.5 + aggression)  # scales with aggression
 
 	# Aggressive pilots want closer engagement
 	var subtype = "pursue"
@@ -146,7 +145,7 @@ static func _make_broadside_decision(crew_data: Dictionary, ship_data: Dictionar
 		"crew_id": crew_data.crew_id,
 		"entity_id": crew_data.assigned_to,
 		"target_id": target.id,
-		"optimal_distance": BROADSIDE_OPTIMAL_DISTANCE,
+		"optimal_distance": CombatRangeCalculator.get_broadside_optimal_distance(ship_data),
 		"skill_factor": effective_skill,
 		"delay": _calculate_decision_delay(crew_data, "broadside"),
 		"timestamp": game_time
@@ -164,7 +163,7 @@ static func _make_kite_decision(crew_data: Dictionary, ship_data: Dictionary, ta
 		"crew_id": crew_data.crew_id,
 		"entity_id": crew_data.assigned_to,
 		"target_id": target.id,
-		"maintain_distance": EVASION_RANGE_BASE,
+		"maintain_distance": CombatRangeCalculator.get_evasion_range(ship_data),
 		"skill_factor": effective_skill,
 		"maneuver_quality": helmsmanship,
 		"delay": _calculate_decision_delay(crew_data, "kite"),

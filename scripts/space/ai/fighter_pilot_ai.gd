@@ -24,11 +24,6 @@ class_name FighterPilotAI
 ## - vs Corvettes/Capitals (many fighters): coordinated group runs
 
 ## Configuration constants
-const FAR_RANGE = 5000.0  # Distance beyond which we use full speed approach
-const MID_RANGE = 1500.0  # Mid range threshold for tactical maneuvering
-const CLOSE_RANGE = 800.0  # Distance for tight maneuvering (ideal weapons range)
-const MIN_COMBAT_RANGE = 300.0  # Minimum safe combat distance - don't get closer than this
-const SAFE_DISTANCE_VS_CAPITAL = 2500.0  # Stay at distance vs big ships
 const GROUP_RUN_THRESHOLD = 4  # Number of fighters needed for coordinated runs
 const FORMATION_SPACING = 80.0  # Distance to maintain from wingmates
 const BEHIND_ANGLE_TOLERANCE = 20.0  # Degrees - "behind" the enemy
@@ -385,18 +380,22 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	# Dynamic distance thresholds based on aggression
 	# Aggressive (1.0): closer thresholds (close faster)
 	# Cautious (0.0): farther thresholds (stay distant)
-	var far_range = FAR_RANGE * (1.4 - aggression * 0.8)
-	# aggression 0.0 = 140% FAR_RANGE (hangs back)
-	# aggression 0.5 = 100% FAR_RANGE (normal)
-	# aggression 1.0 = 60% FAR_RANGE (charges in)
+	# Ranges derived from weapon data via CombatRangeCalculator
+	var base_far = CombatRangeCalculator.get_fighter_far_range(ship_data)
+	var base_close = CombatRangeCalculator.get_fighter_close_range(ship_data)
 
-	var close_range = CLOSE_RANGE * (1.2 - aggression * 0.4)
-	# aggression 0.0 = 120% CLOSE_RANGE (stays distant)
-	# aggression 0.5 = 100% CLOSE_RANGE (normal)
-	# aggression 1.0 = 80% CLOSE_RANGE (presses in)
+	var far_range = base_far * (1.4 - aggression * 0.8)
+	# aggression 0.0 = 140% of base far range (hangs back)
+	# aggression 0.5 = 100% of base far range (normal)
+	# aggression 1.0 = 60% of base far range (charges in)
+
+	var close_range = base_close * (1.2 - aggression * 0.4)
+	# aggression 0.0 = 120% of base close range (stays distant)
+	# aggression 0.5 = 100% of base close range (normal)
+	# aggression 1.0 = 80% of base close range (presses in)
 
 	# Try to get behind the enemy
-	var behind_position = _calculate_behind_position(target_ship, anticipation)
+	var behind_position = _calculate_behind_position(target_ship, anticipation, ship_data)
 	var is_behind = _am_i_behind_target(ship_data, target_ship)
 
 	# Check formation status with wingmates
@@ -492,13 +491,17 @@ static func _make_fighter_vs_capital_decision(crew_data: Dictionary, ship_data: 
 	var maneuver_type = ""
 	var target_id = target_ship.get("ship_id", "")
 
+	# Get ranges from weapon data
+	var safe_distance = CombatRangeCalculator.get_safe_distance_vs_capital(ship_data)
+	var close_range = CombatRangeCalculator.get_fighter_close_range(ship_data)
+
 	# If we have enough fighters, coordinate group runs
 	if nearby_fighters >= GROUP_RUN_THRESHOLD:
 		# Group run tactics
-		if distance > SAFE_DISTANCE_VS_CAPITAL:
+		if distance > safe_distance:
 			# Approach for run
 			maneuver_type = "fight_group_run_approach"
-		elif distance > CLOSE_RANGE:
+		elif distance > close_range:
 			# Execute attack run
 			maneuver_type = "fight_group_run_attack"
 		else:
@@ -506,10 +509,10 @@ static func _make_fighter_vs_capital_decision(crew_data: Dictionary, ship_data: 
 			maneuver_type = "fight_group_run_swing_around"
 	else:
 		# Solo/small group tactics - stay at distance, pot-shots
-		if distance < SAFE_DISTANCE_VS_CAPITAL * 0.7:
+		if distance < safe_distance * 0.7:
 			# Too close, evade
 			maneuver_type = "fight_evasive_retreat"
-		elif distance > SAFE_DISTANCE_VS_CAPITAL * 1.3:
+		elif distance > safe_distance * 1.3:
 			# Too far, close in
 			maneuver_type = "fight_cautious_approach"
 		else:
@@ -568,14 +571,16 @@ static func _am_i_in_front_of_target(my_ship: Dictionary, target_ship: Dictionar
 
 ## Calculate position behind target (for pursuit)
 ## Now uses anticipation skill with error margin for low-skill pilots
-static func _calculate_behind_position(target_ship: Dictionary, anticipation: float = 0.5) -> Vector2:
+static func _calculate_behind_position(target_ship: Dictionary, anticipation: float = 0.5, own_ship: Dictionary = {}) -> Vector2:
 	var target_pos = target_ship.get("position", Vector2.ZERO)
 	var target_rotation = target_ship.get("rotation", 0.0)
 	var target_velocity = target_ship.get("velocity", Vector2.ZERO)
 
 	# Position behind target at ideal weapons range (not too close!)
 	# Use halfway between MIN_COMBAT_RANGE and CLOSE_RANGE for good firing position
-	var ideal_distance = (MIN_COMBAT_RANGE + CLOSE_RANGE) / 2.0  # ~550 units
+	var min_range = CombatRangeCalculator.get_fighter_min_combat_range(own_ship) if not own_ship.is_empty() else 300.0
+	var close_range = CombatRangeCalculator.get_fighter_close_range(own_ship) if not own_ship.is_empty() else 800.0
+	var ideal_distance = (min_range + close_range) / 2.0
 	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * ideal_distance
 
 	# Prediction lookahead scales with anticipation skill
@@ -712,6 +717,10 @@ static func _count_nearby_friendly_fighters(my_ship: Dictionary, all_ships: Arra
 	var my_id = my_ship.get("ship_id", "")
 	var count = 0
 
+	# Count nearby fighters within 1.5x safe distance from capitals
+	var safe_distance = CombatRangeCalculator.get_safe_distance_vs_capital(my_ship)
+	var nearby_range = safe_distance * 1.5
+
 	for ship in all_ships:
 		if ship.get("ship_id", "") == my_id:
 			continue
@@ -724,7 +733,7 @@ static func _count_nearby_friendly_fighters(my_ship: Dictionary, all_ships: Arra
 			continue
 
 		var distance = my_pos.distance_to(ship.get("position", Vector2.ZERO))
-		if distance < SAFE_DISTANCE_VS_CAPITAL * 1.5:
+		if distance < nearby_range:
 			count += 1
 
 	return count
