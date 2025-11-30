@@ -35,28 +35,38 @@ static func update_crew_awareness(crew_data: Dictionary, ships: Array, projectil
 
 ## Gather all entities visible to this crew member
 static func gather_visible_entities(own_ship: Dictionary, crew_data: Dictionary, ships: Array, projectiles: Array) -> Array:
-	var base_range = crew_data.stats.awareness_range
-
-	# Awareness skill modifies effective detection range
-	# 0.0 awareness = 70% range
-	# 0.5 awareness = 100% range
-	# 1.0 awareness = 130% range
-	var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
-	var effective_range = base_range * (0.7 + awareness * 0.6)
-	var range_sq = effective_range * effective_range
-
 	var position = own_ship.position
-
 	var visible = []
 
-	# Check ships
-	for ship in ships:
-		if ship.ship_id != own_ship.ship_id and is_ship_visible(ship):
-			if position.distance_squared_to(ship.position) <= range_sq:
+	# Commanders can see all ships (strategic awareness)
+	# Pilots and gunners only see ships in their local area
+	var role = crew_data.role
+	var has_unlimited_awareness = role in [CrewData.Role.CAPTAIN, CrewData.Role.SQUADRON_LEADER, CrewData.Role.FLEET_COMMANDER]
+
+	if has_unlimited_awareness:
+		# See all ships on the battlefield
+		for ship in ships:
+			if ship.ship_id != own_ship.ship_id and is_ship_visible(ship):
 				visible.append(create_entity_info(ship, "ship"))
+	else:
+		# Pilots have limited range awareness
+		var base_range = crew_data.stats.awareness_range
+		var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
+		var effective_range = base_range * (0.7 + awareness * 0.6)
+		var range_sq = effective_range * effective_range
+
+		for ship in ships:
+			if ship.ship_id != own_ship.ship_id and is_ship_visible(ship):
+				if position.distance_squared_to(ship.position) <= range_sq:
+					visible.append(create_entity_info(ship, "ship"))
 
 	# Check projectiles (if role cares about them)
 	if should_track_projectiles(crew_data.role):
+		var base_range = crew_data.stats.awareness_range
+		var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
+		var effective_range = base_range * (0.7 + awareness * 0.6)
+		var range_sq = effective_range * effective_range
+
 		for projectile in projectiles:
 			if projectile.team != own_ship.team:
 				if position.distance_squared_to(projectile.position) <= range_sq:

@@ -44,6 +44,13 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 	var current_order = ship_data.get("orders", {}).get("current_order", "")
 	var pilot_control: Dictionary
 
+	if ship_data.get("type") == "corvette":
+		print("[MovementSystem] Corvette %s order: '%s', target: %s" % [
+			ship_data.get("ship_id", "?"),
+			current_order,
+			ship_data.get("orders", {}).get("target_id", "none")
+		])
+
 	if current_order == "evade":
 		# Evade mode - retreat from threats
 		var threat_id = ship_data.get("orders", {}).get("threat_id", "")
@@ -52,6 +59,14 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 			return apply_space_drift(ship_data, delta)
 		pilot_control = calculate_evasion_control(ship_data, threat, nearby_ships, obstacles)
 
+	elif current_order == "retreat":
+		# Retreat mode - flee from threat at maximum speed
+		var threat_id = ship_data.get("orders", {}).get("threat_id", "")
+		var threat = find_ship_by_id(targets, threat_id) if threat_id else find_nearest_enemy(ship_data, targets)
+		if threat.is_empty():
+			return apply_space_drift(ship_data, delta)
+		pilot_control = calculate_retreat_control(ship_data, threat, nearby_ships, obstacles)
+
 	elif current_order == "fighter_engage":
 		# FighterPilotAI engage mode - specialized fighter maneuvers
 		var target_id = ship_data.get("orders", {}).get("target_id", "")
@@ -59,6 +74,24 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 		if target.is_empty():
 			return apply_space_drift(ship_data, delta)
 		pilot_control = calculate_fighter_pilot_control(ship_data, target, nearby_ships, obstacles)
+
+	elif current_order == "broadside":
+		# Broadside mode - maintain optimal distance for broadside fire
+		var target_id = ship_data.get("orders", {}).get("target_id", "")
+		var target = find_ship_by_id(targets, target_id) if target_id else find_nearest_enemy(ship_data, targets)
+		if target.is_empty():
+			return apply_space_drift(ship_data, delta)
+		var optimal_distance = ship_data.get("orders", {}).get("optimal_distance", 1200.0)
+		pilot_control = calculate_broadside_control(ship_data, target, optimal_distance, nearby_ships, obstacles)
+
+	elif current_order == "kite":
+		# Kite mode - maintain distance while firing
+		var target_id = ship_data.get("orders", {}).get("target_id", "")
+		var target = find_ship_by_id(targets, target_id) if target_id else find_nearest_enemy(ship_data, targets)
+		if target.is_empty():
+			return apply_space_drift(ship_data, delta)
+		var maintain_distance = ship_data.get("orders", {}).get("maintain_distance", 1500.0)
+		pilot_control = calculate_kite_control(ship_data, target, maintain_distance, nearby_ships, obstacles)
 
 	elif current_order == "engage":
 		# Engage mode - pursue and attack target
@@ -75,7 +108,24 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 			return apply_space_drift(ship_data, delta)
 		pilot_control = calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
 
-	return apply_space_physics(ship_data, pilot_control, delta)
+	if ship_data.get("type") == "corvette":
+		print("[MovementSystem] Corvette %s pilot_control: thrust=%s, heading=%.1f" % [
+			ship_data.get("ship_id", "?"),
+			pilot_control.get("thrust_active", false),
+			rad_to_deg(pilot_control.get("desired_heading", 0.0))
+		])
+
+	var result = apply_space_physics(ship_data, pilot_control, delta)
+
+	if ship_data.get("type") == "corvette":
+		print("[MovementSystem] Corvette %s velocity: (%.1f, %.1f), speed: %.1f" % [
+			ship_data.get("ship_id", "?"),
+			result.velocity.x,
+			result.velocity.y,
+			result.velocity.length()
+		])
+
+	return result
 
 ## Update all ships - returns new Array of ship_data
 static func update_all_ships(ships: Array, delta: float, obstacles: Array = []) -> Array:
@@ -278,6 +328,164 @@ static func calculate_evasion_control(ship_data: Dictionary, threat: Dictionary,
 		"thrust_active": should_thrust,
 		"is_braking": is_braking,
 		"engagement_range": safe_distance,
+		"current_distance": distance
+	}
+
+## Calculate retreat control - full speed retreat from threat
+static func calculate_retreat_control(ship_data: Dictionary, threat: Dictionary, nearby_ships: Array, obstacles: Array = []) -> Dictionary:
+	var to_threat = threat.position - ship_data.position
+	var distance = to_threat.length()
+	var direction_from_threat = -to_threat.normalized()  # Run AWAY from threat
+
+	# Check for collision threats
+	var ship_avoidance = calculate_collision_avoidance(ship_data, nearby_ships)
+	var obstacle_avoidance = calculate_obstacle_avoidance(ship_data, obstacles)
+	var avoidance_vector = ship_avoidance + obstacle_avoidance
+	var has_collision_threat = avoidance_vector.length() > 0.1
+
+	# Always retreat at full speed
+	var retreat_direction = direction_from_threat
+
+	# Apply avoidance if needed
+	if has_collision_threat:
+		if obstacle_avoidance.length() > 0.1:
+			retreat_direction = (retreat_direction + obstacle_avoidance.normalized()).normalized()
+		else:
+			retreat_direction = (retreat_direction + ship_avoidance.normalized()).normalized()
+
+	var desired_heading = direction_to_heading(retreat_direction)
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": true,  # Always thrust when retreating
+		"is_braking": false,
+		"engagement_range": 0.0,  # No engagement, just flee
+		"current_distance": distance
+	}
+
+## Calculate broadside control - maintain optimal distance for broadside fire
+static func calculate_broadside_control(ship_data: Dictionary, target: Dictionary, optimal_distance: float, nearby_ships: Array, obstacles: Array = []) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+	var direction_to_target = to_target.normalized()
+
+	# Check for collision threats
+	var ship_avoidance = calculate_collision_avoidance(ship_data, nearby_ships)
+	var obstacle_avoidance = calculate_obstacle_avoidance(ship_data, obstacles)
+	var avoidance_vector = ship_avoidance + obstacle_avoidance
+	var has_collision_threat = avoidance_vector.length() > 0.1
+
+	var desired_heading: float
+	var should_thrust: bool
+	var is_braking: bool = false
+
+	var distance_error = distance - optimal_distance
+	var tolerance = optimal_distance * 0.15  # 15% tolerance
+
+	if abs(distance_error) > tolerance:
+		# Need to adjust distance
+		if distance_error > 0:
+			# Too far - close in slowly
+			desired_heading = direction_to_heading(direction_to_target)
+			should_thrust = true
+		else:
+			# Too close - back off
+			desired_heading = direction_to_heading(-direction_to_target)
+			should_thrust = true
+	else:
+		# At optimal distance - maintain broadside orientation
+		# For broadside, we want to be perpendicular to the target
+		var perpendicular = Vector2(-direction_to_target.y, direction_to_target.x)
+
+		# Orbit to maintain broadside
+		var orbit_position = ship_data.position + perpendicular * 100.0
+		var to_orbit = orbit_position - ship_data.position
+
+		if to_orbit.length() > 10.0:
+			desired_heading = direction_to_heading(to_orbit)
+			should_thrust = ship_data.velocity.length() < ship_data.stats.max_speed * 0.3
+		else:
+			# Face perpendicular to target for broadside
+			desired_heading = direction_to_heading(perpendicular)
+			should_thrust = false
+
+	# Apply collision avoidance
+	if has_collision_threat:
+		if obstacle_avoidance.length() > 0.1:
+			var avoid_dir = (direction_to_target + obstacle_avoidance.normalized()).normalized()
+			desired_heading = direction_to_heading(avoid_dir)
+		else:
+			var avoid_dir = (direction_to_target + ship_avoidance.normalized()).normalized()
+			desired_heading = direction_to_heading(avoid_dir)
+		should_thrust = true
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": is_braking,
+		"engagement_range": optimal_distance,
+		"current_distance": distance
+	}
+
+## Calculate kite control - maintain distance while firing
+static func calculate_kite_control(ship_data: Dictionary, target: Dictionary, maintain_distance: float, nearby_ships: Array, obstacles: Array = []) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+	var direction_to_target = to_target.normalized()
+
+	# Check for collision threats
+	var ship_avoidance = calculate_collision_avoidance(ship_data, nearby_ships)
+	var obstacle_avoidance = calculate_obstacle_avoidance(ship_data, obstacles)
+	var avoidance_vector = ship_avoidance + obstacle_avoidance
+	var has_collision_threat = avoidance_vector.length() > 0.1
+
+	var desired_heading: float
+	var should_thrust: bool
+	var is_braking: bool = false
+
+	# Kiting: stay at distance, face target, back away if they close
+	var distance_error = distance - maintain_distance
+	var tolerance = maintain_distance * 0.1  # 10% tolerance
+
+	if distance_error < -tolerance:
+		# Target too close - back away while facing them
+		desired_heading = direction_to_heading(direction_to_target)  # Face target
+
+		# Check if we're already moving away
+		var velocity_away = ship_data.velocity.dot(-direction_to_target)
+		if velocity_away < ship_data.stats.max_speed * 0.5:
+			# Not moving away fast enough - thrust backwards
+			# Point engines at target, thrust backwards in practice
+			should_thrust = true
+		else:
+			should_thrust = false
+	elif distance_error > tolerance:
+		# Target too far - close in slowly while facing them
+		desired_heading = direction_to_heading(direction_to_target)
+		should_thrust = true
+	else:
+		# At good distance - maintain position and face target
+		desired_heading = direction_to_heading(direction_to_target)
+
+		# Only thrust if drifting away
+		var velocity_toward = ship_data.velocity.dot(direction_to_target)
+		should_thrust = velocity_toward < -ship_data.stats.max_speed * 0.1
+
+	# Apply collision avoidance
+	if has_collision_threat:
+		if obstacle_avoidance.length() > 0.1:
+			var avoid_dir = (direction_to_target + obstacle_avoidance.normalized()).normalized()
+			desired_heading = direction_to_heading(avoid_dir)
+		else:
+			var avoid_dir = (direction_to_target + ship_avoidance.normalized()).normalized()
+			desired_heading = direction_to_heading(avoid_dir)
+		should_thrust = true
+
+	return {
+		"desired_heading": desired_heading,
+		"thrust_active": should_thrust,
+		"is_braking": is_braking,
+		"engagement_range": maintain_distance,
 		"current_distance": distance
 	}
 
@@ -1054,13 +1262,13 @@ static func create_braking_control(ship_data: Dictionary, desired_heading: float
 static func get_engagement_range(ship_data: Dictionary) -> float:
 	match ship_data.type:
 		"fighter":
-			return 600.0  # Fighters engage at weapons range, not point-blank
+			return 600.0  # Fighters engage close for dogfighting
 		"heavy_fighter":
-			return 700.0  # Slightly longer range than regular fighter
+			return 800.0  # Slightly longer range than regular fighter
 		"corvette":
-			return 3500.0  # Corvettes at medium range
+			return 1200.0  # Corvettes at close-medium range
 		"capital":
-			return 6000.0  # Capital ships engage from far away
+			return 3000.0  # Capital ships engage from distance
 		_:
 			return 1000.0  # Default
 

@@ -58,7 +58,7 @@ static func update_crew_member(crew_data: Dictionary, delta: float, game_time: f
 		CrewData.Role.GUNNER:
 			return make_gunner_decision(updated, game_time)
 		CrewData.Role.CAPTAIN:
-			return make_captain_decision(updated, game_time)
+			return make_captain_decision(updated, game_time, ships, crew_list)
 		CrewData.Role.SQUADRON_LEADER:
 			return make_squadron_leader_decision(updated, game_time)
 		CrewData.Role.FLEET_COMMANDER:
@@ -112,6 +112,7 @@ static func calculate_decision_delay(crew_data: Dictionary) -> float:
 static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = [], wings: Array = []) -> Dictionary:
 	# Check for orders from captain - ALWAYS respect superior orders
 	if crew_data.orders.received != null:
+		print("[Pilot %s] Executing order from captain: %s" % [crew_data.crew_id, crew_data.orders.received.get("type")])
 		return execute_pilot_order(crew_data, game_time)
 
 	# Analyze tactical context (include wings for fighter coordination)
@@ -285,24 +286,32 @@ static func _find_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
 			return ship
 	return {}
 
-## Corvette pilot decision - balanced, tactical positioning
+## Helper to find crew by ID
+static func _find_crew_by_id(crew_id: String, crew_list: Array) -> Dictionary:
+	for crew in crew_list:
+		if crew != null and crew.get("crew_id", "") == crew_id:
+			return crew
+	return {}
+
+## Corvette pilot decision - uses CorvettePilotAI for skill-based behavior
 static func make_corvette_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
-	var awareness = crew_data.awareness
+	# Get all ships and crew from context
+	var all_ships = context.get("all_ships", [])
+	var all_crew = context.get("all_crew", [])
 
-	# Corvettes evade if:
-	# 1. Damaged, OR
-	# 2. Outnumbered without squadron support
-	var should_evade = context.is_outnumbered and not context.has_squadron_support
+	# Get the ship this crew is assigned to
+	var ship_id = crew_data.get("assigned_to", "")
+	var ship_data = _find_ship_by_id(ship_id, all_ships)
 
-	if should_evade and not awareness.threats.is_empty():
-		return make_evasive_decision(crew_data, game_time)
+	if ship_data.is_empty():
+		# Fallback to simple behavior when no ship data available
+		return make_balanced_pilot_decision(crew_data, context, game_time)
 
-	# Engage if have targets and not heavily outnumbered
-	if not awareness.opportunities.is_empty():
-		return make_pursuit_decision(crew_data, game_time)
+	# Use CorvettePilotAI to make decision based on skills
+	var decision = CorvettePilotAI.make_decision(crew_data, ship_data, all_ships, all_crew, game_time)
 
-	# Idle otherwise
-	return make_idle_decision(crew_data, game_time)
+	# The decision is already wrapped with crew_data and decision
+	return decision
 
 ## Capital ship pilot decision - cautious, maintains distance
 static func make_capital_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
@@ -368,16 +377,27 @@ static func make_pursuit_decision_from_threat(crew_data: Dictionary, game_time: 
 
 ## Create movement decision from order
 static func create_movement_decision(crew_data: Dictionary, order: Dictionary, game_time: float) -> Dictionary:
-	return {
+	var decision = {
 		"type": "maneuver",
 		"subtype": order.get("subtype", "pursue"),
 		"crew_id": crew_data.crew_id,
 		"entity_id": crew_data.assigned_to,
 		"target_id": order.get("target_id"),
+		"threat_id": order.get("threat_id", ""),
 		"skill_factor": calculate_effective_skill(crew_data),
 		"delay": crew_data.stats.reaction_time,
 		"timestamp": game_time
 	}
+
+	# Pass through any maneuver-specific parameters from captain
+	if order.has("engage_range"):
+		decision.engage_range = order.engage_range
+	if order.has("optimal_distance"):
+		decision.optimal_distance = order.optimal_distance
+	if order.has("maintain_distance"):
+		decision.maintain_distance = order.maintain_distance
+
+	return decision
 
 ## Calculate threat urgency
 static func calculate_threat_urgency(threat: Dictionary) -> float:
@@ -470,13 +490,19 @@ static func create_fire_decision(crew_data: Dictionary, target_id: String, game_
 # ============================================================================
 
 ## Captain makes ship-level tactical decisions
-static func make_captain_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
+static func make_captain_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = []) -> Dictionary:
+	print("[Captain %s] Making decision, threats=%d, opps=%d" % [
+		crew_data.crew_id,
+		crew_data.awareness.threats.size(),
+		crew_data.awareness.opportunities.size()
+	])
+
 	# Check for orders from squadron leader
 	if crew_data.orders.received != null:
 		return execute_captain_order(crew_data, game_time)
 
 	# Make tactical decision and issue orders to crew
-	return make_ship_tactical_decision(crew_data, game_time)
+	return make_ship_tactical_decision(crew_data, game_time, ships, crew_list)
 
 ## Execute order from squadron leader
 static func execute_captain_order(crew_data: Dictionary, game_time: float) -> Dictionary:
@@ -497,9 +523,18 @@ static func execute_captain_order(crew_data: Dictionary, game_time: float) -> Di
 	}
 
 ## Make ship-level tactical decision
-static func make_ship_tactical_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
+static func make_ship_tactical_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = []) -> Dictionary:
 	var updated = crew_data.duplicate(true)
 
+	# Get the ship this captain is on
+	var ship_id = crew_data.get("assigned_to", "")
+	var ship_data = _find_ship_by_id(ship_id, ships)
+
+	# For corvettes, use CorvettePilotAI to make tactical maneuver decision
+	if not ship_data.is_empty() and ship_data.get("type") == "corvette":
+		return make_corvette_captain_decision(crew_data, ship_data, ships, crew_list, game_time)
+
+	# For other ships (fighters, capitals), use the old logic
 	# Query knowledge for tactical guidance
 	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
 	var knowledge = TacticalKnowledgeSystem.query_captain_knowledge(situation, 1)
@@ -539,9 +574,65 @@ static func make_ship_tactical_decision(crew_data: Dictionary, game_time: float)
 	updated.orders.current = decision
 	updated.orders.issued = subordinate_orders
 
+	print("[Captain %s] Issued %d orders to subordinates" % [crew_data.crew_id, subordinate_orders.size()])
+	for order in subordinate_orders:
+		print("  -> Order to %s: %s (target: %s)" % [order.get("to"), order.get("type"), order.get("target_id", "none")])
+
 	if decision:
 		return {"crew_data": updated, "decision": decision}
 	return {"crew_data": updated}
+
+## Corvette captain uses CorvettePilotAI for tactical decisions
+static func make_corvette_captain_decision(crew_data: Dictionary, ship_data: Dictionary, ships: Array, crew_list: Array, game_time: float) -> Dictionary:
+	var updated = crew_data.duplicate(true)
+
+	# Use CorvettePilotAI to make the tactical decision
+	var pilot_decision_result = CorvettePilotAI.make_decision(crew_data, ship_data, ships, crew_list, game_time)
+	var pilot_decision = pilot_decision_result.decision
+
+	print("[Captain %s] CorvettePilotAI decision: %s" % [crew_data.crew_id, pilot_decision.subtype])
+
+	# Convert pilot decision into orders for subordinates
+	var subordinate_orders = []
+
+	# Issue the specific maneuver order to the pilot
+	for sub_id in crew_data.command_chain.subordinates:
+		var subordinate = _find_crew_by_id(sub_id, crew_list)
+		if subordinate.is_empty():
+			continue
+
+		if subordinate.role == CrewData.Role.PILOT:
+			# Send the specific maneuver type (pursue/evade/broadside/retreat)
+			subordinate_orders.append({
+				"to": sub_id,
+				"type": "maneuver",
+				"subtype": pilot_decision.subtype,  # pursue/evade/broadside/kite/retreat
+				"target_id": pilot_decision.get("target_id", pilot_decision.get("threat_id", "")),
+				"engage_range": pilot_decision.get("engage_range", 1200.0),
+				"optimal_distance": pilot_decision.get("optimal_distance", 1200.0),
+				"maintain_distance": pilot_decision.get("maintain_distance", 1500.0)
+			})
+		elif subordinate.role == CrewData.Role.GUNNER:
+			# Gunners get fire orders with the same target
+			var target_id = pilot_decision.get("target_id", pilot_decision.get("threat_id", ""))
+			if target_id:
+				subordinate_orders.append({
+					"to": sub_id,
+					"type": "engage",
+					"target_id": target_id
+				})
+
+	updated.orders.current = pilot_decision
+	updated.orders.issued = subordinate_orders
+
+	print("[Captain %s] Issued %d orders to subordinates" % [crew_data.crew_id, subordinate_orders.size()])
+	for order in subordinate_orders:
+		print("  -> Order to %s: %s/%s (target: %s)" % [order.get("to"), order.get("type"), order.get("subtype", ""), order.get("target_id", "none")])
+
+	return {
+		"crew_data": updated,
+		"decision": create_captain_decision(updated, {"type": "tactical", "subtype": pilot_decision.subtype}, game_time)
+	}
 
 ## Select best tactical target
 static func select_best_tactical_target(crew_data: Dictionary) -> Dictionary:

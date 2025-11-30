@@ -86,31 +86,31 @@ static func _get_role_modifiers(role: Role) -> Dictionary:
 			return {
 				"reaction_base": 0.15,  # Fast reactions needed
 				"decision_base": 0.2,  # Quick tactical decisions
-				"awareness_range": 800.0  # Medium range awareness
+				"awareness_range": 8000.0  # Local awareness for flying
 			}
 		Role.GUNNER:
 			return {
 				"reaction_base": 0.2,  # Moderate reactions
 				"decision_base": 0.3,  # Target selection time
-				"awareness_range": 1000.0  # Focus on weapon range
+				"awareness_range": 10000.0  # Weapon range awareness
 			}
 		Role.CAPTAIN:
 			return {
 				"reaction_base": 0.3,  # Don't need twitch reflexes
 				"decision_base": 1.0,  # More complex decisions
-				"awareness_range": 1200.0  # Broader tactical view
+				"awareness_range": 12000.0  # Full battlefield (unused, sees all ships)
 			}
 		Role.SQUADRON_LEADER:
 			return {
 				"reaction_base": 0.4,  # Strategic not tactical
 				"decision_base": 1.0,  # Complex squadron coordination
-				"awareness_range": 2000.0  # Squadron-level awareness
+				"awareness_range": 20000.0  # Squadron-level (unused, sees all ships)
 			}
 		Role.FLEET_COMMANDER:
 			return {
 				"reaction_base": 0.5,  # High-level decisions
 				"decision_base": 2.0,  # Very complex decisions
-				"awareness_range": 3000.0  # Strategic view
+				"awareness_range": 30000.0  # Strategic view (unused, sees all ships)
 			}
 		_:
 			return {

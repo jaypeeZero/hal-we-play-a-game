@@ -127,8 +127,8 @@
 			"facing": 0.0,
 			"operator_id": null,
 			"position_offset": {
-				"x": -8.0,
-				"y": -5.0
+				"x": -17.7637481689453,
+				"y": -4.42176818847656
 			},
 			"stats": {
 				"accuracy": 0.8,
@@ -150,8 +150,8 @@
 			"facing": 0.0,
 			"operator_id": null,
 			"position_offset": {
-				"x": 8.0,
-				"y": -5.0
+				"x": 17.4635314941406,
+				"y": -4.42176818847656
 			},
 			"stats": {
 				"accuracy": 0.8,

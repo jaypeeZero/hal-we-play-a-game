@@ -52,10 +52,28 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 	# Handle special non-fighter cases
 	if subtype == "evade":
 		updated.orders.current_order = "evade"
-		updated.orders.threat_id = decision.get("target_id")
+		updated.orders.threat_id = decision.get("threat_id", decision.get("target_id", ""))
+		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
+		updated.orders.evasion_quality = decision.get("evasion_quality", 0.5)
 	elif subtype == "pursue":
 		updated.orders.current_order = "engage"
 		updated.orders.target_id = decision.get("target_id")
+		updated.orders.engage_range = decision.get("engage_range", 2000.0)
+		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
+	elif subtype == "broadside":
+		updated.orders.current_order = "broadside"
+		updated.orders.target_id = decision.get("target_id")
+		updated.orders.optimal_distance = decision.get("optimal_distance", 1200.0)
+		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
+	elif subtype == "kite":
+		updated.orders.current_order = "kite"
+		updated.orders.target_id = decision.get("target_id")
+		updated.orders.maintain_distance = decision.get("maintain_distance", 1500.0)
+		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
+	elif subtype == "retreat":
+		updated.orders.current_order = "retreat"
+		updated.orders.threat_id = decision.get("threat_id", "")
+		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
 	elif subtype == "idle":
 		updated.orders.current_order = ""
 		updated.orders.target_id = ""
