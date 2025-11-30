@@ -1,0 +1,67 @@
+[gd_scene load_steps=2 format=3 uid="uid://bv7f2p3d6ufcjhv"]
+
+[ext_resource type="Script" path="res://scripts/ui/roguelite/fleet_management.gd" id="1_fleet_management"]
+
+[node name="FleetManagement" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_fleet_management")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.15, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Fleet Command"
+theme_override_font_sizes/font_size = 32
+alignment = 1
+
+[node name="FleetLaunchButton" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 2
+size_flags_vertical = 4
+text = "Fleet Launch"
+custom_minimum_size = Vector2(150, 50)
+
+[node name="MessagesContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="MessagesTitle" type="Label" parent="MarginContainer/VBoxContainer/MessagesContainer"]
+layout_mode = 2
+text = "Messages"
+theme_override_font_sizes/font_size = 20
+
+[node name="MessagesList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MessagesContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[connection signal="pressed" from="MarginContainer/VBoxContainer/FleetLaunchButton" to="." method="_on_fleet_launch_pressed"]

@@ -243,11 +243,11 @@ func _on_node_pressed(node_id: String) -> void:
 
 	# Check if we reached the end
 	if _current_row == _map_nodes.size() - 1:
-		_info_label.text = "Journey Complete! Returning to main menu..."
-		# Delay before returning to menu
+		_info_label.text = "Journey Complete! Returning to command center..."
+		# Delay before returning to fleet management
 		await get_tree().create_timer(2.0).timeout
 		map_completed.emit()
-		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+		get_tree().change_scene_to_file("res://scenes/fleet_management.tscn")
 		return
 
 	_update_node_states()
