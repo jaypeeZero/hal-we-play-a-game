@@ -117,75 +117,6 @@ Called at game startup. Loads JSON files from `res://data/knowledgebase/annotate
 - `title`, `summary`, `details`, `annotations` - Concatenated for BM25 text indexing
 - `category` - Used for tag generation
 
-## Usage in CrewAISystem
-
-### Pilot Evasion Decision
-
-**Location**: `scripts/space/systems/crew_ai_system.gd:163-204`
-
-```gdscript
-func make_evasive_decision(crew_data, game_time):
-    situation = TacticalMemorySystem.generate_situation_summary(crew_data)
-    knowledge = TacticalKnowledgeSystem.query_pilot_knowledge(situation, 1)
-
-    evasion_subtype = "evade"  # Default
-
-    if knowledge.size() > 0:
-        maneuver_types = knowledge[0].content.get("maneuver_types", [])
-        for maneuver in maneuver_types:
-            tactic_id = "maneuver_" + maneuver
-            success_rate = TacticalMemorySystem.get_tactic_success_rate(crew_data, tactic_id)
-            if TacticalMemorySystem.has_tried_tactic(crew_data, tactic_id) and success_rate > 0.6:
-                evasion_subtype = maneuver
-                break
-
-    return decision
-```
-
-### Gunner Target Selection
-
-**Location**: `scripts/space/systems/crew_ai_system.gd:421-454`
-
-```gdscript
-func make_target_selection_decision(crew_data, game_time):
-    situation = TacticalMemorySystem.generate_situation_summary(crew_data)
-    knowledge = TacticalKnowledgeSystem.query_gunner_knowledge(situation, 1)
-
-    target = crew_data.awareness.opportunities[0]  # Default: first target
-
-    if knowledge.size() > 0:
-        priority_order = knowledge[0].content.get("priority_order", [])
-        if "damaged_enemies" in priority_order:
-            for opp in crew_data.awareness.opportunities:
-                if opp.get("status") in ["damaged", "disabled"]:
-                    target = opp
-                    break
-
-    return decision
-```
-
-### Captain Tactical Decision
-
-**Location**: `scripts/space/systems/crew_ai_system.gd:500-544`
-
-```gdscript
-func make_ship_tactical_decision(crew_data, game_time):
-    situation = TacticalMemorySystem.generate_situation_summary(crew_data)
-    knowledge = TacticalKnowledgeSystem.query_captain_knowledge(situation, 1)
-
-    tactical_action = "engage"  # Default
-
-    if knowledge.size() > 0:
-        action = knowledge[0].content.get("action", "")
-        if action == "tactical_withdrawal" and top_threat.priority > 200.0:
-            tactical_action = "withdraw"
-        elif action == "concentrate_fire":
-            tactical_action = "concentrate_fire"
-
-    # Issues orders to subordinate crew (pilot, gunner)
-    return decision
-```
-
 ## Crew Experience Data Structure
 
 Stored in `crew_data.awareness.tactical_memory`:
@@ -199,18 +130,7 @@ Stored in `crew_data.awareness.tactical_memory`:
 }
 ```
 
-## Knowledge Entry Categories
-
-| Category | Count | Role Assignment |
-|----------|-------|-----------------|
-| pilot_* | 12 | PILOT |
-| gunner_* | 12 | GUNNER |
-| captain_* | 12 | CAPTAIN |
-| squadron_* | 10 | SQUADRON_LEADER |
-| fleet_* | 10 | FLEET_COMMANDER |
-| physics_* | 12 | CAPTAIN (general knowledge) |
-
-## Performance Configuration
+## Performance Configuration (if needed)
 
 - `TacticalKnowledgeSystem.enable_knowledge_queries`: Set to `false` to disable all queries
 - `MAX_CACHE_SIZE`: 50 entries before cache clear
