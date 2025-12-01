@@ -7,7 +7,8 @@
 		"lateral_acceleration": 0.05,
 		"turn_rate": 0.5,
 		"mass": 1000.0,
-		"size": 150.0
+		"size": 150.0,
+		"drift_factor": 0.7
 	},
 	"armor_sections": [
 		{

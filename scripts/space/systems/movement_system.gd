@@ -1401,7 +1401,21 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	# LATERAL THRUST: Maneuvering thrusters allow sliding perpendicular to facing
 	# This is the key to skilled evasion - change LOS without rotating
 	var lateral_thrust_dir = pilot_control.get("lateral_thrust", 0)  # -1 left, +1 right
-	if lateral_thrust_dir != 0:
+	var has_fuel_system = ship_data.stats.has("maneuvering_fuel_max")
+	var maneuvering_fuel = ship_data.get("maneuvering_fuel", ship_data.stats.get("maneuvering_fuel_max", 0.0))
+	var maneuvering_burst_timer = ship_data.get("maneuvering_burst_timer", 0.0)
+	var maneuvering_cooldown_timer = ship_data.get("maneuvering_cooldown_timer", 0.0)
+	var burst_max = ship_data.stats.get("maneuvering_burst_max", 0.5)
+	var cooldown_max = ship_data.stats.get("maneuvering_cooldown", 1.0)
+
+	# Check if lateral thrust is available
+	# Ships without fuel system: always available
+	# Ships with fuel system: need fuel and no cooldown
+	var lateral_thrust_available = true
+	if has_fuel_system:
+		lateral_thrust_available = maneuvering_fuel > 0.0 and maneuvering_cooldown_timer <= 0.0
+
+	if lateral_thrust_dir != 0 and lateral_thrust_available:
 		# Perpendicular to ship facing (90° rotation)
 		var perpendicular = Vector2(-ship_facing.y, ship_facing.x)
 		# Lateral acceleration is weaker than main engines
@@ -1409,8 +1423,27 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		thrust_vector += perpendicular * lateral_accel * lateral_thrust_dir * delta
 		maneuvering_direction = perpendicular * lateral_thrust_dir
 
+		# Consume fuel during burst
+		maneuvering_fuel -= delta
+		maneuvering_burst_timer += delta
+
+		# Check if burst time exceeded
+		if maneuvering_burst_timer >= burst_max:
+			maneuvering_cooldown_timer = cooldown_max
+			maneuvering_burst_timer = 0.0
+	else:
+		# Update cooldown timer when not firing
+		if maneuvering_cooldown_timer > 0.0:
+			maneuvering_cooldown_timer -= delta
+		# Reset burst timer if on cooldown
+		if maneuvering_cooldown_timer > 0.0:
+			maneuvering_burst_timer = 0.0
+
 	# Update velocity with thrust (no drag in space!)
-	var new_velocity = ship_data.velocity + thrust_vector
+	# Apply drift physics: higher drift_factor = more momentum preservation
+	var drift_factor = ship_data.stats.get("drift_factor", 0.0)
+	var effective_thrust = thrust_vector * (1.0 - drift_factor * 0.5)
+	var new_velocity = ship_data.velocity + effective_thrust
 
 	# Clamp to max speed (engine limitation)
 	if new_velocity.length() > ship_data.stats.max_speed:
@@ -1419,13 +1452,21 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	# Update position based on velocity
 	var new_position = ship_data.position + new_velocity * delta
 
-	return DictUtils.merge_dict(ship_data, {
+	var result_dict = {
 		velocity = new_velocity,
 		position = new_position,
 		rotation = new_rotation,
 		_pilot_state = pilot_control,  # Store for debugging/visualization
 		_maneuvering_thrust_direction = maneuvering_direction  # For thruster visualization
-	})
+	}
+
+	# Include updated maneuvering fuel state if applicable
+	if ship_data.stats.has("maneuvering_fuel_max"):
+		result_dict.maneuvering_fuel = maneuvering_fuel
+		result_dict.maneuvering_burst_timer = maneuvering_burst_timer
+		result_dict.maneuvering_cooldown_timer = maneuvering_cooldown_timer
+
+	return DictUtils.merge_dict(ship_data, result_dict)
 
 ## Ships in space maintain velocity (Newton's first law)
 static func apply_space_drift(ship_data: Dictionary, delta: float) -> Dictionary:

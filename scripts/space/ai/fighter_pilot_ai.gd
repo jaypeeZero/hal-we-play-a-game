@@ -447,7 +447,19 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 		if on_collision_course and distance > close_range:
 			# Detect head-on collision - break perpendicular and accelerate past
 			# Don't try to orbit, just get out of the way fast
-			maneuver_type = "fight_lateral_break"
+			# Check if we have fuel for maneuvering jets (if fuel system exists)
+			var has_fuel_system = ship_data.stats.has("maneuvering_fuel_max")
+			var can_use_lateral_break = true
+			if has_fuel_system:
+				var maneuvering_fuel = ship_data.get("maneuvering_fuel", ship_data.stats.get("maneuvering_fuel_max", 0.0))
+				can_use_lateral_break = maneuvering_fuel > 0.5
+
+			if can_use_lateral_break:
+				# Have fuel (or no fuel system) - use lateral break
+				maneuver_type = "fight_lateral_break"
+			else:
+				# Low fuel - fall back to traditional evasion
+				maneuver_type = "fight_evasive_turn"
 		elif distance > far_range:
 			maneuver_type = "fight_pursue_full_speed"
 		elif distance > close_range:

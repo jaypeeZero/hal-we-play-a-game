@@ -97,6 +97,12 @@ static func create_ship_instance(ship_type: String, team: int, position: Vector2
 	instance.angular_velocity = 0.0
 	instance.status = "operational"
 
+	# Initialize maneuvering fuel state for ships that have fuel system
+	if instance.stats.has("maneuvering_fuel_max"):
+		instance.maneuvering_fuel = instance.stats.maneuvering_fuel_max
+		instance.maneuvering_burst_timer = 0.0
+		instance.maneuvering_cooldown_timer = 0.0
+
 	# Create crew for ship if requested
 	if create_crew:
 		var crew = create_crew_for_ship(instance, crew_skill)

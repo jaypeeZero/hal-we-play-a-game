@@ -104,6 +104,7 @@
 	"ship_id": "ship_0",
 	"stats": {
 		"acceleration": 50.0,
+		"drift_factor": 0.5,
 		"lateral_acceleration": 0.15,
 		"mass": 200.0,
 		"max_speed": 150.0,
@@ -120,22 +121,22 @@
 	"weapons": [
 		{
 			"arc": {
-				"max": 90.0,
-				"min": -90.0
+				"max": 360.0,
+				"min": 180.0
 			},
 			"cooldown_remaining": 0.0,
 			"facing": 0.0,
 			"operator_id": null,
 			"position_offset": {
-				"x": -17.7637481689453,
-				"y": -4.42176818847656
+				"x": -25.0,
+				"y": -20.0
 			},
 			"stats": {
 				"accuracy": 0.8,
 				"damage": 15.0,
 				"projectile_speed": 500.0,
 				"range": 1000.0,
-				"rate_of_fire": 2.0,
+				"rate_of_fire": 4.0,
 				"size": 2.0
 			},
 			"type": "medium_cannon",
@@ -143,15 +144,61 @@
 		},
 		{
 			"arc": {
-				"max": 90.0,
-				"min": -90.0
+				"max": 360.0,
+				"min": 180.0
 			},
 			"cooldown_remaining": 0.0,
 			"facing": 0.0,
 			"operator_id": null,
 			"position_offset": {
-				"x": 17.4635314941406,
-				"y": -4.42176818847656
+				"x": -30.0,
+				"y": 0.0
+			},
+			"stats": {
+				"accuracy": 0.8,
+				"damage": 15.0,
+				"projectile_speed": 500.0,
+				"range": 1000.0,
+				"rate_of_fire": 4.0,
+				"size": 2.0
+			},
+			"type": "medium_cannon",
+			"weapon_id": "turret_2"
+		},
+		{
+			"arc": {
+				"max": 360.0,
+				"min": 180.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": -25.0,
+				"y": 20.0
+			},
+			"stats": {
+				"accuracy": 0.8,
+				"damage": 15.0,
+				"projectile_speed": 500.0,
+				"range": 1000.0,
+				"rate_of_fire": 4.0,
+				"size": 2.0
+			},
+			"type": "medium_cannon",
+			"weapon_id": "turret_3"
+		},
+		{
+			"arc": {
+				"max": 180.0,
+				"min": 0.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 25.0,
+				"y": -20.0
 			},
 			"stats": {
 				"accuracy": 0.8,
@@ -162,7 +209,53 @@
 				"size": 2.0
 			},
 			"type": "medium_cannon",
-			"weapon_id": "turret_2"
+			"weapon_id": "turret_4"
+		},
+		{
+			"arc": {
+				"max": 180.0,
+				"min": 0.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 30.0,
+				"y": 0.0
+			},
+			"stats": {
+				"accuracy": 0.8,
+				"damage": 15.0,
+				"projectile_speed": 500.0,
+				"range": 1000.0,
+				"rate_of_fire": 2.0,
+				"size": 2.0
+			},
+			"type": "medium_cannon",
+			"weapon_id": "turret_5"
+		},
+		{
+			"arc": {
+				"max": 180.0,
+				"min": 0.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 25.0,
+				"y": 20.0
+			},
+			"stats": {
+				"accuracy": 0.8,
+				"damage": 15.0,
+				"projectile_speed": 500.0,
+				"range": 1000.0,
+				"rate_of_fire": 2.0,
+				"size": 2.0
+			},
+			"type": "medium_cannon",
+			"weapon_id": "turret_6"
 		}
 	]
 }

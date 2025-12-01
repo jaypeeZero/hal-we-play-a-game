@@ -7,7 +7,11 @@
 		"lateral_acceleration": 0.3,
 		"turn_rate": 3.0,
 		"mass": 50.0,
-		"size": 15.0
+		"size": 15.0,
+		"drift_factor": 0.1,
+		"maneuvering_fuel_max": 3.0,
+		"maneuvering_burst_max": 0.5,
+		"maneuvering_cooldown": 1.0
 	},
 	"armor_sections": [
 		{
