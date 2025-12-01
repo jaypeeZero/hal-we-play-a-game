@@ -1,0 +1,11 @@
+{
+  "id": "pilot_attack_vector_selection",
+  "title": "Attack Vector Selection",
+  "category": "piloting",
+  "summary": "Choosing approach angles that maximize own firepower while minimizing enemy response.",
+  "details": "Select attack vectors based on enemy weapon arcs and armor distribution. Most ships have stronger forward weapons and armor - approach from flanks or rear when possible. Consider relative velocity: passing attacks limit engagement time but exposure; head-on attacks are dangerous but bring maximum firepower. Account for enemy escort positions to avoid crossfire. Coordinate with wingmen to attack from multiple vectors simultaneously.",
+  "annotations": [
+    "Intelligence on enemy ship layouts is invaluable.",
+    "Rear attacks on capital ships often expose engine weak points."
+  ]
+}

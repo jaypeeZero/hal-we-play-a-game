@@ -1,0 +1,11 @@
+{
+  "id": "captain_defensive_posture",
+  "title": "Defensive Combat Posture",
+  "category": "tactics",
+  "summary": "Configuring ship orientation to minimize incoming damage.",
+  "details": "When outgunned, angle strongest armor toward enemy. Rotate to distribute damage across multiple armor sections rather than concentrating on one. Present smallest profile when possible - edge-on reduces hit probability. Use terrain and debris for cover. Prioritize survival over kills. Defensive posture buys time for reinforcements or creates opportunity for withdrawal.",
+  "annotations": [
+    "Survival often matters more than destruction.",
+    "Know which armor sections are strongest on your ship."
+  ]
+}

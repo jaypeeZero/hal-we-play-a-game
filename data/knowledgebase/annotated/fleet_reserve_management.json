@@ -1,0 +1,11 @@
+{
+  "id": "fleet_reserve_management",
+  "title": "Reserve Force Management",
+  "category": "strategy",
+  "summary": "Maintaining uncommitted forces to exploit opportunities or counter threats.",
+  "details": "Never commit all forces simultaneously. Maintain a reserve to: exploit enemy weakness, counter unexpected threats, reinforce success, or cover retreat. Reserve size depends on situation: larger against uncertain enemy, smaller when objectives require maximum force. Commit reserve decisively when the moment is right - hesitation wastes it. Once committed, reconstitute reserve from units completing objectives.",
+  "annotations": [
+    "The commander without reserve has lost control of the battle.",
+    "Reserve is the commander's personal weapon."
+  ]
+}

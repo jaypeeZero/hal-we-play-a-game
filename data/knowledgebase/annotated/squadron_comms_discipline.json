@@ -1,0 +1,11 @@
+{
+  "id": "squadron_comms_discipline",
+  "title": "Communications Discipline",
+  "category": "squadron",
+  "summary": "Maintaining clear and efficient communications during combat.",
+  "details": "Combat comms must be: brief, clear, and relevant. Use callsigns not names. Report: contacts, kills, damage taken, ammunition state. Avoid chatter - it blocks critical messages. Standard format: 'Callsign, message.' Acknowledge orders briefly: 'Alpha, copies.' When receiving fire, call it: 'Beta taking fire, bearing 270.' Leader summarizes when possible: 'All units, rally point Charlie.'",
+  "annotations": [
+    "Poor comms kills squadrons as surely as enemy fire.",
+    "Practice standard callouts until they're automatic."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "captain_damage_control_priority",
+  "title": "Damage Control Priority",
+  "category": "tactics",
+  "summary": "Prioritizing repairs to maintain combat effectiveness.",
+  "details": "Not all damage is equal. Priority order for repair: 1) Life support (crew death), 2) Propulsion (ability to maneuver/escape), 3) Weapons (ability to fight), 4) Sensors (ability to detect threats), 5) Hull breaches (contained), 6) Non-essential systems. Communicate damage status to crew and allies. Request assistance or withdraw if damage exceeds repair capacity.",
+  "annotations": [
+    "Damage control parties are limited - allocate wisely.",
+    "Some systems may need to be sacrificed to save others."
+  ]
+}

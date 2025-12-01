@@ -1,0 +1,11 @@
+{
+  "id": "fleet_combat_power_ratio",
+  "title": "Combat Power Ratio Analysis",
+  "category": "strategy",
+  "summary": "Assessing relative strength before committing to battle.",
+  "details": "Calculate force ratio before engagement: count ships, weight by class capability, adjust for damage state, consider tactical position. 3:1 advantage typically ensures victory with acceptable losses. 2:1 probable victory with significant losses. 1:1 coin flip, heavy losses. Avoid fair fights - maneuver to create advantage. Force ratio alone doesn't determine outcome but heavily influences it.",
+  "annotations": [
+    "Numbers matter, but tactics multiply numbers.",
+    "Create favorable ratios through maneuver, not attrition."
+  ]
+}

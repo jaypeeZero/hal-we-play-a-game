@@ -1,0 +1,11 @@
+{
+  "id": "captain_threat_assessment",
+  "title": "Threat Assessment Protocol",
+  "category": "tactics",
+  "summary": "Evaluating enemy ships to determine threat level and priority.",
+  "details": "Assess each enemy: ship class (fighter/cruiser/capital), damage state, weapon loadout, current behavior (attacking/defending/fleeing), position relative to you. Highest threats: ships actively engaging you, ships with heavy weapons in range, ships coordinating with others. Lower threats: damaged ships, ships engaged elsewhere, ships outside effective range. Update assessment as battle evolves.",
+  "annotations": [
+    "Misreading threat levels leads to catastrophic decisions.",
+    "Watch for enemy reinforcements changing threat picture."
+  ]
+}

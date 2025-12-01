@@ -1,0 +1,11 @@
+{
+  "id": "fleet_defeat_in_detail",
+  "title": "Defeat in Detail",
+  "category": "strategy",
+  "summary": "Destroying enemy forces piecemeal before they can combine.",
+  "details": "When enemy is divided, strike each portion with overwhelming force before they can reunite. Maneuver to prevent enemy concentration. Attack the weaker portion first for quick victory, then mass against the stronger. Speed is essential - defeat must be accomplished before reinforcement arrives. Intelligence on enemy dispositions enables this strategy.",
+  "annotations": [
+    "Classic strategic maneuver throughout military history.",
+    "Requires mobility advantage over the enemy."
+  ]
+}

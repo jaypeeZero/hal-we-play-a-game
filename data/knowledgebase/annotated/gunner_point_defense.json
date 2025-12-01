@@ -1,0 +1,11 @@
+{
+  "id": "gunner_point_defense",
+  "title": "Point Defense Operations",
+  "category": "gunnery",
+  "summary": "Defensive fire against incoming missiles and torpedoes.",
+  "details": "Point defense is purely defensive - intercept incoming ordnance before impact. Track incoming missiles early and begin engagement at maximum effective range. Prioritize missiles by time-to-impact, not distance. Use rapid-fire weapons with wide spread. Against multiple inbound, prioritize those you can intercept over those you cannot. Coordinate with pilot for evasive support.",
+  "annotations": [
+    "Point defense has highest priority over offensive fire.",
+    "Some munitions are too fast to intercept - evade instead."
+  ]
+}

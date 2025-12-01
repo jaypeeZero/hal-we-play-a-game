@@ -1,0 +1,11 @@
+{
+  "id": "pilot_spiral_approach",
+  "title": "Spiral Approach Pattern",
+  "category": "piloting",
+  "summary": "Corkscrew trajectory that presents a difficult targeting solution while closing distance.",
+  "details": "Execute continuous lateral thrust while approaching a target, creating a spiral trajectory. This makes your position harder to predict while steadily closing range. Vary the timing and intensity of lateral burns to remain unpredictable. Most effective against turret-based point defense systems that have limited traverse speed. Trade-off: uses more fuel than direct approach.",
+  "annotations": [
+    "Favored by fighter pilots in attack runs.",
+    "Less effective against modern predictive targeting."
+  ]
+}

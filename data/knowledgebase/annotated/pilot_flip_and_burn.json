@@ -1,0 +1,11 @@
+{
+  "id": "pilot_flip_and_burn",
+  "title": "Flip and Burn Turnaround",
+  "category": "piloting",
+  "summary": "Standard maneuver to reverse course by rotating 180 degrees and applying main thrust.",
+  "details": "The flip and burn is the fundamental course reversal in space combat. Rotate ship 180 degrees using attitude thrusters while maintaining current trajectory. Once facing retrograde, apply main thrust to decelerate and eventually reverse direction. Timing the flip is critical: begin early enough to arrest momentum before overshooting the target. During the flip, you're temporarily vulnerable with engines exposed.",
+  "annotations": [
+    "Practice until the rotation is muscle memory.",
+    "Consider attitude thruster strength when planning flip duration."
+  ]
+}

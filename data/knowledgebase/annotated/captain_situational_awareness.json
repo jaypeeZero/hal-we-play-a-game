@@ -1,0 +1,11 @@
+{
+  "id": "captain_situational_awareness",
+  "title": "Tactical Situational Awareness",
+  "category": "tactics",
+  "summary": "Maintaining comprehensive awareness of battle conditions and enemy positions.",
+  "details": "The captain must track: all enemy positions, their current actions and probable intentions, friendly ship status, environmental hazards, and escape routes. Use sensors and crew reports to build mental picture. Update threat assessment continuously. Enemies that disappear may be flanking. Delegate tasks but verify critical information. A captain with poor awareness makes poor decisions.",
+  "annotations": [
+    "Information overload is a real danger - prioritize.",
+    "Trust crew reports but verify when possible."
+  ]
+}

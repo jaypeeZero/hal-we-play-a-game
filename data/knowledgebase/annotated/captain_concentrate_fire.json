@@ -1,0 +1,11 @@
+{
+  "id": "captain_concentrate_fire",
+  "title": "Fire Concentration Doctrine",
+  "category": "tactics",
+  "summary": "Focus all weapons on single targets to maximize destruction rate.",
+  "details": "Destroyed enemies cannot fight back. Concentrate all fire on one target until destroyed before switching. Exception: imminent threats to ship survival. Damaged enemies are priority - finishing them removes a threat and prevents repair. Resist the temptation to engage multiple targets simultaneously. A ship with five damaged enemies is worse off than one with four destroyed and one full-health.",
+  "annotations": [
+    "Core tactical principle of naval combat.",
+    "Gunners may need reminded to stay on target."
+  ]
+}

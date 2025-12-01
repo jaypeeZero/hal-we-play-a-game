@@ -1,0 +1,11 @@
+{
+  "id": "physics_weapon_ranges",
+  "title": "Weapon Range in Space",
+  "category": "physics",
+  "summary": "Understanding effective weapon ranges in vacuum combat.",
+  "details": "Projectiles travel indefinitely in vacuum but hit probability decreases with range. Factors limiting effective range: target motion prediction accuracy, projectile travel time, targeting sensor precision. Lasers limited by: beam dispersion, power, and target reflectivity. Missiles limited by: fuel, guidance capability, countermeasure exposure time. Maximum range is not effective range - engage within effective envelope.",
+  "annotations": [
+    "Theoretically infinite range, practically limited.",
+    "Effective range varies by weapon and target type."
+  ]
+}

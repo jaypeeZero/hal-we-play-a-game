@@ -1,0 +1,11 @@
+{
+  "id": "fleet_task_force_org",
+  "title": "Task Force Organization",
+  "category": "strategy",
+  "summary": "Organizing fleet elements into effective task forces for specific missions.",
+  "details": "Organize task forces by mission: strike groups for offensive, screening forces for defense, escort groups for protection, scouts for reconnaissance. Balance capabilities within groups: include anti-fighter, anti-capital, point defense. Assign commanders who understand the mission. Task forces should be self-sufficient for their assigned mission. Reorganize between operations based on losses and objectives.",
+  "annotations": [
+    "Organization shapes capability - design for mission.",
+    "Flexibility in organization enables adaptation."
+  ]
+}

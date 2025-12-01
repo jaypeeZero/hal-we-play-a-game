@@ -1,0 +1,11 @@
+{
+  "id": "gunner_target_priority",
+  "title": "Target Priority Assessment",
+  "category": "gunnery",
+  "summary": "Selecting which targets to engage first based on threat level and vulnerability.",
+  "details": "Priority order: 1) Immediate threats (weapons locked on you), 2) Damaged enemies (finish them), 3) High-value targets (command ships, carriers), 4) Targets of opportunity. Damaged enemies are priority because eliminating them removes threat completely and prevents repair. Focus fire on one target until destroyed rather than spreading damage across multiple enemies.",
+  "annotations": [
+    "Captain may override priority based on tactical situation.",
+    "A damaged ship that escapes can return repaired."
+  ]
+}

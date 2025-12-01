@@ -1,0 +1,11 @@
+{
+  "id": "gunner_weapon_range_bands",
+  "title": "Weapon Range Band Tactics",
+  "category": "gunnery",
+  "summary": "Matching weapon selection to engagement distance for optimal effect.",
+  "details": "Different weapons excel at different ranges. Long range: missiles, railguns. Medium range: autocannons, lasers. Close range: rapid-fire weapons, shotgun patterns. Inform pilot of optimal engagement range for current loadout. At extreme range, conserve ammunition and wait. At close range, maximize rate of fire. Switch weapons based on range rather than trying to force one weapon type.",
+  "annotations": [
+    "Know your ship's weapon loadout before combat.",
+    "Coordinate with pilot to maintain optimal range."
+  ]
+}

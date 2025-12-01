@@ -1,0 +1,11 @@
+{
+  "id": "captain_tactical_withdrawal",
+  "title": "Tactical Withdrawal",
+  "category": "tactics",
+  "summary": "Ordered retreat when battle conditions become unfavorable.",
+  "details": "Withdrawal is not defeat - it preserves force for future battles. Conditions for withdrawal: critical damage, heavily outnumbered, objective lost, low ammunition. Execute by: ordering evasive course away from enemy, calling for covering fire from allies, using smoke/chaff to break locks. Never turn engines toward enemy during withdrawal - you cannot shoot or detect what's behind you. Accelerate to maximum safe velocity.",
+  "annotations": [
+    "A ship that escapes fights again.",
+    "Withdrawal requires discipline - don't panic but don't delay."
+  ]
+}

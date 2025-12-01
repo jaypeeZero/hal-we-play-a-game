@@ -1,0 +1,11 @@
+{
+  "id": "physics_damage_vacuum",
+  "title": "Combat Damage in Vacuum",
+  "category": "physics",
+  "summary": "How combat damage affects ships in the vacuum of space.",
+  "details": "Hull breaches cause explosive decompression. Crew in breached sections die without suits. Atmosphere vents until equalized or sealed. Debris from impacts becomes secondary projectiles inside ship. No fire without oxygen - but hot components remain hazardous. Damaged systems may vent fluids that freeze instantly. Electrical arcs in vacuum behave differently. All crew should maintain pressure suits during combat.",
+  "annotations": [
+    "Space is unforgiving of hull breaches.",
+    "Damage control is life or death, literally."
+  ]
+}

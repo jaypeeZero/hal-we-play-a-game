@@ -1,0 +1,11 @@
+{
+  "id": "captain_orders_clarity",
+  "title": "Clear Orders Protocol",
+  "category": "tactics",
+  "summary": "Issuing unambiguous commands that crew can execute immediately.",
+  "details": "Orders must be: clear (no ambiguity), brief (combat time is precious), and complete (contains necessary information). Good order: 'Pilot, evasive pattern delta, now.' Bad order: 'Try to avoid getting hit.' Confirm receipt of orders. Allow crew initiative within ordered parameters. In emergency, single-word commands may be necessary - establish these in advance.",
+  "annotations": [
+    "Miscommunication kills ships.",
+    "Practice standard commands until they're automatic."
+  ]
+}

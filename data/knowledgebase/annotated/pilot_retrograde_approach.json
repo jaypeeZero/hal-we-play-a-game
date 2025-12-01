@@ -1,0 +1,11 @@
+{
+  "id": "pilot_retrograde_approach",
+  "title": "Retrograde Combat Approach",
+  "category": "piloting",
+  "summary": "Approach targets while facing retrograde to maintain maximum braking capability.",
+  "details": "When approaching a target at high velocity, rotate to face retrograde (opposite to travel direction) early. This allows main engines to brake and brings weapons to bear on the target simultaneously. Begin braking burn well before desired engagement range - space has no friction to slow you down. Calculate deceleration distance: d = v²/(2a) where v is velocity and a is thrust acceleration.",
+  "annotations": [
+    "Standard doctrine for attack runs on capital ships.",
+    "Requires good situational awareness to execute safely."
+  ]
+}

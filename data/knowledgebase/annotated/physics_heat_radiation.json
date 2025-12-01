@@ -1,0 +1,11 @@
+{
+  "id": "physics_heat_radiation",
+  "title": "Thermal Management in Combat",
+  "category": "physics",
+  "summary": "Managing heat buildup during combat operations.",
+  "details": "In space, heat only dissipates through radiation - no convection or conduction to atmosphere. Weapons, engines, and reactors generate heat. Heat buildup causes: weapon malfunction, crew discomfort, component failure. Radiators must have line of sight to cold space. Radiators are vulnerable - damage reduces cooling capacity. Extended combat at high power causes thermal runaway. Manage heat as a critical resource.",
+  "annotations": [
+    "Thermal limits often determine engagement duration.",
+    "Facing radiators away from sun improves cooling."
+  ]
+}

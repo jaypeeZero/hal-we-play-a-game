@@ -1,0 +1,11 @@
+{
+  "id": "physics_detection_stealth",
+  "title": "Detection Physics",
+  "category": "physics",
+  "summary": "Understanding how ships are detected in space.",
+  "details": "Ships are detected by: thermal signature (engine heat, radiators), electromagnetic emissions (radar, comms), reflected light, and gravimetric sensors. Space is not dark - ships are visible against star background. Running silent reduces signature but limits capabilities. Thrust creates highly visible exhaust plume. Cold coasting is stealthier than active maneuvering. There is no true stealth in space - only reduced detection range.",
+  "annotations": [
+    "Stealth is about detection range, not invisibility.",
+    "Every system emits - choose what to reveal."
+  ]
+}

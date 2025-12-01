@@ -1,0 +1,11 @@
+{
+  "id": "captain_ambush_tactics",
+  "title": "Ambush Execution",
+  "category": "tactics",
+  "summary": "Setting up and executing surprise attacks on unsuspecting enemies.",
+  "details": "Successful ambush requires: concealment (sensor shadow, debris field, running silent), patience (wait for optimal moment), violence of action (maximum firepower immediately). Position to cut off escape routes. Strike when enemy is at disadvantage: mid-maneuver, damaged, or distracted. First salvo should cripple if not destroy. If detected before engagement, abort - a failed ambush puts you at disadvantage.",
+  "annotations": [
+    "Ambush trading often favors the ambusher significantly.",
+    "Discipline in waiting is the hardest part."
+  ]
+}

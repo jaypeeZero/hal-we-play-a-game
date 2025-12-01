@@ -1,0 +1,11 @@
+{
+  "id": "pilot_velocity_match",
+  "title": "Velocity Matching for Engagement",
+  "category": "piloting",
+  "summary": "Match target velocity to maintain stable firing solution and extend engagement window.",
+  "details": "For sustained engagement, match your velocity vector to the target's velocity. This creates a stable relative position, allowing gunners to maintain consistent firing solutions. First neutralize relative velocity by thrusting opposite to the target's motion from your perspective. Then make small adjustments to maintain desired range. Warning: velocity matching makes you predictable - only use when you have firepower advantage.",
+  "annotations": [
+    "Essential technique for broadside engagements.",
+    "Break velocity match immediately if taking heavy fire."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "physics_communications",
+  "title": "Combat Communications Physics",
+  "category": "physics",
+  "summary": "Light-speed delays and their tactical implications.",
+  "details": "Radio and laser communications travel at light speed. At 300,000 km, signal takes 1 second each way. At combat ranges, delay is negligible. At strategic distances, delay creates fog of war. Orders arrive after situation has changed. Sensor data shows where enemy was, not where they are. Plan for communication latency in fleet coordination. Tightbeam comms are harder to intercept than broadcast.",
+  "annotations": [
+    "Light speed delay affects fleet-level coordination.",
+    "Close combat sees effectively instant communications."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "gunner_weapon_heat",
+  "title": "Weapon Heat Management",
+  "category": "gunnery",
+  "summary": "Managing thermal buildup to prevent weapon malfunction.",
+  "details": "Continuous fire generates heat that must dissipate. Overheated weapons jam, malfunction, or auto-shutdown. Monitor heat levels and cease fire before critical threshold. Rotate between weapon groups to allow cooling. Heat dissipates faster in shadow (out of sunlight). Some weapons run hotter than others - know your loadout's thermal characteristics. An overheated weapon is worse than a cool weapon on reload.",
+  "annotations": [
+    "Emergency cooldown delays cost precious combat time.",
+    "Heat management is often the limiting factor in sustained combat."
+  ]
+}

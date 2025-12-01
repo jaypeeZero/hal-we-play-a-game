@@ -1,0 +1,11 @@
+{
+  "id": "squadron_formation_combat",
+  "title": "Combat Formation Management",
+  "category": "squadron",
+  "summary": "Maintaining effective formations during active combat.",
+  "details": "Formations provide mutual support and concentrated firepower. Common formations: line abreast (maximum forward firepower), echelon (good coverage, easy to maintain), wedge (flexible, leader protection). Adjust spacing based on enemy weapons - tighter against single targets, wider against area weapons. When formation breaks due to combat, call for reform at rally point. Damaged ships should fall to protected positions within formation.",
+  "annotations": [
+    "Formations work because they provide overlapping fields of fire.",
+    "Rigid formation discipline can be fatal - adapt to situation."
+  ]
+}

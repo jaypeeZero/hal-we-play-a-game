@@ -1,0 +1,11 @@
+{
+  "id": "fleet_intel_assessment",
+  "title": "Intelligence Assessment",
+  "category": "strategy",
+  "summary": "Using intelligence to inform strategic decisions.",
+  "details": "Good intelligence enables good decisions. Assess: enemy fleet composition, positions, capabilities, intentions, morale. Evaluate source reliability. Update assessments continuously. Intelligence gaps are themselves information - unknown enemy positions require caution. Counter-intelligence: assume enemy knows what you broadcast. Deception can create false intelligence for enemy. Act on best available information, not perfect information.",
+  "annotations": [
+    "Decisions made on bad intelligence are bad decisions.",
+    "Perfect intelligence is rare - decide anyway."
+  ]
+}
