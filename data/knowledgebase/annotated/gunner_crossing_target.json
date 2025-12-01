@@ -1,0 +1,11 @@
+{
+  "id": "gunner_crossing_target",
+  "title": "Crossing Target Engagement",
+  "category": "gunnery",
+  "summary": "Techniques for engaging targets moving perpendicular to line of fire.",
+  "details": "Crossing targets are the most difficult to hit - maximum angular velocity means maximum lead requirement. Fire ahead of the target's path, not at the target. Use predictive bursts: place fire where target will cross. Against fighters, use spread patterns to increase hit probability. Alternatively, request pilot adjust to pursuit or head-on approach which reduces crossing angle.",
+  "annotations": [
+    "Crossing shots are low-probability - accept lower accuracy.",
+    "Pursuit geometry is preferable when possible."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "physics_thrust_to_weight",
+  "title": "Thrust-to-Mass Ratio",
+  "category": "physics",
+  "summary": "Understanding acceleration capability based on engine power and ship mass.",
+  "details": "Acceleration = Thrust / Mass. Higher thrust-to-mass ratio means faster acceleration and more agile maneuvering. Fighters excel here - low mass, high thrust. Capital ships suffer - high mass, limited acceleration. As fuel depletes, mass decreases and acceleration improves slightly. Damaged engines reduce thrust. Know your acceleration limits and enemy's - determines who can dictate engagement.",
+  "annotations": [
+    "Can't outrun physics - know your ship's limits.",
+    "Damaged engines critically impair survival."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "physics_orbital_mechanics",
+  "title": "Orbital Mechanics Basics",
+  "category": "physics",
+  "summary": "How orbital dynamics affect combat near gravitational bodies.",
+  "details": "Near planets/moons, orbits matter. Higher orbit = slower orbital velocity. To catch ship ahead, drop to lower orbit (counter-intuitive). Gravity wells affect pursuit - ship diving toward planet accelerates. Escaping gravity requires specific velocity. Combat in orbit differs from deep space - trajectories curve. Use gravity assist to change velocity efficiently. Planets provide sensor shadow but limit maneuver options.",
+  "annotations": [
+    "Orbital combat adds complexity layer to maneuvers.",
+    "Deep space combat is simpler - straight-line physics."
+  ]
+}

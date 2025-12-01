@@ -1,0 +1,11 @@
+{
+  "id": "fleet_strategic_withdrawal",
+  "title": "Strategic Withdrawal",
+  "category": "strategy",
+  "summary": "Fleet-level retreat to preserve combat power for future engagements.",
+  "details": "Withdraw when: battle is lost, objectives impossible, losses threaten fleet survival, or strategic situation changes. Order withdrawal before catastrophic losses. Assign rear guard from ships best able to survive. Establish sequential rally points. Retreat toward reinforcement or resupply. A fleet that survives to fight again is not defeated. Document losses and lessons for future engagement.",
+  "annotations": [
+    "Strategic withdrawal is a commander's hardest decision.",
+    "History judges commanders who fought to destruction harshly."
+  ]
+}

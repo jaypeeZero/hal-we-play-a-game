@@ -1,0 +1,11 @@
+{
+  "id": "squadron_retreat_covering",
+  "title": "Covering Retreat Operations",
+  "category": "squadron",
+  "summary": "Protecting withdrawing allied ships during retreat.",
+  "details": "When allies retreat, healthy ships provide cover. Position between retreating ships and enemy. Draw enemy attention and fire away from retreating ships. Retreat in bounds: some ships withdraw while others cover, then swap. Last ships to leave are those best able to survive the withdrawal. Covering retreat is dangerous but essential - it saves more ships than holding position.",
+  "annotations": [
+    "Covering fire saves lives.",
+    "The rear guard accepts higher risk for squadron survival."
+  ]
+}

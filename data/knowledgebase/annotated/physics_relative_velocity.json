@@ -1,0 +1,11 @@
+{
+  "id": "physics_relative_velocity",
+  "title": "Relative Velocity Combat",
+  "category": "physics",
+  "summary": "Combat effectiveness depends on relative, not absolute, velocity.",
+  "details": "Two ships at 10 km/s on parallel courses have zero relative velocity - they're stationary to each other. Two ships at 100 m/s on collision course have 200 m/s relative velocity. High relative velocity means brief engagement windows but difficult targeting. Low relative velocity allows sustained engagement but predictable positioning. Control relative velocity to control engagement.",
+  "annotations": [
+    "Think relative, not absolute velocities.",
+    "Matching velocity creates stable firing platforms."
+  ]
+}

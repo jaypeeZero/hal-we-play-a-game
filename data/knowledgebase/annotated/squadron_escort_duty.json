@@ -1,0 +1,11 @@
+{
+  "id": "squadron_escort_duty",
+  "title": "Escort Operations",
+  "category": "squadron",
+  "summary": "Protecting high-value assets during transit or combat.",
+  "details": "Escort priority is protection, not kills. Position between escort target and threat axes. Do not pursue enemies beyond protection range. Eliminate threats that approach escort target first, regardless of other tactical considerations. Report all contacts early - escort target needs maximum warning time. If escort target is destroyed, mission has failed regardless of enemy kills.",
+  "annotations": [
+    "Escort discipline requires suppressing hunting instincts.",
+    "Glory is irrelevant - only the escort target matters."
+  ]
+}

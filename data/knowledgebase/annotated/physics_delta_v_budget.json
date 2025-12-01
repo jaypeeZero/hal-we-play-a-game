@@ -1,0 +1,11 @@
+{
+  "id": "physics_delta_v_budget",
+  "title": "Delta-V Budget Management",
+  "category": "physics",
+  "summary": "Understanding velocity change capacity and its tactical implications.",
+  "details": "Delta-V is total velocity change your ship can perform before fuel depletion. Every thrust burn consumes delta-V. Budget includes: approach maneuvers, combat maneuvering, escape velocity, safety reserve. Calculate mission requirements before engagement. Ships with depleted delta-V cannot evade or pursue. Monitor propellant levels throughout combat. Reserve minimum 20% for emergency withdrawal.",
+  "annotations": [
+    "Running out of delta-V is running out of options.",
+    "Efficient pilots survive longer on same fuel."
+  ]
+}

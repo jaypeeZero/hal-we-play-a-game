@@ -1,0 +1,11 @@
+{
+  "id": "fleet_timing_tempo",
+  "title": "Operational Tempo Control",
+  "category": "strategy",
+  "summary": "Managing the pace of operations to maintain advantage.",
+  "details": "Tempo is the rate of operations. High tempo: constant pressure prevents enemy recovery, but exhausts your forces. Low tempo: allows recovery, but gives enemy same opportunity. Control tempo to your advantage - accelerate when winning, pause when needing recovery. Faster tempo than enemy enables initiative. Sudden tempo changes surprise enemy. Match tempo to sustainable crew and ship capacity.",
+  "annotations": [
+    "Tempo advantage wins campaigns, not just battles.",
+    "Exhausted forces make mistakes - manage fatigue."
+  ]
+}

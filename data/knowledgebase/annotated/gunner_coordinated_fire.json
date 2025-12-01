@@ -1,0 +1,11 @@
+{
+  "id": "gunner_coordinated_fire",
+  "title": "Coordinated Fire Doctrine",
+  "category": "gunnery",
+  "summary": "Synchronizing fire with allied ships for maximum damage concentration.",
+  "details": "Multiple ships focusing fire on one target destroy it faster than distributed fire. Coordinate with allies to designate primary target. Time salvos to hit simultaneously for shield/armor overwhelm. When captain calls target, all gunners engage that target unless assigned defensive duties. Call out when switching targets so allies can follow or maintain fire.",
+  "annotations": [
+    "Coordinated fire is the cornerstone of fleet combat.",
+    "Overkill is better than underkill - destroyed enemies can't shoot back."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "squadron_break_tactics",
+  "title": "Break Tactics",
+  "category": "squadron",
+  "summary": "Emergency dispersal maneuvers to avoid concentrated enemy fire.",
+  "details": "Break command orders immediate dispersal. Each ship breaks in pre-assigned direction - typically odd ships break port, even ships break starboard. Break hard with maximum thrust. Purpose: make targeting impossible, avoid area weapons, create confusion. After break, reform on leader's call. Break is defensive - use when formation would take unacceptable casualties.",
+  "annotations": [
+    "Practice break drills to prevent collisions.",
+    "Break should be instinctive when called."
+  ]
+}

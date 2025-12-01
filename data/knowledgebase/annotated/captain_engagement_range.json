@@ -1,0 +1,11 @@
+{
+  "id": "captain_engagement_range",
+  "title": "Optimal Engagement Range",
+  "category": "tactics",
+  "summary": "Selecting combat range based on ship capabilities and enemy loadout.",
+  "details": "Every ship has an optimal engagement range based on weapons and defenses. Heavy armor and short-range weapons: close to knife-fighting range. Long-range weapons and light armor: maintain standoff distance. Know enemy capabilities: if they want close range, deny it; if they want distance, close aggressively. Pilot should maintain range that favors your loadout while denying enemy their preferred range.",
+  "annotations": [
+    "Intelligence on enemy ships is critical for range selection.",
+    "Range control is often the deciding factor in combat."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "squadron_target_distribution",
+  "title": "Target Distribution",
+  "category": "squadron",
+  "summary": "Assigning targets across squadron to maximize destruction efficiency.",
+  "details": "Assign targets to avoid overkill while ensuring destruction. Pair ships against tougher enemies. Single ships against fighters. Call targets clearly: 'Alpha takes bandit one, Beta takes bandit two.' Reassign immediately when target is destroyed. Consider ship loadout when assigning - missile boats against hardened targets, gun platforms against fighters. Track who is engaging what to prevent confusion.",
+  "annotations": [
+    "Efficient target distribution wins battles of attrition.",
+    "Reassignment speed matters when targets go down."
+  ]
+}

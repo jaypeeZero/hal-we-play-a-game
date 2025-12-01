@@ -1,0 +1,11 @@
+{
+  "id": "pilot_perpendicular_evasion",
+  "title": "Perpendicular Evasion Burn",
+  "category": "piloting",
+  "summary": "Evade incoming fire by thrusting perpendicular to the threat vector.",
+  "details": "When under fire, the most effective evasion is to thrust perpendicular to the incoming projectile's path. Enemy targeting computers predict your position based on current velocity - a perpendicular burn invalidates their firing solution. Alternate between port and starboard burns unpredictably. Never thrust directly away from an enemy - you remain on the same vector and are easier to hit.",
+  "annotations": [
+    "Core survival technique against guided projectiles.",
+    "Combine with rotation to present smallest profile."
+  ]
+}

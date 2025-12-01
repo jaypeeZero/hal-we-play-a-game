@@ -1,0 +1,11 @@
+{
+  "id": "physics_projectile_mechanics",
+  "title": "Projectile Physics",
+  "category": "physics",
+  "summary": "Understanding how projectiles behave in space combat.",
+  "details": "Projectiles maintain velocity indefinitely in vacuum - no drop, no drag. Projectile velocity adds to ship velocity at launch. Fast-moving ship firing forward has faster projectiles. Firing while moving laterally imparts that motion to projectiles. Rotation affects projectile trajectory from turrets. Lead calculations must account for your motion, target motion, and projectile travel time.",
+  "annotations": [
+    "Space ballistics differ from atmospheric weapons.",
+    "Projectile velocity is critical for hit probability."
+  ]
+}

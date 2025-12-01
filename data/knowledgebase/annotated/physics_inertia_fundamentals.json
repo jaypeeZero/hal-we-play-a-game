@@ -1,0 +1,11 @@
+{
+  "id": "physics_inertia_fundamentals",
+  "title": "Inertia in Space Combat",
+  "category": "physics",
+  "summary": "Understanding how inertia affects all space maneuvers.",
+  "details": "In space, objects in motion stay in motion. There is no friction to slow you down, no air resistance to limit speed. Every maneuver requires thrust in the opposite direction to stop. Velocity is additive - your velocity plus enemy velocity determines closing rate. High-speed passes happen in seconds. Mass affects maneuverability - heavier ships accelerate slower. Inertia is both ally (coasting saves fuel) and enemy (hard to stop or turn).",
+  "annotations": [
+    "Core physics principle governing all space movement.",
+    "Think in terms of changing velocity, not position."
+  ]
+}

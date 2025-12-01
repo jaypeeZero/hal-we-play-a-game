@@ -1,0 +1,11 @@
+{
+  "id": "gunner_lead_targeting",
+  "title": "Lead Targeting Fundamentals",
+  "category": "gunnery",
+  "summary": "Calculate aim point ahead of moving targets based on projectile travel time.",
+  "details": "Projectiles take time to reach the target. Aim at where the target will be when the projectile arrives, not where it is now. Lead distance = target_velocity * (distance / projectile_velocity). Account for both target and own ship movement. Faster targets require more lead. Closer targets require less lead. Update lead calculation continuously as engagement parameters change.",
+  "annotations": [
+    "Fundamental gunnery skill - practice until intuitive.",
+    "Most targeting computers handle this automatically but understanding helps."
+  ]
+}

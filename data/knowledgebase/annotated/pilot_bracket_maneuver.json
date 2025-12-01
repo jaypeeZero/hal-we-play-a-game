@@ -1,0 +1,11 @@
+{
+  "id": "pilot_bracket_maneuver",
+  "title": "Bracket Maneuver for Intercept",
+  "category": "piloting",
+  "summary": "Flanking approach to intercept a fleeing target while minimizing exposure time.",
+  "details": "When pursuing a fleeing enemy, do not chase directly behind them. Instead, thrust at an angle to their trajectory to cut off their escape vector. Calculate intercept point based on their current velocity and your maximum thrust. Approach from an angle that puts you on their flank, reducing their ability to return fire while keeping them in your forward arc.",
+  "annotations": [
+    "Energy-efficient pursuit compared to direct chase.",
+    "Works best against slower or damaged targets."
+  ]
+}

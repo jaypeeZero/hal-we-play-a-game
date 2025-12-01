@@ -1,0 +1,11 @@
+{
+  "id": "gunner_ammo_conservation",
+  "title": "Ammunition Conservation",
+  "category": "gunnery",
+  "summary": "Fire discipline to ensure ammunition lasts through extended engagements.",
+  "details": "Ammunition is finite - running dry in combat is often fatal. Wait for high-probability shots rather than firing at maximum rate. Long-range shots waste ammo with low hit probability. Reserve ammunition for defensive needs. Track remaining ammunition and adjust fire rate accordingly. When below 30% ammo, switch to precision fire only. When below 10%, reserve for point defense.",
+  "annotations": [
+    "Extended battles punish poor ammunition discipline.",
+    "Better to withdraw with ammo than die without it."
+  ]
+}

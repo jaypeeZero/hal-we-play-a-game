@@ -1,0 +1,11 @@
+{
+  "id": "captain_energy_management",
+  "title": "Combat Energy Management",
+  "category": "tactics",
+  "summary": "Balancing power allocation between engines, weapons, and shields.",
+  "details": "Ship reactors have finite output. Allocate power based on current needs: fleeing requires engine power, attacking requires weapon power, taking fire requires shield power. Pilot and gunner should report energy needs. Make deliberate reallocation decisions rather than leaving at default. Energy starvation in critical systems loses battles.",
+  "annotations": [
+    "Energy management is continuous throughout combat.",
+    "Crisis moments may require all power to one system."
+  ]
+}

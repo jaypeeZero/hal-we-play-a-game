@@ -1,0 +1,11 @@
+{
+  "id": "squadron_rally_point",
+  "title": "Rally Point Designation",
+  "category": "squadron",
+  "summary": "Establishing and using rally points to reform scattered squadron.",
+  "details": "Before engagement, designate rally points - locations to regroup if scattered. Rally points should be: away from main enemy force, defensible, easy to locate. When ordering rally, give clear coordinates and expected arrival time. Damaged ships rally first for protection. Once reformed, assess casualties and redistribute targets. Multiple sequential rally points allow fallback if first is compromised.",
+  "annotations": [
+    "Rally points turn chaos into order.",
+    "Update rally points as battle lines shift."
+  ]
+}

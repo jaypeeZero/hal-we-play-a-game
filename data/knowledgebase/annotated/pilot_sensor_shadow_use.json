@@ -1,0 +1,11 @@
+{
+  "id": "pilot_sensor_shadow_use",
+  "title": "Sensor Shadow Exploitation",
+  "category": "piloting",
+  "summary": "Using obstacles and celestial bodies to mask approach from enemy detection.",
+  "details": "Large objects create sensor shadows - zones where enemy detection is blocked. Plan approach routes that keep obstacles between you and enemy sensors. Asteroids, derelicts, and other ships can all provide concealment. Exit the shadow close to engagement range to minimize enemy reaction time. Risk: you also cannot detect what's behind the obstacle until you emerge.",
+  "annotations": [
+    "Combine with boost-and-coast for silent approach.",
+    "Many ambushes rely on sensor shadow tactics."
+  ]
+}

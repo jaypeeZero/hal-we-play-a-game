@@ -1,0 +1,11 @@
+{
+  "id": "captain_aggressive_posture",
+  "title": "Aggressive Combat Posture",
+  "category": "tactics",
+  "summary": "Maximum forward weapon deployment for overwhelming firepower.",
+  "details": "When you have advantage, press it. Face strongest weapons toward enemy. Close to optimal weapon range. Maintain continuous fire. Push damaged enemies to destruction before they can withdraw or repair. Coordinate with allies for pincer movements. Aggressive posture accepts higher risk for faster kills. Appropriate when: outnumbering enemy, enemy is damaged, time-sensitive objectives.",
+  "annotations": [
+    "Aggression is a tool, not a personality trait.",
+    "Switch to defensive instantly if situation changes."
+  ]
+}

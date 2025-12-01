@@ -1,0 +1,11 @@
+{
+  "id": "fleet_logistics_planning",
+  "title": "Fleet Logistics Planning",
+  "category": "strategy",
+  "summary": "Ensuring sustained operations through proper supply management.",
+  "details": "Ships without fuel and ammunition are useless. Plan operations around logistics constraints: fuel range, ammunition expenditure, repair needs. Position supply points safely. Calculate consumption rates before commitment. Extended operations require resupply schedule. Protect logistics ships as high-value assets. Attacking enemy logistics can win wars without fleet battles.",
+  "annotations": [
+    "Amateurs study tactics, professionals study logistics.",
+    "Many campaigns lost to supply failure, not combat."
+  ]
+}

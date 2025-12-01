@@ -1,0 +1,11 @@
+{
+  "id": "gunner_missile_lock",
+  "title": "Missile Lock and Launch",
+  "category": "gunnery",
+  "summary": "Proper procedure for acquiring lock and launching guided ordnance.",
+  "details": "Guided missiles require target lock before launch. Maintain lock during acquisition phase - breaking lock wastes the cycle time. Launch when lock is solid and target is within missile effective range. Account for missile travel time against evasive targets. Fire-and-forget missiles allow immediate retargeting; guided missiles may require continuous tracking. Conserve missiles for high-value targets.",
+  "annotations": [
+    "Missiles are limited and expensive - make them count.",
+    "Some targets have countermeasures that defeat missiles."
+  ]
+}

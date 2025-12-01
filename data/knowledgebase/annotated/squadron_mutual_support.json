@@ -1,0 +1,11 @@
+{
+  "id": "squadron_mutual_support",
+  "title": "Mutual Support Doctrine",
+  "category": "squadron",
+  "summary": "Squadron members protecting each other during combat.",
+  "details": "Never leave a wingman alone. When ally is engaged, maneuver to threaten their attacker. If ally is damaged, provide cover for withdrawal. Position to create crossfire - enemy attacking one ship exposes themselves to others. Call for help when overwhelmed - squadron mates should respond. A ship alone is a ship lost.",
+  "annotations": [
+    "Solo glory-seekers endanger the whole squadron.",
+    "Practice mutual support drills until they're instinctive."
+  ]
+}

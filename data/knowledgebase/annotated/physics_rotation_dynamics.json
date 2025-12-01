@@ -1,0 +1,11 @@
+{
+  "id": "physics_rotation_dynamics",
+  "title": "Rotational Dynamics",
+  "category": "physics",
+  "summary": "How ships rotate and the tactical implications of rotational motion.",
+  "details": "Rotation uses attitude thrusters, not main engines. Ships can rotate while maintaining trajectory - facing one direction while traveling another. Rotation rate limited by thruster power and ship moment of inertia. Elongated ships rotate slower than compact ones. Rotation continues until counter-thrust stops it. Plan rotations ahead - they take time to execute and stop.",
+  "annotations": [
+    "Decoupled rotation and translation is key tactical capability.",
+    "Rotation speed often limits combat effectiveness."
+  ]
+}

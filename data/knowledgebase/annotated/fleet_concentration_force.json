@@ -1,0 +1,11 @@
+{
+  "id": "fleet_concentration_force",
+  "title": "Concentration of Force",
+  "category": "strategy",
+  "summary": "Massing fleet elements at decisive points to achieve local superiority.",
+  "details": "Never divide the fleet against a concentrated enemy. Mass forces to achieve local numerical superiority, even if it means leaving other areas undefended. Destroy enemy in detail by concentrating against portions of their force. The side that concentrates first usually wins. Accept calculated risks in secondary theaters to maintain concentration in the primary engagement.",
+  "annotations": [
+    "Lanchester's laws apply: concentrated force has exponential advantage.",
+    "This principle overrides many tactical considerations."
+  ]
+}

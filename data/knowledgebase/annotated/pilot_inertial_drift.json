@@ -1,0 +1,11 @@
+{
+  "id": "pilot_inertial_drift",
+  "title": "Inertial Drift Compensation",
+  "category": "piloting",
+  "summary": "Technique for managing velocity drift in zero-gravity combat through controlled thrust burns.",
+  "details": "In space combat, ships continue moving in their current direction until thrust is applied. Pilots must anticipate drift and plan correction burns. Key technique: Apply counter-thrust before reaching desired position, not at the position. The faster you're moving, the earlier you need to begin braking. Monitor velocity vector constantly and apply corrections in small bursts rather than large overcorrections.",
+  "annotations": [
+    "Critical for new pilots - overcorrection is the most common error.",
+    "Ties into energy management - every correction costs fuel."
+  ]
+}

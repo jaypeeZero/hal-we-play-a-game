@@ -1,0 +1,11 @@
+{
+  "id": "squadron_element_tactics",
+  "title": "Element-Based Tactics",
+  "category": "squadron",
+  "summary": "Operating in pairs for enhanced combat effectiveness.",
+  "details": "The element (two-ship pair) is the minimum tactical unit. Leader engages while wingman provides cover and watches for threats. Wingman follows leader's maneuvers at offset to prevent collision. When leader is engaged, wingman attacks the attacker. If separated, reform element as priority. Elements combine into flights (two elements) for larger operations. Trust your element partner completely.",
+  "annotations": [
+    "The element concept is fundamental to fighter tactics.",
+    "Element partners should train together extensively."
+  ]
+}

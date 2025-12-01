@@ -1,0 +1,11 @@
+{
+  "id": "gunner_turret_traverse",
+  "title": "Turret Traverse Management",
+  "category": "gunnery",
+  "summary": "Anticipating target movement to keep weapons in firing arc.",
+  "details": "Turrets have limited traverse speed and arc. Anticipate target movement and pre-position turrets toward likely positions. Request pilot adjust heading if target is leaving weapon arc. Know your weapon arcs: forward, broadside, rear coverage zones. When multiple targets exist, assign turrets to cover different sectors. A weapon pointing the wrong direction cannot engage.",
+  "annotations": [
+    "Dead zones in weapon coverage are vulnerabilities.",
+    "Pilot and gunner must communicate about arcs constantly."
+  ]
+}

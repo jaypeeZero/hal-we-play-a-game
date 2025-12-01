@@ -1,0 +1,11 @@
+{
+  "id": "pilot_debris_field_navigation",
+  "title": "Debris Field Navigation",
+  "category": "piloting",
+  "summary": "Safe passage through debris fields using low-velocity careful maneuvering.",
+  "details": "When navigating debris fields, reduce velocity significantly. At high speed, debris impacts cause severe damage. Plot a path through the least dense regions. Use short correction burns to avoid individual objects rather than large course changes. Debris provides concealment from enemy sensors but also blocks your own detection. Consider using debris as cover for ambush positions.",
+  "annotations": [
+    "Debris relative velocity matters more than absolute velocity.",
+    "Destroyed ships create temporary debris hazards."
+  ]
+}

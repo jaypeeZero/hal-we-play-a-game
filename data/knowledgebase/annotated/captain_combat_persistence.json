@@ -1,0 +1,11 @@
+{
+  "id": "captain_combat_persistence",
+  "title": "Combat Persistence Decision",
+  "category": "tactics",
+  "summary": "Deciding when to continue fighting versus when to disengage.",
+  "details": "Continue combat when: winning exchange rate, objective requires it, retreat is more dangerous than fighting. Disengage when: losing exchange rate, objective lost, ammunition critical, damage compromising survival. The decision point is often before casualties become irreversible. Better to withdraw with a damaged ship than lose the ship entirely. Consider long-term mission over short-term engagement.",
+  "annotations": [
+    "Pride kills captains who should have withdrawn.",
+    "Mission success sometimes requires running away."
+  ]
+}

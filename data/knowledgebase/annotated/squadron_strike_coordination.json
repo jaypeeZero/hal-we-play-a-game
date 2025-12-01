@@ -1,0 +1,11 @@
+{
+  "id": "squadron_strike_coordination",
+  "title": "Coordinated Strike Execution",
+  "category": "squadron",
+  "summary": "Timing squadron attacks for simultaneous impact.",
+  "details": "Coordinated strikes overwhelm point defense and saturate enemy response. All ships attack from different vectors at the same moment. Use countdown: 'All units, attack on my mark... 3... 2... 1... Mark.' Weapons release should be simultaneous. If any ship cannot make the timing, they call 'No joy' and the attack continues without them. Regroup after strike for damage assessment.",
+  "annotations": [
+    "Timing is everything in coordinated strikes.",
+    "Practice until synchronization is reliable."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "gunner_burst_fire_timing",
+  "title": "Burst Fire Timing",
+  "category": "gunnery",
+  "summary": "Optimal burst duration to balance hit probability against heat and ammo usage.",
+  "details": "Fire in controlled bursts of 2-4 seconds rather than continuous fire. Short bursts: observe impact, adjust aim, fire again. Long bursts: weapon overheats, accuracy degrades, ammo depletes rapidly. Time bursts to coincide with predicted target position. Against evasive targets, use shorter bursts to adapt to their maneuvers. Against large slow targets, longer sustained fire is appropriate.",
+  "annotations": [
+    "Weapon heat management affects fire rate.",
+    "Master the rhythm of fire-observe-adjust."
+  ]
+}

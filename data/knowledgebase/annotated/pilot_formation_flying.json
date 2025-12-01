@@ -1,0 +1,11 @@
+{
+  "id": "pilot_formation_flying",
+  "title": "Formation Flying Discipline",
+  "category": "piloting",
+  "summary": "Maintaining position relative to formation leader while matching maneuvers.",
+  "details": "Formation flying requires constant attention to the lead ship's velocity and heading. Anticipate leader's maneuvers rather than reacting after they execute. Maintain assigned spacing - too close risks collision, too far reduces mutual support effectiveness. When the formation maneuvers, apply thrust to preserve relative position, not to maintain absolute heading. Break formation only on orders or when damaged.",
+  "annotations": [
+    "Formation discipline is the mark of an experienced pilot.",
+    "Practice formation burns until they become automatic."
+  ]
+}

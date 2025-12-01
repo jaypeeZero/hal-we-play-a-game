@@ -1,0 +1,11 @@
+{
+  "id": "fleet_objective_priority",
+  "title": "Strategic Objective Prioritization",
+  "category": "strategy",
+  "summary": "Determining which strategic objectives merit fleet commitment.",
+  "details": "Not all objectives are worth the fleet. Evaluate: strategic value of objective, probability of success, expected losses, alternative approaches. Fleet preservation often outweighs tactical objectives. High-value objectives: enemy fleet destruction, critical infrastructure, irreplaceable assets. Low-value: territory that can be retaken, enemies that will retreat, symbolic targets. Choose battles wisely.",
+  "annotations": [
+    "The fleet is a strategic asset - don't spend it on tactical gains.",
+    "Sometimes the best battle is the one you don't fight."
+  ]
+}

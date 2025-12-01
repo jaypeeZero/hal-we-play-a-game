@@ -1,0 +1,11 @@
+{
+  "id": "pilot_boost_and_coast",
+  "title": "Boost and Coast Conservation",
+  "category": "piloting",
+  "summary": "Fuel conservation technique using short thrust burns followed by coasting periods.",
+  "details": "Instead of continuous thrust, apply short powerful burns followed by extended coasting. In the vacuum of space, you maintain velocity without additional fuel expenditure. Plan trajectory to coast through safe sectors, reserving fuel for evasive maneuvers in combat zones. A ship that runs out of fuel is a sitting target. Calculate mission delta-v budget before engagement.",
+  "annotations": [
+    "Essential for extended patrols and pursuit operations.",
+    "Monitor fuel levels constantly in combat."
+  ]
+}

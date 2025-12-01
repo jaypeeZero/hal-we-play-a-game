@@ -1,0 +1,11 @@
+{
+  "id": "gunner_armor_section_targeting",
+  "title": "Armor Section Targeting",
+  "category": "gunnery",
+  "summary": "Concentrate fire on damaged armor sections to maximize penetration.",
+  "details": "Ships have multiple armor sections. Once a section is damaged or depleted, continue hitting that section for maximum effect. Watch for visual cues of armor degradation: venting atmosphere, exposed internals, secondary explosions. Rear and ventral armor is typically weaker than forward sections. Communicate damaged sections to wingmen for coordinated fire.",
+  "annotations": [
+    "Spreading fire across all sections is inefficient.",
+    "Engine hits on capital ships can be mission kills."
+  ]
+}
