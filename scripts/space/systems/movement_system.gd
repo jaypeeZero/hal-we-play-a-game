@@ -129,7 +129,7 @@ static func get_distance(ship: Dictionary) -> float:
 
 ## Get nearby friendly ships for collision avoidance
 static func get_nearby_friendly_ships(ship_data: Dictionary, all_ships: Array) -> Array:
-	var collision_awareness_range = 200.0  # Pilots watch for collisions within this range
+	var collision_awareness_range = 800.0  # Pilots watch for collisions within this range (4x scaled)
 	return all_ships \
 		.filter(func(s): return s != null) \
 		.filter(func(s): return s.ship_id != ship_data.ship_id) \
@@ -374,7 +374,7 @@ static func calculate_pursue_tactical(ship_data: Dictionary, target: Dictionary,
 	# Calculate intuitive throttle for tactical approach
 	var closing_speed = ship_data.velocity.dot(direction)
 	var context_throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-	var safe_throttle = calculate_safe_approach_throttle(ship_data, distance, closing_speed, 400.0)
+	var safe_throttle = calculate_safe_approach_throttle(ship_data, distance, closing_speed, 1600.0)
 
 	# Use the more conservative throttle
 	var throttle = min(context_throttle, safe_throttle)
@@ -393,9 +393,9 @@ static func calculate_pursue_tactical(ship_data: Dictionary, target: Dictionary,
 static func calculate_flank_behind(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var behind_position = ship_data.get("orders", {}).get("behind_position", Vector2.ZERO)
 	if behind_position == Vector2.ZERO:
-		# Calculate behind position - further back for safety
+		# Calculate behind position - further back for safety (4x scaled)
 		var target_rotation = target.get("rotation", 0.0)
-		var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 400.0
+		var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 1600.0
 		behind_position = target.position + behind_offset
 
 	var to_behind = behind_position - ship_data.position
@@ -420,29 +420,40 @@ static func calculate_flank_behind(ship_data: Dictionary, target: Dictionary, ne
 	}
 
 ## Tight pursuit - close range, stay behind
+## Uses lateral thrust (maneuvering jets) to make fine aim adjustments
 static func calculate_tight_pursuit(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var target_rotation = target.get("rotation", 0.0)
 	var target_velocity = target.get("velocity", Vector2.ZERO)
 
 	# Stay behind target at weapons range - not too close!
-	# 500 units is far enough to maneuver but close enough to hit
-	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 500.0
+	# 2000 units is far enough to maneuver but close enough to hit (4x scaled)
+	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 2000.0
 	var desired_pos = target.position + behind_offset + target_velocity * 0.3
 
 	var to_desired = desired_pos - ship_data.position
 	var distance = to_desired.length()
-	var desired_heading = direction_to_heading(to_desired)
+	var to_target = target.position - ship_data.position
+
+	# Face the target for aiming
+	var desired_heading = direction_to_heading(to_target)
+
+	# Calculate lateral thrust to slide toward the desired position
+	# This allows fine aim adjustment while facing target
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+	var lateral_offset = to_desired.dot(perpendicular)
+	var lateral_thrust = clamp(lateral_offset / 200.0, -1.0, 1.0)  # Proportional control
 
 	# DART AND DASH: Quick corrections to stay on target's tail
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
-	if needs_course_correction:
+	if needs_course_correction and distance > 500.0:
 		return create_braking_control(ship_data, desired_heading, distance)
 
 	# Use combat throttle - slow and precise
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "combat")
 
 	# Match target speed - brake if too fast
-	var speed_diff = ship_data.velocity.length() - target_velocity.length()
+	var speed_diff = current_velocity.length() - target_velocity.length()
 	var should_brake = speed_diff > 20.0
 
 	# Reduce throttle if already at or above target speed
@@ -454,45 +465,54 @@ static func calculate_tight_pursuit(ship_data: Dictionary, target: Dictionary, n
 		"throttle": throttle if not should_brake else 0.0,
 		"thrust_active": throttle > 0.1 and not should_brake,
 		"is_braking": should_brake,
-		"engagement_range": 120.0,
+		"lateral_thrust": lateral_thrust,  # Maneuvering jets for aim adjustment
+		"engagement_range": 480.0,
 		"current_distance": distance
 	}
 
 ## Dogfight maneuver - weaving at combat range
+## Uses lateral thrust (maneuvering jets) to strafe while aiming at target
 static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
-	# Weave pattern at medium-close range - don't get too close!
+	# Perpendicular to line of sight - for lateral movement
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+
+	# Weave using lateral thrust while facing target
 	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)
-	var weave_offset = perpendicular * sin(weave_phase * PI) * 200.0  # Wider weave for safety
+	var weave_direction = sin(weave_phase * PI)  # -1 to 1
 
-	# Maintain minimum combat range - orbit at ~600 units, not right on top of target
-	var desired_combat_range = 600.0
-	var range_offset = to_target.normalized() * max(0, distance - desired_combat_range)
-	var desired_pos = target.position + weave_offset - range_offset * 0.5
-	var to_desired = desired_pos - ship_data.position
-	var desired_heading = direction_to_heading(to_desired)
+	# Use lateral thrust for weaving - this allows aiming while moving
+	var lateral_thrust = weave_direction
 
-	# DART AND DASH: Very aggressive direction changes for dogfighting
-	# Use tighter threshold for course correction (30 degrees instead of 45)
+	# Maintain minimum combat range - orbit at ~2400 units, not right on top of target
+	var desired_combat_range = 2400.0
+
+	# Face the target for aiming
+	var desired_heading = direction_to_heading(to_target)
+
+	# Adjust forward/back throttle based on distance
 	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
-	if current_velocity.length() > 40.0:
-		var current_heading = direction_to_heading(current_velocity)
-		var heading_diff = abs(angle_difference(current_heading, desired_heading))
-		if heading_diff > PI / 6.0:  # 30 degrees - tighter for dogfighting
-			return create_braking_control(ship_data, desired_heading, distance)
+	var distance_error = distance - desired_combat_range
 
 	# Use combat/dogfight throttle - slow and precise
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "dogfight")
 
+	# If too close, back off (negative throttle via braking)
+	# If too far, approach
+	var should_brake = false
+	if distance_error < -500.0:  # Too close, need to back off
+		should_brake = true
+		throttle = 0.0
+	elif distance_error > 500.0:  # Too far, approach with lateral drift
+		throttle = min(throttle, 0.3)
+
 	# Cap speed during dogfight - never exceed 40% max speed
 	var current_speed = current_velocity.length()
 	var max_combat_speed = ship_data.stats.max_speed * 0.4
-	var should_brake = current_speed > max_combat_speed
-
-	if should_brake:
+	if current_speed > max_combat_speed:
+		should_brake = true
 		throttle = 0.0
 
 	return {
@@ -500,7 +520,8 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 		"throttle": throttle,
 		"thrust_active": throttle > 0.1,
 		"is_braking": should_brake,
-		"engagement_range": 150.0,
+		"lateral_thrust": lateral_thrust,  # Maneuvering jets for strafing
+		"engagement_range": 600.0,
 		"current_distance": distance
 	}
 
@@ -635,8 +656,8 @@ static func calculate_group_run_attack(ship_data: Dictionary, target: Dictionary
 	# Attack run uses tactical throttle - controlled approach, not kamikaze
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
 
-	# Reduce throttle when very close to avoid collision
-	if distance < 400.0:
+	# Reduce throttle when very close to avoid collision (4x scaled)
+	if distance < 1600.0:
 		throttle = throttle * 0.5
 
 	return {
@@ -653,9 +674,9 @@ static func calculate_group_run_swing_around(ship_data: Dictionary, target: Dict
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
-	# Swing out to the side then come back around - much wider arc for safety
+	# Swing out to the side then come back around - much wider arc for safety (4x scaled)
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var swing_out_pos = target.position + perpendicular * 1000.0
+	var swing_out_pos = target.position + perpendicular * 4000.0
 
 	var to_swing = swing_out_pos - ship_data.position
 	var swing_distance = to_swing.length()
@@ -684,12 +705,12 @@ static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary,
 	var away_from_target = (ship_data.position - target.position).normalized()
 	var desired_heading = direction_to_heading(away_from_target)
 
-	# Add weave to dodge - quick darts side to side
+	# Add weave to dodge - quick darts side to side (4x scaled)
 	var perpendicular = Vector2(-away_from_target.y, away_from_target.x)
 	var weave_phase = fmod(Time.get_ticks_msec() / 600.0, 2.0)  # Faster weaving
-	var weave_offset = perpendicular * sin(weave_phase * PI) * 150.0  # Wider weave for safety
+	var weave_offset = perpendicular * sin(weave_phase * PI) * 600.0  # Wider weave for safety
 
-	var desired_pos = ship_data.position + away_from_target * 500.0 + weave_offset
+	var desired_pos = ship_data.position + away_from_target * 2000.0 + weave_offset
 	var to_desired = desired_pos - ship_data.position
 	desired_heading = direction_to_heading(to_desired)
 
@@ -719,9 +740,9 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 	var distance = to_target.length()
 	var direction = to_target.normalized()
 
-	# Approach at an angle, not directly - stay further out
+	# Approach at an angle, not directly - stay further out (4x scaled)
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var approach_pos = target.position + perpendicular * 400.0
+	var approach_pos = target.position + perpendicular * 1600.0
 
 	var to_approach = approach_pos - ship_data.position
 	var desired_heading = direction_to_heading(to_approach)
@@ -729,7 +750,7 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 	# Cautious approach uses tactical throttle with safe approach check
 	var closing_speed = ship_data.velocity.dot(direction)
 	var context_throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-	var safe_throttle = calculate_safe_approach_throttle(ship_data, distance, closing_speed, 500.0)
+	var safe_throttle = calculate_safe_approach_throttle(ship_data, distance, closing_speed, 2000.0)
 
 	# Use the more conservative throttle
 	var throttle = min(context_throttle, safe_throttle) * 0.7  # Extra cautious
@@ -744,6 +765,7 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 	}
 
 ## Dodge and weave - stay at range, dodge
+## Uses lateral thrust (maneuvering jets) to strafe while aiming at target
 static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
@@ -754,42 +776,41 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 	# Calculate perpendicular vector (right side of approach vector)
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
-	# Use deliberate evasion direction if set, otherwise fall back to time-based
-	# Maintain MUCH larger orbit distance for safety
-	var orbit_offset: Vector2
+	# Determine lateral thrust direction for strafing
+	var lateral_thrust: float
 	if evasion_dir != 0:
 		# Deliberate evasion - skilled pilot picks a side and commits
-		orbit_offset = perpendicular * evasion_dir * 600.0
+		lateral_thrust = float(evasion_dir)
 	else:
-		# Fallback to time-based oscillation (legacy behavior)
+		# Fallback to time-based oscillation
 		var orbit_phase = fmod(Time.get_ticks_msec() / 1500.0, 2.0 * PI)
-		orbit_offset = perpendicular * sin(orbit_phase) * 600.0
+		lateral_thrust = sin(orbit_phase)
 
-	# Weave pattern - slight in/out movement while orbiting
-	var weave_phase = fmod(Time.get_ticks_msec() / 500.0, 2.0)
-	var weave_offset = to_target.normalized() * sin(weave_phase * PI) * 100.0
+	# Face the target for aiming - use lateral thrust to move
+	var desired_heading = direction_to_heading(to_target)
 
-	var desired_pos = target.position + orbit_offset + weave_offset
-	var to_desired = desired_pos - ship_data.position
-	var desired_heading = direction_to_heading(to_desired)
-
-	# DART AND DASH: Quick direction changes while dodging
-	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
-	if current_velocity.length() > 50.0:
-		var current_heading = direction_to_heading(current_velocity)
-		var heading_diff = abs(angle_difference(current_heading, desired_heading))
-		if heading_diff > PI / 4.5:  # ~40 degrees
-			return create_braking_control(ship_data, desired_heading, distance)
+	# Desired combat range
+	var desired_combat_range = 2400.0
+	var distance_error = distance - desired_combat_range
 
 	# Use combat throttle - controlled speed for dodging
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "combat")
 
+	# Adjust throttle based on distance to desired range
+	var should_brake = false
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+
+	if distance_error < -400.0:  # Too close, back off
+		should_brake = true
+		throttle = 0.0
+	elif distance_error > 400.0:  # Too far, approach slowly
+		throttle = min(throttle, 0.25)
+
 	# Cap speed during dodge and weave - never exceed 35% max speed
 	var current_speed = current_velocity.length()
 	var max_dodge_speed = ship_data.stats.max_speed * 0.35
-	var should_brake = current_speed > max_dodge_speed
-
-	if should_brake:
+	if current_speed > max_dodge_speed:
+		should_brake = true
 		throttle = 0.0
 
 	return {
@@ -797,7 +818,8 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		"throttle": throttle,
 		"thrust_active": throttle > 0.1,
 		"is_braking": should_brake,
-		"engagement_range": 400.0,
+		"lateral_thrust": lateral_thrust,  # Maneuvering jets for strafing
+		"engagement_range": 1600.0,
 		"current_distance": distance
 	}
 
@@ -1143,18 +1165,19 @@ static func create_braking_control(ship_data: Dictionary, desired_heading: float
 	}
 
 ## Get engagement range based on ship type (naval-style combat distances)
+## NOTE: All distances scaled 4-5x for proper combat spacing
 static func get_engagement_range(ship_data: Dictionary) -> float:
 	match ship_data.type:
 		"fighter":
-			return 600.0  # Fighters engage at weapons range, not point-blank
+			return 2400.0  # Fighters engage at weapons range, not point-blank (4x scaled)
 		"heavy_fighter":
-			return 700.0  # Slightly longer range than regular fighter
+			return 2800.0  # Slightly longer range than regular fighter (4x scaled)
 		"corvette":
-			return 3500.0  # Corvettes at medium range
+			return 7000.0  # Corvettes at medium range (2x scaled, already larger)
 		"capital":
-			return 6000.0  # Capital ships engage from far away
+			return 10000.0  # Capital ships engage from far away
 		_:
-			return 1000.0  # Default
+			return 4000.0  # Default (4x scaled)
 
 ## Calculate collision avoidance vector from nearby ships
 static func calculate_collision_avoidance(ship_data: Dictionary, nearby_ships: Array) -> Vector2:
@@ -1167,7 +1190,7 @@ static func calculate_collision_avoidance(ship_data: Dictionary, nearby_ships: A
 		var distance = to_other.length()
 
 		# Stronger avoidance the closer they are
-		var danger_distance = 150.0
+		var danger_distance = 600.0  # 4x scaled for proper spacing
 		if distance < danger_distance and distance > 0.1:
 			var avoidance_strength = (danger_distance - distance) / danger_distance
 			# Point away from the other ship
@@ -1255,6 +1278,7 @@ static func calculate_combat_orbit_position(ship_data: Dictionary, target: Dicti
 
 ## Calculate intuitive throttle based on distance and context
 ## Returns 0.0-1.0 throttle value
+## NOTE: All distances scaled 4-5x for proper combat spacing
 static func calculate_intuitive_throttle(
 	ship_data: Dictionary,
 	distance_to_target: float,
@@ -1264,6 +1288,7 @@ static func calculate_intuitive_throttle(
 	var current_speed = ship_data.velocity.length()
 
 	# Context-based throttle profiles
+	# Distance constants scaled 4-5x from original for proper combat spacing
 	match maneuver_context:
 		"fleeing", "retreat", "escape":
 			# Full throttle when running away
@@ -1271,11 +1296,11 @@ static func calculate_intuitive_throttle(
 
 		"pursuit_full":
 			# Far away pursuit - scale with distance
-			# At FAR_RANGE (5000+): full throttle
-			# At MID_RANGE (1500): 60% throttle
+			# At FAR_RANGE (20000+): full throttle
+			# At MID_RANGE (6000): 60% throttle
 			# Closer: taper down
-			var far_range = 5000.0
-			var mid_range = 1500.0
+			var far_range = 20000.0
+			var mid_range = 6000.0
 			if distance_to_target > far_range:
 				return 1.0
 			elif distance_to_target > mid_range:
@@ -1286,8 +1311,8 @@ static func calculate_intuitive_throttle(
 		"pursuit_tactical":
 			# Tactical approach - always controlled
 			# Never exceed 50% throttle, scale with distance
-			var mid_range = 1500.0
-			var close_range = 800.0
+			var mid_range = 6000.0
+			var close_range = 3200.0
 			if distance_to_target > mid_range:
 				return 0.5
 			elif distance_to_target > close_range:
@@ -1298,8 +1323,8 @@ static func calculate_intuitive_throttle(
 		"combat", "dogfight":
 			# Combat maneuvering - slow and precise
 			# Max 40% throttle, usually much less
-			var close_range = 800.0
-			var min_range = 300.0
+			var close_range = 3200.0
+			var min_range = 1200.0
 			if distance_to_target > close_range:
 				return 0.4
 			elif distance_to_target > min_range:
@@ -1310,7 +1335,7 @@ static func calculate_intuitive_throttle(
 
 		"flanking":
 			# Flanking maneuver - moderate speed for positioning
-			var mid_range = 1500.0
+			var mid_range = 6000.0
 			if distance_to_target > mid_range:
 				return 0.6
 			else:
@@ -1326,7 +1351,7 @@ static func calculate_intuitive_throttle(
 
 		_:
 			# Default: conservative combat throttle
-			var mid_range = 1500.0
+			var mid_range = 6000.0
 			if distance_to_target > mid_range:
 				return 0.5
 			else:
@@ -1338,7 +1363,7 @@ static func calculate_safe_approach_throttle(
 	ship_data: Dictionary,
 	distance_to_target: float,
 	closing_speed: float,
-	desired_stop_distance: float = 300.0
+	desired_stop_distance: float = 1200.0
 ) -> float:
 	var max_speed = ship_data.stats.max_speed
 	var acceleration = ship_data.stats.acceleration
@@ -1365,7 +1390,7 @@ static func calculate_safe_approach_throttle(
 		return 0.3
 	else:
 		# Well under safe speed, can accelerate more
-		var distance_factor = clamp(distance_to_target / 1500.0, 0.2, 1.0)
+		var distance_factor = clamp(distance_to_target / 6000.0, 0.2, 1.0)
 		return distance_factor * 0.6
 
 # ============================================================================
