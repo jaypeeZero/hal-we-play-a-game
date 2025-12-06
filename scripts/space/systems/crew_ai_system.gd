@@ -384,7 +384,7 @@ static func calculate_threat_urgency(threat: Dictionary) -> float:
 	return threat.get("_threat_priority", 0.0) / 100.0
 
 # ============================================================================
-# GUNNER DECISIONS
+# GUNNER DECISIONS - KNOWLEDGE-DRIVEN with expanded actions
 # ============================================================================
 
 ## Gunner makes target selection decisions
@@ -409,54 +409,138 @@ static func execute_gunner_order(crew_data: Dictionary, game_time: float) -> Dic
 
 	updated.orders.current = order
 	updated.orders.received = null
-	# When executing captain's order, re-decide frequently (spray mode if captain ordered it)
-	updated.next_decision_time = game_time + 0.1
 
-	return {
-		"crew_data": updated,
-		"decision": create_fire_decision(updated, order.get("target_id"), game_time)
-	}
+	# Determine fire mode based on order
+	var fire_subtype = order.get("subtype", "fire")
+	var decision = create_fire_decision_with_mode(updated, order.get("target_id", ""), fire_subtype, game_time)
 
-## Make target selection decision
-static func make_target_selection_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
-	var updated = crew_data.duplicate(true)
-
-	# Query knowledge for target priority guidance
-	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
-	var knowledge = TacticalKnowledgeSystem.query_gunner_knowledge(situation, 1)
-
-	# Default: pick first target
-	var target = crew_data.awareness.opportunities[0]
-
-	# Use knowledge to inform target selection
-	if knowledge.size() > 0:
-		var priority_order = knowledge[0].content.get("priority_order", [])
-		if "damaged_enemies" in priority_order:
-			# Prefer damaged targets if available
-			for opp in crew_data.awareness.opportunities:
-				if opp.get("status", "") in ["damaged", "disabled"]:
-					target = opp
-					break
-
-	var decision = create_fire_decision(updated, target.id, game_time)
-	updated.orders.current = decision
-
-	# Gatling gun behavior: if multiple targets in range, fire frequently (spray-and-pray)
-	# This creates continuous suppressive fire against multiple threats
-	var target_count = crew_data.awareness.opportunities.size()
-	if target_count >= 2:
-		# Multiple targets = spray fire mode, re-decide very quickly
-		updated.next_decision_time = game_time + 0.1  # Fire every 0.1s, cycling targets
-	else:
-		# Single target = deliberate targeting, normal decision cycle
-		updated.next_decision_time = game_time + randf_range(0.5, 1.0)
+	# Re-decide frequency based on fire mode
+	match fire_subtype:
+		"suppressive_fire":
+			updated.next_decision_time = game_time + 0.05  # Very rapid fire
+		"precision_shot":
+			updated.next_decision_time = game_time + randf_range(0.8, 1.2)  # Careful aim
+		_:
+			updated.next_decision_time = game_time + 0.1
 
 	return {"crew_data": updated, "decision": decision}
 
-## Create fire decision
-static func create_fire_decision(crew_data: Dictionary, target_id: String, game_time: float) -> Dictionary:
+## Make target selection decision - KNOWLEDGE-DRIVEN
+static func make_target_selection_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
+	var updated = crew_data.duplicate(true)
+
+	# Query knowledge for firing guidance
+	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
+	var knowledge = TacticalKnowledgeSystem.query_gunner_knowledge(situation, 3)
+
+	# Select fire action from knowledge
+	var fire_action = _select_gunner_action_from_knowledge(knowledge, crew_data)
+
+	# Default: pick first target
+	var target = crew_data.awareness.opportunities[0]
+	var decision = null
+
+	match fire_action:
+		"hold_fire":
+			# Don't fire - wait for better opportunity
+			decision = create_hold_fire_decision(updated, game_time)
+			updated.next_decision_time = game_time + randf_range(0.5, 1.0)
+
+		"suppressive_fire":
+			# Rapid fire, cycle between targets
+			decision = create_fire_decision_with_mode(updated, target.id, "suppressive_fire", game_time)
+			updated.next_decision_time = game_time + 0.05
+
+		"precision_shot":
+			# Select best target and aim carefully
+			target = _select_best_gunner_target(crew_data)
+			decision = create_fire_decision_with_mode(updated, target.id, "precision_shot", game_time)
+			updated.next_decision_time = game_time + randf_range(0.8, 1.2)
+
+		"fire", _:
+			# Standard fire mode
+			# Use knowledge to inform target selection
+			if knowledge.size() > 0:
+				var priority_order = knowledge[0].get("content", {}).get("priority_order", [])
+				if "damaged_enemies" in priority_order:
+					for opp in crew_data.awareness.opportunities:
+						if opp.get("status", "") in ["damaged", "disabled"]:
+							target = opp
+							break
+
+			decision = create_fire_decision_with_mode(updated, target.id, "fire", game_time)
+
+			# Gatling gun behavior: if multiple targets in range, fire frequently
+			var target_count = crew_data.awareness.opportunities.size()
+			if target_count >= 2:
+				updated.next_decision_time = game_time + 0.1
+			else:
+				updated.next_decision_time = game_time + randf_range(0.5, 1.0)
+
+	updated.orders.current = decision
+	return {"crew_data": updated, "decision": decision}
+
+## Select gunner action from knowledge
+static func _select_gunner_action_from_knowledge(knowledge: Array, crew_data: Dictionary) -> String:
+	var action = "fire"  # Default
+
+	if knowledge.is_empty():
+		return action
+
+	# Check ammo status (TODO: get from ship data)
+	var is_low_ammo = false
+
+	# Check target count
+	var target_count = crew_data.awareness.opportunities.size()
+
+	for k in knowledge:
+		var suggested_action = k.get("content", {}).get("action", "")
+		var subtype = k.get("content", {}).get("subtype", "")
+
+		if suggested_action == "hold_fire":
+			if is_low_ammo:
+				return "hold_fire"
+
+		elif suggested_action == "fire":
+			if subtype == "suppressive_fire" and target_count >= 3:
+				return "suppressive_fire"
+			elif subtype == "precision_shot":
+				return "precision_shot"
+
+	return action
+
+## Select best target for precision shooting
+static func _select_best_gunner_target(crew_data: Dictionary) -> Dictionary:
+	var best_target = {}
+	var best_score = -1.0
+
+	for opp in crew_data.awareness.opportunities:
+		var score = 0.0
+
+		# Prefer damaged targets
+		if opp.get("status", "") in ["damaged", "disabled", "critical"]:
+			score += 50.0
+
+		# Prefer closer targets
+		var distance = opp.get("distance", 1000.0)
+		score += max(0, 100.0 - distance / 10.0)
+
+		# Prefer high-value targets
+		var target_type = opp.get("type", "")
+		if target_type in ["capital", "corvette"]:
+			score += 30.0
+
+		if score > best_score:
+			best_score = score
+			best_target = opp
+
+	return best_target if not best_target.is_empty() else crew_data.awareness.opportunities[0]
+
+## Create fire decision with mode
+static func create_fire_decision_with_mode(crew_data: Dictionary, target_id: String, mode: String, game_time: float) -> Dictionary:
 	return {
 		"type": "fire",
+		"subtype": mode,
 		"crew_id": crew_data.crew_id,
 		"entity_id": crew_data.assigned_to,
 		"target_id": target_id,
@@ -464,6 +548,23 @@ static func create_fire_decision(crew_data: Dictionary, target_id: String, game_
 		"delay": crew_data.stats.reaction_time,
 		"timestamp": game_time
 	}
+
+## Create hold fire decision
+static func create_hold_fire_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
+	return {
+		"type": "fire",
+		"subtype": "hold_fire",
+		"crew_id": crew_data.crew_id,
+		"entity_id": crew_data.assigned_to,
+		"target_id": "",
+		"skill_factor": calculate_effective_skill(crew_data),
+		"delay": 0.0,
+		"timestamp": game_time
+	}
+
+## Create fire decision (legacy compatibility)
+static func create_fire_decision(crew_data: Dictionary, target_id: String, game_time: float) -> Dictionary:
+	return create_fire_decision_with_mode(crew_data, target_id, "fire", game_time)
 
 # ============================================================================
 # CAPTAIN DECISIONS
@@ -496,52 +597,160 @@ static func execute_captain_order(crew_data: Dictionary, game_time: float) -> Di
 		"decision": create_captain_decision(updated, order, game_time)
 	}
 
-## Make ship-level tactical decision
+## Make ship-level tactical decision - KNOWLEDGE-DRIVEN with expanded actions
 static func make_ship_tactical_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
 	var updated = crew_data.duplicate(true)
 
 	# Query knowledge for tactical guidance
 	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
-	var knowledge = TacticalKnowledgeSystem.query_captain_knowledge(situation, 1)
+	var knowledge = TacticalKnowledgeSystem.query_captain_knowledge(situation, 3)
 
 	# Analyze situation
 	var has_threats = not crew_data.awareness.threats.is_empty()
 	var has_opportunities = not crew_data.awareness.opportunities.is_empty()
+	var threat_count = crew_data.awareness.threats.size()
+	var opportunity_count = crew_data.awareness.opportunities.size()
+
+	# Check for damaged friendlies that need support
+	var damaged_friendly = _find_damaged_friendly(crew_data)
 
 	var decision = null
 	var subordinate_orders = []
 
-	# Use knowledge to inform tactical choice
-	var tactical_action = "engage"  # default
-	if knowledge.size() > 0:
-		var action = knowledge[0].content.get("action", "")
-		# Knowledge might suggest defensive stance, withdrawal, etc.
-		if action == "tactical_withdrawal" and has_threats:
-			# Check threat level
-			var top_threat = crew_data.awareness.threats[0]
-			if top_threat.get("_threat_priority", 0.0) > 200.0:
-				tactical_action = "withdraw"
-		elif action == "concentrate_fire" and has_opportunities:
-			# Focus fire on damaged targets
-			tactical_action = "concentrate_fire"
+	# Use knowledge to select tactical action
+	var tactical_action = _select_captain_action_from_knowledge(knowledge, crew_data, has_threats, has_opportunities, damaged_friendly != null)
 
-	if has_threats or has_opportunities:
-		# Prioritize best target
-		var target = select_best_tactical_target(crew_data)
-
-		if tactical_action == "withdraw":
+	# Execute selected action
+	match tactical_action:
+		"withdraw":
 			subordinate_orders = create_withdraw_orders(crew_data)
 			decision = create_captain_decision(updated, {"type": "withdraw"}, game_time)
-		else:
-			subordinate_orders = create_engage_orders(crew_data, target)
-			decision = create_captain_decision(updated, {"type": "engage", "target_id": target.id}, game_time)
+
+		"defensive_posture":
+			subordinate_orders = create_defensive_posture_orders(crew_data)
+			decision = create_captain_decision(updated, {"type": "defensive_posture"}, game_time)
+
+		"concentrate_fire":
+			var target = _select_damaged_target(crew_data)
+			if target.is_empty():
+				target = select_best_tactical_target(crew_data)
+			subordinate_orders = create_concentrate_fire_orders(crew_data, target)
+			decision = create_captain_decision(updated, {"type": "concentrate_fire", "target_id": target.get("id", "")}, game_time)
+
+		"aggressive_pursuit":
+			var target = select_best_tactical_target(crew_data)
+			subordinate_orders = create_aggressive_pursuit_orders(crew_data, target)
+			decision = create_captain_decision(updated, {"type": "aggressive_pursuit", "target_id": target.get("id", "")}, game_time)
+
+		"support_ally":
+			if damaged_friendly != null:
+				subordinate_orders = create_support_ally_orders(crew_data, damaged_friendly)
+				decision = create_captain_decision(updated, {"type": "support_ally", "target_id": damaged_friendly.get("id", "")}, game_time)
+			else:
+				# Fallback to engage
+				var target = select_best_tactical_target(crew_data)
+				subordinate_orders = create_engage_orders(crew_data, target)
+				decision = create_captain_decision(updated, {"type": "engage", "target_id": target.get("id", "")}, game_time)
+
+		"flank":
+			var target = select_best_tactical_target(crew_data)
+			subordinate_orders = create_flank_orders(crew_data, target)
+			decision = create_captain_decision(updated, {"type": "flank", "target_id": target.get("id", "")}, game_time)
+
+		"hold":
+			subordinate_orders = create_hold_orders(crew_data)
+			decision = create_captain_decision(updated, {"type": "hold"}, game_time)
+
+		"engage", _:
+			if has_threats or has_opportunities:
+				var target = select_best_tactical_target(crew_data)
+				subordinate_orders = create_engage_orders(crew_data, target)
+				decision = create_captain_decision(updated, {"type": "engage", "target_id": target.get("id", "")}, game_time)
 
 	updated.orders.current = decision
 	updated.orders.issued = subordinate_orders
 
+	# Set next decision time
+	updated.next_decision_time = game_time + randf_range(1.0, 2.0)
+
 	if decision:
 		return {"crew_data": updated, "decision": decision}
 	return {"crew_data": updated}
+
+## Select captain action based on knowledge and situation
+static func _select_captain_action_from_knowledge(knowledge: Array, crew_data: Dictionary, has_threats: bool, has_opportunities: bool, has_damaged_friendly: bool) -> String:
+	# Default action
+	var action = "engage" if (has_threats or has_opportunities) else "hold"
+
+	if knowledge.is_empty():
+		return action
+
+	# Check each knowledge result
+	for k in knowledge:
+		var suggested_action = k.get("content", {}).get("action", "")
+		if suggested_action == "":
+			continue
+
+		# Validate action is appropriate for situation
+		match suggested_action:
+			"withdraw":
+				if has_threats:
+					var top_threat = crew_data.awareness.threats[0]
+					var threat_priority = top_threat.get("_threat_priority", 0.0)
+					if threat_priority > 200.0 or _is_ship_critically_damaged(crew_data):
+						return "withdraw"
+
+			"defensive_posture":
+				if has_threats and crew_data.awareness.threats.size() > 2:
+					return "defensive_posture"
+
+			"concentrate_fire":
+				if has_opportunities:
+					return "concentrate_fire"
+
+			"aggressive_pursuit":
+				if has_opportunities and not has_threats:
+					return "aggressive_pursuit"
+
+			"support_ally":
+				if has_damaged_friendly:
+					return "support_ally"
+
+			"flank":
+				if has_opportunities and crew_data.awareness.threats.size() <= 1:
+					return "flank"
+
+			"hold":
+				if not has_threats and not has_opportunities:
+					return "hold"
+
+			"engage":
+				if has_threats or has_opportunities:
+					return "engage"
+
+	return action
+
+## Check if ship is critically damaged
+static func _is_ship_critically_damaged(crew_data: Dictionary) -> bool:
+	# TODO: Check actual ship damage from awareness
+	return false
+
+## Find damaged friendly in awareness
+static func _find_damaged_friendly(crew_data: Dictionary) -> Variant:
+	var known = crew_data.awareness.get("known_entities", [])
+	if typeof(known) == TYPE_ARRAY:
+		for entity in known:
+			if typeof(entity) == TYPE_DICTIONARY:
+				if entity.get("is_friendly", false) and entity.get("status", "") in ["damaged", "critical"]:
+					return entity
+	return null
+
+## Select a damaged target for concentrate fire
+static func _select_damaged_target(crew_data: Dictionary) -> Dictionary:
+	for opp in crew_data.awareness.opportunities:
+		if opp.get("status", "") in ["damaged", "disabled", "critical"]:
+			return opp
+	return {}
 
 ## Select best tactical target
 static func select_best_tactical_target(crew_data: Dictionary) -> Dictionary:
@@ -585,7 +794,94 @@ static func create_withdraw_orders(crew_data: Dictionary) -> Array:
 	for sub_id in crew_data.command_chain.subordinates:
 		orders.append({
 			"to": sub_id,
-			"type": "withdraw"
+			"type": "withdraw",
+			"subtype": "evade"
+		})
+
+	return orders
+
+## Create defensive posture orders - angle armor, limit exposure
+static func create_defensive_posture_orders(crew_data: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "defensive_posture",
+			"subtype": "angle_armor"
+		})
+
+	return orders
+
+## Create concentrate fire orders - all weapons on one target
+static func create_concentrate_fire_orders(crew_data: Dictionary, target: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "engage",
+			"subtype": "concentrate_fire",
+			"target_id": target.get("id", ""),
+			"priority": "focus"
+		})
+
+	return orders
+
+## Create aggressive pursuit orders - press the attack
+static func create_aggressive_pursuit_orders(crew_data: Dictionary, target: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "engage",
+			"subtype": "aggressive_pursuit",
+			"target_id": target.get("id", ""),
+			"priority": "destroy"
+		})
+
+	return orders
+
+## Create support ally orders - protect damaged friendly
+static func create_support_ally_orders(crew_data: Dictionary, ally: Variant) -> Array:
+	var orders = []
+	var ally_id = ally.get("id", "") if ally is Dictionary else ""
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "support_ally",
+			"subtype": "escort",
+			"ally_id": ally_id
+		})
+
+	return orders
+
+## Create flank orders - maneuver to enemy's weak arc
+static func create_flank_orders(crew_data: Dictionary, target: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "engage",
+			"subtype": "flank",
+			"target_id": target.get("id", ""),
+			"maneuver": "lateral"
+		})
+
+	return orders
+
+## Create hold orders - maintain position
+static func create_hold_orders(crew_data: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "hold",
+			"subtype": "maintain_position"
 		})
 
 	return orders
@@ -603,32 +899,138 @@ static func create_captain_decision(crew_data: Dictionary, order: Dictionary, ga
 	}
 
 # ============================================================================
-# SQUADRON LEADER DECISIONS
+# SQUADRON LEADER DECISIONS - KNOWLEDGE-DRIVEN with expanded actions
 # ============================================================================
 
 ## Squadron leader coordinates multiple ships
 static func make_squadron_leader_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
-	# Squadron leader prioritizes targets for the squadron
 	var updated = crew_data.duplicate(true)
 
-	if crew_data.awareness.opportunities.is_empty():
-		return {"crew_data": updated}
+	# Query knowledge for squadron guidance
+	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
+	var knowledge = TacticalKnowledgeSystem.query_squadron_knowledge(situation, 3)
 
-	# Assign targets to subordinate ships (captains)
-	var target_assignments = assign_squadron_targets(crew_data)
-	updated.orders.issued = target_assignments
+	# Analyze squadron situation
+	var has_threats = not crew_data.awareness.threats.is_empty()
+	var has_opportunities = not crew_data.awareness.opportunities.is_empty()
+	var damaged_subordinate = _find_damaged_subordinate(crew_data)
+	var is_scattered = _is_squadron_scattered(crew_data)
 
-	var decision = {
-		"type": "squadron_command",
-		"subtype": "assign_targets",
-		"crew_id": crew_data.crew_id,
-		"assignments": target_assignments,
-		"delay": calculate_decision_delay(crew_data),
-		"timestamp": game_time
-	}
+	# Select action based on knowledge
+	var squadron_action = _select_squadron_action_from_knowledge(knowledge, crew_data, has_threats, has_opportunities, damaged_subordinate != null, is_scattered)
 
-	updated.orders.current = decision
-	return {"crew_data": updated, "decision": decision}
+	var decision = null
+	var orders = []
+
+	match squadron_action:
+		"assign_targets":
+			orders = assign_squadron_targets(crew_data)
+			decision = {
+				"type": "squadron_command",
+				"subtype": "assign_targets",
+				"crew_id": crew_data.crew_id,
+				"assignments": orders,
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"call_mutual_support":
+			orders = create_mutual_support_orders(crew_data, damaged_subordinate)
+			decision = {
+				"type": "squadron_command",
+				"subtype": "call_mutual_support",
+				"crew_id": crew_data.crew_id,
+				"protected_ship": damaged_subordinate.get("id", "") if damaged_subordinate else "",
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"reform_formation":
+			orders = create_reform_formation_orders(crew_data)
+			decision = {
+				"type": "squadron_command",
+				"subtype": "reform_formation",
+				"crew_id": crew_data.crew_id,
+				"formation": "wedge",
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"coordinate_attack_run":
+			var target = select_best_tactical_target(crew_data)
+			orders = create_coordinated_attack_orders(crew_data, target)
+			decision = {
+				"type": "squadron_command",
+				"subtype": "coordinate_attack_run",
+				"crew_id": crew_data.crew_id,
+				"target_id": target.get("id", ""),
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"screen_withdrawal":
+			orders = create_screen_withdrawal_orders(crew_data)
+			decision = {
+				"type": "squadron_command",
+				"subtype": "screen_withdrawal",
+				"crew_id": crew_data.crew_id,
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+	if decision:
+		updated.orders.issued = orders
+		updated.orders.current = decision
+		updated.next_decision_time = game_time + randf_range(1.5, 3.0)
+		return {"crew_data": updated, "decision": decision}
+
+	return {"crew_data": updated}
+
+## Select squadron action from knowledge
+static func _select_squadron_action_from_knowledge(knowledge: Array, crew_data: Dictionary, has_threats: bool, has_opportunities: bool, has_damaged_subordinate: bool, is_scattered: bool) -> String:
+	# Default action
+	var action = "assign_targets" if has_opportunities else ""
+
+	if knowledge.is_empty():
+		return action
+
+	for k in knowledge:
+		var suggested_action = k.get("content", {}).get("action", "")
+		if suggested_action == "":
+			continue
+
+		match suggested_action:
+			"call_mutual_support":
+				if has_damaged_subordinate:
+					return "call_mutual_support"
+
+			"reform_formation":
+				if is_scattered and not has_threats:
+					return "reform_formation"
+
+			"coordinate_attack_run":
+				if has_opportunities and crew_data.command_chain.subordinates.size() >= 3:
+					return "coordinate_attack_run"
+
+			"screen_withdrawal":
+				if has_threats and crew_data.awareness.threats.size() > crew_data.command_chain.subordinates.size():
+					return "screen_withdrawal"
+
+			"assign_targets":
+				if has_opportunities:
+					return "assign_targets"
+
+	return action
+
+## Find damaged subordinate ship
+static func _find_damaged_subordinate(crew_data: Dictionary) -> Variant:
+	# TODO: Check subordinate ship status
+	return null
+
+## Check if squadron is scattered
+static func _is_squadron_scattered(crew_data: Dictionary) -> bool:
+	# TODO: Check subordinate positions
+	return false
 
 ## Assign targets to squadron ships
 static func assign_squadron_targets(crew_data: Dictionary) -> Array:
@@ -645,26 +1047,266 @@ static func assign_squadron_targets(crew_data: Dictionary) -> Array:
 
 	return orders
 
+## Create mutual support orders - protect damaged ship
+static func create_mutual_support_orders(crew_data: Dictionary, damaged_ship: Variant) -> Array:
+	var orders = []
+	var ship_id = damaged_ship.get("id", "") if damaged_ship is Dictionary else ""
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "support_ally",
+			"ally_id": ship_id,
+			"priority": "protect"
+		})
+
+	return orders
+
+## Create reform formation orders
+static func create_reform_formation_orders(crew_data: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "formation",
+			"subtype": "reform",
+			"formation": "wedge"
+		})
+
+	return orders
+
+## Create coordinated attack orders
+static func create_coordinated_attack_orders(crew_data: Dictionary, target: Dictionary) -> Array:
+	var orders = []
+	var target_id = target.get("id", "")
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "engage",
+			"subtype": "coordinated_attack",
+			"target_id": target_id,
+			"timing": "synchronized"
+		})
+
+	return orders
+
+## Create screen withdrawal orders - rearguard action
+static func create_screen_withdrawal_orders(crew_data: Dictionary) -> Array:
+	var orders = []
+	var subordinates = crew_data.command_chain.subordinates
+
+	for i in subordinates.size():
+		var role = "rearguard" if i < subordinates.size() / 2 else "withdraw"
+		orders.append({
+			"to": subordinates[i],
+			"type": "withdraw" if role == "withdraw" else "engage",
+			"subtype": role,
+			"priority": "cover_retreat"
+		})
+
+	return orders
+
 # ============================================================================
-# FLEET COMMANDER DECISIONS
+# FLEET COMMANDER DECISIONS - KNOWLEDGE-DRIVEN with expanded actions
 # ============================================================================
 
 ## Fleet commander makes strategic decisions
 static func make_commander_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
-	# High-level strategic decisions
 	var updated = crew_data.duplicate(true)
 
-	# For now, simple: assess overall tactical situation
-	var decision = {
-		"type": "strategic",
-		"subtype": "assess",
-		"crew_id": crew_data.crew_id,
-		"delay": calculate_decision_delay(crew_data),
-		"timestamp": game_time
-	}
+	# Query knowledge for strategic guidance
+	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
+	var knowledge = TacticalKnowledgeSystem.query_commander_knowledge(situation, 3)
 
-	updated.orders.current = decision
-	return {"crew_data": updated, "decision": decision}
+	# Analyze strategic situation
+	var has_threats = not crew_data.awareness.threats.is_empty()
+	var has_opportunities = not crew_data.awareness.opportunities.is_empty()
+	var total_threats = crew_data.awareness.threats.size()
+	var total_opportunities = crew_data.awareness.opportunities.size()
+
+	# Select action based on knowledge
+	var strategic_action = _select_commander_action_from_knowledge(knowledge, crew_data, has_threats, has_opportunities, total_threats)
+
+	var decision = null
+	var orders = []
+
+	match strategic_action:
+		"concentrate_force":
+			orders = create_concentrate_force_orders(crew_data)
+			decision = {
+				"type": "strategic",
+				"subtype": "concentrate_force",
+				"crew_id": crew_data.crew_id,
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"strategic_withdrawal":
+			orders = create_strategic_withdrawal_orders(crew_data)
+			decision = {
+				"type": "strategic",
+				"subtype": "strategic_withdrawal",
+				"crew_id": crew_data.crew_id,
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"commit_reserves":
+			orders = create_commit_reserves_orders(crew_data)
+			decision = {
+				"type": "strategic",
+				"subtype": "commit_reserves",
+				"crew_id": crew_data.crew_id,
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"shift_focus":
+			var new_target = select_best_tactical_target(crew_data)
+			orders = create_shift_focus_orders(crew_data, new_target)
+			decision = {
+				"type": "strategic",
+				"subtype": "shift_focus",
+				"crew_id": crew_data.crew_id,
+				"new_focus": new_target.get("id", ""),
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"hold_line":
+			orders = create_hold_line_orders(crew_data)
+			decision = {
+				"type": "strategic",
+				"subtype": "hold_line",
+				"crew_id": crew_data.crew_id,
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+		"assess", _:
+			decision = {
+				"type": "strategic",
+				"subtype": "assess",
+				"crew_id": crew_data.crew_id,
+				"delay": calculate_decision_delay(crew_data),
+				"timestamp": game_time
+			}
+
+	if decision:
+		updated.orders.issued = orders
+		updated.orders.current = decision
+		updated.next_decision_time = game_time + randf_range(2.0, 4.0)
+		return {"crew_data": updated, "decision": decision}
+
+	return {"crew_data": updated}
+
+## Select commander action from knowledge
+static func _select_commander_action_from_knowledge(knowledge: Array, crew_data: Dictionary, has_threats: bool, has_opportunities: bool, total_threats: int) -> String:
+	var action = "assess"
+
+	if knowledge.is_empty():
+		return action
+
+	for k in knowledge:
+		var suggested_action = k.get("content", {}).get("action", "")
+		if suggested_action == "":
+			continue
+
+		match suggested_action:
+			"concentrate_force":
+				if has_opportunities:
+					return "concentrate_force"
+
+			"strategic_withdrawal":
+				if has_threats and total_threats > crew_data.command_chain.subordinates.size() * 2:
+					return "strategic_withdrawal"
+
+			"commit_reserves":
+				# TODO: Check if we have reserves
+				pass
+
+			"shift_focus":
+				if has_opportunities:
+					return "shift_focus"
+
+			"hold_line":
+				if has_threats and not has_opportunities:
+					return "hold_line"
+
+	return action
+
+## Create concentrate force orders
+static func create_concentrate_force_orders(crew_data: Dictionary) -> Array:
+	var orders = []
+	var target = select_best_tactical_target(crew_data)
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "engage",
+			"target_id": target.get("id", ""),
+			"priority": "concentrate"
+		})
+
+	return orders
+
+## Create strategic withdrawal orders
+static func create_strategic_withdrawal_orders(crew_data: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "withdraw",
+			"subtype": "strategic",
+			"priority": "preserve_force"
+		})
+
+	return orders
+
+## Create commit reserves orders
+static func create_commit_reserves_orders(crew_data: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "engage",
+			"subtype": "all_forces",
+			"priority": "decisive"
+		})
+
+	return orders
+
+## Create shift focus orders
+static func create_shift_focus_orders(crew_data: Dictionary, new_target: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "engage",
+			"target_id": new_target.get("id", ""),
+			"subtype": "redirect"
+		})
+
+	return orders
+
+## Create hold line orders
+static func create_hold_line_orders(crew_data: Dictionary) -> Array:
+	var orders = []
+
+	for sub_id in crew_data.command_chain.subordinates:
+		orders.append({
+			"to": sub_id,
+			"type": "hold",
+			"subtype": "defensive_line",
+			"stance": "no_retreat"
+		})
+
+	return orders
 
 # ============================================================================
 # TACTICAL CONTEXT ANALYSIS

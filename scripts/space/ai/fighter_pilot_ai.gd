@@ -34,6 +34,122 @@ const FORMATION_SPACING = 80.0  # Distance to maintain from wingmates
 const BEHIND_ANGLE_TOLERANCE = 20.0  # Degrees - "behind" the enemy
 const COLLISION_DETECTION_RANGE = 2000.0
 
+# ============================================================================
+# KNOWLEDGE-DRIVEN DECISION MAKING
+# ============================================================================
+
+## Generate situation string for knowledge query based on combat context
+static func _generate_fighter_situation(ship_data: Dictionary, target_ship: Dictionary, context: Dictionary) -> String:
+	var parts = ["fighter"]  # Always include role
+
+	# Target type
+	var target_type = target_ship.get("type", "fighter")
+	if target_type in ["corvette", "capital"]:
+		parts.append("capital")
+		parts.append(target_type)
+	else:
+		parts.append("fighter")
+
+	# Calculate distance
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target_ship.get("position", Vector2.ZERO)
+	var distance = my_pos.distance_to(target_pos)
+
+	# Distance category
+	if distance > FAR_RANGE:
+		parts.append("far")
+		parts.append("approach")
+	elif distance > MID_RANGE:
+		parts.append("mid")
+		parts.append("range")
+	elif distance > CLOSE_RANGE:
+		parts.append("close")
+	else:
+		parts.append("very_close")
+		parts.append("dogfight")
+
+	# Position advantage
+	if _am_i_behind_target(ship_data, target_ship):
+		parts.append("behind")
+		parts.append("advantage")
+	elif _am_i_in_front_of_target(ship_data, target_ship):
+		parts.append("disadvantaged")
+		parts.append("enemy")
+		parts.append("behind")
+	else:
+		parts.append("neutral")
+
+	# Collision detection
+	if _is_on_collision_course(ship_data, target_ship):
+		parts.append("collision")
+		parts.append("head")
+		parts.append("on")
+
+	# Group context
+	var nearby = context.get("nearby_fighters", 0)
+	if nearby >= GROUP_RUN_THRESHOLD:
+		parts.append("group")
+		parts.append("coordinated")
+	elif nearby >= 1:
+		parts.append("wingman")
+		parts.append("support")
+	else:
+		parts.append("solo")
+
+	return " ".join(parts)
+
+## Select best maneuver from knowledge based on crew skills
+static func _select_maneuver_from_knowledge(knowledge: Dictionary, crew_data: Dictionary) -> String:
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var composure = crew_data.get("stats", {}).get("skills", {}).get("composure", skill)
+	var stress = crew_data.get("stats", {}).get("stress", 0.0)
+
+	# Effective composure degrades under stress
+	var effective_composure = composure * (1.0 - stress * 0.5)
+
+	var content = knowledge.get("content", {})
+	var maneuvers = content.get("maneuvers", [])
+	var skill_requirements = content.get("skill_requirements", {})
+	var composure_requirements = content.get("composure_requirements", {})
+
+	if maneuvers.is_empty():
+		return "idle"
+
+	# Filter to maneuvers this pilot can execute
+	var available = []
+	for m in maneuvers:
+		var required_skill = skill_requirements.get(m, 0.0)
+		var required_composure = composure_requirements.get(m, 0.0)
+
+		if skill >= required_skill and effective_composure >= required_composure:
+			available.append(m)
+
+	# Pick best available (first in list is highest priority)
+	if available.size() > 0:
+		return available[0]
+
+	# Fallback to simplest (last in list)
+	return maneuvers[-1]
+
+## Query knowledge system for fighter situation and return best maneuver
+static func _query_fighter_knowledge(situation: String, crew_data: Dictionary) -> String:
+	var knowledge_results = TacticalKnowledgeSystem.query_pilot_knowledge(situation, 3)
+
+	if knowledge_results.is_empty():
+		return ""
+
+	# Try each knowledge result in order of relevance
+	for knowledge in knowledge_results:
+		var maneuver = _select_maneuver_from_knowledge(knowledge, crew_data)
+		if maneuver != "" and maneuver != "idle":
+			return maneuver
+
+	# Check first result even if it returned idle
+	if knowledge_results.size() > 0:
+		return _select_maneuver_from_knowledge(knowledge_results[0], crew_data)
+
+	return ""
+
 ## Wingmate formation constants
 const FORMATION_DISTANCE = 80.0  # Ideal distance between wingmates
 const FORMATION_BROKEN_DISTANCE = 150.0  # Distance at which formation is considered broken
@@ -371,150 +487,106 @@ static func _make_solo_fallback_decision(crew_data: Dictionary, ship_data: Dicti
 	else:
 		return _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
 
-## Fighter vs Fighter combat
+## Fighter vs Fighter combat - KNOWLEDGE-DRIVEN
 static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var target_pos = target_ship.get("position", Vector2.ZERO)
 	var distance = my_pos.distance_to(target_pos)
 
-	# Get skill early - needed for prediction accuracy
+	# Get skill for prediction accuracy
 	var skill = crew_data.get("stats", {}).get("skill", 0.5)
 	var anticipation = crew_data.get("stats", {}).get("skills", {}).get("anticipation", skill)
-	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", skill)
 
-	# Dynamic distance thresholds based on aggression
-	# Aggressive (1.0): closer thresholds (close faster)
-	# Cautious (0.0): farther thresholds (stay distant)
-	var far_range = FAR_RANGE * (1.4 - aggression * 0.8)
-	# aggression 0.0 = 140% FAR_RANGE (hangs back)
-	# aggression 0.5 = 100% FAR_RANGE (normal)
-	# aggression 1.0 = 60% FAR_RANGE (charges in)
-
-	var close_range = CLOSE_RANGE * (1.2 - aggression * 0.4)
-	# aggression 0.0 = 120% CLOSE_RANGE (stays distant)
-	# aggression 0.5 = 100% CLOSE_RANGE (normal)
-	# aggression 1.0 = 80% CLOSE_RANGE (presses in)
-
-	# Try to get behind the enemy
+	# Calculate behind position for pursuit maneuvers
 	var behind_position = _calculate_behind_position(target_ship, anticipation)
-	var is_behind = _am_i_behind_target(ship_data, target_ship)
 
 	# Check formation status with wingmates
 	var wingmates = _find_wingmates(crew_data, all_crew, all_ships)
 	var formation_offset = _calculate_formation_offset(crew_data, wingmates, all_ships)
-	var maneuver_type = ""
-	var target_id = target_ship.get("ship_id", "")
 
-	# Check for incoming collision threat
-	var on_collision_course = _is_on_collision_course(ship_data, target_ship)
+	# Build context for knowledge query
+	var context = {
+		"nearby_fighters": wingmates.size()
+	}
 
-	# Check if enemy is behind me (disadvantageous position)
-	var enemy_behind_me = _am_i_in_front_of_target(ship_data, target_ship)
+	# Generate situation string and query knowledge
+	var situation = _generate_fighter_situation(ship_data, target_ship, context)
+	var maneuver_type = _query_fighter_knowledge(situation, crew_data)
 
-	if enemy_behind_me:
-		# Panic behavior when disadvantaged - varies by composure and stress
-		var composure = crew_data.get("stats", {}).get("skills", {}).get("composure", skill)
-		var stress = crew_data.get("stats", {}).get("stress", 0.0)
-
-		# Effective composure degrades under stress
-		# At stress 0.5: composure is halved
-		# At stress 1.0: composure is zero
-		var effective_composure = composure * (1.0 - stress * 0.5)
-
-		if effective_composure < 0.3:
-			# Panic - fly straight (worst choice - easy target)
-			maneuver_type = "fight_pursue_full_speed"
-		elif effective_composure < 0.6:
-			# Basic evasion - hard turn (predictable but better)
-			maneuver_type = "fight_evasive_turn"
-		else:
-			# Skilled evasion - break and scissors (unpredictable)
-			maneuver_type = "fight_defensive_break"
-	elif skill < 0.3:
-		# Rookie: only knows pursue_full_speed, ignores collision warnings
+	# Fallback to basic pursuit if no knowledge match
+	if maneuver_type == "" or maneuver_type == "idle":
 		maneuver_type = "fight_pursue_full_speed"
-	elif skill < 0.6:
-		# Average: pursue_full_speed + tight_pursuit, still ignores collision warnings
-		if distance > far_range:
-			maneuver_type = "fight_pursue_full_speed"
-		elif is_behind:
-			# Can do tight pursuit when already behind
-			maneuver_type = "fight_pursue_tactical" if distance > close_range else "fight_tight_pursuit"
-		else:
-			# Can't flank, just chase
-			maneuver_type = "fight_pursue_full_speed"
-	else:
-		# Skilled (>= 0.6): full tactical repertoire + collision awareness
-		if on_collision_course and distance > close_range:
-			# Detect head-on collision - break perpendicular and accelerate past
-			# Don't try to orbit, just get out of the way fast
-			maneuver_type = "fight_lateral_break"
-		elif distance > far_range:
-			maneuver_type = "fight_pursue_full_speed"
-		elif distance > close_range:
-			# Mid range - slow approach, try to get behind
-			maneuver_type = "fight_pursue_tactical" if is_behind else "fight_flank_behind"
-		else:
-			# Close range - tight maneuvering
-			maneuver_type = "fight_tight_pursuit" if is_behind else "fight_dogfight_maneuver"
+
+	var target_id = target_ship.get("ship_id", "")
 
 	# Calculate evasion direction for dodge maneuvers
 	var evasion_direction = 0
-	if maneuver_type in ["fight_dodge_and_weave", "fight_lateral_break"]:
+	if maneuver_type in ["fight_dodge_and_weave", "fight_lateral_break", "fight_evasive_turn", "fight_defensive_break"]:
 		evasion_direction = _calculate_evasion_direction(ship_data, target_ship)
 
-	# Apply formation offset if we have wingmates
+	# Build decision
 	var decision = {
 		"type": "maneuver",
 		"subtype": maneuver_type,
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": target_id,
-		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
+		"skill_factor": skill,
 		"delay": crew_data.get("stats", {}).get("reaction_time", 0.1),
 		"timestamp": game_time,
 		"formation_offset": formation_offset,
 		"behind_position": behind_position,
-		"evasion_direction": evasion_direction
+		"evasion_direction": evasion_direction,
+		"knowledge_situation": situation  # For debugging
 	}
 
 	return decision
 
-## Fighter vs Corvette/Capital combat
+## Fighter vs Corvette/Capital combat - KNOWLEDGE-DRIVEN
 static func _make_fighter_vs_capital_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var target_pos = target_ship.get("position", Vector2.ZERO)
 	var distance = my_pos.distance_to(target_pos)
+	var skill = crew_data.get("stats", {}).get("skill", 0.5)
 
 	# Count friendly fighters nearby
 	var nearby_fighters = _count_nearby_friendly_fighters(ship_data, all_ships)
 
-	var maneuver_type = ""
-	var target_id = target_ship.get("ship_id", "")
+	# Build context for knowledge query
+	var context = {
+		"nearby_fighters": nearby_fighters
+	}
 
-	# If we have enough fighters, coordinate group runs
-	if nearby_fighters >= GROUP_RUN_THRESHOLD:
-		# Group run tactics
-		if distance > SAFE_DISTANCE_VS_CAPITAL:
-			# Approach for run
-			maneuver_type = "fight_group_run_approach"
-		elif distance > CLOSE_RANGE:
-			# Execute attack run
-			maneuver_type = "fight_group_run_attack"
-		else:
-			# Too close, swing around
-			maneuver_type = "fight_group_run_swing_around"
+	# Generate situation string and query knowledge
+	var situation = _generate_fighter_situation(ship_data, target_ship, context)
+
+	# Add distance-specific context for capital ships
+	if distance < SAFE_DISTANCE_VS_CAPITAL * 0.7:
+		situation += " too close retreat evade danger"
+	elif distance > SAFE_DISTANCE_VS_CAPITAL * 1.3:
+		situation += " far approach cautious"
 	else:
-		# Solo/small group tactics - stay at distance, pot-shots
-		if distance < SAFE_DISTANCE_VS_CAPITAL * 0.7:
-			# Too close, evade
-			maneuver_type = "fight_evasive_retreat"
-		elif distance > SAFE_DISTANCE_VS_CAPITAL * 1.3:
-			# Too far, close in
-			maneuver_type = "fight_cautious_approach"
+		situation += " harass dodge weave range"
+
+	# Add group context
+	if nearby_fighters >= GROUP_RUN_THRESHOLD:
+		if distance > SAFE_DISTANCE_VS_CAPITAL:
+			situation += " approach run"
+		elif distance > CLOSE_RANGE:
+			situation += " attack run strike"
 		else:
-			# Good range, dodge and weave
+			situation += " swing around reposition"
+
+	var maneuver_type = _query_fighter_knowledge(situation, crew_data)
+
+	# Fallback to appropriate default if no knowledge match
+	if maneuver_type == "" or maneuver_type == "idle":
+		if nearby_fighters >= GROUP_RUN_THRESHOLD:
+			maneuver_type = "fight_group_run_approach"
+		else:
 			maneuver_type = "fight_dodge_and_weave"
+
+	var target_id = target_ship.get("ship_id", "")
 
 	var decision = {
 		"type": "maneuver",
@@ -522,10 +594,11 @@ static func _make_fighter_vs_capital_decision(crew_data: Dictionary, ship_data: 
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": target_id,
-		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
+		"skill_factor": skill,
 		"delay": crew_data.get("stats", {}).get("reaction_time", 0.1),
 		"timestamp": game_time,
-		"nearby_fighters": nearby_fighters
+		"nearby_fighters": nearby_fighters,
+		"knowledge_situation": situation  # For debugging
 	}
 
 	return decision
