@@ -471,46 +471,46 @@ static func calculate_tight_pursuit(ship_data: Dictionary, target: Dictionary, n
 	}
 
 ## Dogfight maneuver - weaving at combat range
-## Uses lateral thrust (maneuvering jets) to strafe while aiming at target
+## Ship ALWAYS faces target for aiming
+## Main thrust = distance control only (close in / back off)
+## Lateral thrust = all positioning (strafing while aiming)
 static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
+	var direction_to_target = to_target.normalized()
+
+	# ALWAYS face the target for aiming
+	var desired_heading = direction_to_heading(to_target)
 
 	# Perpendicular to line of sight - for lateral movement
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
-	# Weave using lateral thrust while facing target
+	# Weave using lateral thrust - strafe left/right while facing target
 	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)
-	var weave_direction = sin(weave_phase * PI)  # -1 to 1
+	var lateral_thrust = sin(weave_phase * PI)  # -1 to 1, oscillating strafe
 
-	# Use lateral thrust for weaving - this allows aiming while moving
-	var lateral_thrust = weave_direction
-
-	# Maintain minimum combat range - orbit at ~2400 units, not right on top of target
+	# Desired combat range
 	var desired_combat_range = 2400.0
-
-	# Face the target for aiming
-	var desired_heading = direction_to_heading(to_target)
-
-	# Adjust forward/back throttle based on distance
-	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 	var distance_error = distance - desired_combat_range
 
-	# Use combat/dogfight throttle - slow and precise
-	var throttle = calculate_intuitive_throttle(ship_data, distance, "dogfight")
-
-	# If too close, back off (negative throttle via braking)
-	# If too far, approach
+	# Main thrust is ONLY for distance control along line of sight
+	# Positive throttle = close in (we're facing target, so forward = toward)
+	# Braking = back off
+	var throttle = 0.0
 	var should_brake = false
-	if distance_error < -500.0:  # Too close, need to back off
-		should_brake = true
-		throttle = 0.0
-	elif distance_error > 500.0:  # Too far, approach with lateral drift
-		throttle = min(throttle, 0.3)
 
-	# Cap speed during dogfight - never exceed 40% max speed
+	if distance_error > 800.0:
+		# Too far - close in slowly
+		throttle = 0.2
+	elif distance_error < -800.0:
+		# Too close - back off (brake, we're facing them)
+		should_brake = true
+	# Otherwise at good range - no forward thrust, just strafe
+
+	# Also brake if going too fast
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 	var current_speed = current_velocity.length()
-	var max_combat_speed = ship_data.stats.max_speed * 0.4
+	var max_combat_speed = ship_data.stats.max_speed * 0.35
 	if current_speed > max_combat_speed:
 		should_brake = true
 		throttle = 0.0
@@ -520,7 +520,7 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 		"throttle": throttle,
 		"thrust_active": throttle > 0.1,
 		"is_braking": should_brake,
-		"lateral_thrust": lateral_thrust,  # Maneuvering jets for strafing
+		"lateral_thrust": lateral_thrust,  # Maneuvering jets for ALL positioning
 		"engagement_range": 600.0,
 		"current_distance": distance
 	}
@@ -765,18 +765,20 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 	}
 
 ## Dodge and weave - stay at range, dodge
-## Uses lateral thrust (maneuvering jets) to strafe while aiming at target
+## Ship ALWAYS faces target for aiming
+## Main thrust = distance control only (close in / back off)
+## Lateral thrust = all positioning (strafing while aiming)
 static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
+	# ALWAYS face the target for aiming
+	var desired_heading = direction_to_heading(to_target)
+
 	# Get evasion direction from orders (1 = right, -1 = left, 0 = time-based fallback)
 	var evasion_dir = ship_data.get("orders", {}).get("evasion_direction", 0)
 
-	# Calculate perpendicular vector (right side of approach vector)
-	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-
-	# Determine lateral thrust direction for strafing
+	# Lateral thrust for strafing - ALL positioning done here
 	var lateral_thrust: float
 	if evasion_dir != 0:
 		# Deliberate evasion - skilled pilot picks a side and commits
@@ -786,27 +788,24 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		var orbit_phase = fmod(Time.get_ticks_msec() / 1500.0, 2.0 * PI)
 		lateral_thrust = sin(orbit_phase)
 
-	# Face the target for aiming - use lateral thrust to move
-	var desired_heading = direction_to_heading(to_target)
-
 	# Desired combat range
 	var desired_combat_range = 2400.0
 	var distance_error = distance - desired_combat_range
 
-	# Use combat throttle - controlled speed for dodging
-	var throttle = calculate_intuitive_throttle(ship_data, distance, "combat")
-
-	# Adjust throttle based on distance to desired range
+	# Main thrust is ONLY for distance control along line of sight
+	var throttle = 0.0
 	var should_brake = false
 	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 
-	if distance_error < -400.0:  # Too close, back off
+	if distance_error > 600.0:
+		# Too far - close in slowly
+		throttle = 0.2
+	elif distance_error < -600.0:
+		# Too close - back off
 		should_brake = true
-		throttle = 0.0
-	elif distance_error > 400.0:  # Too far, approach slowly
-		throttle = min(throttle, 0.25)
+	# Otherwise at good range - no forward thrust, just strafe
 
-	# Cap speed during dodge and weave - never exceed 35% max speed
+	# Brake if going too fast
 	var current_speed = current_velocity.length()
 	var max_dodge_speed = ship_data.stats.max_speed * 0.35
 	if current_speed > max_dodge_speed:
@@ -818,7 +817,7 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		"throttle": throttle,
 		"thrust_active": throttle > 0.1,
 		"is_braking": should_brake,
-		"lateral_thrust": lateral_thrust,  # Maneuvering jets for strafing
+		"lateral_thrust": lateral_thrust,  # Maneuvering jets for ALL positioning
 		"engagement_range": 1600.0,
 		"current_distance": distance
 	}
@@ -1459,6 +1458,14 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		var lateral_accel = ship_data.stats.acceleration * ship_data.stats.get("lateral_acceleration", 0.3)
 		thrust_vector += perpendicular * lateral_accel * lateral_thrust_dir * delta
 		maneuvering_direction = perpendicular * lateral_thrust_dir
+
+	# REVERSE THRUST: Brake thrusters allow backing off without turning around
+	# This lets ships maintain aim while adjusting distance
+	var reverse_thrust_amount = pilot_control.get("reverse_thrust", 0.0)  # 0.0 to 1.0
+	if reverse_thrust_amount > 0.0:
+		# Thrust opposite to ship facing direction
+		var reverse_accel = ship_data.stats.acceleration * ship_data.stats.get("reverse_acceleration", 0.4)
+		thrust_vector -= ship_facing * reverse_accel * reverse_thrust_amount * delta
 
 	# Update velocity with thrust (no drag in space!)
 	var new_velocity = ship_data.velocity + thrust_vector
