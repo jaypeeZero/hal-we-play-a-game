@@ -3,10 +3,13 @@ extends Node
 ## Thin wrapper autoload that holds the BattleEventLogger instance
 ## Ensures app-wide singleton behavior while keeping the logger testable
 
+# Preload at compile time - required for exported builds
+const BattleEventLoggerScript = preload("res://scripts/core/systems/battle_event_logger.gd")
+
 var service: Node
 
 func _ready() -> void:
-	service = load("res://scripts/core/systems/battle_event_logger.gd").new()
+	service = BattleEventLoggerScript.new()
 	add_child(service)
 	print("BattleEventLogger service initialized")
 

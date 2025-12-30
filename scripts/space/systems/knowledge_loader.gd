@@ -3,28 +3,47 @@ extends RefCounted
 
 ## Loads knowledge base from JSON files and populates TacticalKnowledgeSystem
 ## Converts JSON format to TacticalKnowledgeSystem format
+##
+## NOTE: Uses manifest file instead of DirAccess because DirAccess.open()
+## does not work on res:// paths in exported builds (files are packed into PCK)
+
+# Path to the manifest file listing all knowledge files
+const MANIFEST_PATH = "res://data/knowledgebase/manifest.json"
 
 # ============================================================================
 # KNOWLEDGE LOADING
 # ============================================================================
 
-## Load all knowledge from JSON directory
-static func load_knowledge_from_directory(directory_path: String) -> int:
-	var dir = DirAccess.open(directory_path)
-	if not dir:
-		push_error("Failed to open knowledge directory: " + directory_path)
+## Load all knowledge files listed in the manifest
+static func load_knowledge_from_manifest() -> int:
+	var file = FileAccess.open(MANIFEST_PATH, FileAccess.READ)
+	if not file:
+		push_error("Failed to open knowledge manifest: " + MANIFEST_PATH)
 		return 0
 
-	var files = dir.get_files()
+	var json_text = file.get_as_text()
+	file.close()
+
+	var json = JSON.new()
+	var parse_result = json.parse(json_text)
+	if parse_result != OK:
+		push_error("Failed to parse knowledge manifest JSON")
+		return 0
+
+	var manifest = json.data
+	if not manifest is Dictionary or not manifest.has("files"):
+		push_error("Invalid manifest format - expected {files: [...]}")
+		return 0
+
 	var loaded_count = 0
+	var base_path = manifest.get("base_path", "res://data/knowledgebase/annotated")
 
-	for file_name in files:
-		if file_name.ends_with(".json"):
-			var file_path = directory_path + "/" + file_name
-			if load_knowledge_file(file_path):
-				loaded_count += 1
+	for file_name in manifest.files:
+		var file_path = base_path + "/" + file_name
+		if load_knowledge_file(file_path):
+			loaded_count += 1
 
-	print("Loaded %d knowledge entries from %s" % [loaded_count, directory_path])
+	print("Loaded %d knowledge entries from manifest" % loaded_count)
 	return loaded_count
 
 ## Load single knowledge file and add to TacticalKnowledgeSystem
@@ -222,19 +241,13 @@ static func determine_tags_from_content(text: String, keywords: Array) -> Array:
 # INITIALIZATION
 # ============================================================================
 
-## Initialize knowledge base from directory
+## Initialize knowledge base from manifest file
 ## Call this at game startup
 static func initialize_knowledge_base() -> void:
 	print("Loading knowledge base...")
 
-	# Try loading from annotated directory (most detailed)
-	var annotated_path = "res://data/knowledgebase/annotated"
-	var loaded = load_knowledge_from_directory(annotated_path)
-
-	if loaded == 0:
-		push_warning("No knowledge loaded from annotated directory, trying complete...")
-		var complete_path = "res://data/knowledgebase/complete"
-		loaded = load_knowledge_from_directory(complete_path)
+	# Load from manifest file (works in both editor and exports)
+	var loaded = load_knowledge_from_manifest()
 
 	if loaded == 0:
 		push_warning("No external knowledge loaded, using built-in placeholder knowledge")

@@ -4,13 +4,16 @@ extends Node
 ## Starts monitoring custom signals at game startup
 ## Ensures app-wide singleton behavior while keeping the monitor testable
 
+# Preload at compile time - required for exported builds
+const SignalMonitorScript = preload("res://scripts/core/systems/signal_monitor.gd")
+
 var service  # Untyped to avoid type mismatch with loaded script
 
 func _ready() -> void:
 	# Wait for GameLogger to be ready
 	await get_tree().process_frame
 
-	service = load("res://scripts/core/systems/signal_monitor.gd").new()
+	service = SignalMonitorScript.new()
 	add_child(service)
 
 	# Set GameLogger reference

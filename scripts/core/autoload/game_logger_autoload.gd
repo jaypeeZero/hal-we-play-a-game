@@ -3,10 +3,13 @@ extends Node
 ## Thin wrapper autoload that holds the GameLogger instance
 ## Ensures app-wide singleton behavior while keeping the logger testable
 
+# Preload at compile time - required for exported builds
+const GameLoggerScript = preload("res://scripts/core/systems/game_logger.gd")
+
 var service  # Untyped to avoid type mismatch with loaded script
 
 func _ready() -> void:
-	service = load("res://scripts/core/systems/game_logger.gd").new()
+	service = GameLoggerScript.new()
 	add_child(service)
 
 ## Manual logging API
