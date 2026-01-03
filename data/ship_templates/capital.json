@@ -1,314 +1,465 @@
 {
-	"type": "capital",
-	"name": "Capital Ship",
-	"stats": {
-		"max_speed": 80.0,
-		"acceleration": 20.0,
-		"lateral_acceleration": 0.08,
-		"turn_rate": 0.5,
-		"mass": 1000.0,
-		"size": 150.0,
-		"brake_acceleration": 1.0,
-		"brake_heat_capacity": 500.0,
-		"brake_heat_per_second": 50.0,
-		"brake_heat_dissipation": 5.0
-	},
+	"angular_velocity": 0.0,
 	"armor_sections": [
 		{
+			"arc": {
+				"end": 360.0,
+				"start": 300.0
+			},
+			"current_armor": 180.0,
+			"max_armor": 180.0,
+			"position_offset": {
+				"x": -10.0,
+				"y": -20.0
+			},
 			"section_id": "front_left",
-			"position_offset": {"x": -10, "y": -20},
-			"arc": {"start": 300, "end": 360},
-			"max_armor": 180,
-			"current_armor": 180,
-			"size": 3
+			"size": 3.0
 		},
 		{
+			"arc": {
+				"end": 60.0,
+				"start": 0.0
+			},
+			"current_armor": 180.0,
+			"max_armor": 180.0,
+			"position_offset": {
+				"x": 10.0,
+				"y": -20.0
+			},
 			"section_id": "front_right",
-			"position_offset": {"x": 10, "y": -20},
-			"arc": {"start": 0, "end": 60},
-			"max_armor": 180,
-			"current_armor": 180,
-			"size": 3
+			"size": 3.0
 		},
 		{
+			"arc": {
+				"end": 120.0,
+				"start": 60.0
+			},
+			"current_armor": 150.0,
+			"max_armor": 150.0,
+			"position_offset": {
+				"x": 20.0,
+				"y": 0.0
+			},
 			"section_id": "middle_right",
-			"position_offset": {"x": 20, "y": 0},
-			"arc": {"start": 60, "end": 120},
-			"max_armor": 150,
-			"current_armor": 150,
-			"size": 3
+			"size": 3.0
 		},
 		{
+			"arc": {
+				"end": 180.0,
+				"start": 120.0
+			},
+			"current_armor": 120.0,
+			"max_armor": 120.0,
+			"position_offset": {
+				"x": 10.0,
+				"y": 20.0
+			},
 			"section_id": "back_right",
-			"position_offset": {"x": 10, "y": 20},
-			"arc": {"start": 120, "end": 180},
-			"max_armor": 120,
-			"current_armor": 120,
-			"size": 3
+			"size": 3.0
 		},
 		{
+			"arc": {
+				"end": 240.0,
+				"start": 180.0
+			},
+			"current_armor": 120.0,
+			"max_armor": 120.0,
+			"position_offset": {
+				"x": -10.0,
+				"y": 20.0
+			},
 			"section_id": "back_left",
-			"position_offset": {"x": -10, "y": 20},
-			"arc": {"start": 180, "end": 240},
-			"max_armor": 120,
-			"current_armor": 120,
-			"size": 3
+			"size": 3.0
 		},
 		{
+			"arc": {
+				"end": 300.0,
+				"start": 240.0
+			},
+			"current_armor": 150.0,
+			"max_armor": 150.0,
+			"position_offset": {
+				"x": -20.0,
+				"y": 0.0
+			},
 			"section_id": "middle_left",
-			"position_offset": {"x": -20, "y": 0},
-			"arc": {"start": 240, "end": 300},
-			"max_armor": 150,
-			"current_armor": 150,
-			"size": 3
+			"size": 3.0
 		}
 	],
 	"internals": [
 		{
 			"component_id": "engine_left_outer",
-			"type": "engine",
-			"section_id": "back_L",
-			"position_offset": {"x": -35, "y": 25},
-			"max_health": 150,
-			"current_health": 150,
-			"status": "operational",
+			"current_health": 150.0,
 			"effect_on_ship": {
-				"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-				"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-			}
+				"on_damaged": {
+					"acceleration": 0.5,
+					"max_speed": 0.6
+				},
+				"on_destroyed": {
+					"acceleration": 0.1,
+					"max_speed": 0.1
+				}
+			},
+			"max_health": 150.0,
+			"position_offset": {
+				"x": -90.392822265625,
+				"y": 103.986404418945
+			},
+			"section_id": "back_L",
+			"status": "operational",
+			"type": "engine"
 		},
 		{
 			"component_id": "engine_left_inner",
-			"type": "engine",
-			"section_id": "back_L",
-			"position_offset": {"x": -15, "y": 25},
-			"max_health": 150,
-			"current_health": 150,
-			"status": "operational",
+			"current_health": 150.0,
 			"effect_on_ship": {
-				"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-				"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-			}
+				"on_damaged": {
+					"acceleration": 0.5,
+					"max_speed": 0.6
+				},
+				"on_destroyed": {
+					"acceleration": 0.1,
+					"max_speed": 0.1
+				}
+			},
+			"max_health": 150.0,
+			"position_offset": {
+				"x": -15.5892181396484,
+				"y": 103.986404418945
+			},
+			"section_id": "back_L",
+			"status": "operational",
+			"type": "engine"
 		},
 		{
 			"component_id": "engine_right_inner",
-			"type": "engine",
-			"section_id": "back_R",
-			"position_offset": {"x": 15, "y": 25},
-			"max_health": 150,
-			"current_health": 150,
-			"status": "operational",
+			"current_health": 150.0,
 			"effect_on_ship": {
-				"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-				"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-			}
+				"on_damaged": {
+					"acceleration": 0.5,
+					"max_speed": 0.6
+				},
+				"on_destroyed": {
+					"acceleration": 0.1,
+					"max_speed": 0.1
+				}
+			},
+			"max_health": 150.0,
+			"position_offset": {
+				"x": 42.68798828125,
+				"y": 103.551025390625
+			},
+			"section_id": "back_R",
+			"status": "operational",
+			"type": "engine"
 		},
 		{
 			"component_id": "engine_right_outer",
-			"type": "engine",
-			"section_id": "back_R",
-			"position_offset": {"x": 35, "y": 25},
-			"max_health": 150,
-			"current_health": 150,
-			"status": "operational",
+			"current_health": 150.0,
 			"effect_on_ship": {
-				"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-				"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-			}
+				"on_damaged": {
+					"acceleration": 0.5,
+					"max_speed": 0.6
+				},
+				"on_destroyed": {
+					"acceleration": 0.1,
+					"max_speed": 0.1
+				}
+			},
+			"max_health": 150.0,
+			"position_offset": {
+				"x": 104.444458007812,
+				"y": 103.115646362305
+			},
+			"section_id": "back_R",
+			"status": "operational",
+			"type": "engine"
 		}
 	],
-	"weapons": [
-		{
-			"weapon_id": "heavy_cannon_1",
-			"type": "heavy_cannon",
-			"position_offset": {"x": 0, "y": -30},
-			"facing": 0.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 50,
-				"rate_of_fire": 0.5,
-				"projectile_speed": 450,
-				"range": 1500,
-				"accuracy": 0.75,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "heavy_cannon_2",
-			"type": "heavy_cannon",
-			"position_offset": {"x": -20, "y": -15},
-			"facing": 0.0,
-			"arc": {"min": -150, "max": 60},
-			"stats": {
-				"damage": 50,
-				"rate_of_fire": 0.5,
-				"projectile_speed": 450,
-				"range": 1500,
-				"accuracy": 0.75,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "heavy_cannon_3",
-			"type": "heavy_cannon",
-			"position_offset": {"x": 20, "y": -15},
-			"facing": 0.0,
-			"arc": {"min": -60, "max": 150},
-			"stats": {
-				"damage": 50,
-				"rate_of_fire": 0.5,
-				"projectile_speed": 450,
-				"range": 1500,
-				"accuracy": 0.75,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "heavy_cannon_4",
-			"type": "heavy_cannon",
-			"position_offset": {"x": -15, "y": 10},
-			"facing": 180.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 50,
-				"rate_of_fire": 0.5,
-				"projectile_speed": 450,
-				"range": 1500,
-				"accuracy": 0.75,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "heavy_cannon_5",
-			"type": "heavy_cannon",
-			"position_offset": {"x": 15, "y": 10},
-			"facing": 180.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 50,
-				"rate_of_fire": 0.5,
-				"projectile_speed": 450,
-				"range": 1500,
-				"accuracy": 0.75,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "gatling_1",
-			"type": "gatling_gun",
-			"position_offset": {"x": -30, "y": -10},
-			"facing": -90.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 3,
-				"rate_of_fire": 12.0,
-				"projectile_speed": 700,
-				"range": 600,
-				"accuracy": 0.70,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "gatling_2",
-			"type": "gatling_gun",
-			"position_offset": {"x": 30, "y": -10},
-			"facing": 90.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 3,
-				"rate_of_fire": 12.0,
-				"projectile_speed": 700,
-				"range": 600,
-				"accuracy": 0.70,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "gatling_3",
-			"type": "gatling_gun",
-			"position_offset": {"x": -30, "y": 10},
-			"facing": -90.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 3,
-				"rate_of_fire": 12.0,
-				"projectile_speed": 700,
-				"range": 600,
-				"accuracy": 0.70,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "gatling_4",
-			"type": "gatling_gun",
-			"position_offset": {"x": 30, "y": 10},
-			"facing": 90.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 3,
-				"rate_of_fire": 12.0,
-				"projectile_speed": 700,
-				"range": 600,
-				"accuracy": 0.70,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "gatling_5",
-			"type": "gatling_gun",
-			"position_offset": {"x": -20, "y": 25},
-			"facing": 180.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 3,
-				"rate_of_fire": 12.0,
-				"projectile_speed": 700,
-				"range": 600,
-				"accuracy": 0.70,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "gatling_6",
-			"type": "gatling_gun",
-			"position_offset": {"x": 20, "y": 25},
-			"facing": 180.0,
-			"arc": {"min": -120, "max": 120},
-			"stats": {
-				"damage": 3,
-				"rate_of_fire": 12.0,
-				"projectile_speed": 700,
-				"range": 600,
-				"accuracy": 0.70,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		}
-	],
+	"name": "Capital Ship",
 	"orders": {
 		"current_order": "engage",
-		"target_id": null,
-		"patrol_points": []
-	}
+		"patrol_points": [],
+		"target_id": null
+	},
+	"position": {
+		"x": 0.0,
+		"y": 0.0
+	},
+	"rotation": 0.0,
+	"ship_id": "ship_0",
+	"stats": {
+		"acceleration": 20.0,
+		"brake_acceleration": 1.0,
+		"brake_heat_capacity": 500.0,
+		"brake_heat_dissipation": 5.0,
+		"brake_heat_per_second": 50.0,
+		"lateral_acceleration": 0.08,
+		"mass": 1000.0,
+		"max_speed": 80.0,
+		"size": 150.0,
+		"turn_rate": 0.5
+	},
+	"status": "operational",
+	"team": 0,
+	"type": "capital",
+	"velocity": {
+		"x": 0.0,
+		"y": 0.0
+	},
+	"weapons": [
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": -0.3675537109375,
+				"y": -231.687072753906
+			},
+			"stats": {
+				"accuracy": 0.75,
+				"damage": 50.0,
+				"projectile_speed": 450.0,
+				"range": 4500.0,
+				"rate_of_fire": 0.5,
+				"size": 3.0
+			},
+			"type": "heavy_cannon",
+			"weapon_id": "heavy_cannon_1"
+		},
+		{
+			"arc": {
+				"max": 60.0,
+				"min": -150.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": -28.0,
+				"y": -200.0
+			},
+			"stats": {
+				"accuracy": 0.75,
+				"damage": 50.0,
+				"projectile_speed": 450.0,
+				"range": 4500.0,
+				"rate_of_fire": 0.5,
+				"size": 3.0
+			},
+			"type": "heavy_cannon",
+			"weapon_id": "heavy_cannon_2"
+		},
+		{
+			"arc": {
+				"max": 150.0,
+				"min": -60.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 28.0,
+				"y": -202.081634521484
+			},
+			"stats": {
+				"accuracy": 0.75,
+				"damage": 50.0,
+				"projectile_speed": 450.0,
+				"range": 4500.0,
+				"rate_of_fire": 0.5,
+				"size": 3.0
+			},
+			"type": "heavy_cannon",
+			"weapon_id": "heavy_cannon_3"
+		},
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 180.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": -15.0,
+				"y": 10.0
+			},
+			"stats": {
+				"accuracy": 0.75,
+				"damage": 50.0,
+				"projectile_speed": 450.0,
+				"range": 4500.0,
+				"rate_of_fire": 0.5,
+				"size": 3.0
+			},
+			"type": "heavy_cannon",
+			"weapon_id": "heavy_cannon_4"
+		},
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 180.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 13.9842834472656,
+				"y": 8.20408630371094
+			},
+			"stats": {
+				"accuracy": 0.75,
+				"damage": 50.0,
+				"projectile_speed": 450.0,
+				"range": 4500.0,
+				"rate_of_fire": 0.5,
+				"size": 3.0
+			},
+			"type": "heavy_cannon",
+			"weapon_id": "heavy_cannon_5"
+		},
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": -90.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": -30.0,
+				"y": -10.0
+			},
+			"stats": {
+				"accuracy": 0.7,
+				"damage": 3.0,
+				"projectile_speed": 700.0,
+				"range": 1200.0,
+				"rate_of_fire": 12.0,
+				"size": 3.0
+			},
+			"type": "gatling_gun",
+			"weapon_id": "gatling_1"
+		},
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 90.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 30.0,
+				"y": -10.0
+			},
+			"stats": {
+				"accuracy": 0.7,
+				"damage": 3.0,
+				"projectile_speed": 700.0,
+				"range": 1200.0,
+				"rate_of_fire": 12.0,
+				"size": 3.0
+			},
+			"type": "gatling_gun",
+			"weapon_id": "gatling_2"
+		},
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": -90.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": -30.0,
+				"y": 10.0
+			},
+			"stats": {
+				"accuracy": 0.7,
+				"damage": 3.0,
+				"projectile_speed": 700.0,
+				"range": 1200.0,
+				"rate_of_fire": 12.0,
+				"size": 3.0
+			},
+			"type": "gatling_gun",
+			"weapon_id": "gatling_3"
+		},
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 90.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 30.0,
+				"y": 10.0
+			},
+			"stats": {
+				"accuracy": 0.7,
+				"damage": 3.0,
+				"projectile_speed": 700.0,
+				"range": 1200.0,
+				"rate_of_fire": 12.0,
+				"size": 3.0
+			},
+			"type": "gatling_gun",
+			"weapon_id": "gatling_4"
+		},
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 180.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": -20.0,
+				"y": 25.0
+			},
+			"stats": {
+				"accuracy": 0.7,
+				"damage": 3.0,
+				"projectile_speed": 700.0,
+				"range": 1200.0,
+				"rate_of_fire": 12.0,
+				"size": 3.0
+			},
+			"type": "gatling_gun",
+			"weapon_id": "gatling_5"
+		},
+		{
+			"arc": {
+				"max": 120.0,
+				"min": -120.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 180.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 20.0,
+				"y": 25.0
+			},
+			"stats": {
+				"accuracy": 0.7,
+				"damage": 3.0,
+				"projectile_speed": 700.0,
+				"range": 1200.0,
+				"rate_of_fire": 12.0,
+				"size": 3.0
+			},
+			"type": "gatling_gun",
+			"weapon_id": "gatling_6"
+		}
+	]
 }
