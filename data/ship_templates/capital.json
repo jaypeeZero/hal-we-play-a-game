@@ -119,9 +119,9 @@
 	],
 	"weapons": [
 		{
-			"weapon_id": "turret_1",
+			"weapon_id": "heavy_cannon_1",
 			"type": "heavy_cannon",
-			"position_offset": {"x": -15, "y": -10},
+			"position_offset": {"x": 0, "y": -30},
 			"facing": 0.0,
 			"arc": {"min": -120, "max": 120},
 			"stats": {
@@ -136,10 +136,44 @@
 			"operator_id": null
 		},
 		{
-			"weapon_id": "turret_2",
+			"weapon_id": "heavy_cannon_2",
 			"type": "heavy_cannon",
-			"position_offset": {"x": 15, "y": -10},
+			"position_offset": {"x": -20, "y": -15},
 			"facing": 0.0,
+			"arc": {"min": -150, "max": 60},
+			"stats": {
+				"damage": 50,
+				"rate_of_fire": 0.5,
+				"projectile_speed": 450,
+				"range": 1500,
+				"accuracy": 0.75,
+				"size": 3
+			},
+			"cooldown_remaining": 0.0,
+			"operator_id": null
+		},
+		{
+			"weapon_id": "heavy_cannon_3",
+			"type": "heavy_cannon",
+			"position_offset": {"x": 20, "y": -15},
+			"facing": 0.0,
+			"arc": {"min": -60, "max": 150},
+			"stats": {
+				"damage": 50,
+				"rate_of_fire": 0.5,
+				"projectile_speed": 450,
+				"range": 1500,
+				"accuracy": 0.75,
+				"size": 3
+			},
+			"cooldown_remaining": 0.0,
+			"operator_id": null
+		},
+		{
+			"weapon_id": "heavy_cannon_4",
+			"type": "heavy_cannon",
+			"position_offset": {"x": -15, "y": 10},
+			"facing": 180.0,
 			"arc": {"min": -120, "max": 120},
 			"stats": {
 				"damage": 50,
@@ -153,34 +187,17 @@
 			"operator_id": null
 		},
 		{
-			"weapon_id": "turret_3",
-			"type": "medium_cannon",
-			"position_offset": {"x": -12, "y": 5},
-			"facing": 0.0,
-			"arc": {"min": -90, "max": 90},
+			"weapon_id": "heavy_cannon_5",
+			"type": "heavy_cannon",
+			"position_offset": {"x": 15, "y": 10},
+			"facing": 180.0,
+			"arc": {"min": -120, "max": 120},
 			"stats": {
-				"damage": 15,
-				"rate_of_fire": 2.0,
-				"projectile_speed": 500,
-				"range": 1000,
-				"accuracy": 0.80,
-				"size": 3
-			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
-		},
-		{
-			"weapon_id": "turret_4",
-			"type": "medium_cannon",
-			"position_offset": {"x": 12, "y": 5},
-			"facing": 0.0,
-			"arc": {"min": -90, "max": 90},
-			"stats": {
-				"damage": 15,
-				"rate_of_fire": 2.0,
-				"projectile_speed": 500,
-				"range": 1000,
-				"accuracy": 0.80,
+				"damage": 50,
+				"rate_of_fire": 0.5,
+				"projectile_speed": 450,
+				"range": 1500,
+				"accuracy": 0.75,
 				"size": 3
 			},
 			"cooldown_remaining": 0.0,
@@ -189,9 +206,9 @@
 		{
 			"weapon_id": "gatling_1",
 			"type": "gatling_gun",
-			"position_offset": {"x": -20, "y": 0},
-			"facing": 0.0,
-			"arc": {"min": -180, "max": 180},
+			"position_offset": {"x": -30, "y": -10},
+			"facing": -90.0,
+			"arc": {"min": -120, "max": 120},
 			"stats": {
 				"damage": 3,
 				"rate_of_fire": 12.0,
@@ -206,9 +223,77 @@
 		{
 			"weapon_id": "gatling_2",
 			"type": "gatling_gun",
-			"position_offset": {"x": 20, "y": 0},
-			"facing": 0.0,
-			"arc": {"min": -180, "max": 180},
+			"position_offset": {"x": 30, "y": -10},
+			"facing": 90.0,
+			"arc": {"min": -120, "max": 120},
+			"stats": {
+				"damage": 3,
+				"rate_of_fire": 12.0,
+				"projectile_speed": 700,
+				"range": 600,
+				"accuracy": 0.70,
+				"size": 3
+			},
+			"cooldown_remaining": 0.0,
+			"operator_id": null
+		},
+		{
+			"weapon_id": "gatling_3",
+			"type": "gatling_gun",
+			"position_offset": {"x": -30, "y": 10},
+			"facing": -90.0,
+			"arc": {"min": -120, "max": 120},
+			"stats": {
+				"damage": 3,
+				"rate_of_fire": 12.0,
+				"projectile_speed": 700,
+				"range": 600,
+				"accuracy": 0.70,
+				"size": 3
+			},
+			"cooldown_remaining": 0.0,
+			"operator_id": null
+		},
+		{
+			"weapon_id": "gatling_4",
+			"type": "gatling_gun",
+			"position_offset": {"x": 30, "y": 10},
+			"facing": 90.0,
+			"arc": {"min": -120, "max": 120},
+			"stats": {
+				"damage": 3,
+				"rate_of_fire": 12.0,
+				"projectile_speed": 700,
+				"range": 600,
+				"accuracy": 0.70,
+				"size": 3
+			},
+			"cooldown_remaining": 0.0,
+			"operator_id": null
+		},
+		{
+			"weapon_id": "gatling_5",
+			"type": "gatling_gun",
+			"position_offset": {"x": -20, "y": 25},
+			"facing": 180.0,
+			"arc": {"min": -120, "max": 120},
+			"stats": {
+				"damage": 3,
+				"rate_of_fire": 12.0,
+				"projectile_speed": 700,
+				"range": 600,
+				"accuracy": 0.70,
+				"size": 3
+			},
+			"cooldown_remaining": 0.0,
+			"operator_id": null
+		},
+		{
+			"weapon_id": "gatling_6",
+			"type": "gatling_gun",
+			"position_offset": {"x": 20, "y": 25},
+			"facing": 180.0,
+			"arc": {"min": -120, "max": 120},
 			"stats": {
 				"damage": 3,
 				"rate_of_fire": 12.0,

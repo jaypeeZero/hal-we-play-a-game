@@ -1044,8 +1044,9 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> voi
 	# Team 1: Rookie pilots (skill 0.0) - worst possible
 	var base_skill = 1.0 if team == 0 else 0.0
 
-	# Determine crew size based on ship type
-	var weapon_count = 1  # Default
+	# Get actual weapon count from ship data
+	var ship_data = _find_ship_by_id(ship_id)
+	var weapon_count = ship_data.weapons.size() if not ship_data.is_empty() else 1
 	var new_crew = []
 
 	match ship_type:
@@ -1055,11 +1056,8 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> voi
 		"heavy_fighter":
 			# Pilot + gunner for heavy fighters (rear turret defense)
 			new_crew = CrewData.create_heavy_fighter_crew(base_skill)
-		"corvette":
-			weapon_count = 2
-			new_crew = CrewData.create_ship_crew(weapon_count, base_skill)
-		"capital":
-			weapon_count = 4
+		"corvette", "capital":
+			# Captain + pilot + gunners based on actual weapon count
 			new_crew = CrewData.create_ship_crew(weapon_count, base_skill)
 
 	# Assign crew to ship and add to index
