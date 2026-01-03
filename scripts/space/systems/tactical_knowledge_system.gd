@@ -266,6 +266,70 @@ static var knowledge_base = {
 	},
 
 	# ============================================================================
+	# LARGE SHIP PILOT KNOWLEDGE - Corvette and Capital tactics
+	# ============================================================================
+
+	"large_ship_vs_fighters_close": {
+		"role": CrewData.Role.PILOT,
+		"tags": ["corvette", "capital", "fighters", "close", "kite"],
+		"text": "corvette capital fighters close kite back away maintain distance",
+		"content": {
+			"maneuvers": ["large_ship_kite", "large_ship_broadside"],
+			"skill_requirements": {"large_ship_kite": 0.3, "large_ship_broadside": 0.0},
+			"priority": "defensive",
+			"context": "Back away from fighters, maintain turret range"
+		}
+	},
+
+	"large_ship_vs_fighters_mid": {
+		"role": CrewData.Role.PILOT,
+		"tags": ["corvette", "capital", "fighters", "mid", "broadside"],
+		"text": "corvette capital fighters mid range broadside turrets",
+		"content": {
+			"maneuvers": ["large_ship_broadside", "large_ship_kite"],
+			"skill_requirements": {"large_ship_broadside": 0.0, "large_ship_kite": 0.3},
+			"priority": "tactical",
+			"context": "Present broadside for maximum turret coverage"
+		}
+	},
+
+	"large_ship_vs_fighters_far": {
+		"role": CrewData.Role.PILOT,
+		"tags": ["corvette", "capital", "fighters", "far", "approach"],
+		"text": "corvette capital fighters far approach close distance",
+		"content": {
+			"maneuvers": ["large_ship_approach"],
+			"skill_requirements": {"large_ship_approach": 0.0},
+			"priority": "normal",
+			"context": "Close distance to engagement range"
+		}
+	},
+
+	"large_ship_vs_capital_close": {
+		"role": CrewData.Role.PILOT,
+		"tags": ["corvette", "capital", "close", "broadside", "firing"],
+		"text": "corvette capital close range broadside firing solution",
+		"content": {
+			"maneuvers": ["large_ship_broadside", "large_ship_orbit"],
+			"skill_requirements": {"large_ship_broadside": 0.0, "large_ship_orbit": 0.5},
+			"priority": "aggressive",
+			"context": "Maintain broadside firing position"
+		}
+	},
+
+	"large_ship_vs_capital_far": {
+		"role": CrewData.Role.PILOT,
+		"tags": ["corvette", "capital", "far", "approach"],
+		"text": "corvette capital far approach closing",
+		"content": {
+			"maneuvers": ["large_ship_approach"],
+			"skill_requirements": {"large_ship_approach": 0.0},
+			"priority": "normal",
+			"context": "Close to engagement range"
+		}
+	},
+
+	# ============================================================================
 	# GENERAL PILOTING KNOWLEDGE (non-fighter specific)
 	# ============================================================================
 

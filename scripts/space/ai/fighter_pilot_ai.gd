@@ -350,8 +350,13 @@ static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictiona
 static func _count_friendlies_engaging(target_id: String, all_crew: Array) -> int:
 	var count = 0
 	for crew in all_crew:
-		var orders = crew.get("orders", {}).get("current", {})
-		if orders.get("target_id", "") == target_id:
+		var crew_orders = crew.get("orders")
+		if crew_orders == null:
+			continue
+		var current = crew_orders.get("current")
+		if current == null or not current is Dictionary:
+			continue
+		if current.get("target_id", "") == target_id:
 			count += 1
 	return count
 
@@ -802,12 +807,17 @@ static func _count_nearby_friendly_fighters(my_ship: Dictionary, all_ships: Arra
 
 	return count
 
-## Find best target from awareness
+## Find best target from awareness, with fallback to scanning all ships
 static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String:
 	var skill = crew_data.get("stats", {}).get("skill", 0.5)
 	var awareness = crew_data.get("awareness", {})
 	var threats = awareness.get("threats", [])
 	var opportunities = awareness.get("opportunities", [])
+
+	# Get own ship to determine team
+	var ship_id = crew_data.get("assigned_to", "")
+	var own_ship = _get_ship_by_id(ship_id, all_ships)
+	var my_team = own_ship.get("team", -1)
 
 	# Rookie: stick with current target if valid and alive (target fixation)
 	if skill < 0.3:
@@ -833,6 +843,22 @@ static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String
 			selected_target = opportunity.get("id", "")
 		else:
 			selected_target = opportunity
+
+	# FALLBACK: If awareness is empty, scan all_ships directly for enemies
+	# This ensures fighters always find targets even if awareness system hasn't run
+	if selected_target == "" and my_team >= 0:
+		var my_pos = own_ship.get("position", Vector2.ZERO)
+		var closest_distance = INF
+		for ship in all_ships:
+			var ship_team = ship.get("team", -1)
+			if ship_team == my_team or ship_team < 0:
+				continue  # Same team or invalid
+			if ship.get("status", "") != "operational":
+				continue
+			var distance = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+			if distance < closest_distance:
+				closest_distance = distance
+				selected_target = ship.get("ship_id", "")
 
 	# Lock in target for rookies (for next decision cycle)
 	if skill < 0.3 and selected_target != "":

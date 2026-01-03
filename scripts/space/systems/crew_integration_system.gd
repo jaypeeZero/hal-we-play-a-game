@@ -74,6 +74,12 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		updated.orders.lateral_thrust = decision.get("lateral_thrust", 0)
 		updated.orders.position_side = decision.get("position_side", 0)
 		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
+	elif subtype.begins_with("large_ship_"):
+		# ALL large ship maneuvers (large_ship_*) - corvettes and capitals
+		updated.orders.current_order = "large_ship_engage"
+		updated.orders.target_id = decision.get("target_id", "")
+		updated.orders.maneuver_subtype = subtype
+		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
 
 	# Apply crew skill modifiers to ship stats
 	if crew_data and crew_data.has("stats"):

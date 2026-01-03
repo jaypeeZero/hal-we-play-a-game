@@ -104,6 +104,15 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 			return apply_space_drift(ship_data, delta)
 		pilot_control = calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
 
+	elif current_order == "large_ship_engage":
+		# Large ship engage mode - corvette and capital maneuvers
+		var target_id = ship_data.get("orders", {}).get("target_id", "")
+		var target = find_ship_by_id(targets, target_id) if target_id else find_nearest_enemy(ship_data, targets)
+		if target.is_empty():
+			return apply_space_drift(ship_data, delta)
+		var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "large_ship_approach")
+		pilot_control = _calculate_large_ship_control(ship_data, target, maneuver_subtype)
+
 	else:
 		# No orders or unknown order - use default behavior (find nearest enemy)
 		var target = find_nearest_enemy(ship_data, targets)
@@ -979,8 +988,11 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		var orbit_phase = fmod(Time.get_ticks_msec() / 1500.0, 2.0 * PI)
 		lateral_thrust = sin(orbit_phase)
 
-	# Desired combat range
-	var desired_combat_range = 2400.0
+	# Desired combat range - close enough to hit but far enough to evade
+	# Fighter weapons have ~1000 range, corvette weapons have ~1500 range
+	# Stay at 1200-1600 range to hit but avoid worst of enemy fire
+	var desired_combat_range = 1400.0
+	var range_tolerance = 300.0
 	var distance_error = distance - desired_combat_range
 
 	# Main thrust is ONLY for distance control along line of sight
@@ -988,17 +1000,17 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 	var should_brake = false
 	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
 
-	if distance_error > 600.0:
-		# Too far - close in slowly
-		throttle = 0.2
-	elif distance_error < -600.0:
+	if distance_error > range_tolerance:
+		# Too far - close in at moderate speed (more aggressive approach)
+		throttle = 0.5
+	elif distance_error < -range_tolerance:
 		# Too close - back off
 		should_brake = true
 	# Otherwise at good range - no forward thrust, just strafe
 
 	# Brake if going too fast
 	var current_speed = current_velocity.length()
-	var max_dodge_speed = ship_data.stats.max_speed * 0.35
+	var max_dodge_speed = ship_data.stats.max_speed * 0.4
 	if current_speed > max_dodge_speed:
 		should_brake = true
 		throttle = 0.0
@@ -1009,7 +1021,7 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		"thrust_active": throttle > 0.1,
 		"is_braking": should_brake,
 		"lateral_thrust": lateral_thrust,  # Maneuvering jets for ALL positioning
-		"engagement_range": 1600.0,
+		"engagement_range": 1400.0,
 		"current_distance": distance
 	}
 
@@ -1093,6 +1105,129 @@ static func calculate_rejoin_wingman(ship_data: Dictionary, target: Dictionary, 
 			"engagement_range": 80.0,
 			"current_distance": distance
 		}
+
+# ============================================================================
+# LARGE SHIP MANEUVERS - Corvette and Capital tactics
+# ============================================================================
+
+## Calculate large ship pilot control - returns pilot_control dictionary for apply_space_physics
+## These are simpler than fighter maneuvers - less aggressive turning, more lateral thrust
+static func _calculate_large_ship_control(ship_data: Dictionary, target: Dictionary, maneuver: String) -> Dictionary:
+	match maneuver:
+		"large_ship_approach":
+			return _calculate_large_ship_approach(ship_data, target)
+		"large_ship_broadside":
+			return _calculate_large_ship_broadside(ship_data, target)
+		"large_ship_kite":
+			return _calculate_large_ship_kite(ship_data, target)
+		"large_ship_orbit":
+			return _calculate_large_ship_orbit(ship_data, target)
+		_:
+			# Default: approach target
+			return _calculate_large_ship_approach(ship_data, target)
+
+## Approach target at moderate speed - returns pilot_control
+static func _calculate_large_ship_approach(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+
+	# Face target and thrust forward
+	var to_target = (target_pos - my_pos).normalized()
+	var distance = my_pos.distance_to(target_pos)
+
+	# Convert angle to visual heading (ships face "up" visually)
+	var desired_heading = direction_to_heading(to_target)
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": 0.8,  # Large ships don't go full speed
+		"thrust_active": true,
+		"is_braking": false,
+		"lateral_thrust": 0.0,
+		"current_distance": distance
+	}
+
+## Present broadside to target - perpendicular facing for maximum turret coverage
+## The ship commits to presenting one side (left or right) based on current rotation
+static func _calculate_large_ship_broadside(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+	var current_rotation = ship_data.get("rotation", 0.0)
+
+	var to_target = (target_pos - my_pos).normalized()
+	var distance = my_pos.distance_to(target_pos)
+
+	# Broadside = perpendicular to target (rotate 90 degrees from facing target)
+	# Two options: present left side (+90) or right side (-90)
+	var perpendicular_left = Vector2(-to_target.y, to_target.x)
+	var perpendicular_right = Vector2(to_target.y, -to_target.x)
+
+	var heading_left = direction_to_heading(perpendicular_left)
+	var heading_right = direction_to_heading(perpendicular_right)
+
+	# Pick whichever side is closer to current rotation to avoid jerky flip-flopping
+	var diff_left = abs(angle_difference(current_rotation, heading_left))
+	var diff_right = abs(angle_difference(current_rotation, heading_right))
+
+	var desired_heading = heading_left if diff_left < diff_right else heading_right
+
+	# Use lateral thrust to slide toward/away from target while maintaining broadside
+	var lateral: float
+	if distance < 1500.0:
+		lateral = -0.5  # Strafe away
+	else:
+		lateral = 0.3  # Strafe closer
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": 0.2,  # Slow, controlled movement
+		"thrust_active": true,
+		"is_braking": false,
+		"lateral_thrust": lateral,
+		"current_distance": distance
+	}
+
+## Kite target - back away while facing them
+static func _calculate_large_ship_kite(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+
+	var to_target = (target_pos - my_pos).normalized()
+	var distance = my_pos.distance_to(target_pos)
+
+	# Face target (for forward turrets) - convert to visual heading
+	var desired_heading = direction_to_heading(to_target)
+
+	# Kiting means we want to move backward while facing the target
+	# Since ships thrust in their facing direction, we need to use braking/reverse
+	return {
+		"desired_heading": desired_heading,
+		"throttle": 0.0,  # No forward thrust
+		"thrust_active": false,
+		"is_braking": true,  # Apply reverse thrust
+		"lateral_thrust": 0.0,
+		"current_distance": distance
+	}
+
+## Orbit target at current range
+static func _calculate_large_ship_orbit(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+
+	var to_target = (target_pos - my_pos).normalized()
+	var distance = my_pos.distance_to(target_pos)
+
+	# Face target - convert to visual heading
+	var desired_heading = direction_to_heading(to_target)
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": 0.1,  # Slow forward movement
+		"thrust_active": true,
+		"is_braking": false,
+		"lateral_thrust": 0.6,  # Strong lateral thrust to orbit
+		"current_distance": distance
+	}
 
 # ============================================================================
 # WING FORMATION MANEUVERS - Dynamic wing system
@@ -1828,9 +1963,16 @@ static func apply_disabled_drift(ship_data: Dictionary, delta: float) -> Diction
 
 ## Rotate toward desired heading at turn_rate speed
 static func rotate_toward_heading(current_rotation: float, target_rotation: float, turn_rate: float, delta: float) -> float:
-	# Smooth rotation using lerp_angle for shortest path
-	var rotation_speed = clamp(turn_rate * delta, 0.0, 1.0)
-	return lerp_angle(current_rotation, target_rotation, rotation_speed)
+	# Turn at constant angular velocity (not percentage-based)
+	var max_turn_this_frame = turn_rate * delta  # Radians we can turn this frame
+	var diff = angle_difference(current_rotation, target_rotation)
+
+	if abs(diff) <= max_turn_this_frame:
+		# Close enough - snap to target
+		return target_rotation
+	else:
+		# Turn at max rate toward target
+		return current_rotation + sign(diff) * max_turn_this_frame
 
 ## Calculate the signed difference between two angles
 static func angle_difference(angle1: float, angle2: float) -> float:
