@@ -278,6 +278,22 @@ static func _get_fighter_decision_delay(maneuver_subtype: String) -> float:
 		_:
 			return randf_range(0.5, 0.8)  # Default
 
+## Get decision delay for large ship maneuvers
+static func _get_large_ship_decision_delay(maneuver_subtype: String) -> float:
+	match maneuver_subtype:
+		"large_ship_kite":
+			return randf_range(0.5, 0.8)  # Moderate updates for defensive kiting
+		"large_ship_broadside":
+			return randf_range(0.6, 0.9)  # Measured updates for tactical positioning
+		"large_ship_approach":
+			return randf_range(0.7, 1.0)  # Less frequent for straightforward approach
+		"large_ship_orbit":
+			return randf_range(0.5, 0.8)  # Moderate updates for orbital positioning
+		"idle":
+			return randf_range(2.0, 4.0)  # Slow when idle
+		_:
+			return randf_range(0.5, 1.0)  # Default
+
 ## Helper to find ship by ID
 static func _find_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
 	for ship in all_ships:
@@ -285,42 +301,43 @@ static func _find_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
 			return ship
 	return {}
 
-## Corvette pilot decision - balanced, tactical positioning
+## Corvette pilot decision - uses LargeShipPilotAI for knowledge-driven tactics
 static func make_corvette_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
-	var awareness = crew_data.awareness
+	var ship_data = context.get("ship_data", {})
+	var all_ships = context.get("all_ships", [])
 
-	# Corvettes evade if:
-	# 1. Damaged, OR
-	# 2. Outnumbered without squadron support
-	var should_evade = context.is_outnumbered and not context.has_squadron_support
+	# Use LargeShipPilotAI to make knowledge-driven decision
+	var decision = LargeShipPilotAI.make_decision(crew_data, ship_data, all_ships, game_time)
 
-	if should_evade and not awareness.threats.is_empty():
-		return make_evasive_decision(crew_data, game_time)
+	# Wrap decision in standard format
+	var updated = crew_data.duplicate(true)
+	updated.orders.current = decision
+	updated.current_action = decision.get("subtype", "idle")
 
-	# Engage if have targets and not heavily outnumbered
-	if not awareness.opportunities.is_empty():
-		return make_pursuit_decision(crew_data, game_time)
+	# Set next decision time based on maneuver type
+	var next_delay = _get_large_ship_decision_delay(decision.get("subtype", "idle"))
+	updated.next_decision_time = game_time + next_delay
 
-	# Idle otherwise
-	return make_idle_decision(crew_data, game_time)
+	return {"crew_data": updated, "decision": decision}
 
-## Capital ship pilot decision - cautious, maintains distance
+## Capital ship pilot decision - uses LargeShipPilotAI for knowledge-driven tactics
 static func make_capital_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
-	var awareness = crew_data.awareness
+	var ship_data = context.get("ship_data", {})
+	var all_ships = context.get("all_ships", [])
 
-	# Capital ships are cautious - evade if threatened
-	if not awareness.threats.is_empty():
-		# Check if threats are close (would need distance data)
-		# For now, evade if any significant threats
-		if context.threat_count > 2:
-			return make_evasive_decision(crew_data, game_time)
+	# Use LargeShipPilotAI to make knowledge-driven decision
+	var decision = LargeShipPilotAI.make_decision(crew_data, ship_data, all_ships, game_time)
 
-	# Engage only if have clear opportunities
-	if not awareness.opportunities.is_empty() and not context.is_outnumbered:
-		return make_pursuit_decision(crew_data, game_time)
+	# Wrap decision in standard format
+	var updated = crew_data.duplicate(true)
+	updated.orders.current = decision
+	updated.current_action = decision.get("subtype", "idle")
 
-	# Default: maintain position
-	return make_idle_decision(crew_data, game_time)
+	# Set next decision time based on maneuver type
+	var next_delay = _get_large_ship_decision_delay(decision.get("subtype", "idle"))
+	updated.next_decision_time = game_time + next_delay
+
+	return {"crew_data": updated, "decision": decision}
 
 ## Balanced pilot decision - default behavior
 static func make_balanced_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
@@ -732,7 +749,14 @@ static func _select_captain_action_from_knowledge(knowledge: Array, crew_data: D
 
 ## Check if ship is critically damaged
 static func _is_ship_critically_damaged(crew_data: Dictionary) -> bool:
-	# TODO: Check actual ship damage from awareness
+	var threats = crew_data.get("awareness", {}).get("threats", [])
+	var threat_count = threats.size()
+	var stress = crew_data.get("stats", {}).get("stress", 0.0)
+
+	# Consider critically damaged if high stress and many threats
+	if stress > 0.7 and threat_count >= 3:
+		return true
+
 	return false
 
 ## Find damaged friendly in awareness
@@ -1024,12 +1048,44 @@ static func _select_squadron_action_from_knowledge(knowledge: Array, crew_data: 
 
 ## Find damaged subordinate ship
 static func _find_damaged_subordinate(crew_data: Dictionary) -> Variant:
-	# TODO: Check subordinate ship status
+	var subordinates = crew_data.get("command_chain", {}).get("subordinates", [])
+	var known_entities = crew_data.get("awareness", {}).get("known_entities", [])
+
+	for sub_id in subordinates:
+		for entity in known_entities:
+			if entity.get("id", "") == sub_id:
+				var status = entity.get("status", "")
+				if status in ["damaged", "critical", "disabled"]:
+					return entity
+
 	return null
 
 ## Check if squadron is scattered
+const SCATTERED_THRESHOLD = 2000.0  # Units
+
 static func _is_squadron_scattered(crew_data: Dictionary) -> bool:
-	# TODO: Check subordinate positions
+	var subordinates = crew_data.get("command_chain", {}).get("subordinates", [])
+	if subordinates.size() < 2:
+		return false
+
+	var known_entities = crew_data.get("awareness", {}).get("known_entities", [])
+	var positions = []
+
+	for sub_id in subordinates:
+		for entity in known_entities:
+			if entity.get("id", "") == sub_id:
+				positions.append(entity.get("position", Vector2.ZERO))
+				break
+
+	if positions.size() < 2:
+		return false
+
+	# Check if any pair is too far apart
+	for i in range(positions.size()):
+		for j in range(i + 1, positions.size()):
+			if positions[i].distance_to(positions[j]) > SCATTERED_THRESHOLD:
+				return true
+
 	return false
 
 ## Assign targets to squadron ships
@@ -1318,6 +1374,10 @@ static func analyze_tactical_context(crew_data: Dictionary, ships: Array = [], c
 	var friendlies = count_friendlies(awareness.known_entities)
 	var enemies = count_enemies(awareness.known_entities, awareness.threats)
 
+	# Get the ship this crew is assigned to
+	var ship_id = crew_data.get("assigned_to", "")
+	var ship_data = _find_ship_by_id(ship_id, ships)
+
 	return {
 		"friendly_count": friendlies,
 		"enemy_count": enemies,
@@ -1328,7 +1388,8 @@ static func analyze_tactical_context(crew_data: Dictionary, ships: Array = [], c
 		"threat_count": awareness.threats.size(),
 		"opportunity_count": awareness.opportunities.size(),
 		"all_ships": ships,
-		"all_crew": crew_list
+		"all_crew": crew_list,
+		"ship_data": ship_data
 	}
 
 ## Count friendly ships in awareness

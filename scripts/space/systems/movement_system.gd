@@ -1095,6 +1095,96 @@ static func calculate_rejoin_wingman(ship_data: Dictionary, target: Dictionary, 
 		}
 
 # ============================================================================
+# LARGE SHIP MANEUVERS - Corvette and Capital tactics
+# ============================================================================
+
+## Execute large ship maneuvers
+## These are simpler than fighter maneuvers - less aggressive turning, more lateral thrust
+static func _execute_large_ship_maneuver(ship_data: Dictionary, target: Dictionary, maneuver: String, delta: float) -> Dictionary:
+	match maneuver:
+		"large_ship_approach":
+			return _execute_large_ship_approach(ship_data, target, delta)
+		"large_ship_broadside":
+			return _execute_large_ship_broadside(ship_data, target, delta)
+		"large_ship_kite":
+			return _execute_large_ship_kite(ship_data, target, delta)
+		"large_ship_orbit":
+			return _execute_large_ship_orbit(ship_data, target, delta)
+		_:
+			return ship_data
+
+## Approach target at full speed
+static func _execute_large_ship_approach(ship_data: Dictionary, target: Dictionary, delta: float) -> Dictionary:
+	var updated = ship_data.duplicate(true)
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+
+	# Face target and thrust forward
+	var to_target = (target_pos - my_pos).normalized()
+	var target_rotation = to_target.angle()
+
+	updated.orders.desired_rotation = target_rotation
+	updated.orders.throttle = 0.8  # Large ships don't go full speed
+	updated.orders.lateral_thrust = 0.0
+
+	return updated
+
+## Present broadside to target - perpendicular facing for maximum turret coverage
+static func _execute_large_ship_broadside(ship_data: Dictionary, target: Dictionary, delta: float) -> Dictionary:
+	var updated = ship_data.duplicate(true)
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+
+	var to_target = (target_pos - my_pos).normalized()
+	var target_angle = to_target.angle()
+
+	# Broadside = perpendicular to target (rotate 90 degrees from facing target)
+	var broadside_angle = target_angle + PI/2
+
+	updated.orders.desired_rotation = broadside_angle
+	updated.orders.throttle = 0.2  # Slow, controlled movement
+	# Use lateral thrust to slide toward/away from target while maintaining broadside
+	var distance = my_pos.distance_to(target_pos)
+	if distance < 1500.0:
+		updated.orders.lateral_thrust = -0.5  # Strafe away
+	else:
+		updated.orders.lateral_thrust = 0.3  # Strafe closer
+
+	return updated
+
+## Kite target - back away while facing them
+static func _execute_large_ship_kite(ship_data: Dictionary, target: Dictionary, delta: float) -> Dictionary:
+	var updated = ship_data.duplicate(true)
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+
+	var to_target = (target_pos - my_pos).normalized()
+	var target_angle = to_target.angle()
+
+	# Face target (for forward turrets) but thrust backward
+	updated.orders.desired_rotation = target_angle
+	updated.orders.throttle = -0.4  # Reverse thrust
+	updated.orders.lateral_thrust = 0.0
+
+	return updated
+
+## Orbit target at current range
+static func _execute_large_ship_orbit(ship_data: Dictionary, target: Dictionary, delta: float) -> Dictionary:
+	var updated = ship_data.duplicate(true)
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+
+	var to_target = (target_pos - my_pos).normalized()
+	var target_angle = to_target.angle()
+
+	# Face target but strafe perpendicular to orbit
+	updated.orders.desired_rotation = target_angle
+	updated.orders.throttle = 0.1
+	updated.orders.lateral_thrust = 0.6  # Strong lateral thrust to orbit
+
+	return updated
+
+# ============================================================================
 # WING FORMATION MANEUVERS - Dynamic wing system
 # ============================================================================
 
