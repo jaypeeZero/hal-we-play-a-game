@@ -68,11 +68,15 @@
 	"ship_id": "ship_0",
 	"stats": {
 		"acceleration": 60.0,
-		"lateral_acceleration": 0.2,
+		"lateral_acceleration": 0.25,
 		"mass": 80.0,
 		"max_speed": 200.0,
 		"size": 25.0,
-		"turn_rate": 2.0
+		"turn_rate": 2.0,
+		"brake_acceleration": 1.0,
+		"brake_heat_capacity": 120.0,
+		"brake_heat_per_second": 50.0,
+		"brake_heat_dissipation": 10.0
 	},
 	"status": "operational",
 	"team": 0,
