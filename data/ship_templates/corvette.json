@@ -108,7 +108,11 @@
 		"mass": 200.0,
 		"max_speed": 150.0,
 		"size": 90.0,
-		"turn_rate": 1.5
+		"turn_rate": 1.5,
+		"brake_acceleration": 1.0,
+		"brake_heat_capacity": 200.0,
+		"brake_heat_per_second": 50.0,
+		"brake_heat_dissipation": 8.0
 	},
 	"status": "operational",
 	"team": 0,

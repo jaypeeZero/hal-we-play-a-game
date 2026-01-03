@@ -4,10 +4,14 @@
 	"stats": {
 		"max_speed": 80.0,
 		"acceleration": 20.0,
-		"lateral_acceleration": 0.05,
+		"lateral_acceleration": 0.08,
 		"turn_rate": 0.5,
 		"mass": 1000.0,
-		"size": 150.0
+		"size": 150.0,
+		"brake_acceleration": 1.0,
+		"brake_heat_capacity": 500.0,
+		"brake_heat_per_second": 50.0,
+		"brake_heat_dissipation": 5.0
 	},
 	"armor_sections": [
 		{
