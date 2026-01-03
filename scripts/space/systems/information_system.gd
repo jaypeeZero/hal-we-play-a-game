@@ -135,9 +135,9 @@ static func calculate_threat_priority(entity: Dictionary, own_ship: Dictionary, 
 	priority += calculate_distance_threat(distance, crew_data.stats.awareness_range)
 
 	# Type factor
-	if entity.type == "projectile":
+	if entity.get("type") == "projectile":
 		priority += calculate_projectile_threat(entity, own_ship)
-	elif entity.type == "ship":
+	elif entity.get("type") == "ship":
 		priority += calculate_ship_threat(entity)
 
 	return priority
@@ -185,7 +185,7 @@ static func calculate_ship_threat(ship: Dictionary) -> float:
 
 ## Identify tactical opportunities
 static func identify_opportunities(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array) -> Array:
-	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team and e.type == "ship")
+	var enemies = visible_entities.filter(func(e): return e.get("team") != own_ship.get("team") and e.get("type") == "ship")
 
 	# All enemy ships are potential opportunities (can damage any target at some effectiveness)
 	# Prioritization of good targets happens at the weapon system level
@@ -208,7 +208,7 @@ static func add_opportunity_score(entity: Dictionary, own_ship: Dictionary, crew
 
 ## Calculate opportunity score (good targets)
 static func calculate_opportunity_score(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> float:
-	if entity.type != "ship":
+	if entity.get("type") != "ship":
 		return 0.0
 
 	var score = 50.0  # Base score

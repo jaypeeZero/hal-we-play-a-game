@@ -104,6 +104,15 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 			return apply_space_drift(ship_data, delta)
 		pilot_control = calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
 
+	elif current_order == "large_ship_engage":
+		# Large ship engage mode - corvette and capital maneuvers
+		var target_id = ship_data.get("orders", {}).get("target_id", "")
+		var target = find_ship_by_id(targets, target_id) if target_id else find_nearest_enemy(ship_data, targets)
+		if target.is_empty():
+			return apply_space_drift(ship_data, delta)
+		var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "large_ship_approach")
+		return _execute_large_ship_maneuver(ship_data, target, maneuver_subtype, delta)
+
 	else:
 		# No orders or unknown order - use default behavior (find nearest enemy)
 		var target = find_nearest_enemy(ship_data, targets)

@@ -307,18 +307,23 @@ static func make_corvette_pilot_decision(crew_data: Dictionary, context: Diction
 	var all_ships = context.get("all_ships", [])
 
 	# Use LargeShipPilotAI to make knowledge-driven decision
-	var decision = LargeShipPilotAI.make_decision(crew_data, ship_data, all_ships, game_time)
+	var ai_result = LargeShipPilotAI.make_decision(crew_data, ship_data, all_ships, game_time)
 
-	# Wrap decision in standard format
-	var updated = crew_data.duplicate(true)
-	updated.orders.current = decision
-	updated.current_action = decision.get("subtype", "idle")
+	# Check if we got an actual decision (has "decision" key with proper structure)
+	if ai_result.has("decision") and ai_result.decision.has("type"):
+		var decision = ai_result.decision
+		var updated = ai_result.crew_data
+		updated.orders.current = decision
+		updated.current_action = decision.get("subtype", "idle")
 
-	# Set next decision time based on maneuver type
-	var next_delay = _get_large_ship_decision_delay(decision.get("subtype", "idle"))
-	updated.next_decision_time = game_time + next_delay
+		# Set next decision time based on maneuver type
+		var next_delay = _get_large_ship_decision_delay(decision.get("subtype", "idle"))
+		updated.next_decision_time = game_time + next_delay
 
-	return {"crew_data": updated, "decision": decision}
+		return {"crew_data": updated, "decision": decision}
+
+	# No ship targets available - fall back to awareness-based decisions
+	return make_balanced_pilot_decision(crew_data, context, game_time)
 
 ## Capital ship pilot decision - uses LargeShipPilotAI for knowledge-driven tactics
 static func make_capital_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:
@@ -326,18 +331,23 @@ static func make_capital_pilot_decision(crew_data: Dictionary, context: Dictiona
 	var all_ships = context.get("all_ships", [])
 
 	# Use LargeShipPilotAI to make knowledge-driven decision
-	var decision = LargeShipPilotAI.make_decision(crew_data, ship_data, all_ships, game_time)
+	var ai_result = LargeShipPilotAI.make_decision(crew_data, ship_data, all_ships, game_time)
 
-	# Wrap decision in standard format
-	var updated = crew_data.duplicate(true)
-	updated.orders.current = decision
-	updated.current_action = decision.get("subtype", "idle")
+	# Check if we got an actual decision (has "decision" key with proper structure)
+	if ai_result.has("decision") and ai_result.decision.has("type"):
+		var decision = ai_result.decision
+		var updated = ai_result.crew_data
+		updated.orders.current = decision
+		updated.current_action = decision.get("subtype", "idle")
 
-	# Set next decision time based on maneuver type
-	var next_delay = _get_large_ship_decision_delay(decision.get("subtype", "idle"))
-	updated.next_decision_time = game_time + next_delay
+		# Set next decision time based on maneuver type
+		var next_delay = _get_large_ship_decision_delay(decision.get("subtype", "idle"))
+		updated.next_decision_time = game_time + next_delay
 
-	return {"crew_data": updated, "decision": decision}
+		return {"crew_data": updated, "decision": decision}
+
+	# No ship targets available - fall back to awareness-based decisions
+	return make_balanced_pilot_decision(crew_data, context, game_time)
 
 ## Balanced pilot decision - default behavior
 static func make_balanced_pilot_decision(crew_data: Dictionary, context: Dictionary, game_time: float) -> Dictionary:

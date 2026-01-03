@@ -350,8 +350,13 @@ static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictiona
 static func _count_friendlies_engaging(target_id: String, all_crew: Array) -> int:
 	var count = 0
 	for crew in all_crew:
-		var orders = crew.get("orders", {}).get("current", {})
-		if orders.get("target_id", "") == target_id:
+		var crew_orders = crew.get("orders")
+		if crew_orders == null:
+			continue
+		var current = crew_orders.get("current")
+		if current == null or not current is Dictionary:
+			continue
+		if current.get("target_id", "") == target_id:
 			count += 1
 	return count
 

@@ -165,9 +165,9 @@ static func _generate_threat_summary(threats: Array) -> String:
 		parts.append("incoming")
 
 	# Threat types
-	if top_threat.type == "projectile":
+	if top_threat.get("type") == "projectile":
 		parts.append("incoming fire")
-	elif top_threat.type == "ship":
+	elif top_threat.get("type") == "ship":
 		parts.append("enemy ship")
 
 	return " ".join(parts)
