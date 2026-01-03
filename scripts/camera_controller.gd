@@ -8,7 +8,7 @@ class_name CameraController
 ## - Reset: / key (return to initial position and zoom)
 
 # Camera settings
-const ZOOM_MIN: float = 0.5
+const ZOOM_MIN: float = 0.05
 const ZOOM_MAX: float = 2.0
 const ZOOM_STEP: float = 0.1
 const PAN_SPEED: float = 500.0

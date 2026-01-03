@@ -599,25 +599,14 @@ func _spawn_initial_squadrons() -> void:
 
 ## Spawn all ships for a team based on fleet configuration
 func _spawn_fleet_for_team(fleet: Dictionary, team: int, base_x: float) -> void:
-	var total_ships := 0
-
-	for ship_type in FleetDataManager.SHIP_TYPES:
-		total_ships += fleet.get(ship_type, 0)
-
-	if total_ships == 0:
-		return
-
-	# Calculate vertical spacing based on number of ships
-	var vertical_spacing := _battlefield_size.y / (total_ships + 1)
-	var current_index := 0
-
-	for ship_type in FleetDataManager.SHIP_TYPES:
-		var count: int = fleet.get(ship_type, 0)
-		for i in range(count):
-			current_index += 1
-			var base_y := vertical_spacing * current_index
-			var offset := Vector2(randf_range(-50, 50), randf_range(-30, 30))
-			spawn_ship(ship_type, team, Vector2(base_x, base_y) + offset)
+	print("=== SPAWNING FLEET FOR TEAM %d ===" % team)
+	print("Fleet config: %s" % str(fleet))
+	print("Battlefield height: %s" % _battlefield_size.y)
+	var spawn_positions = ShipData.calculate_fleet_spawn_positions(fleet, base_x, _battlefield_size.y)
+	print("Got %d spawn positions" % spawn_positions.size())
+	for spawn_info in spawn_positions:
+		print("  Spawning %s at position %s (size=%.0f)" % [spawn_info["type"], spawn_info["position"], spawn_info["size"]])
+		spawn_ship(spawn_info["type"], team, spawn_info["position"])
 
 ## Spawn initial obstacles at game start
 func _spawn_initial_obstacles() -> void:

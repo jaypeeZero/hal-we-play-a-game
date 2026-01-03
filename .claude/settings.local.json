@@ -5,7 +5,9 @@
       "Bash(godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gtest=test_damage_resolver.gd -gexit:*)",
       "Bash(godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gtest=test_crew_ai_system.gd -gexit:*)",
       "WebSearch",
-      "WebFetch(domain:en.wikipedia.org)"
+      "WebFetch(domain:en.wikipedia.org)",
+      "Bash(grep:*)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

@@ -147,3 +147,70 @@ static func validate_ship_data(data: Dictionary) -> bool:
 	if not data.has("internals"): return false
 	if not data.has("weapons"): return false
 	return true
+
+
+## Get hull length (Y extent) for a ship type - used for spawn spacing
+static func get_hull_length(ship_type: String) -> float:
+	var hull = HullShapes.get_hull(ship_type)
+	var sections = hull.get("sections", [])
+	if sections.is_empty():
+		# Fallback to stats.size * 2 if no hull data
+		var template = get_ship_template(ship_type)
+		return template.stats.size * 2.0 if not template.is_empty() else 40.0
+
+	var min_y := 0.0
+	var max_y := 0.0
+	for section in sections:
+		for point in section.get("points", []):
+			if point.y < min_y:
+				min_y = point.y
+			if point.y > max_y:
+				max_y = point.y
+	return max_y - min_y
+
+
+## Calculate spawn positions for a fleet - pure function for testability
+## Returns array of {type: String, position: Vector2, size: float}
+static func calculate_fleet_spawn_positions(fleet: Dictionary, base_x: float, battlefield_height: float) -> Array:
+	var results := []
+
+	# Build list of ships with their hull lengths (not collision radius)
+	var ships_to_spawn := []
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		var count: int = fleet.get(ship_type, 0)
+		if count > 0:
+			var hull_length: float = get_hull_length(ship_type)
+			for i in range(count):
+				ships_to_spawn.append({"type": ship_type, "length": hull_length})
+
+	if ships_to_spawn.is_empty():
+		return results
+
+	# Calculate minimum spacing needed - ships CANNOT overlap
+	var min_gap := 50.0  # Extra gap between ship edges
+	var total_required := 0.0
+	for ship in ships_to_spawn:
+		total_required += ship["length"] + min_gap
+
+	# Available space
+	var margin := 100.0
+	var available := battlefield_height - margin * 2.0
+
+	# Distribute extra space as additional gap if we have room
+	var extra_gap := 0.0
+	if total_required < available:
+		extra_gap = (available - total_required) / float(ships_to_spawn.size())
+
+	# Position each ship - use half-length to find center
+	var current_y := margin
+	for ship in ships_to_spawn:
+		var half_length: float = ship["length"] / 2.0
+		current_y += half_length  # Move to ship center
+		results.append({
+			"type": ship["type"],
+			"position": Vector2(base_x, current_y),
+			"size": ship["length"]
+		})
+		current_y += half_length + min_gap + extra_gap  # Move past ship
+
+	return results
