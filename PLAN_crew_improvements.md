@@ -6,26 +6,13 @@ The Fighter Pilot AI works well. Other crew types are broken or severely limited
 
 ---
 
-## CRITICAL BUG: Heavy Fighter Gunners Never Shoot
+## BUG FIXED: Heavy Fighter Rear Turret Arc
 
-### Root Cause Analysis
+**Bug:** Rear turret arc was 270° (±135°), should be 360°.
 
-**Bug:** Heavy Fighter rear turrets never fire.
+**Fix:** Changed `data/ship_templates/heavy_fighter.json` rear turret arc from `±135` to `±180`.
 
-**Why:** Two independent issues:
-
-1. **Gunner decisions are disconnected from weapon firing:**
-   - `crew_ai_system.gd:make_gunner_decision()` creates fire decisions with `target_id`
-   - `crew_integration_system.gd:apply_fire_decision()` sets `ship_data.orders.target_id`
-   - `weapon_system.gd:update_weapons()` **IGNORES** `orders.target_id` - it auto-picks targets from the `targets` array
-   - **Result:** Gunner AI runs but has no effect on actual weapon firing
-
-2. **Heavy Fighter pilots never expose the rear:**
-   - Heavy Fighter pilot uses same logic as regular Fighter (`fighter_pilot_ai.gd`)
-   - Pilot pursues enemies (enemies end up in FRONT)
-   - Rear turret arc is behind the ship (weapon.facing = π radians)
-   - Enemies are never in the rear turret's arc
-   - **Result:** Rear turret finds no valid targets
+**Note:** Weapons fire automatically via `weapon_system.gd` - gunner AI decisions don't directly control firing. This is fine; the weapon system handles targeting and arc checks.
 
 ---
 
@@ -43,160 +30,11 @@ From commits `0a2850c`, `8764dcc`, `e5d74eb`, `08c4f4e`, `67b13b4`:
 
 ## Implementation Plan
 
-### Phase 1: Fix Heavy Fighter Gunner (Bug Fix)
-
-This is the most visible bug. Heavy Fighters have a rear gunner that never shoots.
-
-#### Step 1.1: Add Heavy Fighter Pilot Awareness of Rear Arc
-
-**File:** `scripts/space/ai/fighter_pilot_ai.gd`
-
-**Location:** Add new function after `_make_fighter_vs_fighter_decision()` (around line 480)
-
-**What to add:**
-
-```gdscript
-## Check if ship is heavy_fighter type
-static func _is_heavy_fighter(ship_data: Dictionary) -> bool:
-    return ship_data.get("type", "") == "heavy_fighter"
-
-## Check if any enemy is in the rear turret arc (behind the ship)
-## Returns the enemy ship_data if found, empty dict if not
-static func _get_enemy_in_rear_arc(ship_data: Dictionary, all_ships: Array) -> Dictionary:
-    var my_team = ship_data.get("team", -1)
-    var my_pos = ship_data.get("position", Vector2.ZERO)
-    var my_rotation = ship_data.get("rotation", 0.0)
-
-    # Rear is opposite of ship facing (ship faces rotation, rear is rotation + PI)
-    var rear_direction = Vector2(cos(my_rotation + PI), sin(my_rotation + PI))
-
-    for ship in all_ships:
-        if ship.get("team", -1) == my_team:
-            continue
-        if ship.get("status", "") == "destroyed":
-            continue
-
-        var enemy_pos = ship.get("position", Vector2.ZERO)
-        var to_enemy = (enemy_pos - my_pos).normalized()
-        var distance = my_pos.distance_to(enemy_pos)
-
-        # Check if enemy is within 500 units (rear turret range) and behind us
-        # Behind = within 135 degrees of rear (matches rear turret arc)
-        if distance < 500.0:
-            var angle_to_enemy = abs(rear_direction.angle_to(to_enemy))
-            if angle_to_enemy < deg_to_rad(135.0):
-                return ship
-
-    return {}
-```
-
-**Location:** Modify `_make_fighter_vs_fighter_decision()` (around line 480)
-
-**What to change:** At the start of the function, add this check:
-
-```gdscript
-static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
-    # HEAVY FIGHTER SPECIAL: If enemy is behind us, don't evade - let rear gunner engage
-    if _is_heavy_fighter(ship_data):
-        var rear_enemy = _get_enemy_in_rear_arc(ship_data, all_ships)
-        if not rear_enemy.is_empty():
-            # Enemy behind us - maintain current heading, let rear gunner shoot
-            # Use gentle pursuit of our forward target instead of aggressive maneuvering
-            return _make_heavy_fighter_present_rear_decision(crew_data, ship_data, target_ship, rear_enemy, game_time)
-
-    # ... rest of existing function unchanged ...
-```
-
-**Add new function:**
-
-```gdscript
-## Heavy fighter behavior when enemy is behind - maintain heading for rear gunner
-static func _make_heavy_fighter_present_rear_decision(crew_data: Dictionary, ship_data: Dictionary, forward_target: Dictionary, rear_enemy: Dictionary, game_time: float) -> Dictionary:
-    var updated = crew_data.duplicate(true)
-
-    # Continue toward forward target but at reduced throttle
-    # This keeps rear exposed to the enemy behind us
-    var decision = {
-        "type": "maneuver",
-        "subtype": "fight_pursue_tactical",  # Reuse existing maneuver
-        "crew_id": crew_data.get("crew_id", ""),
-        "entity_id": crew_data.get("assigned_to", ""),
-        "target_id": forward_target.get("ship_id", ""),
-        "rear_target_id": rear_enemy.get("ship_id", ""),  # For debugging/logging
-        "skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
-        "timestamp": game_time
-    }
-
-    updated.next_decision_time = game_time + randf_range(0.3, 0.5)
-    return {"crew_data": updated, "decision": decision}
-```
-
-#### Step 1.2: Verify Weapon System Arc Calculation
-
-**File:** `scripts/space/systems/weapon_system.gd`
-
-**No changes needed** - The weapon system already correctly calculates arcs via `can_fire_at_target()` -> `is_in_firing_arc()`. The rear turret will fire automatically when targets are in arc.
-
-#### Step 1.3: Add Test for Heavy Fighter Rear Gunner
-
-**File:** `tests/test_heavy_fighter_gunner.gd` (NEW FILE)
-
-```gdscript
-extends GutTest
-
-## Test that heavy fighter rear turret can fire at enemies behind the ship
-
-func test_rear_turret_fires_at_enemy_behind():
-    # Create heavy fighter facing north (rotation = -PI/2)
-    var heavy_fighter = _create_heavy_fighter(Vector2(500, 500), -PI/2, 0)
-
-    # Create enemy behind (south of) the heavy fighter
-    var enemy = _create_fighter(Vector2(500, 700), 0, 1)  # 200 units behind
-
-    # Get rear turret (weapon with facing = PI)
-    var rear_turret = null
-    for weapon in heavy_fighter.weapons:
-        if abs(weapon.facing - PI) < 0.1:
-            rear_turret = weapon
-            break
-
-    assert_not_null(rear_turret, "Heavy fighter should have rear turret")
-
-    # Check if rear turret can fire at enemy
-    var can_fire = WeaponSystem.can_fire_at_target(heavy_fighter, rear_turret, enemy)
-    assert_true(can_fire, "Rear turret should be able to fire at enemy behind ship")
-
-func test_rear_turret_cannot_fire_at_enemy_in_front():
-    # Create heavy fighter facing north
-    var heavy_fighter = _create_heavy_fighter(Vector2(500, 500), -PI/2, 0)
-
-    # Create enemy in front (north of) the heavy fighter
-    var enemy = _create_fighter(Vector2(500, 300), 0, 1)  # 200 units in front
-
-    var rear_turret = null
-    for weapon in heavy_fighter.weapons:
-        if abs(weapon.facing - PI) < 0.1:
-            rear_turret = weapon
-            break
-
-    var can_fire = WeaponSystem.can_fire_at_target(heavy_fighter, rear_turret, enemy)
-    assert_false(can_fire, "Rear turret should NOT fire at enemy in front of ship")
-
-func _create_heavy_fighter(pos: Vector2, rotation: float, team: int) -> Dictionary:
-    var template = load("res://data/ship_templates/heavy_fighter.json")
-    # ... create ship from template with position, rotation, team ...
-
-func _create_fighter(pos: Vector2, rotation: float, team: int) -> Dictionary:
-    # ... create basic fighter ...
-```
-
----
-
-### Phase 2: Corvette/Capital Pilot AI
+### Phase 1: Corvette/Capital Pilot AI
 
 Currently these pilots have ~15 lines of simple if/else logic. They need knowledge-driven decisions like Fighter Pilot AI.
 
-#### Step 2.1: Create Shared Large Ship Pilot AI
+#### Step 1.1: Create Shared Large Ship Pilot AI
 
 **IMPORTANT: DRY Principle** - Corvettes and Capitals share most logic. Create ONE class that handles both.
 
@@ -375,7 +213,7 @@ static func _create_maneuver_decision(crew_data: Dictionary, ship_data: Dictiona
     return {"crew_data": updated, "decision": decision}
 ```
 
-#### Step 2.2: Add Large Ship Knowledge Patterns
+#### Step 1.2: Add Large Ship Knowledge Patterns
 
 **File:** `scripts/space/systems/tactical_knowledge_system.gd`
 
@@ -447,13 +285,11 @@ static func _create_maneuver_decision(crew_data: Dictionary, ship_data: Dictiona
 },
 ```
 
-#### Step 2.3: Add Large Ship Maneuvers to Movement System
+#### Step 1.3: Add Large Ship Maneuvers to Movement System
 
 **File:** `scripts/space/systems/movement_system.gd`
 
 **Location:** Add in the maneuver execution section (find where `fight_` maneuvers are handled)
-
-**What to add:**
 
 ```gdscript
 ## Execute large ship maneuvers
@@ -544,7 +380,7 @@ static func _execute_large_ship_orbit(ship_data: Dictionary, target: Dictionary,
     return updated
 ```
 
-#### Step 2.4: Wire Up Large Ship AI in CrewAISystem
+#### Step 1.4: Wire Up Large Ship AI in CrewAISystem
 
 **File:** `scripts/space/systems/crew_ai_system.gd`
 
@@ -573,11 +409,11 @@ static func make_capital_pilot_decision(crew_data: Dictionary, context: Dictiona
 
 ---
 
-### Phase 3: Fix Captain/Squadron Leader TODOs
+### Phase 2: Fix Captain/Squadron Leader TODOs
 
 These functions always return false/null. They need actual implementations.
 
-#### Step 3.1: Fix `_is_ship_critically_damaged()`
+#### Step 2.1: Fix `_is_ship_critically_damaged()`
 
 **File:** `scripts/space/systems/crew_ai_system.gd`
 
@@ -593,25 +429,18 @@ static func _is_ship_critically_damaged(crew_data: Dictionary) -> bool:
 **Change TO:**
 ```gdscript
 static func _is_ship_critically_damaged(crew_data: Dictionary) -> bool:
-    # Check known entities for our own ship's status
-    var ship_id = crew_data.get("assigned_to", "")
-    var known = crew_data.get("awareness", {}).get("known_entities", [])
-
-    # Also check if we have direct damage info
     var threats = crew_data.get("awareness", {}).get("threats", [])
     var threat_count = threats.size()
     var stress = crew_data.get("stats", {}).get("stress", 0.0)
 
-    # Consider critically damaged if:
-    # - High stress (indicates taking damage)
-    # - Many threats (overwhelmed)
+    # Consider critically damaged if high stress and many threats
     if stress > 0.7 and threat_count >= 3:
         return true
 
     return false
 ```
 
-#### Step 3.2: Fix `_find_damaged_subordinate()`
+#### Step 2.2: Fix `_find_damaged_subordinate()`
 
 **File:** `scripts/space/systems/crew_ai_system.gd`
 
@@ -640,7 +469,7 @@ static func _find_damaged_subordinate(crew_data: Dictionary) -> Variant:
     return null
 ```
 
-#### Step 3.3: Fix `_is_squadron_scattered()`
+#### Step 2.3: Fix `_is_squadron_scattered()`
 
 **File:** `scripts/space/systems/crew_ai_system.gd`
 
@@ -689,29 +518,23 @@ static func _is_squadron_scattered(crew_data: Dictionary) -> bool:
 
 | File | Action | Description |
 |------|--------|-------------|
-| `scripts/space/ai/fighter_pilot_ai.gd` | MODIFY | Add heavy fighter rear arc awareness |
+| `data/ship_templates/heavy_fighter.json` | DONE | Fixed rear turret arc to 360° |
 | `scripts/space/ai/large_ship_pilot_ai.gd` | NEW | Shared AI for corvettes and capitals |
 | `scripts/space/systems/tactical_knowledge_system.gd` | MODIFY | Add large ship knowledge patterns |
 | `scripts/space/systems/movement_system.gd` | MODIFY | Add large ship maneuvers |
 | `scripts/space/systems/crew_ai_system.gd` | MODIFY | Wire up new AI, fix TODOs |
-| `tests/test_heavy_fighter_gunner.gd` | NEW | Test rear turret functionality |
-| `tests/test_large_ship_pilot_ai.gd` | NEW | Test large ship AI |
 
 ---
 
 ## Implementation Order
 
-1. **Phase 1: Heavy Fighter Gunner** (Critical bug fix)
-   - Modify `fighter_pilot_ai.gd` to detect enemies behind
-   - Add test to verify fix
-
-2. **Phase 2: Large Ship Pilot AI** (Most visible improvement)
+1. **Phase 1: Large Ship Pilot AI** (Most visible improvement)
    - Create `large_ship_pilot_ai.gd`
    - Add knowledge patterns
    - Add maneuvers to movement system
    - Wire up in crew_ai_system
 
-3. **Phase 3: Captain/Squadron Leader TODOs** (Enables better coordination)
+2. **Phase 2: Captain/Squadron Leader TODOs** (Enables better coordination)
    - Fix `_is_ship_critically_damaged()`
    - Fix `_find_damaged_subordinate()`
    - Fix `_is_squadron_scattered()`
@@ -722,12 +545,11 @@ static func _is_squadron_scattered(crew_data: Dictionary) -> bool:
 
 After implementation:
 
-1. **Heavy Fighter rear turret fires** at enemies behind the ship
-2. **Corvettes kite fighters** by backing away while keeping turrets on target
-3. **Corvettes and Capitals present broadside** to maximize turret coverage
-4. **Captains withdraw** when the ship is critically damaged
-5. **Squadron Leaders call for support** when subordinates are damaged
-6. **Squadron Leaders reform** when the squadron is scattered
+1. **Corvettes kite fighters** by backing away while keeping turrets on target
+2. **Corvettes and Capitals present broadside** to maximize turret coverage
+3. **Captains withdraw** when the ship is critically damaged
+4. **Squadron Leaders call for support** when subordinates are damaged
+5. **Squadron Leaders reform** when the squadron is scattered
 
 ---
 
@@ -737,4 +559,3 @@ After implementation:
 - [ ] Maneuver execution reuses existing patterns from `movement_system.gd`
 - [ ] Knowledge query pattern matches `FighterPilotAI._query_fighter_knowledge()`
 - [ ] Situation string generation matches `FighterPilotAI._generate_fighter_situation()` pattern
-- [ ] Test helpers are shared between test files
