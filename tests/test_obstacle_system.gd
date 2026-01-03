@@ -235,8 +235,13 @@ func test_process_collisions_with_obstacles():
 func test_movement_with_obstacle_avoidance():
 	# BEHAVIOR: When an obstacle is in the path to target, pilot detects it and changes course to avoid
 	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	ship.velocity = Vector2(100, 0)  # Moving toward obstacle for detection
 	var target = create_test_ship("ship_2", Vector2(2000, 0), 1)  # Far target
-	var obstacle = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(500, 0))  # In direct path
+
+	# Detection range is ship_size * 8.0, place obstacle within detection range
+	var detection_range = ship.stats.size * 8.0
+	var obstacle_distance = detection_range * 0.5  # Well within detection range
+	var obstacle = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(obstacle_distance, 0))  # In direct path
 
 	var direct_heading = atan2(target.position.y - ship.position.y, target.position.x - ship.position.x)
 	var updated_ship = MovementSystem.update_ship_movement(ship, [ship, target], 0.1, [obstacle])

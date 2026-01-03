@@ -52,7 +52,6 @@ func create_pilot_crew(id: String, ship_id: String) -> Dictionary:
 		"crew_id": id,
 		"role": CrewData.Role.PILOT,
 		"assigned_to": ship_id,
-		"assigned_ship_id": ship_id,
 		"stats": {
 			"skill": 0.8,
 			"reaction_time": 0.1,
@@ -71,9 +70,10 @@ func create_pilot_crew(id: String, ship_id: String) -> Dictionary:
 # ============================================================================
 
 func test_full_speed_pursuit_when_far_away():
-	# BEHAVIOR: When target is far away, fighter pursues at full speed
+	# BEHAVIOR: When target is far away (beyond FAR_RANGE), fighter pursues at full speed
+	var far_distance = FighterPilotAI.FAR_RANGE * 1.5  # Well beyond far range
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var target = create_fighter_ship("enemy1", Vector2(1000, 0), 1)
+	var target = create_fighter_ship("enemy1", Vector2(far_distance, 0), 1)
 	var crew = create_pilot_crew("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
@@ -83,24 +83,25 @@ func test_full_speed_pursuit_when_far_away():
 	assert_string_contains(decision.subtype, "pursue", "Should pursue when far away")
 
 func test_slows_approach_at_mid_range():
-	# BEHAVIOR: When target is NOT directly behind us and reasonably far away, use approach maneuvers
-	# (not close-range combat maneuvers like tight_pursuit or dogfight)
+	# BEHAVIOR: When target is at mid range, use tactical approach maneuvers (not close-range combat)
+	var mid_distance = (FighterPilotAI.MID_RANGE + FighterPilotAI.FAR_RANGE) / 2.0  # Middle of mid range
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var target = create_fighter_ship("enemy1", Vector2(3000, 0), 1)  # Far enough to be outside close range
+	var target = create_fighter_ship("enemy1", Vector2(mid_distance, 0), 1)
 	var crew = create_pilot_crew("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	# When target is far and not behind us, should use pursuit-type maneuvers, not close-range ones
+	# When target is at mid range, should use pursuit-type maneuvers, not close-range ones
 	var is_not_close_combat = decision.subtype not in ["fight_tight_pursuit", "fight_dogfight_maneuver"]
-	assert_true(is_not_close_combat, "Should use approach maneuvers when target is far")
+	assert_true(is_not_close_combat, "Should use approach maneuvers when target is at mid range")
 
 func test_tight_maneuvering_at_close_range():
-	# BEHAVIOR: At close range, fighter uses tight maneuvers
+	# BEHAVIOR: At very close range (inside MIN_COMBAT_RANGE), fighter uses tight maneuvers
+	var close_distance = FighterPilotAI.MIN_COMBAT_RANGE * 0.8  # Inside minimum combat range
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var target = create_fighter_ship("enemy1", Vector2(100, 0), 1)
+	var target = create_fighter_ship("enemy1", Vector2(close_distance, 0), 1)
 	var crew = create_pilot_crew("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
@@ -115,9 +116,10 @@ func test_tight_maneuvering_at_close_range():
 # ============================================================================
 
 func test_tries_to_get_behind_enemy_fighter():
-	# BEHAVIOR: When fighting fighters, try to get behind enemy
+	# BEHAVIOR: When fighting fighters at close range, try to get behind enemy
+	var close_distance = FighterPilotAI.CLOSE_RANGE * 0.5  # Well inside close range
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var enemy = create_fighter_ship("enemy1", Vector2(200, 0), 1)
+	var enemy = create_fighter_ship("enemy1", Vector2(close_distance, 0), 1)
 	enemy.rotation = 0.0  # Facing right
 	var crew = create_pilot_crew("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
@@ -131,9 +133,11 @@ func test_tries_to_get_behind_enemy_fighter():
 
 func test_formation_flying_with_wingmates():
 	# BEHAVIOR: When fighting with wingmates, maintain formation
+	var formation_spacing = FighterPilotAI.FORMATION_SPACING
+	var combat_distance = FighterPilotAI.CLOSE_RANGE * 0.8
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var wingmate = create_fighter_ship("fighter2", Vector2(50, 50), 0)  # Nearby friendly
-	var enemy = create_fighter_ship("enemy1", Vector2(500, 0), 1)
+	var wingmate = create_fighter_ship("fighter2", Vector2(formation_spacing, formation_spacing), 0)  # Nearby friendly
+	var enemy = create_fighter_ship("enemy1", Vector2(combat_distance, 0), 1)
 	var crew1 = create_pilot_crew("pilot1", "fighter1")
 	var crew2 = create_pilot_crew("pilot2", "fighter2")
 	crew1.awareness.threats = ["enemy1"]
@@ -148,9 +152,10 @@ func test_formation_flying_with_wingmates():
 # ============================================================================
 
 func test_stays_at_distance_vs_capital_ships():
-	# BEHAVIOR: When fighting capitals/corvettes, stay at distance
+	# BEHAVIOR: When fighting capitals/corvettes too close, use defensive maneuvers
+	var too_close_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.5  # Too close to capital
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var capital = create_capital_ship("capital1", Vector2(300, 0), 1)
+	var capital = create_capital_ship("capital1", Vector2(too_close_distance, 0), 1)
 	var crew = create_pilot_crew("pilot1", "fighter1")
 	crew.awareness.threats = ["capital1"]
 
@@ -161,9 +166,10 @@ func test_stays_at_distance_vs_capital_ships():
 	assert_true(is_defensive, "Should use defensive maneuvers vs capital ships")
 
 func test_dodge_and_weave_vs_corvettes():
-	# BEHAVIOR: When fighting corvettes solo, dodge and weave
+	# BEHAVIOR: When fighting corvettes solo at safe distance, dodge and weave
+	var safe_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL  # At safe harass distance
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var corvette = create_corvette_ship("corvette1", Vector2(400, 0), 1)
+	var corvette = create_corvette_ship("corvette1", Vector2(safe_distance, 0), 1)
 	var crew = create_pilot_crew("pilot1", "fighter1")
 	crew.awareness.threats = ["corvette1"]
 
@@ -175,17 +181,19 @@ func test_dodge_and_weave_vs_corvettes():
 
 func test_group_runs_with_multiple_fighters():
 	# BEHAVIOR: With many fighters, coordinate group runs vs capitals
+	var formation_spacing = FighterPilotAI.FORMATION_SPACING
+	var attack_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.8  # Close enough for attack run
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
 	var fighters = [my_ship]
 	var crew_list = [create_pilot_crew("pilot1", "fighter1")]
 
-	# Add 4 more friendly fighters nearby
-	for i in range(2, 6):
-		var fighter = create_fighter_ship("fighter" + str(i), Vector2(i * 50, 0), 0)
+	# Add enough friendly fighters nearby to meet GROUP_RUN_THRESHOLD
+	for i in range(2, FighterPilotAI.GROUP_RUN_THRESHOLD + 2):
+		var fighter = create_fighter_ship("fighter" + str(i), Vector2(i * formation_spacing, 0), 0)
 		fighters.append(fighter)
 		crew_list.append(create_pilot_crew("pilot" + str(i), "fighter" + str(i)))
 
-	var capital = create_capital_ship("capital1", Vector2(800, 0), 1)
+	var capital = create_capital_ship("capital1", Vector2(attack_distance, 0), 1)
 	fighters.append(capital)
 	var crew = crew_list[0]
 	crew.awareness.threats = ["capital1"]
@@ -193,7 +201,7 @@ func test_group_runs_with_multiple_fighters():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, fighters, crew_list, game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	# With 5 fighters, should coordinate group runs
+	# With enough fighters, should coordinate group runs
 	var is_group_run = "group_run" in decision.subtype
 	assert_true(is_group_run, "Should coordinate group runs with multiple fighters")
 	assert_true(decision.has("nearby_fighters"), "Should track nearby fighters count")
@@ -283,23 +291,26 @@ func test_full_integration_fighter_vs_fighter():
 
 func test_full_integration_group_run():
 	# BEHAVIOR: Multiple fighters coordinate group run on capital
+	var formation_spacing = FighterPilotAI.FORMATION_SPACING
+	var attack_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.8
 	var fighters = []
 	var crew_list = []
 
-	# Create 5 fighters
-	for i in range(5):
-		var fighter = create_fighter_ship("fighter" + str(i), Vector2(i * 100, 0), 0)
+	# Create enough fighters to meet GROUP_RUN_THRESHOLD
+	var num_fighters = FighterPilotAI.GROUP_RUN_THRESHOLD + 1
+	for i in range(num_fighters):
+		var fighter = create_fighter_ship("fighter" + str(i), Vector2(i * formation_spacing, 0), 0)
 		fighters.append(fighter)
 		var crew = create_pilot_crew("pilot" + str(i), "fighter" + str(i))
 		crew.awareness.threats = ["capital1"]
 		crew_list.append(crew)
 
-	var capital = create_capital_ship("capital1", Vector2(1000, 0), 1)
+	var capital = create_capital_ship("capital1", Vector2(attack_distance, 0), 1)
 	fighters.append(capital)
 
 	# All fighters make decisions
 	var decisions = []
-	for i in range(5):
+	for i in range(num_fighters):
 		var decision = FighterPilotAI.make_decision(crew_list[i], fighters[i], fighters, crew_list, game_time)
 		decisions.append(decision)
 
@@ -317,11 +328,12 @@ func test_full_integration_group_run():
 
 func test_collision_detection_head_on_approach():
 	# BEHAVIOR: Two ships flying toward each other should detect collision course
+	var collision_range = FighterPilotAI.COLLISION_DETECTION_RANGE * 0.8  # Within detection range
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(200, 0)  # Flying right
 	my_ship.rotation = 0.0
 
-	var enemy = create_fighter_ship("enemy1", Vector2(1500, 0), 1)
+	var enemy = create_fighter_ship("enemy1", Vector2(collision_range, 0), 1)
 	enemy.velocity = Vector2(-200, 0)  # Flying left (toward us)
 	enemy.rotation = PI
 
@@ -332,10 +344,11 @@ func test_collision_detection_head_on_approach():
 
 func test_collision_detection_not_triggered_when_diverging():
 	# BEHAVIOR: Ships moving apart should NOT trigger collision detection
+	var collision_range = FighterPilotAI.COLLISION_DETECTION_RANGE * 0.8
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(-200, 0)  # Flying left (away from enemy)
 
-	var enemy = create_fighter_ship("enemy1", Vector2(1500, 0), 1)
+	var enemy = create_fighter_ship("enemy1", Vector2(collision_range, 0), 1)
 	enemy.velocity = Vector2(200, 0)  # Flying right (away from us)
 
 	var is_collision = FighterPilotAI._is_on_collision_course(my_ship, enemy)
@@ -344,11 +357,12 @@ func test_collision_detection_not_triggered_when_diverging():
 
 func test_skilled_pilot_chooses_lateral_break_on_collision():
 	# BEHAVIOR: Skilled pilot facing head-on collision should choose lateral_break
+	var collision_range = FighterPilotAI.COLLISION_DETECTION_RANGE * 0.8
 	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(200, 0)
 	my_ship.rotation = 0.0
 
-	var enemy = create_fighter_ship("enemy1", Vector2(1500, 0), 1)
+	var enemy = create_fighter_ship("enemy1", Vector2(collision_range, 0), 1)
 	enemy.velocity = Vector2(-200, 0)
 	enemy.rotation = PI
 

@@ -22,7 +22,7 @@ func create_test_fighter(ship_id: String, team: int, position: Vector2) -> Dicti
 func create_test_crew(crew_id: String, ship_id: String, skill: float = 0.5) -> Dictionary:
 	return {
 		"crew_id": crew_id,
-		"assigned_ship_id": ship_id,
+		"assigned_to": ship_id,
 		"role": CrewData.Role.PILOT,
 		"stats": {
 			"skill": skill,

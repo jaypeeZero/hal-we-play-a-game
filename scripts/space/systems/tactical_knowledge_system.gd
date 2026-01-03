@@ -31,12 +31,12 @@ static var knowledge_base = {
 	"fighter_approach_far": {
 		"role": CrewData.Role.PILOT,
 		"tags": ["fighter", "approach", "far", "pursuit"],
-		"text": "fighter far range approach closing pursuit intercept distance",
+		"text": "fighter fighter far range approach closing pursuit intercept distance solo neutral",
 		"content": {
 			"maneuvers": ["fight_pursue_full_speed"],
 			"skill_requirements": {"fight_pursue_full_speed": 0.0},
 			"priority": "normal",
-			"context": "Close distance quickly at far range"
+			"context": "Close distance quickly at far range vs fighter"
 		}
 	},
 
@@ -123,7 +123,7 @@ static var knowledge_base = {
 	"fighter_capital_cautious_approach": {
 		"role": CrewData.Role.PILOT,
 		"tags": ["fighter", "capital", "corvette", "approach", "cautious", "far"],
-		"text": "fighter capital corvette far approach cautious solo careful",
+		"text": "fighter capital corvette far approach cautious careful bigship",
 		"content": {
 			"maneuvers": ["fight_cautious_approach"],
 			"skill_requirements": {"fight_cautious_approach": 0.0},

@@ -130,8 +130,7 @@ static func _group_fighters_by_team(all_ships: Array, all_crew: Array) -> Dictio
 ## Find crew assigned to a ship
 static func _find_crew_for_ship(ship_id: String, all_crew: Array) -> Dictionary:
 	for crew in all_crew:
-		# Check both assigned_ship_id and assigned_to (for compatibility)
-		if crew.get("assigned_ship_id", "") == ship_id or crew.get("assigned_to", "") == ship_id:
+		if crew.get("assigned_to", "") == ship_id:
 			return crew
 	return {}
 

@@ -521,7 +521,6 @@ func _execute_squadron_spawn(spawn_position: Vector2) -> void:
 		for i in range(6):
 			if i < squadron_crew.size() and i < ship_ids.size():
 				squadron_crew[i].assigned_to = ship_ids[i]
-				squadron_crew[i].assigned_ship_id = ship_ids[i]
 				_crew_list.append(squadron_crew[i])
 				_crew_index[squadron_crew[i].crew_id] = squadron_crew[i]
 
@@ -790,7 +789,7 @@ func _update_crew_ai_systems(delta: float) -> void:
 	_crew_events.clear()
 
 	# Check for decision timers (crew scheduled to wake up)
-	_check_crew_decision_timers(delta, game_time)
+	_check_crew_decision_timers(delta, game_time, wings)
 
 ## Process crew events (EVENT-DRIVEN: only affected crew)
 func _process_crew_events(events: Array, delta: float, game_time: float) -> void:
@@ -818,7 +817,7 @@ func _process_crew_events(events: Array, delta: float, game_time: float) -> void
 				_handle_battle_event(crew, event, game_time)
 
 ## Check if any crew need to make decisions (timer expired)
-func _check_crew_decision_timers(delta: float, game_time: float) -> void:
+func _check_crew_decision_timers(delta: float, game_time: float, wings: Array = []) -> void:
 	var decisions = []
 
 	for i in range(_crew_list.size()):
@@ -826,8 +825,8 @@ func _check_crew_decision_timers(delta: float, game_time: float) -> void:
 
 		# Check if it's time for this crew to think
 		if game_time >= crew.get("next_decision_time", 0.0):
-			# Make decision based on current state
-			var result = CrewAISystem.update_crew_member(crew, delta, game_time, _ships, _crew_list)
+			# Make decision based on current state (pass wings for fighter coordination)
+			var result = CrewAISystem.update_crew_member(crew, delta, game_time, _ships, _crew_list, wings)
 			_crew_list[i] = result.crew_data
 
 			if result.has("decision") and not result.decision.is_empty():

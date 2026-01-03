@@ -308,7 +308,7 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 ## Calculate target score based on lead's skills
 static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array) -> float:
 	var skill = crew_data.get("stats", {}).get("skill", 0.5)
-	var my_ship_id = crew_data.get("assigned_ship_id", "")
+	var my_ship_id = crew_data.get("assigned_to", "")
 	var my_ship = _get_ship_by_id(my_ship_id, all_ships)
 	var my_pos = my_ship.get("position", Vector2.ZERO) if not my_ship.is_empty() else Vector2.ZERO
 
@@ -685,7 +685,7 @@ static func _get_squadron_leader_target(crew_data: Dictionary, all_crew: Array) 
 ## Find wingmates (other fighters on same team)
 static func _find_wingmates(crew_data: Dictionary, all_crew: Array, all_ships: Array) -> Array:
 	var wingmates = []
-	var my_ship_id = crew_data.get("assigned_ship_id", "")
+	var my_ship_id = crew_data.get("assigned_to", "")
 	var my_ship = _get_ship_by_id(my_ship_id, all_ships)
 	if my_ship == null:
 		return wingmates
@@ -702,7 +702,7 @@ static func _find_wingmates(crew_data: Dictionary, all_crew: Array, all_ships: A
 			if crew.get("wingman_pair", -1) != my_pair:
 				continue
 
-			var crew_ship_id = crew.get("assigned_ship_id", "")
+			var crew_ship_id = crew.get("assigned_to", "")
 			var crew_ship = _get_ship_by_id(crew_ship_id, all_ships)
 			if crew_ship != null and crew_ship.get("status", "") == "operational":
 				wingmates.append(crew_ship)
@@ -736,7 +736,7 @@ static func _calculate_formation_offset(crew_data: Dictionary, wingmates: Array,
 	if wingmates.is_empty():
 		return Vector2.ZERO
 
-	var my_ship_id = crew_data.get("assigned_ship_id", "")
+	var my_ship_id = crew_data.get("assigned_to", "")
 	var my_ship = _get_ship_by_id(my_ship_id, all_ships)
 	if my_ship == null:
 		return Vector2.ZERO
@@ -858,7 +858,7 @@ static func _make_idle_decision(crew_data: Dictionary, game_time: float) -> Dict
 		"type": "maneuver",
 		"subtype": "idle",
 		"crew_id": crew_data.get("crew_id", ""),
-		"entity_id": crew_data.get("assigned_ship_id", ""),
+		"entity_id": crew_data.get("assigned_to", ""),
 		"target_id": "",
 		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
 		"delay": 2.0,  # Check again in 2 seconds
@@ -898,7 +898,7 @@ static func _find_wingman_partner(crew_data: Dictionary, all_crew: Array, all_sh
 			continue
 
 		# Found our wingman partner - get their ship
-		var partner_ship_id = crew.get("assigned_ship_id", "")
+		var partner_ship_id = crew.get("assigned_to", "")
 		var partner_ship = _get_ship_by_id(partner_ship_id, all_ships)
 
 		if partner_ship != null and partner_ship.get("status", "") == "operational":
