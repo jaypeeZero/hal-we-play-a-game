@@ -96,6 +96,8 @@ static func create_ship_instance(ship_type: String, team: int, position: Vector2
 	instance.velocity = Vector2.ZERO
 	instance.angular_velocity = 0.0
 	instance.status = "operational"
+	# Collision radius derived from hull shape (matches visual exactly)
+	instance.collision_radius = HullShapes.get_collision_radius(ship_type)
 
 	# Create crew for ship if requested
 	if create_crew:

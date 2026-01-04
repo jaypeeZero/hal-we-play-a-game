@@ -502,9 +502,9 @@ func _execute_squadron_spawn(spawn_position: Vector2) -> void:
 		_ships.append(ship_data)
 		ship_ids.append(ship_data.ship_id)
 
-		# Create entity
+		# Create entity - use hull-derived collision radius from ship_data
 		var entity = ShipEntity.new()
-		entity.initialize(ship_data.ship_id, team, ship_data.stats.size, "fighter")
+		entity.initialize(ship_data.ship_id, team, ship_data.collision_radius, "fighter")
 		add_child(entity)
 		_ship_entities[ship_data.ship_id] = entity
 
@@ -540,9 +540,9 @@ func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
 	# Add to data array
 	_ships.append(ship_data)
 
-	# Create entity
+	# Create entity - use hull-derived collision radius from ship_data
 	var entity = ShipEntity.new()
-	entity.initialize(ship_data.ship_id, team, ship_data.stats.size, ship_type)
+	entity.initialize(ship_data.ship_id, team, ship_data.collision_radius, ship_type)
 	add_child(entity)
 	_ship_entities[ship_data.ship_id] = entity
 

@@ -198,6 +198,7 @@ func test_ship_ignores_obstacle_behind():
 func test_ship_emergency_push_when_colliding():
 	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
 	ship.stats.size = 20.0
+	ship.collision_radius = 20.0
 
 	# Obstacle overlapping ship
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(100, 100))
@@ -238,8 +239,8 @@ func test_movement_with_obstacle_avoidance():
 	ship.velocity = Vector2(100, 0)  # Moving toward obstacle for detection
 	var target = create_test_ship("ship_2", Vector2(2000, 0), 1)  # Far target
 
-	# Detection range is ship_size * 8.0, place obstacle within detection range
-	var detection_range = ship.stats.size * 8.0
+	# Detection range is collision_radius * 8.0, place obstacle within detection range
+	var detection_range = ship.collision_radius * 8.0
 	var obstacle_distance = detection_range * 0.5  # Well within detection range
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(obstacle_distance, 0))  # In direct path
 
@@ -267,6 +268,7 @@ func create_test_ship(id: String, pos: Vector2, team: int) -> Dictionary:
 		"velocity": Vector2.ZERO,
 		"rotation": 0.0,
 		"status": "operational",
+		"collision_radius": 15.0,
 		"stats": {
 			"max_speed": 300.0,
 			"acceleration": 100.0,
@@ -306,6 +308,7 @@ func test_ship_obstacle_collision_applies_momentum():
 	ship.velocity = Vector2(100, 0)  # Moving right at 100 units/sec
 	ship.stats.mass = 50.0
 	ship.stats.size = 15.0
+	ship.collision_radius = 15.0
 
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(115, 100))  # Overlapping
 	obstacle.mass = 100.0
@@ -322,6 +325,7 @@ func test_ship_obstacle_collision_moves_asteroid():
 	ship.velocity = Vector2(100, 0)  # Moving right
 	ship.stats.mass = 100.0
 	ship.stats.size = 15.0
+	ship.collision_radius = 15.0
 
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(115, 100))
 	obstacle.velocity = Vector2.ZERO  # Stationary
@@ -336,6 +340,7 @@ func test_ship_obstacle_collision_damage_scales_with_speed():
 	ship_slow.velocity = Vector2(30, 0)  # Slow speed
 	ship_slow.stats.mass = 50.0
 	ship_slow.stats.size = 15.0
+	ship_slow.collision_radius = 15.0
 
 	var obstacle1 = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(115, 100))
 
@@ -345,6 +350,7 @@ func test_ship_obstacle_collision_damage_scales_with_speed():
 	ship_fast.velocity = Vector2(150, 0)  # Fast speed
 	ship_fast.stats.mass = 50.0
 	ship_fast.stats.size = 15.0
+	ship_fast.collision_radius = 15.0
 
 	var obstacle2 = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(115, 100))
 
@@ -359,6 +365,7 @@ func test_larger_asteroid_deals_more_damage():
 	ship.velocity = Vector2(100, 0)
 	ship.stats.mass = 50.0
 	ship.stats.size = 15.0
+	ship.collision_radius = 15.0
 
 	var small_asteroid = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(115, 100))
 	var large_asteroid = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(115, 100))
@@ -371,6 +378,7 @@ func test_larger_asteroid_deals_more_damage():
 func test_no_damage_from_slow_collision():
 	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
 	ship.stats.size = 15.0
+	ship.collision_radius = 15.0
 
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(115, 100))
 
@@ -383,11 +391,13 @@ func test_ship_ship_collision_applies_momentum_to_both():
 	ship1.velocity = Vector2(100, 0)  # Moving right
 	ship1.stats.mass = 50.0
 	ship1.stats.size = 15.0
+	ship1.collision_radius = 15.0
 
 	var ship2 = create_test_ship("ship_2", Vector2(130, 100), 1)
 	ship2.velocity = Vector2(-50, 0)  # Moving left (head-on)
 	ship2.stats.mass = 50.0
 	ship2.stats.size = 15.0
+	ship2.collision_radius = 15.0
 
 	var result = CollisionSystem.check_and_resolve_ship_ship_collision(ship1, ship2)
 
@@ -401,11 +411,13 @@ func test_heavier_ship_affected_less_by_collision():
 	light_ship.velocity = Vector2(100, 0)
 	light_ship.stats.mass = 50.0
 	light_ship.stats.size = 15.0
+	light_ship.collision_radius = 15.0
 
 	var heavy_ship = create_test_ship("ship_2", Vector2(130, 100), 1)
 	heavy_ship.velocity = Vector2.ZERO  # Stationary
 	heavy_ship.stats.mass = 200.0  # 4x heavier
 	heavy_ship.stats.size = 30.0
+	heavy_ship.collision_radius = 30.0
 
 	var result = CollisionSystem.check_and_resolve_ship_ship_collision(light_ship, heavy_ship)
 
@@ -420,10 +432,12 @@ func test_collision_separates_overlapping_ships():
 	var ship1 = create_test_ship("ship_1", Vector2(100, 100), 0)
 	ship1.velocity = Vector2(50, 0)
 	ship1.stats.size = 15.0
+	ship1.collision_radius = 15.0
 
 	var ship2 = create_test_ship("ship_2", Vector2(110, 100), 1)  # Overlapping
 	ship2.velocity = Vector2.ZERO
 	ship2.stats.size = 15.0
+	ship2.collision_radius = 15.0
 
 	var initial_distance = ship1.position.distance_to(ship2.position)
 
@@ -431,7 +445,7 @@ func test_collision_separates_overlapping_ships():
 
 	if not result.is_empty():
 		var final_distance = result.ship1.position.distance_to(result.ship2.position)
-		var min_distance = ship1.stats.size + ship2.stats.size
+		var min_distance = ship1.collision_radius + ship2.collision_radius
 
 		assert_true(final_distance >= min_distance, "Ships should be separated after collision")
 
@@ -439,10 +453,12 @@ func test_moving_apart_ships_not_colliding():
 	var ship1 = create_test_ship("ship_1", Vector2(100, 100), 0)
 	ship1.velocity = Vector2(-100, 0)  # Moving left
 	ship1.stats.size = 15.0
+	ship1.collision_radius = 15.0
 
 	var ship2 = create_test_ship("ship_2", Vector2(115, 100), 1)
 	ship2.velocity = Vector2(100, 0)  # Moving right (away)
 	ship2.stats.size = 15.0
+	ship2.collision_radius = 15.0
 
 	var result = CollisionSystem.check_and_resolve_ship_ship_collision(ship1, ship2)
 
@@ -452,10 +468,12 @@ func test_process_physical_collisions_handles_multiple_ships():
 	var ship1 = create_test_ship("ship_1", Vector2(100, 100), 0)
 	ship1.velocity = Vector2(50, 0)
 	ship1.stats.size = 15.0
+	ship1.collision_radius = 15.0
 
 	var ship2 = create_test_ship("ship_2", Vector2(130, 100), 1)
 	ship2.velocity = Vector2.ZERO
 	ship2.stats.size = 15.0
+	ship2.collision_radius = 15.0
 
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(500, 500))
 

@@ -18,6 +18,7 @@ func create_corvette_ship(id: String, position: Vector2, team: int = 0) -> Dicti
 		"rotation": 0.0,
 		"velocity": Vector2.ZERO,
 		"status": "operational",
+		"collision_radius": 30.0,
 		"stats": {
 			"max_speed": 200.0,
 			"size": 30.0,
@@ -36,6 +37,7 @@ func create_capital_ship(id: String, position: Vector2, team: int = 0) -> Dictio
 	ship.type = "capital"
 	ship.stats.max_speed = 100.0
 	ship.stats.size = 60.0
+	ship.collision_radius = 60.0
 	return ship
 
 func create_fighter_ship(id: String, position: Vector2, team: int = 0) -> Dictionary:
@@ -47,6 +49,7 @@ func create_fighter_ship(id: String, position: Vector2, team: int = 0) -> Dictio
 		"rotation": 0.0,
 		"velocity": Vector2.ZERO,
 		"status": "operational",
+		"collision_radius": 10.0,
 		"stats": {
 			"max_speed": 400.0,
 			"size": 10.0,
