@@ -318,13 +318,41 @@ static func create_fire_command(ship_data: Dictionary, weapon: Dictionary, targe
 static func calculate_weapon_world_position(ship_data: Dictionary, weapon: Dictionary) -> Vector2:
 	return ship_data.position + weapon.position_offset.rotated(ship_data.rotation)
 
+## Calculate lead position based on gunner skill and targeting style
+## SIMPLE: No lead - aims at current position
+## LEADING: Basic velocity prediction with skill-based accuracy
+## PREDICTIVE: Full prediction with anticipation
+## SUBSYSTEM: Perfect lead plus weak point targeting
 static func calculate_lead_position(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> Vector2:
 	if not target.has("velocity"):
 		return target.position
 
+	# Get targeting style and lead accuracy from crew modifiers
+	var crew_modifiers = ship_data.get("crew_modifiers", {})
+	var targeting_style = crew_modifiers.get("targeting_style", CrewIntegrationSystem.TargetingStyle.SIMPLE)
+	var lead_accuracy = crew_modifiers.get("lead_accuracy", 0.0)
+
+	# SIMPLE targeting: No lead calculation - aim at current position
+	if targeting_style == CrewIntegrationSystem.TargetingStyle.SIMPLE:
+		return target.position
+
 	var weapon_pos = calculate_weapon_world_position(ship_data, weapon)
 	var time_to_impact = calculate_time_to_impact(weapon_pos, target.position, weapon.stats.projectile_speed)
-	return predict_target_position(target.position, target.velocity, time_to_impact)
+	var perfect_lead = predict_target_position(target.position, target.velocity, time_to_impact)
+
+	# LEADING targeting: Basic velocity prediction with skill-based accuracy
+	if targeting_style == CrewIntegrationSystem.TargetingStyle.LEADING:
+		# Blend between current position and perfect lead based on skill
+		return target.position.lerp(perfect_lead, lead_accuracy * 0.7)
+
+	# PREDICTIVE targeting: Full prediction with anticipation of maneuvers
+	if targeting_style == CrewIntegrationSystem.TargetingStyle.PREDICTIVE:
+		# Use full lead calculation with small error margin
+		var error_margin = (1.0 - lead_accuracy) * 0.2
+		return target.position.lerp(perfect_lead, 1.0 - error_margin)
+
+	# SUBSYSTEM targeting: Perfect lead (fall through for elite gunners)
+	return perfect_lead
 
 static func calculate_time_to_impact(from: Vector2, to: Vector2, projectile_speed: float) -> float:
 	return calculate_distance(from, to) / projectile_speed

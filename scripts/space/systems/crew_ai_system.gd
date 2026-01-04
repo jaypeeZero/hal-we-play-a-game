@@ -99,9 +99,19 @@ static func calculate_effective_skill(crew_data: Dictionary) -> float:
 	return max(0.1, base_skill - stress_penalty - fatigue_penalty)
 
 ## Calculate decision delay based on stats
+## Now uses constants for captain-specific dramatic skill differences
 static func calculate_decision_delay(crew_data: Dictionary) -> float:
 	var base_time = crew_data.stats.decision_time
 	var stress_multiplier = 1.0 + (crew_data.stats.stress * 0.5)  # Stress slows decisions
+	var role = crew_data.get("role", -1)
+
+	# Captains have dramatic skill-based decision delay
+	if role == CrewData.Role.CAPTAIN:
+		var skill = calculate_effective_skill(crew_data)
+		# 1.5s (low skill) to 0.3s (high skill)
+		base_time = lerp(WingConstants.CAPTAIN_DECISION_DELAY_MAX,
+						 WingConstants.CAPTAIN_DECISION_DELAY_MIN, skill)
+
 	return base_time * stress_multiplier
 
 # ============================================================================
@@ -704,15 +714,52 @@ static func make_ship_tactical_decision(crew_data: Dictionary, game_time: float)
 		return {"crew_data": updated, "decision": decision}
 	return {"crew_data": updated}
 
-## Select captain action based on knowledge and situation
+## Select captain action based on knowledge, situation, and COMMAND STYLE
+## REACTIVE: Only responds to immediate threats, poor prioritization
+## STANDARD: Follows doctrine, reasonable priorities
+## TACTICAL: Anticipates situations, coordinates crew effectively
+## ADAPTIVE: Reads the battle, adjusts strategy dynamically
 static func _select_captain_action_from_knowledge(knowledge: Array, crew_data: Dictionary, has_threats: bool, has_opportunities: bool, has_damaged_friendly: bool) -> String:
-	# Default action
+	var skill = calculate_effective_skill(crew_data)
+	var command_style = CrewIntegrationSystem._select_command_style(skill)
+
+	# Default action based on command style
 	var action = "engage" if (has_threats or has_opportunities) else "hold"
 
-	if knowledge.is_empty():
+	# REACTIVE captains (low skill) - poor decision making
+	if command_style == CrewIntegrationSystem.CommandStyle.REACTIVE:
+		# Often makes suboptimal choices
+		if has_threats:
+			# Low skill captains panic and may withdraw prematurely
+			if crew_data.awareness.threats.size() >= 2 and randf() < 0.4:
+				return "withdraw"
+			# Or just hold when they should engage
+			if randf() < 0.3:
+				return "hold"
+		# Miss opportunities
+		if has_opportunities and randf() < 0.3:
+			return "hold"  # Hesitates instead of engaging
 		return action
 
-	# Check each knowledge result
+	# STANDARD captains follow doctrine
+	if command_style == CrewIntegrationSystem.CommandStyle.STANDARD:
+		if has_threats and crew_data.awareness.threats.size() > 3:
+			return "defensive_posture"
+		if has_opportunities:
+			return "engage"
+		return action
+
+	# TACTICAL and ADAPTIVE captains use knowledge effectively
+	if knowledge.is_empty():
+		# Even without knowledge, tactical+ captains make good choices
+		if command_style >= CrewIntegrationSystem.CommandStyle.TACTICAL:
+			if has_damaged_friendly:
+				return "support_ally"
+			if has_opportunities and crew_data.awareness.threats.size() <= 1:
+				return "flank"
+		return action
+
+	# Check each knowledge result for tactical+ captains
 	for k in knowledge:
 		var suggested_action = k.get("content", {}).get("action", "")
 		if suggested_action == "":
@@ -736,16 +783,20 @@ static func _select_captain_action_from_knowledge(knowledge: Array, crew_data: D
 					return "concentrate_fire"
 
 			"aggressive_pursuit":
-				if has_opportunities and not has_threats:
-					return "aggressive_pursuit"
+				# Only ADAPTIVE captains use aggressive pursuit
+				if command_style == CrewIntegrationSystem.CommandStyle.ADAPTIVE:
+					if has_opportunities and not has_threats:
+						return "aggressive_pursuit"
 
 			"support_ally":
 				if has_damaged_friendly:
 					return "support_ally"
 
 			"flank":
-				if has_opportunities and crew_data.awareness.threats.size() <= 1:
-					return "flank"
+				# Tactical+ captains can execute flanking maneuvers
+				if command_style >= CrewIntegrationSystem.CommandStyle.TACTICAL:
+					if has_opportunities and crew_data.awareness.threats.size() <= 1:
+						return "flank"
 
 			"hold":
 				if not has_threats and not has_opportunities:
@@ -1020,12 +1071,55 @@ static func make_squadron_leader_decision(crew_data: Dictionary, game_time: floa
 
 	return {"crew_data": updated}
 
-## Select squadron action from knowledge
+## Select squadron action from knowledge and COORDINATION STYLE
+## INDIVIDUAL: Ships fight independently, no coordination
+## PAIRED: Basic wingman pairing works
+## COORDINATED: Focus fire, mutual support, timing
+## ORCHESTRATED: Complex maneuvers, feints, traps
 static func _select_squadron_action_from_knowledge(knowledge: Array, crew_data: Dictionary, has_threats: bool, has_opportunities: bool, has_damaged_subordinate: bool, is_scattered: bool) -> String:
-	# Default action
+	var skill = calculate_effective_skill(crew_data)
+	var coordination_style = CrewIntegrationSystem._select_coordination_style(skill)
+
+	# Default action based on coordination level
 	var action = "assign_targets" if has_opportunities else ""
 
+	# INDIVIDUAL style (low skill) - ships fight on their own
+	if coordination_style == CrewIntegrationSystem.CoordinationStyle.INDIVIDUAL:
+		# Can only do basic target assignment, and poorly at that
+		if has_opportunities:
+			# Poor target assignment - may not even assign targets
+			if randf() < 0.4:
+				return ""  # Fails to coordinate at all
+			return "assign_targets"
+		return ""
+
+	# PAIRED style - basic wingman support
+	if coordination_style == CrewIntegrationSystem.CoordinationStyle.PAIRED:
+		if has_damaged_subordinate:
+			return "call_mutual_support"
+		if has_opportunities:
+			return "assign_targets"
+		return action
+
+	# COORDINATED style - can do focus fire and tactical retreats
+	if coordination_style == CrewIntegrationSystem.CoordinationStyle.COORDINATED:
+		if has_damaged_subordinate:
+			return "call_mutual_support"
+		if is_scattered and not has_threats:
+			return "reform_formation"
+		if has_threats and crew_data.awareness.threats.size() > crew_data.command_chain.subordinates.size():
+			return "screen_withdrawal"
+		if has_opportunities:
+			return "assign_targets"
+		return action
+
+	# ORCHESTRATED style (elite) - uses all tactics from knowledge
 	if knowledge.is_empty():
+		# Even without knowledge, orchestrated leaders make good choices
+		if has_damaged_subordinate:
+			return "call_mutual_support"
+		if has_opportunities and crew_data.command_chain.subordinates.size() >= 3:
+			return "coordinate_attack_run"
 		return action
 
 	for k in knowledge:
@@ -1043,6 +1137,7 @@ static func _select_squadron_action_from_knowledge(knowledge: Array, crew_data: 
 					return "reform_formation"
 
 			"coordinate_attack_run":
+				# Only ORCHESTRATED leaders can pull off coordinated attacks
 				if has_opportunities and crew_data.command_chain.subordinates.size() >= 3:
 					return "coordinate_attack_run"
 
@@ -1099,19 +1194,67 @@ static func _is_squadron_scattered(crew_data: Dictionary) -> bool:
 	return false
 
 ## Assign targets to squadron ships
+## Skill affects assignment quality: low skill = poor matching, high skill = optimal
 static func assign_squadron_targets(crew_data: Dictionary) -> Array:
 	var orders = []
-	var targets = crew_data.awareness.opportunities.slice(0, crew_data.command_chain.subordinates.size())
+	var skill = calculate_effective_skill(crew_data)
+	var subordinates = crew_data.command_chain.subordinates
+	var targets = crew_data.awareness.opportunities.duplicate()
 
-	for i in crew_data.command_chain.subordinates.size():
+	# Assignment quality based on skill (using constants)
+	var assignment_quality = lerp(WingConstants.SQUADRON_ASSIGNMENT_QUALITY_MIN,
+								  WingConstants.SQUADRON_ASSIGNMENT_QUALITY_MAX, skill)
+
+	# High skill: Sort targets by priority (damaged, close, threatening)
+	if assignment_quality > 0.7:
+		targets.sort_custom(func(a, b):
+			var score_a = _calculate_target_priority_score(a)
+			var score_b = _calculate_target_priority_score(b)
+			return score_a > score_b
+		)
+	# Medium skill: Partial sorting (top half sorted)
+	elif assignment_quality > 0.5:
+		var half = targets.size() / 2
+		if half > 0:
+			var top_half = targets.slice(0, half)
+			top_half.sort_custom(func(a, b):
+				return _calculate_target_priority_score(a) > _calculate_target_priority_score(b)
+			)
+			for i in half:
+				targets[i] = top_half[i]
+	# Low skill: Random order (poor assessment)
+	else:
+		targets.shuffle()
+
+	# Assign targets to subordinates
+	for i in subordinates.size():
 		if i < targets.size():
 			orders.append({
-				"to": crew_data.command_chain.subordinates[i],
+				"to": subordinates[i],
 				"type": "engage",
 				"target_id": targets[i].id
 			})
 
 	return orders
+
+## Calculate priority score for target assignment
+static func _calculate_target_priority_score(target: Dictionary) -> float:
+	var score = 0.0
+
+	# Damaged targets are higher priority
+	var status = target.get("status", "")
+	if status in ["damaged", "critical", "disabled"]:
+		score += 50.0
+
+	# Closer targets are higher priority
+	var distance = target.get("distance", 1000.0)
+	score += max(0, 100.0 - distance / 20.0)
+
+	# Threatening targets (facing us) are higher priority
+	if target.get("is_threat", false):
+		score += 30.0
+
+	return score
 
 ## Create mutual support orders - protect damaged ship
 static func create_mutual_support_orders(crew_data: Dictionary, damaged_ship: Variant) -> Array:
