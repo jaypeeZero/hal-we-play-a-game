@@ -33,23 +33,22 @@
 	"internals": [
 		{
 			"component_id": "engine",
-			"type": "engine",
-			"section_id": "back",
-			"position_offset": {
-				"x": 0.0,
-				"y": 7.0
-			},
-			"max_health": 30.0,
 			"effect_on_ship": {
 				"on_damaged": {
 					"acceleration": 0.7,
 					"max_speed": 0.8
 				},
 				"on_destroyed": {
-					"acceleration": 0.3,
-					"max_speed": 0.3
+					"acceleration": 0.3
 				}
-			}
+			},
+			"max_health": 30.0,
+			"position_offset": {
+				"x": 0.0,
+				"y": 7.0
+			},
+			"section_id": "back",
+			"type": "engine"
 		}
 	],
 	"name": "Torpedo Boat",
@@ -85,33 +84,33 @@
 	},
 	"weapons": [
 		{
-			"weapon_id": "gatling",
-			"type": "gatling_gun",
-			"section_id": "front",
-			"position_offset": {
-				"x": 0.0,
-				"y": -6.0
-			},
 			"arc": {
-				"min": -25.0,
-				"max": 25.0
+				"max": 25.0,
+				"min": -25.0
 			},
+			"position_offset": {
+				"x": 3.42106628417969,
+				"y": -6.7049560546875
+			},
+			"section_id": "front",
 			"stats": {
 				"range": 600.0
-			}
+			},
+			"type": "gatling_gun",
+			"weapon_id": "gatling"
 		},
 		{
-			"weapon_id": "torpedo_tube",
-			"type": "torpedo_launcher",
-			"section_id": "front",
-			"position_offset": {
-				"x": 0.0,
-				"y": -8.0
-			},
 			"arc": {
-				"min": -10.0,
-				"max": 10.0
-			}
+				"max": 10.0,
+				"min": -10.0
+			},
+			"position_offset": {
+				"x": -8.6842041015625,
+				"y": -0.3909912109375
+			},
+			"section_id": "front",
+			"type": "torpedo_launcher",
+			"weapon_id": "torpedo_tube"
 		}
 	]
 }
