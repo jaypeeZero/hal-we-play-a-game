@@ -46,9 +46,6 @@ var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 var _pending_spawn: Dictionary = {}
 var _battlefield_size: Vector2 = Vector2(1920, 1080)
 
-# Initial pause state
-var _initial_paused: bool = true
-
 # Weapon update timer
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
@@ -385,10 +382,9 @@ func _sync_all_entities() -> void:
 # ============================================================================
 
 func _input(event: InputEvent) -> void:
-	# Handle initial unpause with spacebar
-	if _initial_paused and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
-		get_tree().paused = false
-		_initial_paused = false
+	# Handle spacebar for pause/resume toggle
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
+		get_tree().paused = not get_tree().paused
 		get_viewport().set_input_as_handled()
 		return
 
