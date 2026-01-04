@@ -9,6 +9,19 @@ const TEAM_1_FILE := "user://team_1_fleet.json"
 
 const SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat", "corvette", "capital"]
 
+## Ship type categories - SINGLE SOURCE OF TRUTH
+## All systems should use these instead of hardcoding ship type checks
+const FIGHTER_CLASS_TYPES := ["fighter", "heavy_fighter", "torpedo_boat"]
+const LARGE_SHIP_TYPES := ["corvette", "capital"]
+
+## Check if a ship type is fighter-class (small, agile craft)
+static func is_fighter_class(ship_type: String) -> bool:
+	return ship_type in FIGHTER_CLASS_TYPES
+
+## Check if a ship type is a large ship (corvette or capital)
+static func is_large_ship(ship_type: String) -> bool:
+	return ship_type in LARGE_SHIP_TYPES
+
 ## Default fleet when no save file exists
 static func get_default_fleet() -> Dictionary:
 	return {
