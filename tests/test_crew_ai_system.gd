@@ -366,6 +366,183 @@ func test_full_crew_ai_cycle():
 	assert_true(true, "Full cycle completes without errors")
 
 # ============================================================================
+# CREW SKILL VARIATION TESTS
+# ============================================================================
+
+func test_gunner_targeting_style_varies_with_skill():
+	# Low skill gunner uses SIMPLE targeting
+	var low_skill_style = CrewIntegrationSystem._select_targeting_style(0.2)
+	assert_eq(low_skill_style, CrewIntegrationSystem.TargetingStyle.SIMPLE,
+		"Low skill gunner uses SIMPLE targeting")
+
+	# Medium skill gunner uses LEADING targeting
+	var medium_skill_style = CrewIntegrationSystem._select_targeting_style(0.5)
+	assert_eq(medium_skill_style, CrewIntegrationSystem.TargetingStyle.LEADING,
+		"Medium skill gunner uses LEADING targeting")
+
+	# High skill gunner uses PREDICTIVE targeting
+	var high_skill_style = CrewIntegrationSystem._select_targeting_style(0.7)
+	assert_eq(high_skill_style, CrewIntegrationSystem.TargetingStyle.PREDICTIVE,
+		"High skill gunner uses PREDICTIVE targeting")
+
+	# Elite gunner uses SUBSYSTEM targeting
+	var elite_skill_style = CrewIntegrationSystem._select_targeting_style(0.9)
+	assert_eq(elite_skill_style, CrewIntegrationSystem.TargetingStyle.SUBSYSTEM,
+		"Elite gunner uses SUBSYSTEM targeting")
+
+func test_captain_command_style_varies_with_skill():
+	# Low skill captain uses REACTIVE command
+	var low_skill_style = CrewIntegrationSystem._select_command_style(0.2)
+	assert_eq(low_skill_style, CrewIntegrationSystem.CommandStyle.REACTIVE,
+		"Low skill captain uses REACTIVE command")
+
+	# Medium skill captain uses STANDARD command
+	var medium_skill_style = CrewIntegrationSystem._select_command_style(0.55)
+	assert_eq(medium_skill_style, CrewIntegrationSystem.CommandStyle.STANDARD,
+		"Medium skill captain uses STANDARD command")
+
+	# High skill captain uses TACTICAL command
+	var high_skill_style = CrewIntegrationSystem._select_command_style(0.75)
+	assert_eq(high_skill_style, CrewIntegrationSystem.CommandStyle.TACTICAL,
+		"High skill captain uses TACTICAL command")
+
+	# Elite captain uses ADAPTIVE command
+	var elite_skill_style = CrewIntegrationSystem._select_command_style(0.9)
+	assert_eq(elite_skill_style, CrewIntegrationSystem.CommandStyle.ADAPTIVE,
+		"Elite captain uses ADAPTIVE command")
+
+func test_squadron_coordination_style_varies_with_skill():
+	# Low skill leader uses INDIVIDUAL coordination
+	var low_skill_style = CrewIntegrationSystem._select_coordination_style(0.2)
+	assert_eq(low_skill_style, CrewIntegrationSystem.CoordinationStyle.INDIVIDUAL,
+		"Low skill leader uses INDIVIDUAL coordination")
+
+	# Medium skill leader uses PAIRED coordination
+	var medium_skill_style = CrewIntegrationSystem._select_coordination_style(0.5)
+	assert_eq(medium_skill_style, CrewIntegrationSystem.CoordinationStyle.PAIRED,
+		"Medium skill leader uses PAIRED coordination")
+
+	# High skill leader uses COORDINATED coordination
+	var high_skill_style = CrewIntegrationSystem._select_coordination_style(0.7)
+	assert_eq(high_skill_style, CrewIntegrationSystem.CoordinationStyle.COORDINATED,
+		"High skill leader uses COORDINATED coordination")
+
+	# Elite leader uses ORCHESTRATED coordination
+	var elite_skill_style = CrewIntegrationSystem._select_coordination_style(0.9)
+	assert_eq(elite_skill_style, CrewIntegrationSystem.CoordinationStyle.ORCHESTRATED,
+		"Elite leader uses ORCHESTRATED coordination")
+
+func test_gunner_modifiers_have_dramatic_range():
+	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	ship.weapons = [create_test_weapon()]
+
+	# Low skill gunner
+	var low_gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.1)
+	ship.crew_modifiers = {}
+	var low_ship = CrewIntegrationSystem.apply_gunner_skill_modifiers(ship, low_gunner)
+	var low_weapon_stats = CrewIntegrationSystem.get_crew_modified_weapon_stats(ship.weapons[0], low_ship)
+
+	# High skill gunner
+	var high_gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.95)
+	ship.crew_modifiers = {}
+	var high_ship = CrewIntegrationSystem.apply_gunner_skill_modifiers(ship, high_gunner)
+	var high_weapon_stats = CrewIntegrationSystem.get_crew_modified_weapon_stats(ship.weapons[0], high_ship)
+
+	# Accuracy should have dramatic difference (40% vs 130%)
+	var accuracy_ratio = high_weapon_stats.accuracy / low_weapon_stats.accuracy
+	assert_gt(accuracy_ratio, 2.0, "High skill gunner has >2x accuracy of low skill")
+
+func test_captain_modifiers_have_dramatic_range():
+	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+
+	# Low skill captain
+	var low_captain = CrewData.create_crew_member(CrewData.Role.CAPTAIN, 0.1)
+	ship.crew_modifiers = {}
+	var low_ship = CrewIntegrationSystem.apply_captain_skill_modifiers(ship, low_captain)
+
+	# High skill captain
+	var high_captain = CrewData.create_crew_member(CrewData.Role.CAPTAIN, 0.95)
+	ship.crew_modifiers = {}
+	var high_ship = CrewIntegrationSystem.apply_captain_skill_modifiers(ship, high_captain)
+
+	# Coordination should have significant difference (-10% vs +30%)
+	var low_coord = low_ship.crew_modifiers.captain_coordination
+	var high_coord = high_ship.crew_modifiers.captain_coordination
+
+	assert_lt(low_coord, 1.0, "Low skill captain has coordination penalty")
+	assert_gt(high_coord, 1.2, "High skill captain has significant coordination bonus")
+
+	# Decision delay should have dramatic difference
+	var low_delay = low_ship.crew_modifiers.captain_decision_delay
+	var high_delay = high_ship.crew_modifiers.captain_decision_delay
+	assert_gt(low_delay, high_delay * 2, "Low skill captain decides >2x slower")
+
+func test_pilot_modifiers_have_dramatic_range():
+	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+
+	# Low skill pilot
+	var low_pilot = CrewData.create_crew_member(CrewData.Role.PILOT, 0.0)
+	ship.crew_modifiers = {"pilot_skill": 0.0}
+	var low_stats = CrewIntegrationSystem.get_crew_modified_movement_stats(ship)
+
+	# High skill pilot
+	ship.crew_modifiers = {"pilot_skill": 1.0}
+	var high_stats = CrewIntegrationSystem.get_crew_modified_movement_stats(ship)
+
+	# Turn rate should have dramatic difference (50% vs 130%)
+	var turn_ratio = high_stats.turn_rate / low_stats.turn_rate
+	assert_gt(turn_ratio, 2.0, "High skill pilot has >2x turn rate of low skill")
+
+func test_gunner_panic_affects_performance():
+	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	ship.weapons = [create_test_weapon()]
+
+	# Calm gunner
+	var calm_gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.7)
+	calm_gunner.stats.stress = 0.0
+	calm_gunner.stats.skills.composure = 0.8
+	ship.crew_modifiers = {}
+	var calm_ship = CrewIntegrationSystem.apply_gunner_skill_modifiers(ship, calm_gunner)
+
+	# Panicking gunner (high stress, low composure)
+	var panic_gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.7)
+	panic_gunner.stats.stress = 0.9
+	panic_gunner.stats.skills.composure = 0.2
+	ship.crew_modifiers = {}
+	var panic_ship = CrewIntegrationSystem.apply_gunner_skill_modifiers(ship, panic_gunner)
+
+	assert_false(calm_ship.crew_modifiers.gunner_panicking, "Calm gunner not panicking")
+	assert_true(panic_ship.crew_modifiers.gunner_panicking, "Stressed low-composure gunner panics")
+
+func test_crew_decision_delay_varies_by_role_and_skill():
+	# Captain decision delay uses constants
+	var low_captain = CrewData.create_crew_member(CrewData.Role.CAPTAIN, 0.1)
+	var high_captain = CrewData.create_crew_member(CrewData.Role.CAPTAIN, 0.95)
+
+	var low_delay = CrewAISystem.calculate_decision_delay(low_captain)
+	var high_delay = CrewAISystem.calculate_decision_delay(high_captain)
+
+	# Captain delay should range from ~0.3s (high) to ~1.5s (low)
+	assert_gt(low_delay, 1.0, "Low skill captain has >1s decision delay")
+	assert_lt(high_delay, 0.5, "High skill captain has <0.5s decision delay")
+
+func create_test_weapon() -> Dictionary:
+	return {
+		"weapon_id": "test_weapon",
+		"stats": {
+			"damage": 10,
+			"range": 500,
+			"accuracy": 0.8,
+			"rate_of_fire": 2.0,
+			"projectile_speed": 400
+		},
+		"arc": {"min": -45, "max": 45},
+		"facing": 0.0,
+		"position_offset": Vector2.ZERO,
+		"cooldown_remaining": 0.0
+	}
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 

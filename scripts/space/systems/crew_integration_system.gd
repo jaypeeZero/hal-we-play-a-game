@@ -5,6 +5,36 @@ extends RefCounted
 ## Translates crew decisions into ship_data modifications
 ## Following functional programming principles - all data is immutable
 
+# =============================================================================
+# TARGETING STYLE ENUM - Unlocked by gunner skill
+# =============================================================================
+enum TargetingStyle {
+	SIMPLE,      # Aims at target center, no lead (low skill)
+	LEADING,     # Basic velocity prediction (medium skill)
+	PREDICTIVE,  # Full lead calculation, anticipates maneuvers (high skill)
+	SUBSYSTEM    # Targets specific weak points (elite skill)
+}
+
+# =============================================================================
+# COMMAND STYLE ENUM - Unlocked by captain skill
+# =============================================================================
+enum CommandStyle {
+	REACTIVE,    # Only responds to immediate threats (low skill)
+	STANDARD,    # Follows doctrine, reasonable priorities (medium skill)
+	TACTICAL,    # Anticipates situations, coordinates crew (high skill)
+	ADAPTIVE     # Reads battle, adjusts strategy dynamically (elite skill)
+}
+
+# =============================================================================
+# COORDINATION STYLE ENUM - Unlocked by squadron leader skill
+# =============================================================================
+enum CoordinationStyle {
+	INDIVIDUAL,   # Ships fight independently (low skill)
+	PAIRED,       # Basic wingman pairing works (medium skill)
+	COORDINATED,  # Focus fire, mutual support, timing (high skill)
+	ORCHESTRATED  # Complex maneuvers, feints, traps (elite skill)
+}
+
 # ============================================================================
 # MAIN API - Apply crew decisions to ships
 # ============================================================================
@@ -126,6 +156,7 @@ static func apply_fire_decision(ship_data: Dictionary, decision: Dictionary, cre
 	return updated
 
 ## Apply gunner skill modifiers to weapons
+## DRAMATIC skill differences: 0-skill sprays wildly, 1.0-skill lands precise shots
 static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dictionary) -> Dictionary:
 	var updated = ship_data.duplicate(true)
 	var skill_factor = CrewAISystem.calculate_effective_skill(crew_data)
@@ -136,7 +167,31 @@ static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dicti
 	updated.crew_modifiers.gunner_skill = skill_factor
 	updated.crew_modifiers.gunner_reaction = crew_data.stats.reaction_time
 
+	# Select targeting style based on skill
+	updated.crew_modifiers.targeting_style = _select_targeting_style(skill_factor)
+
+	# Calculate lead accuracy (how well gunner predicts target position)
+	updated.crew_modifiers.lead_accuracy = lerp(WingConstants.GUNNER_LEAD_MIN,
+												WingConstants.GUNNER_LEAD_MAX, skill_factor)
+
+	# Check for panic state (low composure under stress)
+	var composure = crew_data.get("stats", {}).get("skills", {}).get("composure", skill_factor)
+	var stress = crew_data.get("stats", {}).get("stress", 0.0)
+	var effective_composure = composure * (1.0 - stress * 0.5)
+	updated.crew_modifiers.gunner_panicking = effective_composure < WingConstants.GUNNER_PANIC_COMPOSURE
+
 	return updated
+
+## Select targeting style based on gunner skill
+static func _select_targeting_style(skill: float) -> int:
+	if skill >= WingConstants.GUNNER_SUBSYSTEM_SKILL:
+		return TargetingStyle.SUBSYSTEM
+	elif skill >= WingConstants.GUNNER_PREDICTIVE_SKILL:
+		return TargetingStyle.PREDICTIVE
+	elif skill >= WingConstants.GUNNER_LEADING_SKILL:
+		return TargetingStyle.LEADING
+	else:
+		return TargetingStyle.SIMPLE
 
 # ============================================================================
 # TACTICAL DECISIONS (Captain)
@@ -164,6 +219,7 @@ static func apply_tactical_decision(ship_data: Dictionary, decision: Dictionary,
 	return updated
 
 ## Apply captain skill modifiers
+## DRAMATIC skill differences: 0-skill issues confused orders, 1.0-skill orchestrates perfectly
 static func apply_captain_skill_modifiers(ship_data: Dictionary, crew_data: Dictionary) -> Dictionary:
 	var updated = ship_data.duplicate(true)
 	var skill_factor = CrewAISystem.calculate_effective_skill(crew_data)
@@ -172,9 +228,53 @@ static func apply_captain_skill_modifiers(ship_data: Dictionary, crew_data: Dict
 		updated.crew_modifiers = {}
 
 	updated.crew_modifiers.captain_skill = skill_factor
-	updated.crew_modifiers.captain_coordination = 1.0 + (skill_factor * 0.2)  # Up to 20% bonus
+
+	# Coordination bonus: -10% to +30% (was 0-20%)
+	updated.crew_modifiers.captain_coordination = lerp(WingConstants.CAPTAIN_COORDINATION_MIN,
+													   WingConstants.CAPTAIN_COORDINATION_MAX, skill_factor)
+
+	# Select command style based on skill
+	updated.crew_modifiers.command_style = _select_command_style(skill_factor)
+
+	# Decision delay: 1.5s (low skill) to 0.3s (high skill)
+	updated.crew_modifiers.captain_decision_delay = lerp(WingConstants.CAPTAIN_DECISION_DELAY_MAX,
+														 WingConstants.CAPTAIN_DECISION_DELAY_MIN, skill_factor)
+
+	# Order clarity: 60% to 100% effectiveness
+	updated.crew_modifiers.order_clarity = lerp(WingConstants.CAPTAIN_ORDER_CLARITY_MIN,
+												WingConstants.CAPTAIN_ORDER_CLARITY_MAX, skill_factor)
+
+	# Threat assessment accuracy: 40% to 100%
+	updated.crew_modifiers.threat_assessment = lerp(WingConstants.CAPTAIN_THREAT_ASSESSMENT_MIN,
+													WingConstants.CAPTAIN_THREAT_ASSESSMENT_MAX, skill_factor)
+
+	# Damage control effectiveness: 50% to 120%
+	updated.crew_modifiers.damage_control = lerp(WingConstants.CAPTAIN_DAMAGE_CONTROL_MIN,
+												 WingConstants.CAPTAIN_DAMAGE_CONTROL_MAX, skill_factor)
 
 	return updated
+
+## Select command style based on captain skill
+static func _select_command_style(skill: float) -> int:
+	if skill >= WingConstants.CAPTAIN_ADAPTIVE_SKILL:
+		return CommandStyle.ADAPTIVE
+	elif skill >= WingConstants.CAPTAIN_TACTICAL_SKILL:
+		return CommandStyle.TACTICAL
+	elif skill >= WingConstants.CAPTAIN_STANDARD_SKILL:
+		return CommandStyle.STANDARD
+	else:
+		return CommandStyle.REACTIVE
+
+## Select coordination style based on squadron leader skill
+static func _select_coordination_style(skill: float) -> int:
+	if skill >= WingConstants.SQUADRON_ORCHESTRATED_SKILL:
+		return CoordinationStyle.ORCHESTRATED
+	elif skill >= WingConstants.SQUADRON_COORDINATED_SKILL:
+		return CoordinationStyle.COORDINATED
+	elif skill >= WingConstants.SQUADRON_PAIRED_SKILL:
+		return CoordinationStyle.PAIRED
+	else:
+		return CoordinationStyle.INDIVIDUAL
 
 # ============================================================================
 # CREW-MODIFIED SHIP STATS
@@ -213,6 +313,7 @@ static func get_crew_modified_movement_stats(ship_data: Dictionary) -> Dictionar
 	return stats
 
 ## Get weapon stats modified by crew skill
+## DRAMATIC skill differences using constants for wide ranges
 static func get_crew_modified_weapon_stats(weapon: Dictionary, ship_data: Dictionary) -> Dictionary:
 	var stats = weapon.stats.duplicate()
 
@@ -221,11 +322,31 @@ static func get_crew_modified_weapon_stats(weapon: Dictionary, ship_data: Dictio
 
 	var modifiers = ship_data.crew_modifiers
 
-	# Gunner skill affects accuracy and rate of fire
+	# Gunner skill affects accuracy, rate of fire, and tracking
 	if modifiers.has("gunner_skill"):
 		var skill = modifiers.gunner_skill
-		stats.accuracy *= (0.7 + skill * 0.5)  # 70% to 120% based on skill
-		stats.rate_of_fire *= (0.9 + skill * 0.2)  # Skilled gunners fire slightly faster
+
+		# Check for panic state - overrides normal modifiers
+		if modifiers.get("gunner_panicking", false):
+			stats.accuracy *= WingConstants.GUNNER_PANIC_ACCURACY_PENALTY
+			stats.rate_of_fire *= WingConstants.GUNNER_PANIC_ROF_BONUS
+		else:
+			# Normal skill-based modifiers with WIDE ranges
+			# Accuracy: 40% to 130% (was 70-120%)
+			stats.accuracy *= lerp(WingConstants.GUNNER_ACCURACY_MIN,
+								   WingConstants.GUNNER_ACCURACY_MAX, skill)
+			# Rate of fire: 70% to 120% (was 90-110%)
+			stats.rate_of_fire *= lerp(WingConstants.GUNNER_ROF_MIN,
+									   WingConstants.GUNNER_ROF_MAX, skill)
+
+		# Tracking speed: 30% to 110% (new)
+		if stats.has("tracking_speed"):
+			stats.tracking_speed *= lerp(WingConstants.GUNNER_TRACKING_MIN,
+										 WingConstants.GUNNER_TRACKING_MAX, skill)
+
+		# Add targeting style for weapon system to use
+		stats.targeting_style = modifiers.get("targeting_style", TargetingStyle.SIMPLE)
+		stats.lead_accuracy = modifiers.get("lead_accuracy", 0.0)
 
 	return stats
 
