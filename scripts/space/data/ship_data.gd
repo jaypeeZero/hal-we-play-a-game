@@ -54,7 +54,12 @@ static func _load_template_json(file_path: String) -> Dictionary:
 	var data = json.get_data()
 
 	# Convert all position_offset dictionaries to Vector2
-	return _convert_vectors(data)
+	data = _convert_vectors(data)
+
+	# Apply base stats to weapons and internals (JSON values override base stats)
+	data = _apply_base_stats(data)
+
+	return data
 
 ## Recursively convert {x, y} dictionaries to Vector2
 static func _convert_vectors(data: Variant) -> Variant:
@@ -75,6 +80,26 @@ static func _convert_vectors(data: Variant) -> Variant:
 		return result
 	else:
 		return data
+
+## Apply base stats from BaseStats to weapons and internals
+## JSON data acts as overrides on top of base stats
+static func _apply_base_stats(data: Dictionary) -> Dictionary:
+	# Apply base stats to weapons
+	if data.has("weapons"):
+		var weapons := []
+		for weapon in data.weapons:
+			weapons.append(BaseStats.apply_weapon_base_stats(weapon))
+		data.weapons = weapons
+
+	# Apply base stats to internals (engines)
+	if data.has("internals"):
+		var internals := []
+		for internal in data.internals:
+			internals.append(BaseStats.apply_internal_base_stats(internal))
+		data.internals = internals
+
+	return data
+
 
 ## Force reload templates (useful after Ship Editor saves)
 static func reload_templates() -> void:

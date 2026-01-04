@@ -33,25 +33,23 @@
 	"internals": [
 		{
 			"component_id": "engine",
-			"current_health": 25.0,
-			"effect_on_ship": {
-				"on_damaged": {
-					"acceleration": 0.700000000000728,
-					"max_speed": 0.799999999999272
-				},
-				"on_destroyed": {
-					"acceleration": 0.299999999999272,
-					"max_speed": 0.299999999999272
-				}
-			},
-			"max_health": 25.0,
+			"type": "engine",
+			"section_id": "back",
 			"position_offset": {
 				"x": 0.0,
 				"y": 6.0
 			},
-			"section_id": "back",
-			"status": "operational",
-			"type": "engine"
+			"max_health": 25.0,
+			"effect_on_ship": {
+				"on_damaged": {
+					"acceleration": 0.7,
+					"max_speed": 0.8
+				},
+				"on_destroyed": {
+					"acceleration": 0.3,
+					"max_speed": 0.3
+				}
+			}
 		}
 	],
 	"name": "Fighter",
@@ -87,27 +85,17 @@
 	},
 	"weapons": [
 		{
-			"arc": {
-				"max": 20.0,
-				"min": -20.0
-			},
-			"cooldown_remaining": 0.0,
-			"facing": 0.0,
-			"operator_id": null,
+			"weapon_id": "guns",
+			"type": "light_cannon",
+			"section_id": "front",
 			"position_offset": {
 				"x": 0.0,
 				"y": -5.0
 			},
-			"stats": {
-				"accuracy": 0.85,
-				"damage": 5.0,
-				"projectile_speed": 600.0,
-				"range": 800.0,
-				"rate_of_fire": 5.0,
-				"size": 1.0
-			},
-			"type": "light_cannon",
-			"weapon_id": "guns"
+			"arc": {
+				"min": -20.0,
+				"max": 20.0
+			}
 		}
 	]
 }
