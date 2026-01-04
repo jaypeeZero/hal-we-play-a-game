@@ -157,6 +157,92 @@ func test_torpedo_explosion_effect_creation():
 	assert_eq(effect.position, Vector2(100, 100), "Effect should store position")
 	assert_gt(effect.max_lifetime, 0.5, "Explosion should have longer duration")
 
+func test_process_collisions_creates_torpedo_explosion_effect_on_ship_hit():
+	# Create an explosive projectile that will hit a ship
+	var ships = [create_test_ship(Vector2(0, 0))]
+	ships[0].team = 0  # Ensure ship is team 0
+
+	var explosive_projectile = {
+		"projectile_id": "torpedo_1",
+		"position": Vector2(0, 0),  # Same position = collision
+		"velocity": Vector2(0, -100),
+		"damage": 15.0,
+		"source_id": "attacker",
+		"team": 1,  # Different team so it can hit
+		"projectile_type": "explosive",
+		"explosion_radius": 80.0,
+		"explosion_damage": 60.0
+	}
+
+	var result = CollisionSystem.process_collisions(ships, [explosive_projectile], [])
+
+	# Should have visual effects for the torpedo explosion
+	var has_torpedo_explosion = false
+	for effect in result.visual_effects:
+		if effect.type == "effect_torpedo_explosion":
+			has_torpedo_explosion = true
+			assert_eq(effect.radius, 80.0, "Explosion effect should have correct radius")
+			break
+
+	assert_true(has_torpedo_explosion, "Torpedo hit should create torpedo explosion visual effect")
+
+func test_torpedo_explosion_effect_radius_matches_projectile():
+	var ships = [create_test_ship(Vector2(0, 0))]
+	ships[0].team = 0
+
+	var test_radius = 120.0  # Non-default radius
+	var explosive_projectile = {
+		"projectile_id": "torpedo_1",
+		"position": Vector2(0, 0),
+		"velocity": Vector2(0, -100),
+		"damage": 15.0,
+		"source_id": "attacker",
+		"team": 1,
+		"projectile_type": "explosive",
+		"explosion_radius": test_radius,
+		"explosion_damage": 60.0
+	}
+
+	var result = CollisionSystem.process_collisions(ships, [explosive_projectile], [])
+
+	var explosion_effect = null
+	for effect in result.visual_effects:
+		if effect.type == "effect_torpedo_explosion":
+			explosion_effect = effect
+			break
+
+	assert_not_null(explosion_effect, "Should create explosion effect")
+	assert_eq(explosion_effect.radius, test_radius, "Effect radius should match projectile explosion_radius")
+
+func test_torpedo_explosion_effect_has_required_fields():
+	var effect = VisualEffectSystem.create_torpedo_explosion(Vector2(50, 75), 100.0)
+
+	# All required fields for spawning visual effect entity
+	assert_true(effect.has("effect_id"), "Effect must have effect_id")
+	assert_true(effect.has("type"), "Effect must have type")
+	assert_true(effect.has("position"), "Effect must have position")
+	assert_true(effect.has("radius"), "Effect must have radius")
+	assert_true(effect.has("max_lifetime"), "Effect must have max_lifetime")
+	assert_true(effect.has("lifetime"), "Effect must have lifetime")
+
+func test_apply_torpedo_explosion_creates_effect():
+	# Test apply_torpedo_explosion directly
+	var ships = []  # No ships to damage
+	var explosion = {
+		"position": Vector2(100, 100),
+		"radius": 80.0,
+		"damage": 60.0,
+		"source_id": "test",
+		"team": 1
+	}
+
+	var result = CollisionSystem.apply_torpedo_explosion(ships, explosion)
+
+	# Should still create explosion visual even with no ships
+	assert_eq(result.visual_effects.size(), 1, "Should create explosion effect")
+	assert_eq(result.visual_effects[0].type, "effect_torpedo_explosion", "Effect should be torpedo explosion")
+	assert_eq(result.visual_effects[0].radius, 80.0, "Effect should have correct radius")
+
 # ============================================================================
 # FIRE COMMAND TESTS
 # ============================================================================
