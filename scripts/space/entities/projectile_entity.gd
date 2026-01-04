@@ -7,7 +7,7 @@ extends IRenderable
 
 var entity_id: String = ""
 var team: int = 0
-var projectile_type: String = "standard"  # "standard" or "torpedo"
+var projectile_type: String = "standard"  # "standard" or "explosive"
 
 var _area: Area2D
 
@@ -64,7 +64,7 @@ func get_entity_id() -> String:
 	return entity_id
 
 func get_visual_type() -> String:
-	if projectile_type == "torpedo":
+	if projectile_type == "explosive":
 		return "space_torpedo"
 	return "space_projectile"
 

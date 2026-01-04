@@ -28,8 +28,8 @@ static func process_collisions(ships: Array, projectiles: Array, obstacles: Arra
 			hits.append(hit)
 			destroyed_projectile_ids.append(projectile.projectile_id)
 
-			# Check if this is a torpedo - queue explosion
-			if projectile.get("projectile_type", "standard") == "torpedo":
+			# Check if this is an explosive projectile - queue explosion
+			if projectile.get("projectile_type", "standard") == "explosive":
 				torpedo_explosions.append({
 					position = hit.hit_position,
 					radius = projectile.get("explosion_radius", 80.0),
@@ -44,8 +44,8 @@ static func process_collisions(ships: Array, projectiles: Array, obstacles: Arra
 		if not obstacle_hit.is_empty():
 			destroyed_projectile_ids.append(projectile.projectile_id)
 
-			# Torpedoes also explode on obstacles
-			if projectile.get("projectile_type", "standard") == "torpedo":
+			# Explosive projectiles also explode on obstacles
+			if projectile.get("projectile_type", "standard") == "explosive":
 				torpedo_explosions.append({
 					position = obstacle_hit.hit_position,
 					radius = projectile.get("explosion_radius", 80.0),

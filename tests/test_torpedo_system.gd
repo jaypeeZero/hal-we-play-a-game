@@ -60,7 +60,7 @@ func test_torpedo_projectile_has_explosion_data():
 	var fire_command = create_torpedo_fire_command()
 	var projectile = ProjectileSystem.create_projectile(fire_command, 0)
 
-	assert_eq(projectile.projectile_type, "torpedo", "Projectile should be torpedo type")
+	assert_eq(projectile.projectile_type, "explosive", "Projectile should be explosive type")
 	assert_gt(projectile.explosion_radius, 0.0, "Torpedo should have explosion radius")
 	assert_gt(projectile.explosion_damage, 0.0, "Torpedo should have explosion damage")
 

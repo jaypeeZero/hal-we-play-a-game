@@ -64,7 +64,7 @@ static func create_projectile(fire_command: Dictionary, team: int) -> Dictionary
 		lifetime = 0.0,
 		max_lifetime = max_lifetime,
 		weapon_size = fire_command.get("weapon_size", 1),
-		projectile_type = "torpedo" if is_torpedo else "standard",
+		projectile_type = "explosive" if is_torpedo else "standard",
 		explosion_radius = explosion_radius,
 		explosion_damage = explosion_damage
 	}
