@@ -101,7 +101,7 @@
 		"y": 0.0
 	},
 	"rotation": 0.0,
-	"ship_id": "ship_2",
+	"ship_id": "ship_0",
 	"stats": {
 		"acceleration": 50.0,
 		"brake_acceleration": 1.0,
@@ -131,8 +131,8 @@
 			"facing": 0.0,
 			"operator_id": null,
 			"position_offset": {
-				"x": -10.0,
-				"y": -20.0
+				"x": -26.0269317626953,
+				"y": -60.0
 			},
 			"stats": {
 				"accuracy": 0.75,
@@ -154,8 +154,8 @@
 			"facing": 0.0,
 			"operator_id": null,
 			"position_offset": {
-				"x": 10.0,
-				"y": -20.0
+				"x": 26.0,
+				"y": -60.149658203125
 			},
 			"stats": {
 				"accuracy": 0.75,
@@ -246,8 +246,8 @@
 			"facing": 0.0,
 			"operator_id": null,
 			"position_offset": {
-				"x": 13.1144714355469,
-				"y": 19.5238189697266
+				"x": 13.960334777832,
+				"y": 18.253662109375
 			},
 			"stats": {
 				"accuracy": 0.7,
