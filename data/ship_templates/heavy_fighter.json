@@ -33,25 +33,22 @@
 	"internals": [
 		{
 			"component_id": "engine",
-			"current_health": 40.0,
-			"effect_on_ship": {
-				"on_damaged": {
-					"acceleration": 0.5,
-					"max_speed": 0.799999999999272
-				},
-				"on_destroyed": {
-					"acceleration": 0.299999999999272,
-					"max_speed": 0.299999999999272
-				}
-			},
-			"max_health": 40.0,
+			"type": "engine",
+			"section_id": "back",
 			"position_offset": {
 				"x": 0.912986755371094,
 				"y": 10.3930511474609
 			},
-			"section_id": "back",
-			"status": "operational",
-			"type": "engine"
+			"max_health": 40.0,
+			"effect_on_ship": {
+				"on_damaged": {
+					"max_speed": 0.8
+				},
+				"on_destroyed": {
+					"acceleration": 0.3,
+					"max_speed": 0.3
+				}
+			}
 		}
 	],
 	"name": "Heavy Fighter",
@@ -87,50 +84,35 @@
 	},
 	"weapons": [
 		{
-			"arc": {
-				"max": 15.0,
-				"min": -15.0
-			},
-			"cooldown_remaining": 0.0,
-			"facing": 0.0,
-			"operator_id": null,
+			"weapon_id": "guns",
+			"type": "medium_cannon",
+			"section_id": "front",
 			"position_offset": {
 				"x": -1.67227172851562,
 				"y": -12.6938781738281
 			},
-			"stats": {
-				"accuracy": 0.8,
-				"damage": 12.0,
-				"projectile_speed": 550.0,
-				"range": 900.0,
-				"rate_of_fire": 3.0,
-				"size": 2.0
-			},
-			"type": "medium_cannon",
-			"weapon_id": "guns"
+			"arc": {
+				"min": -15.0,
+				"max": 15.0
+			}
 		},
 		{
-			"arc": {
-				"max": 180.0,
-				"min": -180.0
-			},
-			"cooldown_remaining": 0.0,
-			"facing": 3.14159265359,
-			"operator_id": null,
+			"weapon_id": "rear_turret",
+			"type": "gatling_gun",
+			"section_id": "back",
 			"position_offset": {
 				"x": 7.02581787109375,
 				"y": -3.11564636230469
 			},
+			"facing": 3.14159265359,
+			"arc": {
+				"min": -180.0,
+				"max": 180.0
+			},
 			"stats": {
 				"accuracy": 0.65,
-				"damage": 3.0,
-				"projectile_speed": 700.0,
-				"range": 500.0,
-				"rate_of_fire": 10.0,
-				"size": 2.0
-			},
-			"type": "gatling_gun",
-			"weapon_id": "rear_turret"
+				"range": 500.0
+			}
 		}
 	]
 }
