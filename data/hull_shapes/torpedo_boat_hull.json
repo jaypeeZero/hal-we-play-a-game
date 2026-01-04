@@ -1,0 +1,26 @@
+{
+	"ship_type": "torpedo_boat",
+	"base_size": 18.0,
+	"description": "Bulky fighter with torpedo bay - wider midsection for ordnance",
+	"sections": [
+		{
+			"section_id": "front",
+			"points": [
+				{"x": 0.0, "y": -27.0},
+				{"x": -8.0, "y": 0.0},
+				{"x": 8.0, "y": 0.0},
+				{"x": 0.0, "y": -27.0}
+			]
+		},
+		{
+			"section_id": "back",
+			"points": [
+				{"x": -8.0, "y": 0.0},
+				{"x": -6.0, "y": 9.0},
+				{"x": 6.0, "y": 9.0},
+				{"x": 8.0, "y": 0.0},
+				{"x": -8.0, "y": 0.0}
+			]
+		}
+	]
+}

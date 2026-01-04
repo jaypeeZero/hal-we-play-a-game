@@ -38,6 +38,16 @@ const WEAPONS := {
 		"accuracy": 0.7,
 		"projectile_speed": 700.0,
 		"size": 2.0
+	},
+	"torpedo_launcher": {
+		"damage": 15.0,
+		"range": 1200.0,
+		"rate_of_fire": 0.3,
+		"accuracy": 0.95,
+		"projectile_speed": 200.0,
+		"size": 3.0,
+		"explosion_radius": 80.0,
+		"explosion_damage": 60.0
 	}
 }
 

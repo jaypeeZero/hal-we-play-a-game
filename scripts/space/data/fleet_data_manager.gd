@@ -7,13 +7,14 @@ extends RefCounted
 const TEAM_0_FILE := "user://team_0_fleet.json"
 const TEAM_1_FILE := "user://team_1_fleet.json"
 
-const SHIP_TYPES := ["fighter", "heavy_fighter", "corvette", "capital"]
+const SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat", "corvette", "capital"]
 
 ## Default fleet when no save file exists
 static func get_default_fleet() -> Dictionary:
 	return {
 		"fighter": 1,
 		"heavy_fighter": 0,
+		"torpedo_boat": 0,
 		"corvette": 0,
 		"capital": 0
 	}

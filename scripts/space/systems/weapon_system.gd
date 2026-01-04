@@ -168,6 +168,7 @@ static func calculate_type_priority(ship_type: String) -> float:
 	var priorities = {
 		"fighter": 100.0,
 		"heavy_fighter": 90.0,  # High priority but slightly less than fighter
+		"torpedo_boat": 95.0,   # High priority - dangerous anti-ship platform
 		"corvette": 50.0,
 		"capital": 25.0
 	}
@@ -312,7 +313,9 @@ static func create_fire_command(ship_data: Dictionary, weapon: Dictionary, targe
 		target_id = target.ship_id,
 		delay = generate_reaction_delay(),
 		accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data),
-		weapon_size = weapon.stats.get("size", 1)
+		weapon_size = weapon.stats.get("size", 1),
+		explosion_radius = weapon.stats.get("explosion_radius", 0.0),
+		explosion_damage = weapon.stats.get("explosion_damage", 0.0)
 	}
 
 static func calculate_weapon_world_position(ship_data: Dictionary, weapon: Dictionary) -> Vector2:

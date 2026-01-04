@@ -110,6 +110,22 @@ min_value = 0.0
 max_value = 15.0
 value = 0.0
 
+[node name="TorpedoBoatRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TorpedoBoatLabel" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships/TorpedoBoatRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Torpedo Boats"
+
+[node name="Team0TorpedoBoatSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships/TorpedoBoatRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 15.0
+value = 0.0
+
 [node name="CorvetteRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team0Panel/Team0VBox/Team0Ships"]
 layout_mode = 2
 theme_override_constants/separation = 20
@@ -191,6 +207,22 @@ layout_mode = 2
 text = "Heavy Fighters"
 
 [node name="Team1HeavyFighterSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/HeavyFighterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 15.0
+value = 0.0
+
+[node name="TorpedoBoatRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TorpedoBoatLabel" type="Label" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/TorpedoBoatRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Torpedo Boats"
+
+[node name="Team1TorpedoBoatSpinBox" type="SpinBox" parent="MarginContainer/VBoxContainer/FleetsContainer/Team1Panel/Team1VBox/Team1Ships/TorpedoBoatRow"]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.0

@@ -9,12 +9,14 @@ var entity_id: String = ""
 var effect_type: String = ""
 var lifetime: float = 0.0
 var max_lifetime: float = 1.0
+var effect_radius: float = 0.0  # For explosion effects
 
 ## Initialize entity with ID and effect type
-func initialize(id: String, type: String, duration: float = 1.0) -> void:
+func initialize(id: String, type: String, duration: float = 1.0, radius: float = 0.0) -> void:
 	entity_id = id
 	effect_type = type
 	max_lifetime = duration
+	effect_radius = radius
 
 	# Register with visual bridge for rendering
 	if VisualBridgeAutoload.bridge:

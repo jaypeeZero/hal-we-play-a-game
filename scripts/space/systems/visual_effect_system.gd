@@ -24,6 +24,20 @@ static func create_damage_effect(hit_result: Dictionary, hit_position: Vector2) 
 static func create_projectile_impact(position: Vector2) -> Dictionary:
 	return create_effect("effect_projectile_impact", position, 0.3)
 
+## Create a torpedo explosion effect (larger, longer duration)
+static func create_torpedo_explosion(position: Vector2, radius: float) -> Dictionary:
+	var effect_id = "effect_" + str(_next_effect_id)
+	_next_effect_id += 1
+
+	return {
+		effect_id = effect_id,
+		type = "effect_torpedo_explosion",
+		position = position,
+		lifetime = 0.0,
+		max_lifetime = 1.0,  # Longer duration for explosion animation
+		radius = radius      # Used by renderer for explosion size
+	}
+
 ## Create a generic effect
 static func create_effect(effect_type: String, position: Vector2, duration: float = 1.0) -> Dictionary:
 	var effect_id = "effect_" + str(_next_effect_id)
