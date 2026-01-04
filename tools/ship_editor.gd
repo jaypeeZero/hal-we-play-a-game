@@ -18,8 +18,12 @@ const COLOR_INTERNAL = Color(1.0, 0.5, 0.2)   # Orange - internal components
 const COLOR_WEAPON = Color(1.0, 0.3, 0.3)     # Red - weapons
 const COLOR_ENGINE = Color(0.3, 1.0, 0.5)     # Green - engines
 
+# Runtime-only fields that should not be saved to templates
+const RUNTIME_ONLY_KEYS := ["collision_radius"]
+
 # Current ship data and selected component
 var current_ship_data: Dictionary = {}
+var original_template_data: Dictionary = {}  # Preserve original template values
 var selected_component: Dictionary = {}
 var selected_component_type: String = ""
 
@@ -82,9 +86,29 @@ func _on_ship_type_selected(index: int) -> void:
 		ship_info_label.text = "ERROR: Ship data not found"
 
 func _get_ship_data(ship_type: String) -> Dictionary:
+	# Load original template to preserve non-runtime values like ship_id
+	original_template_data = _load_original_template(ship_type)
+
 	# Create a full ship instance using ShipData API
 	var ship_instance = ShipData.create_ship_instance(ship_type, 0, Vector2.ZERO, false)
 	return ship_instance
+
+
+## Load original JSON template to preserve values that get overwritten at runtime
+func _load_original_template(ship_type: String) -> Dictionary:
+	var res_path = TEMPLATES_PATH + ship_type + ".json"
+	var file = FileAccess.open(res_path, FileAccess.READ)
+	if not file:
+		return {}
+
+	var json_text = file.get_as_text()
+	file.close()
+
+	var json = JSON.new()
+	if json.parse(json_text) != OK:
+		return {}
+
+	return json.get_data()
 
 func _draw_ship(ship_data: Dictionary) -> void:
 	# Clear previous drawing
@@ -609,8 +633,11 @@ func _on_save_button_pressed() -> void:
 	var absolute_path = ProjectSettings.globalize_path(res_path)
 
 	# Convert ship data to JSON (need to handle Vector2 serialization)
-	var save_data = _serialize_ship_data(current_ship_data)
+	var save_data = _serialize_ship_data(current_ship_data, true)
 	var json_string = JSON.stringify(save_data, "\t")
+	# Ensure file ends with newline
+	if not json_string.ends_with("\n"):
+		json_string += "\n"
 
 	var file = FileAccess.open(absolute_path, FileAccess.WRITE)
 	if file:
@@ -625,23 +652,30 @@ func _on_save_button_pressed() -> void:
 
 ## Serialize ship data for JSON (convert Vector2 to {x, y} dict)
 ## Strips base stats and defaults so only overrides are saved
-func _serialize_ship_data(data: Variant) -> Variant:
+func _serialize_ship_data(data: Variant, is_top_level: bool = false) -> Variant:
 	if data is Dictionary:
 		var result = {}
 		for key in data.keys():
+			# Skip runtime-only keys at top level
+			if is_top_level and key in RUNTIME_ONLY_KEYS:
+				continue
+
+			# Preserve original ship_id from template
+			if is_top_level and key == "ship_id" and original_template_data.has("ship_id"):
+				result[key] = original_template_data.ship_id
 			# Special handling for weapons array
-			if key == "weapons" and data[key] is Array:
+			elif key == "weapons" and data[key] is Array:
 				result[key] = _serialize_weapons(data[key])
 			# Special handling for internals array
 			elif key == "internals" and data[key] is Array:
 				result[key] = _serialize_internals(data[key])
 			else:
-				result[key] = _serialize_ship_data(data[key])
+				result[key] = _serialize_ship_data(data[key], false)
 		return result
 	elif data is Array:
 		var result = []
 		for item in data:
-			result.append(_serialize_ship_data(item))
+			result.append(_serialize_ship_data(item, false))
 		return result
 	elif data is Vector2:
 		return {"x": data.x, "y": data.y}
