@@ -41,6 +41,15 @@ var maneuvering_thrust_direction: Vector2 = Vector2.ZERO  # Direction of lateral
 ## Color.TRANSPARENT means not in a wing
 var wing_color: Color = Color.TRANSPARENT
 
+# ===== DEBUG VISUALIZATION =====
+## Direction the pilot is trying to move towards (world-space direction vector)
+## Vector2.ZERO means no direction to show
+var debug_pilot_direction: Vector2 = Vector2.ZERO
+
+## Leader identification number for squadron/wing leaders
+## 0 means not a leader, positive number indicates leader index
+var debug_leader_number: int = 0
+
 # ===== TYPE-SAFE HELPER METHODS =====
 func has_flag(flag: String) -> bool:
 	return flag in state_flags
@@ -67,7 +76,9 @@ func to_dict() -> Dictionary:
 		"components": components,
 		"is_main_engine_firing": is_main_engine_firing,
 		"maneuvering_thrust_direction": maneuvering_thrust_direction,
-		"wing_color": wing_color
+		"wing_color": wing_color,
+		"debug_pilot_direction": debug_pilot_direction,
+		"debug_leader_number": debug_leader_number
 	}
 
 static func from_dict(data: Dictionary) -> EntityState:
@@ -91,5 +102,7 @@ static func from_dict(data: Dictionary) -> EntityState:
 	state.is_main_engine_firing = data.get("is_main_engine_firing", false)
 	state.maneuvering_thrust_direction = data.get("maneuvering_thrust_direction", Vector2.ZERO)
 	state.wing_color = data.get("wing_color", Color.TRANSPARENT)
+	state.debug_pilot_direction = data.get("debug_pilot_direction", Vector2.ZERO)
+	state.debug_leader_number = data.get("debug_leader_number", 0)
 
 	return state

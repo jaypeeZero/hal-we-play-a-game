@@ -162,6 +162,10 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 	# Wing color for visualization (set by game loop from wing formation)
 	state.wing_color = ship_data.get("_wing_color", Color.TRANSPARENT)
 
+	# Debug visualization data
+	state.debug_pilot_direction = ship_data.get("_debug_pilot_direction", Vector2.ZERO)
+	state.debug_leader_number = ship_data.get("_debug_leader_number", 0)
+
 	return state
 
 ## Map weapon types to visual types

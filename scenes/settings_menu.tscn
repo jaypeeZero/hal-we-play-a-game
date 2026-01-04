@@ -205,3 +205,41 @@ text = "Debug Mode"
 [node name="DebugModeToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/GameplaySection/DebugModeContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+
+[node name="Separator3" type="HSeparator" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer"]
+layout_mode = 2
+
+[node name="DebugToolsSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="DebugToolsHeader" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "DEBUG TOOLS"
+
+[node name="PilotDirectionContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="PilotDirectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/PilotDirectionContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Pilot Direction"
+
+[node name="PilotDirectionToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/PilotDirectionContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="LeaderNumbersContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="LeaderNumbersLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/LeaderNumbersContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Leader Numbers"
+
+[node name="LeaderNumbersToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/LeaderNumbersContainer"]
+unique_name_in_owner = true
+layout_mode = 2

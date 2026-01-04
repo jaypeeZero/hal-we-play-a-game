@@ -771,6 +771,7 @@ func _update_crew_ai_systems(delta: float) -> void:
 	# Form wings and update ship visual data with wing colors
 	var wings = WingFormationSystem.form_wings(_ships, _crew_list, _previous_wings)
 	_update_ship_wing_colors(wings)
+	_update_ship_debug_data(wings)
 	_previous_wings = wings  # Store for next frame's loyalty preservation
 
 	# EVENT-DRIVEN: Only process crew events, don't poll all crew
@@ -1098,6 +1099,65 @@ func _update_ship_wing_colors(wings: Array) -> void:
 				if ship.get("ship_id", "") == ship_id:
 					ship["_wing_color"] = wing_color
 					break
+
+## Update ship data with debug visualization info
+func _update_ship_debug_data(wings: Array) -> void:
+	# Skip if debug tools are disabled
+	if not GameSettings.show_pilot_direction and not GameSettings.show_leader_numbers:
+		# Clear debug data when disabled
+		for ship in _ships:
+			ship["_debug_pilot_direction"] = Vector2.ZERO
+			ship["_debug_leader_number"] = 0
+		return
+
+	# Build a map of wing leads (ship_id -> wing_index)
+	var wing_leads: Dictionary = {}
+	for i in range(wings.size()):
+		var wing = wings[i]
+		var lead_ship_id = wing.get("lead_ship_id", "")
+		if lead_ship_id != "":
+			wing_leads[lead_ship_id] = i + 1  # 1-indexed wing number
+
+	# Build a map of squadron leaders (ship_id -> squadron_index)
+	var squadron_leaders: Dictionary = {}
+	var squadron_index: int = 1
+	for crew in _crew_list:
+		if crew.get("is_squadron_leader", false):
+			var ship_id = crew.get("assigned_to", "")
+			if ship_id != "":
+				squadron_leaders[ship_id] = squadron_index
+				squadron_index += 1
+
+	# Update debug data for each ship
+	for ship in _ships:
+		var ship_id = ship.get("ship_id", "")
+
+		# Pilot direction - direction to target
+		if GameSettings.show_pilot_direction:
+			var target_id = ship.get("orders", {}).get("target_id", "")
+			if target_id != "":
+				var target = _find_ship_by_id(target_id)
+				if not target.is_empty():
+					var direction = (target.position - ship.position).normalized()
+					ship["_debug_pilot_direction"] = direction
+				else:
+					ship["_debug_pilot_direction"] = Vector2.ZERO
+			else:
+				ship["_debug_pilot_direction"] = Vector2.ZERO
+		else:
+			ship["_debug_pilot_direction"] = Vector2.ZERO
+
+		# Leader number - squadron leaders and wing leads
+		if GameSettings.show_leader_numbers:
+			# Priority: squadron leader > wing lead
+			if squadron_leaders.has(ship_id):
+				ship["_debug_leader_number"] = squadron_leaders[ship_id]
+			elif wing_leads.has(ship_id):
+				ship["_debug_leader_number"] = wing_leads[ship_id]
+			else:
+				ship["_debug_leader_number"] = 0
+		else:
+			ship["_debug_leader_number"] = 0
 
 ## Check for squadron leader deaths and promote next in line
 func _check_squadron_leadership_succession() -> void:
