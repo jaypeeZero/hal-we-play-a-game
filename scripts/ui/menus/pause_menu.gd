@@ -15,16 +15,14 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	# Spacebar toggles pause when menu is visible OR when game is running (not initial pause)
+	# Spacebar toggles pause - use paused state directly, not visibility
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
-		# Only handle if menu is visible (user wants to unpause)
-		# OR if game is running and not initially paused (user wants to pause)
-		if _menu_container.visible or not get_tree().paused:
-			toggle_pause()
-			get_viewport().set_input_as_handled()
+		toggle_pause()
+		get_viewport().set_input_as_handled()
 
 func toggle_pause() -> void:
-	if _menu_container.visible:
+	# Use the actual paused state, not visibility
+	if get_tree().paused:
 		resume()
 	else:
 		pause()
