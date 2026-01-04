@@ -919,11 +919,11 @@ static func _make_idle_decision(crew_data: Dictionary, game_time: float) -> Dict
 		"timestamp": game_time
 	}
 
-## Make basic pursuit decision
+## Make basic pursuit decision - uses valid movement system subtype
 static func _make_pursuit_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, game_time: float) -> Dictionary:
 	return {
 		"type": "maneuver",
-		"subtype": "pursue",
+		"subtype": "fight_pursue_full_speed",
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": target_ship.get("ship_id", ""),
