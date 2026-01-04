@@ -1,8 +1,11 @@
 extends CanvasLayer
 class_name PauseMenu
 
+# Reference to the Control child that contains the actual UI
+@onready var _menu_container: Control = $Control
+
 func _ready() -> void:
-	hide()
+	_menu_container.hide()
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 
 func _input(event: InputEvent) -> void:
@@ -13,27 +16,26 @@ func _input(event: InputEvent) -> void:
 		return
 
 	# Spacebar toggles pause when menu is visible OR when game is running (not initial pause)
-	# Check if game is running by checking if we're NOT paused OR if menu is visible
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		# Only handle if menu is visible (user wants to unpause)
 		# OR if game is running and not initially paused (user wants to pause)
-		if visible or not get_tree().paused:
+		if _menu_container.visible or not get_tree().paused:
 			toggle_pause()
 			get_viewport().set_input_as_handled()
 
 func toggle_pause() -> void:
-	if visible:
+	if _menu_container.visible:
 		resume()
 	else:
 		pause()
 
 func pause() -> void:
 	get_tree().paused = true
-	show()
+	_menu_container.show()
 
 func resume() -> void:
 	get_tree().paused = false
-	hide()
+	_menu_container.hide()
 
 func _on_resume_pressed() -> void:
 	resume()

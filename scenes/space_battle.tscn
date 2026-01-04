@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://b2xq8v9k3space"]
+[gd_scene load_steps=4 format=3 uid="uid://b2xq8v9k3space"]
 
 [ext_resource type="Script" path="res://scripts/space/space_battle_game.gd" id="1_space_game"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
+[ext_resource type="PackedScene" uid="uid://cq8yh5m2jxp0w" path="res://scenes/pause_menu.tscn" id="3_pause_menu"]
 
 [node name="SpaceBattle" type="Control"]
 layout_mode = 3
@@ -71,3 +72,5 @@ Ship Types:
 Teams:
   Blue tint = Player (Team 0)
   Red tint = Enemy (Team 1)"
+
+[node name="PauseMenu" parent="." instance=ExtResource("3_pause_menu")]
