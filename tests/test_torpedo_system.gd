@@ -225,6 +225,240 @@ func test_torpedo_boat_crew_has_command_chain():
 		"Pilot should command torpedo operator")
 
 # ============================================================================
+# CREW ASSIGNMENT TESTS - Verify crew is properly linked to ships
+# ============================================================================
+
+func test_torpedo_boat_crew_assigned_to_ship():
+	var ship = ShipData.create_ship_instance("torpedo_boat", 0, Vector2(0, 0), true, 0.5)
+
+	assert_true(ship.has("crew"), "Ship should have crew array")
+	assert_eq(ship.crew.size(), 2, "Torpedo boat should have 2 crew members")
+
+	for crew_member in ship.crew:
+		assert_eq(crew_member.assigned_to, ship.ship_id,
+			"Each crew member's assigned_to should match ship_id")
+
+func test_torpedo_boat_gunner_assigned_to_ship():
+	var ship = ShipData.create_ship_instance("torpedo_boat", 0, Vector2(0, 0), true, 0.5)
+
+	var gunner = null
+	for member in ship.crew:
+		if member.role == CrewData.Role.GUNNER:
+			gunner = member
+			break
+
+	assert_not_null(gunner, "Torpedo boat should have a gunner")
+	assert_eq(gunner.assigned_to, ship.ship_id, "Gunner must be assigned to ship")
+
+# ============================================================================
+# AWARENESS TESTS - Verify gunner can see enemies
+# ============================================================================
+
+func test_gunner_awareness_opportunities_populated():
+	# Create torpedo boat with crew
+	var torpedo_boat = create_torpedo_boat_ship(Vector2(0, 0), 0)
+	var crew = ShipData.create_crew_for_ship(torpedo_boat, 0.5)
+
+	# Get the gunner
+	var gunner = null
+	for member in crew:
+		if member.role == CrewData.Role.GUNNER:
+			gunner = member
+			break
+
+	assert_not_null(gunner, "Should have a gunner")
+
+	# Create enemy corvette (big, slow, easy target)
+	var enemy = create_corvette_ship(Vector2(0, -500), 1)
+
+	var all_ships = [torpedo_boat, enemy]
+	var projectiles = []
+
+	# Update gunner awareness
+	var updated_gunner = InformationSystem.update_crew_awareness(gunner, all_ships, projectiles, 0.0)
+
+	assert_false(updated_gunner.awareness.opportunities.is_empty(),
+		"Gunner should see enemy corvette as opportunity")
+
+func test_gunner_awareness_sees_enemy_ships():
+	# Create torpedo boat
+	var torpedo_boat = create_torpedo_boat_ship(Vector2(0, 0), 0)
+	var crew = ShipData.create_crew_for_ship(torpedo_boat, 0.5)
+
+	# Find gunner
+	var gunner = null
+	for member in crew:
+		if member.role == CrewData.Role.GUNNER:
+			gunner = member
+			break
+
+	# Create multiple enemies at various distances
+	var enemies = [
+		create_corvette_ship(Vector2(0, -400), 1),  # Close
+		create_corvette_ship(Vector2(0, -800), 1),  # Medium
+	]
+
+	var all_ships = [torpedo_boat] + enemies
+	var projectiles = []
+
+	var updated_gunner = InformationSystem.update_crew_awareness(gunner, all_ships, projectiles, 0.0)
+
+	assert_gte(updated_gunner.awareness.opportunities.size(), 1,
+		"Gunner should see at least one enemy ship")
+
+func test_gunner_awareness_empty_without_enemies():
+	# Create torpedo boat
+	var torpedo_boat = create_torpedo_boat_ship(Vector2(0, 0), 0)
+	var crew = ShipData.create_crew_for_ship(torpedo_boat, 0.5)
+
+	# Find gunner
+	var gunner = null
+	for member in crew:
+		if member.role == CrewData.Role.GUNNER:
+			gunner = member
+			break
+
+	# No enemies - only friendly ships
+	var friendly = create_torpedo_boat_ship(Vector2(100, 0), 0)
+	var all_ships = [torpedo_boat, friendly]
+	var projectiles = []
+
+	var updated_gunner = InformationSystem.update_crew_awareness(gunner, all_ships, projectiles, 0.0)
+
+	assert_true(updated_gunner.awareness.opportunities.is_empty(),
+		"Gunner should have no opportunities when no enemies exist")
+
+# ============================================================================
+# GUNNER DECISION TESTS - Verify gunner fires at targets
+# ============================================================================
+
+func test_gunner_makes_fire_decision_with_opportunities():
+	# Create gunner with populated awareness
+	var gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.5)
+	gunner.assigned_to = "test_ship"
+	gunner.next_decision_time = 0.0  # Ready to decide now
+
+	# Manually populate awareness with a valid opportunity
+	gunner.awareness.opportunities = [
+		{
+			"id": "enemy_corvette",
+			"type": "ship",
+			"ship_type": "corvette",
+			"position": Vector2(0, -500),
+			"team": 1,
+			"status": "operational",
+			"_opportunity_score": 80.0
+		}
+	]
+
+	# Make gunner decision
+	var result = CrewAISystem.make_gunner_decision(gunner, 0.0)
+
+	assert_true(result.has("decision"), "Gunner should produce a decision when opportunities exist")
+	assert_eq(result.decision.type, "fire", "Decision should be fire type")
+	assert_eq(result.decision.target_id, "enemy_corvette", "Should target the enemy")
+
+func test_gunner_no_decision_without_opportunities():
+	# Create gunner with empty awareness
+	var gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.5)
+	gunner.assigned_to = "test_ship"
+	gunner.next_decision_time = 0.0
+
+	# Empty opportunities
+	gunner.awareness.opportunities = []
+
+	var result = CrewAISystem.make_gunner_decision(gunner, 0.0)
+
+	# Should not have a fire decision
+	var has_fire_decision = result.has("decision") and result.decision.get("type") == "fire" and result.decision.get("subtype") != "hold_fire"
+	assert_false(has_fire_decision, "Gunner should not fire without opportunities")
+
+# ============================================================================
+# COMPLETE INTEGRATION TESTS - Full flow from ship to fire command
+# ============================================================================
+
+func test_torpedo_boat_gunner_complete_flow():
+	# Create torpedo boat with crew
+	var torpedo_boat = ShipData.create_ship_instance("torpedo_boat", 0, Vector2(0, 0), true, 0.5)
+
+	# Get crew from ship
+	var crew_list = torpedo_boat.crew
+
+	# Find the gunner
+	var gunner = null
+	for member in crew_list:
+		if member.role == CrewData.Role.GUNNER:
+			gunner = member
+			break
+
+	assert_not_null(gunner, "Should have a gunner")
+	assert_eq(gunner.assigned_to, torpedo_boat.ship_id, "Gunner must be assigned")
+
+	# Create enemy
+	var enemy = create_corvette_ship(Vector2(0, -500), 1)
+	var all_ships = [torpedo_boat, enemy]
+
+	# Step 1: Update awareness
+	var updated_crew_list = InformationSystem.update_all_crew_awareness(crew_list, all_ships, [], 0.0)
+
+	# Find updated gunner
+	var updated_gunner = null
+	for member in updated_crew_list:
+		if member.role == CrewData.Role.GUNNER:
+			updated_gunner = member
+			break
+
+	assert_false(updated_gunner.awareness.opportunities.is_empty(),
+		"After awareness update, gunner should see enemy")
+
+	# Step 2: Make decision
+	updated_gunner.next_decision_time = 0.0  # Force decision now
+	var result = CrewAISystem.make_gunner_decision(updated_gunner, 0.0)
+
+	assert_true(result.has("decision"), "Gunner should make a decision")
+	assert_eq(result.decision.type, "fire", "Decision should be fire type")
+
+func test_torpedo_boat_vs_corvette_fires():
+	# Full integration: torpedo boat facing corvette should fire
+	var torpedo_boat = ShipData.create_ship_instance("torpedo_boat", 0, Vector2(0, 0), true, 0.5)
+	var corvette = create_corvette_ship(Vector2(0, -500), 1)
+
+	var all_ships = [torpedo_boat, corvette]
+	var crew_list = torpedo_boat.crew.duplicate(true)
+
+	# Update awareness for all crew
+	crew_list = InformationSystem.update_all_crew_awareness(crew_list, all_ships, [], 0.0)
+
+	# Force all crew to be ready to decide
+	for i in crew_list.size():
+		crew_list[i].next_decision_time = 0.0
+
+	# Get decisions from all crew
+	var crew_result = CrewAISystem.update_all_crew(crew_list, 0.1, 0.0, all_ships)
+	var decisions = crew_result.decisions
+
+	# Should have at least one fire decision from the gunner
+	var has_fire_decision = false
+	for decision in decisions:
+		if decision.type == "fire" and decision.subtype != "hold_fire":
+			has_fire_decision = true
+			break
+
+	assert_true(has_fire_decision, "Torpedo boat gunner should fire at corvette")
+
+func test_gunner_awareness_range_sufficient():
+	# Verify gunner awareness range covers combat distance
+	var gunner_stats = CrewData._get_role_modifiers(CrewData.Role.GUNNER)
+	var base_range = gunner_stats.awareness_range
+
+	# With 0.5 skill: effective_range = base_range * (0.7 + 0.5 * 0.6) = base_range * 1.0
+	var effective_range = base_range * 1.0
+
+	# Should be able to see enemies at 500 units (typical combat range)
+	assert_gte(effective_range, 500.0,
+		"Gunner awareness range should cover 500 unit combat distance")
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -325,6 +559,84 @@ func create_test_ship_with_torpedo_launcher(cooldown: float) -> Dictionary:
 					"explosion_damage": 60.0
 				},
 				"cooldown_remaining": cooldown
+			}
+		],
+		"internals": []
+	}
+
+func create_torpedo_boat_ship(pos: Vector2, team: int) -> Dictionary:
+	return {
+		"ship_id": "torpedo_boat_" + str(randi()),
+		"type": "torpedo_boat",
+		"team": team,
+		"position": pos,
+		"velocity": Vector2.ZERO,
+		"rotation": 0.0 if team == 0 else PI,
+		"status": "operational",
+		"collision_radius": 18.0,
+		"stats": {"mass": 60.0, "size": 18.0, "max_speed": 250.0},
+		"armor_sections": [
+			{
+				"section_id": "front",
+				"current_armor": 30.0,
+				"max_armor": 30.0,
+				"size": 1.5,
+				"arc": {"start": -90.0, "end": 90.0}
+			}
+		],
+		"weapons": [
+			{
+				"weapon_id": "gatling",
+				"type": "gatling_gun",
+				"position_offset": Vector2(0, -6),
+				"facing": 0.0,
+				"arc": {"min": -25, "max": 25},
+				"stats": {"range": 600.0}
+			},
+			{
+				"weapon_id": "torpedo_tube",
+				"type": "torpedo_launcher",
+				"position_offset": Vector2(0, -8),
+				"facing": 0.0,
+				"arc": {"min": -10, "max": 10},
+				"stats": {
+					"range": 1200.0,
+					"explosion_radius": 80.0,
+					"explosion_damage": 60.0
+				}
+			}
+		],
+		"internals": []
+	}
+
+func create_corvette_ship(pos: Vector2, team: int) -> Dictionary:
+	return {
+		"ship_id": "corvette_" + str(randi()),
+		"type": "corvette",
+		"team": team,
+		"position": pos,
+		"velocity": Vector2.ZERO,
+		"rotation": 0.0 if team == 0 else PI,
+		"status": "operational",
+		"collision_radius": 40.0,
+		"stats": {"mass": 300.0, "size": 40.0, "max_speed": 100.0},
+		"armor_sections": [
+			{
+				"section_id": "front",
+				"current_armor": 60.0,
+				"max_armor": 60.0,
+				"size": 2.0,
+				"arc": {"start": -90.0, "end": 90.0}
+			}
+		],
+		"weapons": [
+			{
+				"weapon_id": "turret_1",
+				"type": "light_cannon",
+				"position_offset": Vector2(0, -20),
+				"facing": 0.0,
+				"arc": {"min": -180, "max": 180},
+				"stats": {"range": 800.0}
 			}
 		],
 		"internals": []
