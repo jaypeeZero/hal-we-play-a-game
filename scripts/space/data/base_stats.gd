@@ -44,7 +44,7 @@ const WEAPONS := {
 		"range": 10000.0,
 		"rate_of_fire": 0.3,
 		"accuracy": 0.95,
-		"projectile_speed": 200.0,
+		"projectile_speed": 400.0,
 		"size": 3.0,
 		"explosion_radius": 80.0,
 		"explosion_damage": 60.0
