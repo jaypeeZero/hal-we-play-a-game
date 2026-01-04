@@ -624,11 +624,19 @@ func _on_save_button_pressed() -> void:
 		print("ERROR: Could not save ship template to: " + absolute_path)
 
 ## Serialize ship data for JSON (convert Vector2 to {x, y} dict)
+## Strips base stats and defaults so only overrides are saved
 func _serialize_ship_data(data: Variant) -> Variant:
 	if data is Dictionary:
 		var result = {}
 		for key in data.keys():
-			result[key] = _serialize_ship_data(data[key])
+			# Special handling for weapons array
+			if key == "weapons" and data[key] is Array:
+				result[key] = _serialize_weapons(data[key])
+			# Special handling for internals array
+			elif key == "internals" and data[key] is Array:
+				result[key] = _serialize_internals(data[key])
+			else:
+				result[key] = _serialize_ship_data(data[key])
 		return result
 	elif data is Array:
 		var result = []
@@ -639,3 +647,135 @@ func _serialize_ship_data(data: Variant) -> Variant:
 		return {"x": data.x, "y": data.y}
 	else:
 		return data
+
+
+## Serialize weapons array, stripping base stats and defaults
+func _serialize_weapons(weapons: Array) -> Array:
+	var result = []
+	for weapon in weapons:
+		result.append(_serialize_weapon(weapon))
+	return result
+
+
+## Serialize a single weapon, only including overrides from base stats
+func _serialize_weapon(weapon: Dictionary) -> Dictionary:
+	var weapon_type: String = weapon.get("type", "")
+	var base_stats := BaseStats.get_weapon_stats(weapon_type)
+
+	var result := {}
+
+	# Always include these identifying fields
+	var required_keys := ["weapon_id", "type", "section_id", "position_offset"]
+	for key in required_keys:
+		if weapon.has(key):
+			result[key] = _serialize_ship_data(weapon[key])
+
+	# Only include arc if it differs from default
+	var default_arc = BaseStats.WEAPON_DEFAULTS.get("arc", {})
+	if weapon.has("arc"):
+		var arc = weapon.arc
+		if arc.get("min") != default_arc.get("min") or arc.get("max") != default_arc.get("max"):
+			result["arc"] = _serialize_ship_data(arc)
+
+	# Only include facing if it differs from default (0.0)
+	if weapon.has("facing") and weapon.facing != BaseStats.WEAPON_DEFAULTS.get("facing", 0.0):
+		result["facing"] = weapon.facing
+
+	# Only include stats that differ from base stats
+	if weapon.has("stats") and not base_stats.is_empty():
+		var stats_overrides := {}
+		var weapon_stats: Dictionary = weapon.stats
+		for stat_key in weapon_stats.keys():
+			var value = weapon_stats[stat_key]
+			var base_value = base_stats.get(stat_key)
+			if base_value == null or not _values_equal(value, base_value):
+				stats_overrides[stat_key] = value
+		if not stats_overrides.is_empty():
+			result["stats"] = stats_overrides
+	elif weapon.has("stats") and base_stats.is_empty():
+		# Unknown weapon type - save all stats
+		result["stats"] = _serialize_ship_data(weapon.stats)
+
+	# Skip cooldown_remaining and operator_id (runtime-only values)
+
+	return result
+
+
+## Serialize internals array, stripping base stats and defaults
+func _serialize_internals(internals: Array) -> Array:
+	var result = []
+	for internal in internals:
+		result.append(_serialize_internal(internal))
+	return result
+
+
+## Serialize a single internal component, only including overrides
+func _serialize_internal(internal: Dictionary) -> Dictionary:
+	var internal_type: String = internal.get("type", "")
+	var base_stats := BaseStats.get_engine_stats(internal_type)
+
+	var result := {}
+
+	# Always include these identifying fields
+	var required_keys := ["component_id", "type", "section_id", "position_offset"]
+	for key in required_keys:
+		if internal.has(key):
+			result[key] = _serialize_ship_data(internal[key])
+
+	# For engine-specific stats, only include overrides
+	if not base_stats.is_empty():
+		# Only include max_health if it differs from base
+		if internal.has("max_health"):
+			var base_max_health = base_stats.get("max_health", 0.0)
+			if not _values_equal(internal.max_health, base_max_health):
+				result["max_health"] = internal.max_health
+
+		# Only include effect_on_ship entries that differ from base
+		if internal.has("effect_on_ship") and base_stats.has("effect_on_ship"):
+			var effect_overrides := {}
+			var base_effects: Dictionary = base_stats.effect_on_ship
+			var internal_effects: Dictionary = internal.effect_on_ship
+
+			for effect_key in internal_effects.keys():
+				if not base_effects.has(effect_key):
+					effect_overrides[effect_key] = internal_effects[effect_key]
+				else:
+					var stat_overrides := {}
+					var base_effect: Dictionary = base_effects[effect_key]
+					var internal_effect: Dictionary = internal_effects[effect_key]
+					for stat_key in internal_effect.keys():
+						var value = internal_effect[stat_key]
+						var base_value = base_effect.get(stat_key)
+						if base_value == null or not _values_equal(value, base_value):
+							stat_overrides[stat_key] = value
+					if not stat_overrides.is_empty():
+						effect_overrides[effect_key] = stat_overrides
+
+			if not effect_overrides.is_empty():
+				result["effect_on_ship"] = effect_overrides
+	else:
+		# Unknown internal type - save relevant fields
+		if internal.has("max_health"):
+			result["max_health"] = internal.max_health
+		if internal.has("effect_on_ship"):
+			result["effect_on_ship"] = _serialize_ship_data(internal.effect_on_ship)
+
+	# Skip runtime-only values like current_health and status
+
+	return result
+
+
+## Compare two values for equality (handles floats with tolerance)
+func _values_equal(a: Variant, b: Variant) -> bool:
+	if typeof(a) != typeof(b):
+		return false
+	if a is float:
+		return absf(a - b) < 0.001
+	if a is Dictionary:
+		if a.size() != b.size():
+			return false
+		for key in a.keys():
+			if not b.has(key) or not _values_equal(a[key], b[key]):
+				return false
+		return true
+	return a == b
