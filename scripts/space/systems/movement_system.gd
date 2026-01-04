@@ -1787,6 +1787,8 @@ static func get_engagement_range(ship_data: Dictionary) -> float:
 			return 2400.0  # Fighters engage at weapons range, not point-blank (4x scaled)
 		"heavy_fighter":
 			return 2800.0  # Slightly longer range than regular fighter (4x scaled)
+		"torpedo_boat":
+			return 3600.0  # Longer range for torpedo delivery (torpedo range is 1200)
 		"corvette":
 			return 7000.0  # Corvettes at medium range (2x scaled, already larger)
 		"capital":

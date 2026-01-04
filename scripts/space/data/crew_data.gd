@@ -151,6 +151,21 @@ static func create_heavy_fighter_crew(skill_level: float = 0.5) -> Array:
 
 	return [pilot, gunner]
 
+## Create a torpedo boat crew (pilot + torpedo operator)
+## The pilot flies and operates the gatling gun
+## The torpedo operator manages torpedo targeting and launch
+static func create_torpedo_boat_crew(skill_level: float = 0.5) -> Array:
+	var pilot = create_crew_member(Role.PILOT, skill_level)
+
+	# Torpedo operator - needs good anticipation for slow projectiles
+	var torpedo_operator = create_crew_member(Role.GUNNER, skill_level * 0.95)
+
+	# Torpedo operator reports to pilot
+	torpedo_operator.command_chain.superior = pilot.crew_id
+	pilot.command_chain.subordinates.append(torpedo_operator.crew_id)
+
+	return [pilot, torpedo_operator]
+
 ## Create a fighter squadron (6 fighters in 3 wingman pairs)
 ## Squadron Leader (Alpha) decides targets, others follow
 ## Leadership succession: Alpha -> Beta -> Gamma -> Delta -> Epsilon -> Zeta

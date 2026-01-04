@@ -1,0 +1,117 @@
+{
+	"angular_velocity": 0.0,
+	"armor_sections": [
+		{
+			"arc": {
+				"end": 90.0,
+				"start": -90.0
+			},
+			"current_armor": 30.0,
+			"max_armor": 30.0,
+			"position_offset": {
+				"x": 0.0,
+				"y": -9.0
+			},
+			"section_id": "front",
+			"size": 1.5
+		},
+		{
+			"arc": {
+				"end": 270.0,
+				"start": 90.0
+			},
+			"current_armor": 25.0,
+			"max_armor": 25.0,
+			"position_offset": {
+				"x": 0.0,
+				"y": 9.0
+			},
+			"section_id": "back",
+			"size": 1.5
+		}
+	],
+	"internals": [
+		{
+			"component_id": "engine",
+			"type": "engine",
+			"section_id": "back",
+			"position_offset": {
+				"x": 0.0,
+				"y": 7.0
+			},
+			"max_health": 30.0,
+			"effect_on_ship": {
+				"on_damaged": {
+					"acceleration": 0.7,
+					"max_speed": 0.8
+				},
+				"on_destroyed": {
+					"acceleration": 0.3,
+					"max_speed": 0.3
+				}
+			}
+		}
+	],
+	"name": "Torpedo Boat",
+	"orders": {
+		"current_order": "engage",
+		"patrol_points": [],
+		"target_id": null
+	},
+	"position": {
+		"x": 0.0,
+		"y": 0.0
+	},
+	"rotation": 0.0,
+	"ship_id": "ship_torpedo",
+	"stats": {
+		"acceleration": 80.0,
+		"brake_acceleration": 1.0,
+		"brake_heat_capacity": 100.0,
+		"brake_heat_dissipation": 12.0,
+		"brake_heat_per_second": 50.0,
+		"lateral_acceleration": 0.35,
+		"mass": 60.0,
+		"max_speed": 250.0,
+		"size": 18.0,
+		"turn_rate": 2.5
+	},
+	"status": "operational",
+	"team": 0,
+	"type": "torpedo_boat",
+	"velocity": {
+		"x": 0.0,
+		"y": 0.0
+	},
+	"weapons": [
+		{
+			"weapon_id": "gatling",
+			"type": "gatling_gun",
+			"section_id": "front",
+			"position_offset": {
+				"x": 0.0,
+				"y": -6.0
+			},
+			"arc": {
+				"min": -25.0,
+				"max": 25.0
+			},
+			"stats": {
+				"range": 600.0
+			}
+		},
+		{
+			"weapon_id": "torpedo_tube",
+			"type": "torpedo_launcher",
+			"section_id": "front",
+			"position_offset": {
+				"x": 0.0,
+				"y": -8.0
+			},
+			"arc": {
+				"min": -10.0,
+				"max": 10.0
+			}
+		}
+	]
+}

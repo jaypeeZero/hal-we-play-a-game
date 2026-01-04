@@ -36,6 +36,16 @@ func attach_to_entity(entity: IRenderable) -> void:
 		visual_node = _create_ship_visual(entity, visual_type)
 	elif visual_type == "space_projectile":
 		visual_node = _create_projectile_visual(entity)
+	elif visual_type == "space_torpedo":
+		visual_node = _create_torpedo_visual(entity)
+	elif visual_type == "effect_torpedo_explosion":
+		# Get radius from the effect entity
+		var radius = 80.0  # Default explosion radius
+		if entity.has_method("get") and entity.get("effect_radius"):
+			radius = entity.effect_radius
+		elif "effect_radius" in entity:
+			radius = entity.effect_radius
+		visual_node = _create_torpedo_explosion_visual(entity, radius)
 	else:
 		# Fallback to simple shape
 		visual_node = _create_fallback_visual()
@@ -616,6 +626,101 @@ func _create_projectile_visual(entity: IRenderable) -> Node2D:
 	light.energy = 0.8
 	light.color = COLOR_HIGHLIGHT
 	container.add_child(light)
+
+	return container
+
+## Create torpedo visual - larger, different color
+func _create_torpedo_visual(entity: IRenderable) -> Node2D:
+	var container = Node2D.new()
+	container.name = "MatrixTorpedoVisual"
+
+	# Torpedo color - orange/yellow to stand out
+	var torpedo_color = Color(1.0, 0.6, 0.1)  # Orange
+
+	# Elongated diamond shape (torpedo-like)
+	var polygon = Polygon2D.new()
+	polygon.name = "TorpedoBody"
+
+	var points = PackedVector2Array([
+		Vector2(0, -8),    # Nose
+		Vector2(4, 0),     # Right side
+		Vector2(0, 6),     # Tail
+		Vector2(-4, 0)     # Left side
+	])
+	polygon.polygon = points
+	polygon.color = torpedo_color
+
+	container.add_child(polygon)
+
+	# Add longer trail effect
+	var trail = Line2D.new()
+	trail.name = "Trail"
+	trail.add_point(Vector2.ZERO)
+	trail.add_point(Vector2(0, 20))  # Longer trail behind
+	trail.default_color = Color(torpedo_color, 0.5)
+	trail.width = 3.0
+	container.add_child(trail)
+
+	# Add brighter glow
+	var light = PointLight2D.new()
+	light.name = "Glow"
+	light.enabled = true
+	light.texture_scale = 0.5
+	light.energy = 1.2
+	light.color = torpedo_color
+	container.add_child(light)
+
+	return container
+
+## Create torpedo explosion visual - expanding ring effect
+func _create_torpedo_explosion_visual(entity: IRenderable, radius: float) -> Node2D:
+	var container = Node2D.new()
+	container.name = "MatrixTorpedoExplosion"
+
+	# Explosion color - bright orange/yellow
+	var explosion_color = Color(1.0, 0.6, 0.1)
+	var explosion_core_color = Color(1.0, 0.9, 0.5)
+
+	# Create multiple expanding rings
+	for ring_idx in range(3):
+		var ring = Line2D.new()
+		ring.name = "ExplosionRing" + str(ring_idx)
+		ring.default_color = explosion_color
+		ring.width = 4.0 - ring_idx  # Inner rings are thicker
+
+		# Create circle points
+		var segments = 32
+		var ring_radius = radius * (0.3 + ring_idx * 0.35)  # Staggered ring sizes
+		for i in range(segments + 1):
+			var angle = (float(i) / segments) * TAU
+			ring.add_point(Vector2(cos(angle), sin(angle)) * ring_radius)
+
+		container.add_child(ring)
+
+	# Add bright center flash
+	var center_glow = Polygon2D.new()
+	center_glow.name = "CenterFlash"
+	var center_points = PackedVector2Array()
+	var center_segments = 16
+	var center_radius = radius * 0.2
+	for i in range(center_segments):
+		var angle = (float(i) / center_segments) * TAU
+		center_points.append(Vector2(cos(angle), sin(angle)) * center_radius)
+	center_glow.polygon = center_points
+	center_glow.color = explosion_core_color
+	container.add_child(center_glow)
+
+	# Add point light for glow effect
+	var light = PointLight2D.new()
+	light.name = "ExplosionGlow"
+	light.enabled = true
+	light.texture_scale = radius / 50.0  # Scale with explosion size
+	light.energy = 2.0
+	light.color = explosion_color
+	container.add_child(light)
+
+	# Store radius for animation updates
+	container.set_meta("explosion_radius", radius)
 
 	return container
 

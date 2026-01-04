@@ -7,13 +7,15 @@ extends IRenderable
 
 var entity_id: String = ""
 var team: int = 0
+var projectile_type: String = "standard"  # "standard" or "explosive"
 
 var _area: Area2D
 
 ## Initialize entity with ID and team for collision layers
-func initialize(id: String, projectile_team: int) -> void:
+func initialize(id: String, projectile_team: int, type: String = "standard") -> void:
 	entity_id = id
 	team = projectile_team
+	projectile_type = type
 	_setup_collision()
 
 	# Register with visual bridge for rendering
@@ -62,6 +64,8 @@ func get_entity_id() -> String:
 	return entity_id
 
 func get_visual_type() -> String:
+	if projectile_type == "explosive":
+		return "space_torpedo"
 	return "space_projectile"
 
 ## Clean up

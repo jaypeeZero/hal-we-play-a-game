@@ -46,7 +46,7 @@ static func _generate_situation(ship_type: String, target_type: String, distance
 	var parts = [ship_type]
 
 	# Target type category
-	if target_type in ["fighter", "heavy_fighter"]:
+	if FleetDataManager.is_fighter_class(target_type):
 		parts.append("fighters")
 	elif target_type == "corvette":
 		parts.append("corvette")
@@ -84,7 +84,7 @@ static func _is_presenting_broadside(ship_data: Dictionary, target: Dictionary) 
 
 ## Get default maneuver when knowledge query returns empty
 static func _get_default_maneuver(ship_type: String, target_type: String, distance: float) -> String:
-	if target_type in ["fighter", "heavy_fighter"]:
+	if FleetDataManager.is_fighter_class(target_type):
 		if distance < SAFE_RANGE_VS_FIGHTERS:
 			return "large_ship_kite"  # Back away from fighters
 		else:

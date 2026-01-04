@@ -9,7 +9,7 @@ extends RefCounted
 const WEAPONS := {
 	"light_cannon": {
 		"damage": 5.0,
-		"range": 800.0,
+		"range": 4000.0,
 		"rate_of_fire": 5.0,
 		"accuracy": 0.85,
 		"projectile_speed": 600.0,
@@ -17,7 +17,7 @@ const WEAPONS := {
 	},
 	"medium_cannon": {
 		"damage": 12.0,
-		"range": 900.0,
+		"range": 6000.0,
 		"rate_of_fire": 3.0,
 		"accuracy": 0.8,
 		"projectile_speed": 550.0,
@@ -38,6 +38,16 @@ const WEAPONS := {
 		"accuracy": 0.7,
 		"projectile_speed": 700.0,
 		"size": 2.0
+	},
+	"torpedo_launcher": {
+		"damage": 15.0,
+		"range": 10000.0,
+		"rate_of_fire": 0.3,
+		"accuracy": 0.95,
+		"projectile_speed": 400.0,
+		"size": 3.0,
+		"explosion_radius": 80.0,
+		"explosion_damage": 60.0
 	}
 }
 

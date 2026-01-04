@@ -45,6 +45,14 @@ static func create_projectile(fire_command: Dictionary, team: int) -> Dictionary
 	var projectile_id = "projectile_" + str(_next_projectile_id)
 	_next_projectile_id += 1
 
+	# Check if this is a torpedo (has explosion properties)
+	var explosion_radius = fire_command.get("explosion_radius", 0.0)
+	var explosion_damage = fire_command.get("explosion_damage", 0.0)
+	var is_torpedo = explosion_radius > 0.0
+
+	# Torpedoes get longer lifetime due to slower speed
+	var max_lifetime = 15.0 if is_torpedo else 10.0
+
 	return {
 		projectile_id = projectile_id,
 		position = fire_command.spawn_position,
@@ -54,8 +62,11 @@ static func create_projectile(fire_command: Dictionary, team: int) -> Dictionary
 		target_id = fire_command.get("target_id", ""),
 		team = team,
 		lifetime = 0.0,
-		max_lifetime = 10.0,
-		weapon_size = fire_command.get("weapon_size", 1)
+		max_lifetime = max_lifetime,
+		weapon_size = fire_command.get("weapon_size", 1),
+		projectile_type = "explosive" if is_torpedo else "standard",
+		explosion_radius = explosion_radius,
+		explosion_damage = explosion_damage
 	}
 
 ## Spawn projectiles from fire commands - returns Array of projectile_data

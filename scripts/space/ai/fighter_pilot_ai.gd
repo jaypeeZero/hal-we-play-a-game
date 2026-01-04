@@ -53,10 +53,11 @@ static func _generate_fighter_situation(ship_data: Dictionary, target_ship: Dict
 
 	# Target type
 	var target_type = target_ship.get("type", "fighter")
-	if target_type in ["corvette", "capital"]:
+	if FleetDataManager.is_large_ship(target_type):
 		parts.append("capital")
 		parts.append(target_type)
 	else:
+		# All fighter-class ships treated the same for knowledge queries
 		parts.append("fighter")
 
 	# Calculate distance
@@ -218,9 +219,9 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 	var target_type = target_ship.get("type", "fighter")
 	var decision = {}
 
-	if target_type == "fighter" or target_type == "heavy_fighter":
+	if FleetDataManager.is_fighter_class(target_type):
 		decision = _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
-	elif target_type == "corvette" or target_type == "capital":
+	elif FleetDataManager.is_large_ship(target_type):
 		decision = _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 	else:
 		decision = _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
@@ -252,9 +253,9 @@ static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wi
 	var target_type = target_ship.get("type", "fighter")
 	var decision = {}
 
-	if target_type == "fighter" or target_type == "heavy_fighter":
+	if FleetDataManager.is_fighter_class(target_type):
 		decision = _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
-	elif target_type == "corvette" or target_type == "capital":
+	elif FleetDataManager.is_large_ship(target_type):
 		decision = _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 	else:
 		decision = _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
@@ -494,9 +495,9 @@ static func _make_solo_fallback_decision(crew_data: Dictionary, ship_data: Dicti
 
 	var target_type = target_ship.get("type", "fighter")
 
-	if target_type == "fighter" or target_type == "heavy_fighter":
+	if FleetDataManager.is_fighter_class(target_type):
 		return _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
-	elif target_type == "corvette" or target_type == "capital":
+	elif FleetDataManager.is_large_ship(target_type):
 		return _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 	else:
 		return _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
@@ -746,7 +747,7 @@ static func _find_wingmates(crew_data: Dictionary, all_crew: Array, all_ships: A
 		if ship.get("team", -1) != my_team:
 			continue
 		var ship_type = ship.get("type", "")
-		if ship_type != "fighter" and ship_type != "heavy_fighter":
+		if not FleetDataManager.is_fighter_class(ship_type):
 			continue
 		if ship.get("status", "") != "operational":
 			continue
@@ -823,7 +824,7 @@ static func _count_nearby_friendly_fighters(my_ship: Dictionary, all_ships: Arra
 		if ship.get("team", -1) != my_team:
 			continue
 		var ship_type = ship.get("type", "")
-		if ship_type != "fighter" and ship_type != "heavy_fighter":
+		if not FleetDataManager.is_fighter_class(ship_type):
 			continue
 		if ship.get("status", "") != "operational":
 			continue
@@ -918,11 +919,11 @@ static func _make_idle_decision(crew_data: Dictionary, game_time: float) -> Dict
 		"timestamp": game_time
 	}
 
-## Make basic pursuit decision
+## Make basic pursuit decision - uses valid movement system subtype
 static func _make_pursuit_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, game_time: float) -> Dictionary:
 	return {
 		"type": "maneuver",
-		"subtype": "pursue",
+		"subtype": "fight_pursue_full_speed",
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": target_ship.get("ship_id", ""),

@@ -264,7 +264,7 @@ func _spawn_projectiles(fire_commands: Array) -> void:
 
 		# Create entity
 		var entity = ProjectileEntity.new()
-		entity.initialize(projectile_data.projectile_id, team)
+		entity.initialize(projectile_data.projectile_id, team, projectile_data.get("projectile_type", "standard"))
 		add_child(entity)
 		_projectile_entities[projectile_data.projectile_id] = entity
 
@@ -330,7 +330,8 @@ func _spawn_visual_effect(effect_data: Dictionary) -> void:
 
 	# Create entity
 	var entity = VisualEffectEntity.new()
-	entity.initialize(effect_data.effect_id, effect_data.type, effect_data.max_lifetime)
+	var radius = effect_data.get("radius", 0.0)  # For explosion effects
+	entity.initialize(effect_data.effect_id, effect_data.type, effect_data.max_lifetime, radius)
 	entity.global_position = effect_data.position
 	add_child(entity)
 	_effect_entities[effect_data.effect_id] = entity
@@ -1057,6 +1058,9 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> voi
 		"heavy_fighter":
 			# Pilot + gunner for heavy fighters (rear turret defense)
 			new_crew = CrewData.create_heavy_fighter_crew(base_skill)
+		"torpedo_boat":
+			# Pilot + torpedo operator for torpedo boats
+			new_crew = CrewData.create_torpedo_boat_crew(base_skill)
 		"corvette", "capital":
 			# Captain + pilot + gunners based on actual weapon count
 			new_crew = CrewData.create_ship_crew(weapon_count, base_skill)

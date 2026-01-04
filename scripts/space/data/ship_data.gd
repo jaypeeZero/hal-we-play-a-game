@@ -146,6 +146,12 @@ static func create_crew_for_ship(ship_data: Dictionary, skill_level: float = 0.5
 			for member in crew:
 				member.assigned_to = ship_data.ship_id
 			return crew
+		"torpedo_boat":
+			# Pilot + torpedo operator for torpedo boats
+			var crew = CrewData.create_torpedo_boat_crew(skill_level)
+			for member in crew:
+				member.assigned_to = ship_data.ship_id
+			return crew
 		"corvette":
 			# Captain, pilot, and gunners for corvette
 			var weapon_count = ship_data.weapons.size()

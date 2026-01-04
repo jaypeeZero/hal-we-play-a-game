@@ -14,6 +14,7 @@ static func process_collisions(ships: Array, projectiles: Array, obstacles: Arra
 	var hits = []
 	var destroyed_projectile_ids = []
 	var visual_effects = []
+	var torpedo_explosions = []  # Track torpedo explosions for AOE damage
 
 	# Filter out null values
 	var valid_ships = ships.filter(func(s): return s != null)
@@ -26,20 +27,53 @@ static func process_collisions(ships: Array, projectiles: Array, obstacles: Arra
 		if not hit.is_empty():
 			hits.append(hit)
 			destroyed_projectile_ids.append(projectile.projectile_id)
+
+			# Check if this is an explosive projectile - queue explosion
+			if projectile.get("projectile_type", "standard") == "explosive":
+				torpedo_explosions.append({
+					position = hit.hit_position,
+					radius = projectile.get("explosion_radius", 80.0),
+					damage = projectile.get("explosion_damage", 60.0),
+					source_id = projectile.source_id,
+					team = projectile.team
+				})
 			continue  # Projectile can only hit one target
 
 		# Check projectile against obstacles
 		var obstacle_hit = find_obstacle_hit_for_projectile(projectile, valid_obstacles)
 		if not obstacle_hit.is_empty():
 			destroyed_projectile_ids.append(projectile.projectile_id)
-			# Create visual effect for projectile hitting obstacle
-			var effect = VisualEffectSystem.create_effect("effect_projectile_impact", obstacle_hit.hit_position, 0.3)
-			visual_effects.append(effect)
+
+			# Explosive projectiles also explode on obstacles
+			if projectile.get("projectile_type", "standard") == "explosive":
+				torpedo_explosions.append({
+					position = obstacle_hit.hit_position,
+					radius = projectile.get("explosion_radius", 80.0),
+					damage = projectile.get("explosion_damage", 60.0),
+					source_id = projectile.source_id,
+					team = projectile.team
+				})
+				# Create torpedo explosion effect
+				var explosion_effect = VisualEffectSystem.create_torpedo_explosion(
+					obstacle_hit.hit_position,
+					projectile.get("explosion_radius", 80.0)
+				)
+				visual_effects.append(explosion_effect)
+			else:
+				# Create visual effect for projectile hitting obstacle
+				var effect = VisualEffectSystem.create_effect("effect_projectile_impact", obstacle_hit.hit_position, 0.3)
+				visual_effects.append(effect)
 
 	# Apply damage to ships and generate visual effects
 	var result = apply_hits_to_ships_with_effects(valid_ships, hits)
 	var updated_ships = result.ships
 	visual_effects.append_array(result.visual_effects)
+
+	# Process torpedo explosions (AOE damage)
+	for explosion in torpedo_explosions:
+		var explosion_result = apply_torpedo_explosion(updated_ships, explosion)
+		updated_ships = explosion_result.ships
+		visual_effects.append_array(explosion_result.visual_effects)
 
 	# Apply damage to obstacles from projectiles
 	var obstacle_result = apply_projectile_hits_to_obstacles(valid_obstacles, valid_projectiles, destroyed_projectile_ids)
@@ -524,3 +558,70 @@ static func calculate_ship_collision_damage(receiving_ship: Dictionary, impactin
 	var total_damage = base_damage * size_multiplier * mass_multiplier
 
 	return total_damage
+
+# ============================================================================
+# TORPEDO EXPLOSION (AOE DAMAGE)
+# ============================================================================
+
+## Apply torpedo explosion damage to all ships within radius
+## Returns {ships: Array, visual_effects: Array}
+static func apply_torpedo_explosion(ships: Array, explosion: Dictionary) -> Dictionary:
+	var updated_ships = []
+	var visual_effects = []
+	var explosion_pos = explosion.position
+	var explosion_radius = explosion.radius
+	var explosion_damage = explosion.damage
+
+	# Create the main explosion visual effect
+	var explosion_effect = VisualEffectSystem.create_torpedo_explosion(explosion_pos, explosion_radius)
+	visual_effects.append(explosion_effect)
+
+	for ship in ships:
+		if ship == null or ship.status == "destroyed":
+			updated_ships.append(ship)
+			continue
+
+		var distance = ship.position.distance_to(explosion_pos)
+
+		# Ship outside explosion radius - no damage
+		if distance > explosion_radius:
+			updated_ships.append(ship)
+			continue
+
+		# Calculate damage falloff (linear - full damage at center, 0 at edge)
+		var damage_multiplier = 1.0 - (distance / explosion_radius)
+		var applied_damage = int(explosion_damage * damage_multiplier)
+
+		if applied_damage <= 0:
+			updated_ships.append(ship)
+			continue
+
+		# Determine which armor section faces the explosion
+		var angle_to_explosion = (explosion_pos - ship.position).angle()
+		var damage_result = DamageResolver.resolve_hit(
+			ship,
+			explosion_pos,
+			applied_damage,
+			angle_to_explosion,
+			3  # Explosion weapon size (large)
+		)
+
+		updated_ships.append(damage_result.ship_data)
+
+		# Create damage visual effect
+		var effect = VisualEffectSystem.create_damage_effect(damage_result.hit_result, ship.position)
+		visual_effects.append(effect)
+
+		# Log explosion damage
+		if BattleEventLoggerAutoload.service:
+			BattleEventLoggerAutoload.log_event("torpedo_explosion_damage", {
+				"ship_id": ship.ship_id,
+				"source_id": explosion.source_id,
+				"damage": applied_damage,
+				"distance": distance
+			})
+
+	return {
+		ships = updated_ships,
+		visual_effects = visual_effects
+	}
