@@ -34,6 +34,15 @@ const FORMATION_SPACING = 80.0  # Distance to maintain from wingmates
 const BEHIND_ANGLE_TOLERANCE = 20.0  # Degrees - "behind" the enemy
 const COLLISION_DETECTION_RANGE = 2000.0
 
+## Approach style enum for skill-based maneuvering
+enum ApproachStyle {
+	DIRECT,            # Fly straight at target (low skill)
+	ANGLED,            # Approach from offset angle (medium skill)
+	PURSUIT_CURVE,     # Lead/lag pursuit with jinking (high skill)
+	DEFENSIVE_SPIRAL,  # Break contact, reposition (high skill, disadvantaged)
+	ATTACK_RUN         # Press advantage with evasion (high skill, advantaged)
+}
+
 # ============================================================================
 # KNOWLEDGE-DRIVEN DECISION MAKING
 # ============================================================================
@@ -492,7 +501,7 @@ static func _make_solo_fallback_decision(crew_data: Dictionary, ship_data: Dicti
 	else:
 		return _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
 
-## Fighter vs Fighter combat - KNOWLEDGE-DRIVEN
+## Fighter vs Fighter combat - KNOWLEDGE-DRIVEN with SKILL-BASED APPROACH
 static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var target_pos = target_ship.get("position", Vector2.ZERO)
@@ -508,6 +517,18 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	# Check formation status with wingmates
 	var wingmates = _find_wingmates(crew_data, all_crew, all_ships)
 	var formation_offset = _calculate_formation_offset(crew_data, wingmates, all_ships)
+
+	# Determine position advantage for approach style selection
+	var position_advantage = "neutral"
+	if _am_i_behind_target(ship_data, target_ship):
+		position_advantage = "behind"
+	elif _am_i_in_front_of_target(ship_data, target_ship):
+		position_advantage = "disadvantaged"
+
+	# SKILL-BASED APPROACH: Select approach style and calculate jink params
+	var approach_style = _select_approach_style(skill, position_advantage)
+	var jink_params = _calculate_jink_params(skill)
+	var approach_angle = _calculate_approach_angle(skill)
 
 	# Build context for knowledge query
 	var context = {
@@ -529,7 +550,7 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	if maneuver_type in ["fight_dodge_and_weave", "fight_lateral_break", "fight_evasive_turn", "fight_defensive_break"]:
 		evasion_direction = _calculate_evasion_direction(ship_data, target_ship)
 
-	# Build decision
+	# Build decision with skill-based approach data
 	var decision = {
 		"type": "maneuver",
 		"subtype": maneuver_type,
@@ -542,7 +563,13 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 		"formation_offset": formation_offset,
 		"behind_position": behind_position,
 		"evasion_direction": evasion_direction,
-		"knowledge_situation": situation  # For debugging
+		"knowledge_situation": situation,  # For debugging
+		# NEW: Skill-based approach data
+		"approach_style": approach_style,
+		"position_advantage": position_advantage,
+		"jink_amplitude": jink_params.amplitude,
+		"jink_period": jink_params.period,
+		"approach_angle": approach_angle,
 	}
 
 	return decision
@@ -1010,6 +1037,65 @@ static func _make_rejoin_wingman_decision(crew_data: Dictionary, ship_data: Dict
 		"delay": 0.3,  # Check frequently when rejoining
 		"timestamp": game_time
 	}
+
+# ============================================================================
+# SKILL-BASED APPROACH STYLE SELECTION
+# ============================================================================
+
+## Select approach style based on pilot skill and tactical situation
+## Low skill: always direct approach (fly straight at target)
+## High skill: uses angles, pursuit curves, defensive maneuvers
+static func _select_approach_style(skill: float, position_advantage: String) -> int:
+	# LOW SKILL (< 0.4): Always direct approach - fly straight at target
+	if skill < WingConstants.PILOT_APPROACH_ANGLE_SKILL:
+		return ApproachStyle.DIRECT
+
+	# MEDIUM SKILL (0.4-0.6): Basic angle awareness
+	if skill < WingConstants.PILOT_PURSUIT_CURVE_SKILL:
+		if position_advantage == "behind":
+			return ApproachStyle.DIRECT  # Have advantage, go straight in
+		else:
+			return ApproachStyle.ANGLED  # Try basic angle approach
+
+	# HIGH SKILL (0.6+): Full tactical approach selection
+	if position_advantage == "disadvantaged":
+		# Enemy is behind us - need to break and reposition
+		if skill >= WingConstants.PILOT_DEFENSIVE_MANEUVER_SKILL:
+			return ApproachStyle.DEFENSIVE_SPIRAL
+		else:
+			return ApproachStyle.ANGLED  # Best we can do at this skill
+	elif position_advantage == "behind":
+		# We have advantage - press it
+		return ApproachStyle.ATTACK_RUN
+	else:
+		# Neutral - use pursuit curves to gain advantage
+		return ApproachStyle.PURSUIT_CURVE
+
+## Calculate jink parameters based on skill
+## Returns: { amplitude: float, period: float }
+static func _calculate_jink_params(skill: float) -> Dictionary:
+	if skill < WingConstants.PILOT_JINKING_SKILL:
+		# Below jinking threshold - no jinking
+		return { "amplitude": 0.0, "period": 1000.0 }
+
+	# Scale jinking with skill above threshold
+	var jink_skill = (skill - WingConstants.PILOT_JINKING_SKILL) / (1.0 - WingConstants.PILOT_JINKING_SKILL)
+	var amplitude = lerp(WingConstants.PILOT_JINK_AMPLITUDE_MIN,
+						 WingConstants.PILOT_JINK_AMPLITUDE_MAX, jink_skill)
+	var period = lerp(WingConstants.PILOT_JINK_PERIOD_LOW_SKILL,
+					  WingConstants.PILOT_JINK_PERIOD_HIGH_SKILL, jink_skill)
+
+	return { "amplitude": amplitude, "period": period }
+
+## Calculate approach angle offset based on skill
+## Returns angle in radians (0 for direct, up to ~0.7 for skilled)
+static func _calculate_approach_angle(skill: float) -> float:
+	if skill < WingConstants.PILOT_APPROACH_ANGLE_SKILL:
+		return 0.0
+
+	var angle_skill = (skill - WingConstants.PILOT_APPROACH_ANGLE_SKILL) / (1.0 - WingConstants.PILOT_APPROACH_ANGLE_SKILL)
+	return lerp(WingConstants.PILOT_APPROACH_ANGLE_MIN,
+				WingConstants.PILOT_APPROACH_ANGLE_MAX, angle_skill)
 
 # ============================================================================
 # COLLISION DETECTION & EVASION
