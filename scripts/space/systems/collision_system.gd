@@ -86,7 +86,7 @@ static func can_projectile_hit_ship(projectile: Dictionary, ship: Dictionary) ->
 
 static func is_projectile_colliding_with_ship(projectile: Dictionary, ship: Dictionary) -> bool:
 	var distance = projectile.position.distance_to(ship.position)
-	var collision_radius = ship.stats.size + 3.0  # ship size + projectile size
+	var collision_radius = ship.collision_radius + 3.0  # ship collision radius + projectile size
 	return distance <= collision_radius
 
 static func create_hit(projectile: Dictionary, ship: Dictionary) -> Dictionary:
@@ -142,7 +142,7 @@ static func find_obstacle_collision_for_ship(ship: Dictionary, obstacles: Array)
 			continue
 
 		var distance = ship.position.distance_to(obstacle.position)
-		var collision_radius = ship.stats.size + obstacle.radius
+		var collision_radius = ship.collision_radius + obstacle.radius
 
 		if distance <= collision_radius and distance < min_distance:
 			min_distance = distance
@@ -305,7 +305,7 @@ static func process_physical_collisions(ships: Array, obstacles: Array) -> Dicti
 ## Returns {ship: Dictionary, obstacle: Dictionary, event: Dictionary} or empty dict
 static func check_and_resolve_ship_obstacle_collision(ship: Dictionary, obstacle: Dictionary) -> Dictionary:
 	var distance = ship.position.distance_to(obstacle.position)
-	var collision_radius = ship.stats.size + obstacle.radius
+	var collision_radius = ship.collision_radius + obstacle.radius
 
 	# Not colliding
 	if distance > collision_radius:
@@ -391,7 +391,7 @@ static func check_and_resolve_ship_obstacle_collision(ship: Dictionary, obstacle
 ## Returns {ship1: Dictionary, ship2: Dictionary, event: Dictionary} or empty dict
 static func check_and_resolve_ship_ship_collision(ship1: Dictionary, ship2: Dictionary) -> Dictionary:
 	var distance = ship1.position.distance_to(ship2.position)
-	var collision_radius = ship1.stats.size + ship2.stats.size
+	var collision_radius = ship1.collision_radius + ship2.collision_radius
 
 	# Not colliding
 	if distance > collision_radius:

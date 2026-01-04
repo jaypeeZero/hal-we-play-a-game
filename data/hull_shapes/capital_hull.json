@@ -1,6 +1,6 @@
 {
 	"ship_type": "capital",
-	"base_size": 150.0,
+	"base_size": 540.0,
 	"description": "Star Destroyer triangle - narrow nose widening to broad rear",
 	"sections": [
 		{

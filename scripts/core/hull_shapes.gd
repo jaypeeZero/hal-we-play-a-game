@@ -72,10 +72,29 @@ static func get_section(ship_type: String, section_id: String) -> Array:
 			return section.get("points", [])
 	return []
 
-## Get base size for a ship type
+## Get base size for a ship type (legacy - prefer get_collision_radius)
 static func get_base_size(ship_type: String) -> float:
 	var hull = get_hull(ship_type)
 	return hull.get("base_size", 15.0)
+
+
+## Calculate collision radius from hull polygon points
+## Returns the maximum distance from origin to any point in the hull
+static func get_collision_radius(ship_type: String) -> float:
+	var sections = get_sections(ship_type)
+	if sections.is_empty():
+		return get_base_size(ship_type)
+
+	var max_radius: float = 0.0
+	for section in sections:
+		var points = section.get("points", [])
+		for point in points:
+			var distance = point.length()
+			if distance > max_radius:
+				max_radius = distance
+
+	# Fallback to base_size if no points found
+	return max_radius if max_radius > 0.0 else get_base_size(ship_type)
 
 ## Rotate a point 90 degrees clockwise (vertical -> horizontal)
 static func rotate_90(point: Vector2) -> Vector2:

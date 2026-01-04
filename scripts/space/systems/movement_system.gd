@@ -1601,7 +1601,7 @@ static func calculate_obstacle_avoidance(ship_data: Dictionary, obstacles: Array
 		return Vector2.ZERO
 
 	var avoidance = Vector2.ZERO
-	var detection_range = ship_data.stats.size * 8.0  # Look ahead distance
+	var detection_range = ship_data.collision_radius * 8.0  # Look ahead distance
 
 	# Filter active obstacles that block movement
 	var active_obstacles = obstacles \
@@ -1612,7 +1612,7 @@ static func calculate_obstacle_avoidance(ship_data: Dictionary, obstacles: Array
 	for obstacle in active_obstacles:
 		var to_obstacle = obstacle.position - ship_data.position
 		var distance = to_obstacle.length()
-		var combined_radius = ship_data.stats.size + obstacle.radius
+		var combined_radius = ship_data.collision_radius + obstacle.radius
 
 		# Only avoid obstacles in detection range
 		if distance > detection_range:

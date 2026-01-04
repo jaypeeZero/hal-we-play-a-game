@@ -378,6 +378,7 @@ func create_test_ship(id: String, pos: Vector2, team: int) -> Dictionary:
 		"velocity": Vector2.ZERO,
 		"rotation": 0.0,
 		"status": "operational",
+		"collision_radius": 15.0,
 		"stats": {
 			"max_speed": 300.0,
 			"acceleration": 100.0,

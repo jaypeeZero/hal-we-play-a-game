@@ -1,6 +1,6 @@
 {
 	"ship_type": "corvette",
-	"base_size": 90.0,
+	"base_size": 116.0,
 	"description": "Thick hammerhead front, thin body, narrow rear",
 	"sections": [
 		{
