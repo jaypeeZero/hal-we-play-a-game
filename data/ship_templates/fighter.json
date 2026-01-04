@@ -1,73 +1,113 @@
 {
-	"type": "fighter",
-	"name": "Fighter",
-	"stats": {
-		"max_speed": 300.0,
-		"acceleration": 100.0,
-		"lateral_acceleration": 0.4,
-		"turn_rate": 3.0,
-		"mass": 50.0,
-		"size": 15.0,
-		"brake_acceleration": 1.0,
-		"brake_heat_capacity": 80.0,
-		"brake_heat_per_second": 50.0,
-		"brake_heat_dissipation": 15.0
-	},
+	"angular_velocity": 0.0,
 	"armor_sections": [
 		{
+			"arc": {
+				"end": 90.0,
+				"start": -90.0
+			},
+			"current_armor": 25.0,
+			"max_armor": 25.0,
+			"position_offset": {
+				"x": 0.0,
+				"y": -8.0
+			},
 			"section_id": "front",
-			"position_offset": {"x": 0, "y": -8},
-			"arc": {"start": -90, "end": 90},
-			"max_armor": 25,
-			"current_armor": 25,
-			"size": 1
+			"size": 1.0
 		},
 		{
+			"arc": {
+				"end": 270.0,
+				"start": 90.0
+			},
+			"current_armor": 20.0,
+			"max_armor": 20.0,
+			"position_offset": {
+				"x": 0.0,
+				"y": 8.0
+			},
 			"section_id": "back",
-			"position_offset": {"x": 0, "y": 8},
-			"arc": {"start": 90, "end": 270},
-			"max_armor": 20,
-			"current_armor": 20,
-			"size": 1
+			"size": 1.0
 		}
 	],
 	"internals": [
 		{
 			"component_id": "engine",
-			"type": "engine",
-			"section_id": "back",
-			"position_offset": {"x": 0, "y": 6},
-			"max_health": 25,
-			"current_health": 25,
-			"status": "operational",
+			"current_health": 25.0,
 			"effect_on_ship": {
-				"on_damaged": {"max_speed": 0.6, "acceleration": 0.5},
-				"on_destroyed": {"max_speed": 0.1, "acceleration": 0.1}
-			}
-		}
-	],
-	"weapons": [
-		{
-			"weapon_id": "guns",
-			"type": "light_cannon",
-			"position_offset": {"x": 0, "y": -5},
-			"facing": 0.0,
-			"arc": {"min": -20, "max": 20},
-			"stats": {
-				"damage": 5,
-				"rate_of_fire": 5.0,
-				"projectile_speed": 600,
-				"range": 800,
-				"accuracy": 0.85,
-				"size": 1
+				"on_damaged": {
+					"acceleration": 0.700000000000728,
+					"max_speed": 0.799999999999272
+				},
+				"on_destroyed": {
+					"acceleration": 0.299999999999272,
+					"max_speed": 0.299999999999272
+				}
 			},
-			"cooldown_remaining": 0.0,
-			"operator_id": null
+			"max_health": 25.0,
+			"position_offset": {
+				"x": 0.0,
+				"y": 6.0
+			},
+			"section_id": "back",
+			"status": "operational",
+			"type": "engine"
 		}
 	],
+	"name": "Fighter",
 	"orders": {
 		"current_order": "engage",
-		"target_id": null,
-		"patrol_points": []
-	}
+		"patrol_points": [],
+		"target_id": null
+	},
+	"position": {
+		"x": 0.0,
+		"y": 0.0
+	},
+	"rotation": 0.0,
+	"ship_id": "ship_5",
+	"stats": {
+		"acceleration": 100.0,
+		"brake_acceleration": 1.0,
+		"brake_heat_capacity": 80.0,
+		"brake_heat_dissipation": 15.0,
+		"brake_heat_per_second": 50.0,
+		"lateral_acceleration": 0.4,
+		"mass": 50.0,
+		"max_speed": 300.0,
+		"size": 15.0,
+		"turn_rate": 3.0
+	},
+	"status": "operational",
+	"team": 0,
+	"type": "fighter",
+	"velocity": {
+		"x": 0.0,
+		"y": 0.0
+	},
+	"weapons": [
+		{
+			"arc": {
+				"max": 20.0,
+				"min": -20.0
+			},
+			"cooldown_remaining": 0.0,
+			"facing": 0.0,
+			"operator_id": null,
+			"position_offset": {
+				"x": 0.0,
+				"y": -5.0
+			},
+			"stats": {
+				"accuracy": 0.85,
+				"damage": 5.0,
+				"projectile_speed": 600.0,
+				"range": 800.0,
+				"rate_of_fire": 5.0,
+				"size": 1.0
+			},
+			"type": "light_cannon",
+			"weapon_id": "guns"
+		}
+	]
 }
