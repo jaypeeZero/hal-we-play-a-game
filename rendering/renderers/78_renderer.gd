@@ -70,6 +70,10 @@ func update_state(entity_id: String, state: EntityState) -> void:
 	# Update wing circle visual
 	_update_wing_circle(visual.root, state.wing_color)
 
+	# Update debug visuals
+	_update_pilot_direction_line(visual.root, state.debug_pilot_direction)
+	_update_leader_number(visual.root, state.debug_leader_number)
+
 func play_animation(entity_id: String, request: AnimationRequest) -> void:
 	# Animations handled by state changes in this renderer
 	pass
@@ -260,3 +264,68 @@ func _update_wing_circle(parent_node: Node2D, wing_color: Color) -> void:
 	# Update color and visibility
 	wing_circle.default_color = wing_color
 	wing_circle.visible = true
+
+## Update pilot direction line debug visual
+func _update_pilot_direction_line(parent_node: Node2D, direction: Vector2) -> void:
+	const DEBUG_LINE_LENGTH: float = 60.0
+	const DEBUG_LINE_COLOR: Color = Color(1.0, 1.0, 0.0, 0.8)  # Yellow
+	const DEBUG_LINE_WIDTH: float = 2.0
+
+	var direction_line = parent_node.get_node_or_null("DebugDirectionLine")
+
+	# If no direction (zero vector), hide/remove line
+	if direction.length_squared() < 0.001:
+		if direction_line:
+			direction_line.visible = false
+		return
+
+	# Create direction line if it doesn't exist
+	if not direction_line:
+		direction_line = Line2D.new()
+		direction_line.name = "DebugDirectionLine"
+		direction_line.width = DEBUG_LINE_WIDTH
+		direction_line.default_color = DEBUG_LINE_COLOR
+		direction_line.z_index = 10  # Draw above other elements
+		parent_node.add_child(direction_line)
+
+	# Update line points - line goes from ship center in the direction
+	# Need to account for ship rotation since the line is a child of the ship
+	var ship_rotation = parent_node.get_parent().rotation if parent_node.get_parent() else 0.0
+	var local_direction = direction.rotated(-ship_rotation)
+
+	direction_line.clear_points()
+	direction_line.add_point(Vector2.ZERO)
+	direction_line.add_point(local_direction * DEBUG_LINE_LENGTH)
+	direction_line.visible = true
+
+## Update leader number debug visual
+func _update_leader_number(parent_node: Node2D, leader_number: int) -> void:
+	const LABEL_OFFSET: Vector2 = Vector2(0, -50)  # Above the ship
+	const LABEL_COLOR: Color = Color(1.0, 1.0, 1.0, 0.9)  # White
+	const LABEL_FONT_SIZE: int = 16
+
+	var leader_label = parent_node.get_node_or_null("DebugLeaderLabel")
+
+	# If not a leader (0), hide label
+	if leader_number <= 0:
+		if leader_label:
+			leader_label.visible = false
+		return
+
+	# Create label if it doesn't exist
+	if not leader_label:
+		leader_label = Label.new()
+		leader_label.name = "DebugLeaderLabel"
+		leader_label.add_theme_color_override("font_color", LABEL_COLOR)
+		leader_label.add_theme_font_size_override("font_size", LABEL_FONT_SIZE)
+		leader_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		leader_label.z_index = 10  # Draw above other elements
+		parent_node.add_child(leader_label)
+
+	# Update label text and position
+	# Counter-rotate to keep text upright (since it's a child of rotating ship)
+	var ship_rotation = parent_node.get_parent().rotation if parent_node.get_parent() else 0.0
+	leader_label.rotation = -ship_rotation
+	leader_label.position = LABEL_OFFSET.rotated(-ship_rotation)
+	leader_label.text = str(leader_number)
+	leader_label.visible = true

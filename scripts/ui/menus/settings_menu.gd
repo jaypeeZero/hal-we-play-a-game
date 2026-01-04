@@ -15,6 +15,10 @@ extends Control
 # Gameplay controls
 @onready var debug_mode_toggle: CheckButton = %DebugModeToggle
 
+# Debug tool controls
+@onready var pilot_direction_toggle: CheckButton = %PilotDirectionToggle
+@onready var leader_numbers_toggle: CheckButton = %LeaderNumbersToggle
+
 # Back button
 @onready var back_button: Button = %BackButton
 
@@ -61,6 +65,10 @@ func _load_current_settings() -> void:
 	# Load gameplay settings
 	debug_mode_toggle.button_pressed = GameSettings.debug_mode
 
+	# Load debug tool settings
+	pilot_direction_toggle.button_pressed = GameSettings.show_pilot_direction
+	leader_numbers_toggle.button_pressed = GameSettings.show_leader_numbers
+
 func _connect_signals() -> void:
 	# Audio signals
 	master_slider.value_changed.connect(_on_master_volume_changed)
@@ -73,6 +81,10 @@ func _connect_signals() -> void:
 
 	# Gameplay signals
 	debug_mode_toggle.toggled.connect(_on_debug_mode_toggled)
+
+	# Debug tool signals
+	pilot_direction_toggle.toggled.connect(_on_pilot_direction_toggled)
+	leader_numbers_toggle.toggled.connect(_on_leader_numbers_toggled)
 
 	# Back button
 	back_button.pressed.connect(_on_back_pressed)
@@ -105,6 +117,12 @@ func _on_resolution_selected(index: int) -> void:
 
 func _on_debug_mode_toggled(enabled: bool) -> void:
 	GameSettings.set_debug_mode(enabled)
+
+func _on_pilot_direction_toggled(enabled: bool) -> void:
+	GameSettings.set_show_pilot_direction(enabled)
+
+func _on_leader_numbers_toggled(enabled: bool) -> void:
+	GameSettings.set_show_leader_numbers(enabled)
 
 func _on_back_pressed() -> void:
 	# Save settings before leaving
