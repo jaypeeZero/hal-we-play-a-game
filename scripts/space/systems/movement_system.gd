@@ -328,19 +328,16 @@ static func calculate_evasion_control(ship_data: Dictionary, threat: Dictionary,
 	}
 
 ## Calculate fighter pilot control - specialized FighterPilotAI maneuvers
+## Now uses SKILL-BASED APPROACH for pursuit maneuvers
 static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array = []) -> Dictionary:
 	var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "pursue")
 
 	# Route to appropriate maneuver calculation
+	# PURSUIT MANEUVERS now use skill-aware approach system
 	match maneuver_subtype:
-		"fight_pursue_full_speed":
-			return calculate_pursue_full_speed(ship_data, target, nearby_ships, obstacles)
-		"fight_pursue_tactical":
-			return calculate_pursue_tactical(ship_data, target, nearby_ships, obstacles)
-		"fight_flank_behind":
-			return calculate_flank_behind(ship_data, target, nearby_ships, obstacles)
-		"fight_tight_pursuit":
-			return calculate_tight_pursuit(ship_data, target, nearby_ships, obstacles)
+		"fight_pursue_full_speed", "fight_pursue_tactical", "fight_flank_behind", "fight_tight_pursuit", "fight_get_behind":
+			# Use skill-aware approach - routes based on approach_style from AI
+			return calculate_skill_aware_approach(ship_data, target, nearby_ships, obstacles)
 		"fight_dogfight_maneuver":
 			return calculate_dogfight_maneuver(ship_data, target, nearby_ships, obstacles)
 		"fight_evasive_turn":
@@ -1525,6 +1522,227 @@ static func _calculate_default_wing_position(lead_ship: Dictionary, position_sid
 	var predicted_lead_pos = lead_pos + lead_velocity * prediction_time
 
 	return predicted_lead_pos + formation_offset
+
+# ============================================================================
+# SKILL-BASED APPROACH MANEUVERS
+# ============================================================================
+# These functions implement dramatically different flight patterns based on
+# pilot skill. Low skill pilots fly straight at targets, high skill pilots
+# use angles, jinking, and complex maneuvers.
+
+## Skill-aware approach router - selects maneuver based on approach_style
+static func calculate_skill_aware_approach(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var orders = ship_data.get("orders", {})
+	var approach_style = orders.get("approach_style", 0)  # 0 = DIRECT
+	var skill = orders.get("skill_factor", 0.5)
+
+	# Route to appropriate skill-based maneuver
+	match approach_style:
+		0:  # DIRECT - low skill, fly straight at target
+			return calculate_direct_approach(ship_data, target)
+		1:  # ANGLED - medium skill, approach from offset angle
+			return calculate_angled_approach(ship_data, target, skill)
+		2:  # PURSUIT_CURVE - high skill, lead pursuit with jinking
+			return calculate_pursuit_curve(ship_data, target, skill, orders)
+		3:  # DEFENSIVE_SPIRAL - high skill, break and reposition
+			return calculate_defensive_spiral(ship_data, target, skill, orders)
+		4:  # ATTACK_RUN - high skill, press advantage with jinking
+			return calculate_attack_run(ship_data, target, skill, orders)
+		_:
+			return calculate_direct_approach(ship_data, target)
+
+## DIRECT APPROACH - Low skill pilots fly straight at target
+## No lateral movement, no prediction, no angles - just point and burn
+static func calculate_direct_approach(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+	var desired_heading = direction_to_heading(to_target)
+
+	# Low skill pilots don't brake and adjust - they commit and hope
+	# Only brake if going WAY too fast
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+	var current_speed = current_velocity.length()
+	var max_speed = ship_data.get("stats", {}).get("max_speed", 500.0)
+	var should_brake = current_speed > max_speed * 1.2
+
+	# Full throttle approach - no subtlety
+	var throttle = 1.0 if not should_brake else 0.0
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": should_brake,
+		"lateral_thrust": 0.0,  # NO LATERAL - key characteristic of low skill
+		"engagement_range": 400.0,
+		"current_distance": distance
+	}
+
+## ANGLED APPROACH - Medium skill pilots approach from offset angle
+## Tries to come in from the side rather than head-on
+static func calculate_angled_approach(ship_data: Dictionary, target: Dictionary, skill: float) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Calculate approach angle offset based on skill
+	var angle_skill = (skill - WingConstants.PILOT_APPROACH_ANGLE_SKILL) / (1.0 - WingConstants.PILOT_APPROACH_ANGLE_SKILL)
+	var offset_angle = lerp(WingConstants.PILOT_APPROACH_ANGLE_MIN,
+							WingConstants.PILOT_APPROACH_ANGLE_MAX, angle_skill)
+
+	# Consistent side selection per ship (based on ship_id hash)
+	var ship_id = ship_data.get("ship_id", "")
+	var approach_side = 1 if hash(ship_id) % 2 == 0 else -1
+
+	# Offset the approach direction
+	var offset_direction = to_target.rotated(offset_angle * approach_side).normalized()
+	var desired_heading = direction_to_heading(offset_direction)
+
+	# DART AND DASH check
+	var needs_brake = check_needs_braking(ship_data, desired_heading)
+	if needs_brake:
+		return create_braking_control(ship_data, desired_heading, distance)
+
+	# Some lateral movement for repositioning (scales with skill)
+	var lateral_thrust = lerp(0.0, 0.4, angle_skill) * approach_side
+
+	# Tactical throttle - not full speed
+	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": false,
+		"lateral_thrust": lateral_thrust,
+		"engagement_range": 400.0,
+		"current_distance": distance
+	}
+
+## PURSUIT CURVE - High skill pilots use lead pursuit with constant jinking
+## Predicts target movement and constantly adjusts with lateral thrust
+static func calculate_pursuit_curve(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+	var target_velocity = target.get("velocity", Vector2.ZERO)
+
+	# Lead pursuit: aim ahead of target based on skill
+	var prediction_time = lerp(0.3, 1.2, skill)
+	var predicted_pos = target.position + target_velocity * prediction_time
+	var to_predicted = predicted_pos - ship_data.position
+
+	var desired_heading = direction_to_heading(to_predicted)
+
+	# DART AND DASH check
+	var needs_brake = check_needs_braking(ship_data, desired_heading)
+	if needs_brake:
+		return create_braking_control(ship_data, desired_heading, distance)
+
+	# Jinking during approach - makes pilot hard to hit
+	var jink_amplitude = orders.get("jink_amplitude", 0.0)
+	var jink_period = orders.get("jink_period", 500.0)
+	var jink_phase = fmod(Time.get_ticks_msec() / jink_period, 2.0)
+	var lateral_thrust = sin(jink_phase * PI) * jink_amplitude
+
+	# Tactical throttle with distance awareness
+	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": false,
+		"lateral_thrust": lateral_thrust,
+		"engagement_range": 400.0,
+		"current_distance": distance
+	}
+
+## DEFENSIVE SPIRAL - High skill pilots break contact when disadvantaged
+## Turns away sharply, builds speed, then comes back from better angle
+static func calculate_defensive_spiral(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+
+	# Break away - turn perpendicular to line of sight
+	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+
+	# Consistent break direction per ship
+	var ship_id = ship_data.get("ship_id", "")
+	var break_side = 1 if hash(ship_id) % 2 == 0 else -1
+
+	# Spiral out: initially break perpendicular, then curve away
+	var away_from_target = -to_target.normalized()
+	var spiral_blend = clamp(distance / 2000.0, 0.0, 1.0)  # More away at close range
+	var spiral_direction = (perpendicular * break_side * (1.0 - spiral_blend) + away_from_target * spiral_blend).normalized()
+
+	var desired_heading = direction_to_heading(spiral_direction)
+
+	# Jinking while breaking - even harder to hit
+	var jink_amplitude = orders.get("jink_amplitude", 0.0) * 1.2  # Extra jinking when defensive
+	var jink_period = orders.get("jink_period", 400.0) * 0.8  # Faster jinking
+	var jink_phase = fmod(Time.get_ticks_msec() / jink_period, 2.0)
+	var lateral_thrust = sin(jink_phase * PI) * jink_amplitude
+
+	# Full evasion throttle - get out fast
+	var throttle = calculate_intuitive_throttle(ship_data, distance, "evasion")
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": false,
+		"lateral_thrust": lateral_thrust,
+		"engagement_range": 600.0,  # Larger engagement range - we're repositioning
+		"current_distance": distance
+	}
+
+## ATTACK RUN - High skill pilots press behind advantage with evasive jinking
+## Maintains position advantage while being hard to hit
+static func calculate_attack_run(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var distance = to_target.length()
+	var target_velocity = target.get("velocity", Vector2.ZERO)
+
+	# Get behind position from orders or calculate
+	var behind_position = orders.get("behind_position", Vector2.ZERO)
+	if behind_position == Vector2.ZERO:
+		var target_rotation = target.get("rotation", 0.0)
+		var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * 600.0
+		behind_position = target.position + behind_offset
+
+	# Predict where behind position will be
+	var prediction_time = lerp(0.3, 0.8, skill)
+	var predicted_behind = behind_position + target_velocity * prediction_time
+
+	var to_behind = predicted_behind - ship_data.position
+	var desired_heading = direction_to_heading(to_behind)
+
+	# DART AND DASH check
+	var needs_brake = check_needs_braking(ship_data, desired_heading)
+	if needs_brake:
+		return create_braking_control(ship_data, desired_heading, distance)
+
+	# Jinking while attacking - stay hard to hit even with advantage
+	var jink_amplitude = orders.get("jink_amplitude", 0.0) * 0.8  # Slightly less when attacking
+	var jink_period = orders.get("jink_period", 500.0)
+	var jink_phase = fmod(Time.get_ticks_msec() / jink_period, 2.0)
+	var lateral_thrust = sin(jink_phase * PI) * jink_amplitude
+
+	# Tactical throttle - controlled approach to maintain advantage
+	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
+
+	# Slow down when close to maintain position
+	if distance < 800.0:
+		throttle *= 0.5
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": false,
+		"lateral_thrust": lateral_thrust,
+		"engagement_range": 350.0,
+		"current_distance": distance
+	}
 
 ## DART AND DASH HELPERS - Make fighters fly with sharp movements, not sliding
 

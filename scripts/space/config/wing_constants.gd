@@ -152,3 +152,60 @@ const TARGET_SCORE_THREAT_FACING_ANGLE = 45.0  # degrees
 const LEAD_PICK_BEST_SKILL = 0.6       # Always picks best
 const LEAD_PICK_TOP_THREE_SKILL = 0.3  # Picks from top 3
 # Below 0.3 = random selection
+
+# =============================================================================
+# PILOT SKILL - Movement capability modifiers
+# =============================================================================
+# These create DRAMATIC differences between low and high skill pilots
+# A 0-skill pilot should fly straight at targets
+# A 1.0-skill pilot should dance circles around them
+
+## Turn rate modifier range (multiplied by base turn rate)
+const PILOT_TURN_RATE_MIN = 0.5       # 0-skill: 50% turn rate
+const PILOT_TURN_RATE_MAX = 1.3       # 1.0-skill: 130% turn rate
+
+## Acceleration modifier range
+const PILOT_ACCEL_MIN = 0.6           # 0-skill: 60% acceleration
+const PILOT_ACCEL_MAX = 1.2           # 1.0-skill: 120% acceleration
+
+## Lateral thrust capability (critical for evasion)
+const PILOT_LATERAL_MIN = 0.2         # 0-skill: 20% lateral capability
+const PILOT_LATERAL_MAX = 1.0         # 1.0-skill: 100% lateral capability
+
+# =============================================================================
+# PILOT SKILL - Behavior thresholds
+# =============================================================================
+# Low skill pilots can only do simple maneuvers
+# Higher skill unlocks more sophisticated tactics
+
+## Skill to approach from angles instead of direct
+const PILOT_APPROACH_ANGLE_SKILL = 0.4
+
+## Skill to jink (random lateral movement) during approach
+const PILOT_JINKING_SKILL = 0.5
+
+## Skill to use pursuit curves (lead/lag pursuit)
+const PILOT_PURSUIT_CURVE_SKILL = 0.6
+
+## Skill for complex defensive maneuvers (spiral, break)
+const PILOT_DEFENSIVE_MANEUVER_SKILL = 0.7
+
+# =============================================================================
+# PILOT SKILL - Jinking parameters
+# =============================================================================
+
+## Jink amplitude range (how much lateral thrust when jinking)
+const PILOT_JINK_AMPLITUDE_MIN = 0.0  # Low skill: no jinking
+const PILOT_JINK_AMPLITUDE_MAX = 0.7  # High skill: strong jinking
+
+## Jink frequency (ms per cycle) - skilled pilots jink faster
+const PILOT_JINK_PERIOD_LOW_SKILL = 800.0   # Slow, predictable
+const PILOT_JINK_PERIOD_HIGH_SKILL = 300.0  # Fast, hard to track
+
+# =============================================================================
+# PILOT SKILL - Approach angle parameters
+# =============================================================================
+
+## Approach offset angle range (radians)
+const PILOT_APPROACH_ANGLE_MIN = 0.0          # Direct approach
+const PILOT_APPROACH_ANGLE_MAX = 0.7          # ~40 degrees offset

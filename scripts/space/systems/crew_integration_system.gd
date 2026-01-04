@@ -74,6 +74,12 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		updated.orders.lateral_thrust = decision.get("lateral_thrust", 0)
 		updated.orders.position_side = decision.get("position_side", 0)
 		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
+		# NEW: Skill-based approach data
+		updated.orders.approach_style = decision.get("approach_style", 0)  # 0 = DIRECT
+		updated.orders.position_advantage = decision.get("position_advantage", "neutral")
+		updated.orders.jink_amplitude = decision.get("jink_amplitude", 0.0)
+		updated.orders.jink_period = decision.get("jink_period", 1000.0)
+		updated.orders.approach_angle = decision.get("approach_angle", 0.0)
 	elif subtype.begins_with("large_ship_"):
 		# ALL large ship maneuvers (large_ship_*) - corvettes and capitals
 		updated.orders.current_order = "large_ship_engage"
@@ -175,6 +181,7 @@ static func apply_captain_skill_modifiers(ship_data: Dictionary, crew_data: Dict
 # ============================================================================
 
 ## Get movement stats modified by crew skill
+## DRAMATIC skill differences: 0-skill flies straight, 1.0-skill dances circles
 static func get_crew_modified_movement_stats(ship_data: Dictionary) -> Dictionary:
 	var stats = ship_data.stats.duplicate()
 
@@ -183,11 +190,20 @@ static func get_crew_modified_movement_stats(ship_data: Dictionary) -> Dictionar
 
 	var modifiers = ship_data.crew_modifiers
 
-	# Pilot skill affects turn rate and acceleration
+	# Pilot skill affects turn rate, acceleration, and lateral thrust
+	# Using WIDE ranges for dramatic skill differences
 	if modifiers.has("pilot_skill"):
 		var skill = modifiers.pilot_skill
-		stats.turn_rate *= (0.8 + skill * 0.4)  # 80% to 120% based on skill
-		stats.acceleration *= (0.9 + skill * 0.2)  # 90% to 110%
+		# Turn rate: 50% to 130% - huge impact on dogfighting
+		stats.turn_rate *= lerp(WingConstants.PILOT_TURN_RATE_MIN,
+								WingConstants.PILOT_TURN_RATE_MAX, skill)
+		# Acceleration: 60% to 120%
+		stats.acceleration *= lerp(WingConstants.PILOT_ACCEL_MIN,
+								   WingConstants.PILOT_ACCEL_MAX, skill)
+		# Lateral thrust: 20% to 100% - critical for evasion
+		var lateral_base = stats.get("lateral_acceleration", 0.3)
+		stats.lateral_acceleration = lateral_base * lerp(WingConstants.PILOT_LATERAL_MIN,
+														 WingConstants.PILOT_LATERAL_MAX, skill)
 
 	# Captain coordination affects overall performance
 	if modifiers.has("captain_coordination"):
