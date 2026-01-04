@@ -107,6 +107,10 @@ func _ensure_action(action_name: String, key: int) -> void:
 # ============================================================================
 
 func _process(delta: float) -> void:
+	# Skip game logic when paused
+	if get_tree().paused:
+		return
+
 	# 0. CREW AI SYSTEMS - Update crew awareness, tactical memory, and decisions
 	if ENABLE_CREW_AI:
 		_update_crew_ai_systems(delta)
