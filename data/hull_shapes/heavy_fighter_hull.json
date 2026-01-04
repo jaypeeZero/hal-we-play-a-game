@@ -1,6 +1,6 @@
 {
 	"ship_type": "heavy_fighter",
-	"base_size": 30.0,
+	"base_size": 25.0,
 	"description": "Stockier triangle - wider body with reinforced front",
 	"sections": [
 		{
