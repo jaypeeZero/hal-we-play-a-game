@@ -168,6 +168,8 @@ static func calculate_ship_threat(ship: Dictionary) -> float:
 			threat += 30.0  # Fast and aggressive
 		"heavy_fighter":
 			threat += 45.0  # Between fighter (30) and corvette (50)
+		"torpedo_boat":
+			threat += 55.0  # Higher threat due to AOE torpedoes
 		"corvette":
 			threat += 50.0  # Moderate threat
 		"capital":
