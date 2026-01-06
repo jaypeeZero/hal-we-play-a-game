@@ -91,6 +91,25 @@ func set_show_leader_numbers(enabled: bool) -> void:
 # PERSISTENCE
 # ============================================================================
 
+func reset_to_defaults() -> void:
+	# Remove the settings file
+	if FileAccess.file_exists(SETTINGS_PATH):
+		DirAccess.remove_absolute(SETTINGS_PATH)
+
+	# Reset all settings to defaults
+	master_volume = 1.0
+	music_volume = 0.7
+	sfx_volume = 0.8
+	fullscreen = false
+	resolution_index = 0
+	debug_mode = false
+	show_pilot_direction = false
+	show_leader_numbers = false
+
+	# Apply default display settings
+	set_fullscreen(false)
+	_apply_audio_settings()
+
 func save_settings() -> void:
 	var config = ConfigFile.new()
 

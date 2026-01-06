@@ -19,7 +19,8 @@ extends Control
 @onready var pilot_direction_toggle: CheckButton = %PilotDirectionToggle
 @onready var leader_numbers_toggle: CheckButton = %LeaderNumbersToggle
 
-# Back button
+# Buttons
+@onready var reset_button: Button = %ResetButton
 @onready var back_button: Button = %BackButton
 
 func _ready() -> void:
@@ -86,7 +87,8 @@ func _connect_signals() -> void:
 	pilot_direction_toggle.toggled.connect(_on_pilot_direction_toggled)
 	leader_numbers_toggle.toggled.connect(_on_leader_numbers_toggled)
 
-	# Back button
+	# Buttons
+	reset_button.pressed.connect(_on_reset_pressed)
 	back_button.pressed.connect(_on_back_pressed)
 
 func _on_master_volume_changed(value: float) -> void:
@@ -123,6 +125,10 @@ func _on_pilot_direction_toggled(enabled: bool) -> void:
 
 func _on_leader_numbers_toggled(enabled: bool) -> void:
 	GameSettings.set_show_leader_numbers(enabled)
+
+func _on_reset_pressed() -> void:
+	GameSettings.reset_to_defaults()
+	_load_current_settings()
 
 func _on_back_pressed() -> void:
 	# Save settings before leaving
