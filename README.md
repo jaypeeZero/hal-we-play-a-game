@@ -294,31 +294,3 @@ The system is designed to scale to:
     }]
 }
 ```
-
-## Design Philosophy
-
-### Code is the Enemy
-- Keep systems simple and focused
-- Favor data over code
-- Delete complexity whenever possible
-- Write minimum code to solve problems
-
-### Functional + Signals + Data
-- Pure functions process state
-- Signals communicate changes
-- Dictionaries/JSON define entities
-- No global state in game logic
-
-### Surgical, Precise, Clean
-- Clear separation of concerns
-- Each class has ONE responsibility
-- Data flows predictably
-- Easy to test, easy to understand
-
-## Credits
-
-Built on the foundation of Wizard Battle Arena, preserving the signal-based architecture and functional programming principles while creating an entirely new game.
-
-## License
-
-[Same as parent project]
