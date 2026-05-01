@@ -59,6 +59,59 @@ static func tick(
 		"mailboxes": current_mailboxes
 	}
 
+## Same as tick(), but also refreshes a crew's awareness when they wake.
+##
+## This replaces per-frame InformationSystem.update_all_crew_awareness — at
+## fleet scale, that scan is the dominant CPU cost (50 crew * ~120 entities
+## = 6000 distance checks per frame).  Only crew that wake (timer due or
+## events pending) need their awareness rebuilt; sleeping crew see the same
+## stale snapshot they had before, which is fine because they aren't deciding.
+##
+## Caller passes `projectiles` (separate from ships because their lifecycles
+## differ; same shape used by InformationSystem).
+static func tick_with_awareness(
+	crew_list: Array,
+	game_time: float,
+	mailboxes: Dictionary,
+	ships: Array = [],
+	projectiles: Array = [],
+	wings: Array = []
+) -> Dictionary:
+	var updated_crew: Array = []
+	var decisions: Array = []
+	var current_mailboxes = mailboxes
+
+	for crew in crew_list:
+		var crew_id = crew.crew_id
+		var has_events = CrewMailboxSystem.has_pending(current_mailboxes, crew_id)
+		var is_due = game_time >= crew.get("next_decision_time", 0.0)
+
+		if not has_events and not is_due:
+			updated_crew.append(crew)
+			continue
+
+		# Refresh THIS crew's awareness against the current world snapshot.
+		var aware_crew = InformationSystem.update_crew_awareness(crew, ships, projectiles, game_time)
+
+		var events: Array = []
+		if has_events:
+			var drained = CrewMailboxSystem.drain_events(current_mailboxes, crew_id)
+			events = drained.events
+			current_mailboxes = drained.mailboxes
+
+		var result = update_crew_with_events(aware_crew, game_time, events, ships, crew_list, wings)
+		var stamped = result.crew_data.duplicate(true)
+		stamped["last_state_update_time"] = game_time
+		updated_crew.append(stamped)
+		if result.has("decision") and result.decision != null and not result.decision.is_empty():
+			decisions.append(result.decision)
+
+	return {
+		"crew_list": updated_crew,
+		"decisions": decisions,
+		"mailboxes": current_mailboxes
+	}
+
 ## Make a single crew member's decision, considering pending events.
 ## URGENT events (missile_locked, threat_appeared, ship_damaged) for pilots
 ## with known threats short-circuit to an evasive maneuver.  Other events fall

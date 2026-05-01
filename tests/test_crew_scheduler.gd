@@ -35,6 +35,20 @@ func make_captain(skill: float = 0.7, ship_id: String = "ship_1") -> Dictionary:
 func make_threat(id: String, priority: float) -> Dictionary:
 	return {"id": id, "type": "ship", "_threat_priority": priority}
 
+func make_test_ship(id: String, team: int, pos: Vector2) -> Dictionary:
+	return {
+		"ship_id": id,
+		"team": team,
+		"position": pos,
+		"velocity": Vector2.ZERO,
+		"rotation": 0.0,
+		"status": "operational",
+		"type": "fighter",
+		"collision_radius": 15.0,
+		"stats": {"max_speed": 300.0, "acceleration": 100.0, "turn_rate": 3.0},
+		"weapons": []
+	}
+
 func make_opportunity(id: String, score: float) -> Dictionary:
 	return {"id": id, "type": "ship", "_opportunity_score": score}
 
@@ -356,10 +370,8 @@ func test_sleeping_crew_awareness_is_not_refreshed():
 	pilot.next_decision_time = 5.0  # asleep
 	pilot.awareness.last_update = 0.0
 
-	var ship = {"ship_id": "ship_1", "team": 0, "position": Vector2.ZERO,
-		"status": "operational", "type": "fighter"}
-	var enemy = {"ship_id": "enemy_1", "team": 1, "position": Vector2(100, 0),
-		"status": "operational", "type": "fighter"}
+	var ship = make_test_ship("ship_1", 0, Vector2.ZERO)
+	var enemy = make_test_ship("enemy_1", 1, Vector2(100, 0))
 
 	var result = Scheduler.tick_with_awareness([pilot], 1.0, {}, [ship, enemy], [], [])
 
@@ -377,10 +389,8 @@ func test_waking_crew_awareness_is_refreshed():
 	pilot.next_decision_time = 0.5  # due to wake
 	pilot.awareness.last_update = 0.0
 
-	var ship = {"ship_id": "ship_1", "team": 0, "position": Vector2.ZERO,
-		"status": "operational", "type": "fighter"}
-	var enemy = {"ship_id": "enemy_1", "team": 1, "position": Vector2(200, 0),
-		"status": "operational", "type": "fighter"}
+	var ship = make_test_ship("ship_1", 0, Vector2.ZERO)
+	var enemy = make_test_ship("enemy_1", 1, Vector2(200, 0))
 
 	var result = Scheduler.tick_with_awareness([pilot], 1.0, {}, [ship, enemy], [], [])
 
@@ -398,12 +408,8 @@ func test_event_woken_crew_sees_current_world_state():
 	pilot.next_decision_time = 100.0  # would otherwise sleep forever
 	pilot.awareness.last_update = 0.0
 
-	var ship = {"ship_id": "ship_1", "team": 0, "position": Vector2.ZERO,
-		"status": "operational", "type": "fighter",
-		"stats": {"max_speed": 300.0}}
-	var enemy = {"ship_id": "enemy_1", "team": 1, "position": Vector2(150, 0),
-		"status": "operational", "type": "fighter",
-		"stats": {"max_speed": 300.0}}
+	var ship = make_test_ship("ship_1", 0, Vector2.ZERO)
+	var enemy = make_test_ship("enemy_1", 1, Vector2(150, 0))
 
 	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
 		"type": "threat_appeared",

@@ -1,38 +1,49 @@
 class_name ProjectileSystem
 extends RefCounted
 
-## Pure functional projectile system - IMMUTABLE DATA
-## Processes projectile movement, lifetime, and spawning
-## Following functional programming principles
+## Projectile state and movement.
+##
+## Projectiles are owned by the game loop, advanced once per frame, and
+## consumed by the collision system in the same frame.  No other system
+## holds onto a projectile dict, and the previous-frame state is dead the
+## instant the next frame starts.
+##
+## Per-frame allocation of fresh projectile dicts (via merge_dict) was the
+## immutability tax for a guarantee no consumer needs.  The advance_* fns
+## below MUTATE THE PROJECTILE DICTS IN PLACE.  Their names end in
+## `_in_place` to make the contract explicit at every call site.
+##
+## If you ever need a snapshot of a projectile (e.g. for a replay buffer),
+## duplicate it BEFORE handing it to advance_*_in_place.
 
 # ============================================================================
-# MAIN API - Process projectiles
+# MOVEMENT (MUTATES IN PLACE)
 # ============================================================================
 
-## Update single projectile - returns {projectile: Dictionary, expired: bool}
-static func update_projectile(projectile_data: Dictionary, delta: float) -> Dictionary:
-	var new_position = projectile_data.position + projectile_data.velocity * delta
-	var new_lifetime = projectile_data.lifetime + delta
+## Advance one projectile by `dt` seconds, mutating its position and lifetime.
+## Returns true if the projectile has now exceeded its max_lifetime.
+##
+## MUTATES: projectile_data.position, projectile_data.lifetime
+static func advance_projectile_in_place(projectile_data: Dictionary, dt: float) -> bool:
+	projectile_data.position += projectile_data.velocity * dt
+	projectile_data.lifetime += dt
+	return projectile_data.lifetime >= projectile_data.max_lifetime
 
-	if new_lifetime >= projectile_data.max_lifetime:
-		return {projectile = projectile_data, expired = true}
-
-	return {
-		projectile = DictUtils.merge_dict(projectile_data, {
-			position = new_position,
-			lifetime = new_lifetime
-		}),
-		expired = false
-	}
-
-## Update all projectiles - returns {projectiles: Array, expired_ids: Array}
-static func update_all_projectiles(projectiles: Array, delta: float) -> Dictionary:
-	var results = projectiles.map(func(p): return update_projectile(p, delta))
-
-	return {
-		projectiles = results.filter(func(r): return not r.expired).map(func(r): return r.projectile),
-		expired_ids = results.filter(func(r): return r.expired).map(func(r): return r.projectile.projectile_id)
-	}
+## Advance every projectile in `projectiles` by `dt` seconds.
+## Returns {expired_ids: Array} -- the projectile dicts in the input array are
+## mutated in place, so the caller's `_projectiles` list is now up to date.
+## The caller is responsible for removing expired entries.
+##
+## MUTATES: every dict in the projectiles array.
+static func advance_all_projectiles_in_place(projectiles: Array, dt: float) -> Dictionary:
+	var expired_ids: Array = []
+	for projectile in projectiles:
+		if projectile == null:
+			continue
+		var expired = advance_projectile_in_place(projectile, dt)
+		if expired:
+			expired_ids.append(projectile.projectile_id)
+	return {"expired_ids": expired_ids}
 
 # ============================================================================
 # PROJECTILE CREATION
@@ -72,4 +83,3 @@ static func create_projectile(fire_command: Dictionary, team: int) -> Dictionary
 ## Spawn projectiles from fire commands - returns Array of projectile_data
 static func spawn_projectiles(fire_commands: Array, team: int) -> Array:
 	return fire_commands.map(func(cmd): return create_projectile(cmd, team))
-

@@ -138,13 +138,24 @@ func _process(delta: float) -> void:
 	if not fire_commands.is_empty():
 		_spawn_projectiles(fire_commands)
 
-	# 4. PROJECTILE SYSTEM - Update projectile positions
-	var projectile_result = ProjectileSystem.update_all_projectiles(_projectiles, delta)
-	_projectiles = projectile_result.projectiles
+	# 4. PROJECTILE SYSTEM - Update projectile positions IN PLACE.
+	# Projectiles are mutated rather than re-allocated (~5400 dict allocs/sec
+	# at scale would otherwise drive GC jitter); _projectiles still holds the
+	# same dicts but with updated position/lifetime.
+	var projectile_result = ProjectileSystem.advance_all_projectiles_in_place(_projectiles, delta)
 
-	# Remove expired projectiles
+	# Remove expired projectiles (entity cleanup + array filter)
 	for expired_id in projectile_result.expired_ids:
 		_remove_projectile(expired_id)
+	if not projectile_result.expired_ids.is_empty():
+		var expired_set = {}
+		for id in projectile_result.expired_ids:
+			expired_set[id] = true
+		var kept: Array = []
+		for p in _projectiles:
+			if p != null and not expired_set.has(p.projectile_id):
+				kept.append(p)
+		_projectiles = kept
 
 	# 5. COLLISION SYSTEM - Detect hits and apply damage (includes obstacles)
 	var collision_result = CollisionSystem.process_collisions(_ships, _projectiles, _obstacles)
@@ -769,8 +780,9 @@ func _update_crew_ai_systems(delta: float) -> void:
 
 	var game_time = Time.get_ticks_msec() / 1000.0
 
-	# Update crew awareness (periodic - every frame for now, could be throttled)
-	_crew_list = InformationSystem.update_all_crew_awareness(_crew_list, _ships, _projectiles, game_time)
+	# Awareness is now refreshed on-wake by CrewSchedulerSystem.tick_with_awareness;
+	# the per-frame fleet-wide scan was the dominant CPU cost at scale (50 crew x
+	# ~120 entities = 6000 distance checks/frame, plus thousands of dict allocs).
 
 	# Process command chain (information flows up, orders flow down)
 	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
@@ -822,11 +834,14 @@ func _process_crew_events(events: Array, delta: float, game_time: float) -> void
 
 ## Check if any crew need to make decisions (timer expired or events pending)
 ##
-## Delegates to CrewSchedulerSystem.tick: sleeping crew with no pending events
-## are skipped entirely (no deep-clone, no state update, no decision call).
-## Crew state catches up lazily on wake using game_time - last_state_update_time.
+## Delegates to CrewSchedulerSystem.tick_with_awareness: sleeping crew with no
+## pending events are skipped entirely (no awareness scan, no deep-clone, no
+## state update, no decision call).  Waking crew get their awareness refreshed
+## against the current ships/projectiles snapshot before deciding.  Crew state
+## catches up lazily on wake using game_time - last_state_update_time.
 func _check_crew_decision_timers(_delta: float, game_time: float, wings: Array = []) -> void:
-	var result = CrewSchedulerSystem.tick(_crew_list, game_time, _crew_mailboxes, _ships, wings)
+	var result = CrewSchedulerSystem.tick_with_awareness(
+		_crew_list, game_time, _crew_mailboxes, _ships, _projectiles, wings)
 	_crew_list = result.crew_list
 	_crew_mailboxes = result.mailboxes
 	_rebuild_crew_index()
