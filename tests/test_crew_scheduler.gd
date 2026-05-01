@@ -424,6 +424,103 @@ func test_event_woken_crew_sees_current_world_state():
 		"An event-woken crew should refresh awareness and see the enemy.")
 
 # ============================================================================
+# REGRESSION: mid-game-spawned crew must produce decisions
+#
+# A bug was reported where ~half of fighters added mid-battle (via the
+# squadron-spawn input) would never act.  Squadron-spawned pilots have
+# command_chain.superior set (Alpha is leader), so non-Alpha pilots route
+# through make_corvette_pilot_decision -> LargeShipPilotAI.  These tests
+# verify that a freshly-added pilot, with default next_decision_time = 0
+# and an empty awareness snapshot, will be processed and produce a real
+# decision (not silent idle) on its first scheduler tick.
+# ============================================================================
+
+func test_mid_game_squadron_pilot_makes_decision_on_first_tick():
+	var Scheduler = _load_scheduler_with_awareness()
+	if Scheduler == null:
+		pending("CrewSchedulerSystem.tick_with_awareness not implemented yet.")
+		return
+
+	# Simulate a squadron-style pilot: has a superior (the squadron leader)
+	var pilot = CrewData.create_crew_member(CrewData.Role.PILOT, 1.0)
+	pilot.assigned_to = "ship_new"
+	pilot.command_chain.superior = "crew_alpha_x"
+	# next_decision_time defaults to 0; awareness is empty arrays.
+
+	var own_ship = make_test_ship("ship_new", 0, Vector2.ZERO)
+	var enemy = make_test_ship("enemy_1", 1, Vector2(300, 0))  # within sensor range
+
+	var result = Scheduler.tick_with_awareness(
+		[pilot], 50.0, {}, [own_ship, enemy], [], [])
+
+	assert_eq(result.decisions.size(), 1,
+		"A mid-game-spawned squadron pilot should produce a decision on first tick.")
+	var d = result.decisions[0]
+	assert_ne(d.get("type", ""), "",
+		"The decision must be a real maneuver, not an empty/idle dict.")
+
+func test_mid_game_pilot_continues_to_act_across_multiple_ticks():
+	var Scheduler = _load_scheduler_with_awareness()
+	if Scheduler == null:
+		pending("CrewSchedulerSystem.tick_with_awareness not implemented yet.")
+		return
+
+	# Squadron-style pilot with a superior.
+	var pilot = CrewData.create_crew_member(CrewData.Role.PILOT, 1.0)
+	pilot.assigned_to = "ship_new"
+	pilot.command_chain.superior = "crew_alpha_x"
+
+	var own_ship = make_test_ship("ship_new", 0, Vector2.ZERO)
+	var enemy = make_test_ship("enemy_1", 1, Vector2(300, 0))
+	var crew_list = [pilot]
+
+	var decisions_total = 0
+	var time = 50.0
+	for i in range(200):
+		time += 0.1
+		var result = Scheduler.tick_with_awareness(
+			crew_list, time, {}, [own_ship, enemy], [], [])
+		crew_list = result.crew_list
+		decisions_total += result.decisions.size()
+
+	assert_gt(decisions_total, 0,
+		"A mid-game-spawned pilot must produce at least one decision over 20s.")
+
+func test_mid_game_pilot_with_no_visible_enemies_eventually_sees_arrivals():
+	# Repro scenario: pilot spawns far from action.  Their initial awareness
+	# is empty, they go idle.  Then an enemy moves into range.  They should
+	# wake (via sensor_contact event) and act.
+	var Scheduler = _load_scheduler_with_awareness()
+	var Mailbox = _load_mailbox()
+	if Scheduler == null or Mailbox == null:
+		pending("CrewSchedulerSystem / CrewMailboxSystem not implemented yet.")
+		return
+
+	var pilot = CrewData.create_crew_member(CrewData.Role.PILOT, 1.0)
+	pilot.assigned_to = "ship_new"
+	pilot.command_chain.superior = "crew_alpha_x"
+
+	var own_ship = make_test_ship("ship_new", 0, Vector2.ZERO)
+	var crew_list = [pilot]
+
+	# Tick once with no enemies — pilot decides (idle), schedules far-future wake
+	var r1 = Scheduler.tick_with_awareness(crew_list, 50.0, {}, [own_ship], [], [])
+	crew_list = r1.crew_list
+
+	# Sleeping now.  Post a threat_appeared event (as if spatial trigger fired).
+	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
+		"type": "threat_appeared",
+		"data": {"enemy_id": "enemy_late"}
+	})
+	var enemy = make_test_ship("enemy_late", 1, Vector2(200, 0))
+
+	var r2 = Scheduler.tick_with_awareness(
+		crew_list, 51.0, mailboxes, [own_ship, enemy], [], [])
+
+	assert_eq(r2.decisions.size(), 1,
+		"An idle mid-game pilot should react to a posted threat event with a decision.")
+
+# ============================================================================
 # Helpers: dynamic loaders so tests parse before the modules exist
 # ============================================================================
 

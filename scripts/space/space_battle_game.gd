@@ -979,8 +979,8 @@ func _check_spatial_awareness_triggers() -> void:
 		var ship_pos = ship.position
 		var sensor_range = 800.0  # TODO: Get from ship stats
 
-		# Get previous contacts
-		var previous_contacts = crew.awareness.get("known_entities", {})
+		# Get previous contacts (Dict of {ship_id: true} from last frame's snapshot)
+		var previous_contacts = crew.awareness.get("_spatial_seen", {})
 		var current_contacts = {}
 
 		# Helper to check if ID exists in previous contacts (handles both Dict and Array)
@@ -1037,9 +1037,14 @@ func _check_spatial_awareness_triggers() -> void:
 					"enemy_id": previous_id
 				})
 
-		# Update crew with current contacts
+		# Snapshot this frame's spatial sightings for the next-frame diff.
+		# Stored under a dedicated key so we don't clobber awareness.known_entities,
+		# which is the canonical Array of entity-info records owned by
+		# InformationSystem.  Overwriting it with a Dict here used to break
+		# CommandChainSystem.combine_known_entities and silently corrupt the
+		# command-chain merge for squadron crew (catatonia regression).
 		var updated_crew = crew.duplicate(true)
-		updated_crew.awareness.known_entities = current_contacts
+		updated_crew.awareness["_spatial_seen"] = current_contacts
 		_crew_list[i] = updated_crew
 		_crew_index[crew.crew_id] = updated_crew
 
