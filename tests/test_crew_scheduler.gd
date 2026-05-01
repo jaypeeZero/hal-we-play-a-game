@@ -339,6 +339,85 @@ func test_drain_empties_the_mailbox():
 		"Mailbox is empty after drain.")
 
 # ============================================================================
+# BEHAVIOR: Awareness is refreshed only when crew wakes
+# ============================================================================
+#
+# Per-frame awareness scans were costing 6,000+ distance checks at 30 fighters
+# scale.  The optimization: refresh a crew's awareness when they wake (event
+# or scheduled), not every frame.  These tests describe the contract.
+
+func test_sleeping_crew_awareness_is_not_refreshed():
+	var Scheduler = _load_scheduler_with_awareness()
+	if Scheduler == null:
+		pending("CrewSchedulerSystem.tick_with_awareness not implemented yet.")
+		return
+
+	var pilot = make_pilot()
+	pilot.next_decision_time = 5.0  # asleep
+	pilot.awareness.last_update = 0.0
+
+	var ship = {"ship_id": "ship_1", "team": 0, "position": Vector2.ZERO,
+		"status": "operational", "type": "fighter"}
+	var enemy = {"ship_id": "enemy_1", "team": 1, "position": Vector2(100, 0),
+		"status": "operational", "type": "fighter"}
+
+	var result = Scheduler.tick_with_awareness([pilot], 1.0, {}, [ship, enemy], [], [])
+
+	# Sleeping crew should not have their awareness refreshed
+	assert_eq(result.crew_list[0].awareness.last_update, 0.0,
+		"Sleeping crew with no events should NOT refresh awareness.")
+
+func test_waking_crew_awareness_is_refreshed():
+	var Scheduler = _load_scheduler_with_awareness()
+	if Scheduler == null:
+		pending("CrewSchedulerSystem.tick_with_awareness not implemented yet.")
+		return
+
+	var pilot = make_pilot()
+	pilot.next_decision_time = 0.5  # due to wake
+	pilot.awareness.last_update = 0.0
+
+	var ship = {"ship_id": "ship_1", "team": 0, "position": Vector2.ZERO,
+		"status": "operational", "type": "fighter"}
+	var enemy = {"ship_id": "enemy_1", "team": 1, "position": Vector2(200, 0),
+		"status": "operational", "type": "fighter"}
+
+	var result = Scheduler.tick_with_awareness([pilot], 1.0, {}, [ship, enemy], [], [])
+
+	assert_eq(result.crew_list[0].awareness.last_update, 1.0,
+		"A waking crew member's awareness should be refreshed at game_time.")
+
+func test_event_woken_crew_sees_current_world_state():
+	var Scheduler = _load_scheduler_with_awareness()
+	var Mailbox = _load_mailbox()
+	if Scheduler == null or Mailbox == null:
+		pending("CrewSchedulerSystem.tick_with_awareness / CrewMailboxSystem not implemented yet.")
+		return
+
+	var pilot = make_pilot()
+	pilot.next_decision_time = 100.0  # would otherwise sleep forever
+	pilot.awareness.last_update = 0.0
+
+	var ship = {"ship_id": "ship_1", "team": 0, "position": Vector2.ZERO,
+		"status": "operational", "type": "fighter",
+		"stats": {"max_speed": 300.0}}
+	var enemy = {"ship_id": "enemy_1", "team": 1, "position": Vector2(150, 0),
+		"status": "operational", "type": "fighter",
+		"stats": {"max_speed": 300.0}}
+
+	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
+		"type": "threat_appeared",
+		"data": {"enemy_id": "enemy_1"}
+	})
+
+	var result = Scheduler.tick_with_awareness([pilot], 1.0, mailboxes, [ship, enemy], [], [])
+
+	# When woken by an event, the pilot should see the enemy
+	var awakened_pilot = result.crew_list[0]
+	assert_gt(awakened_pilot.awareness.known_entities.size(), 0,
+		"An event-woken crew should refresh awareness and see the enemy.")
+
+# ============================================================================
 # Helpers: dynamic loaders so tests parse before the modules exist
 # ============================================================================
 
@@ -353,3 +432,12 @@ func _load_scheduler():
 	if not ResourceLoader.exists(path):
 		return null
 	return load(path)
+
+# Stricter loader that also checks the awareness extension is present.
+func _load_scheduler_with_awareness():
+	var s = _load_scheduler()
+	if s == null:
+		return null
+	if not s.has_method("tick_with_awareness"):
+		return null
+	return s
