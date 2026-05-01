@@ -55,12 +55,15 @@ const WEAPON_UPDATE_INTERVAL: float = 0.1
 
 # Crew AI - EVENT-DRIVEN (no polling!)
 var _crew_list: Array = []  # Array of crew_data Dictionaries
-var _crew_events: Array = []  # Events to process this frame
+var _crew_events: Array = []  # Events to process this frame (legacy, drained into mailboxes)
+var _crew_mailboxes: Dictionary = {}  # crew_id -> Array[event] for the scheduler
 var _crew_index: Dictionary = {}  # crew_id -> crew_data (O(1) lookup)
 const ENABLE_CREW_AI = true  # Re-enabled with proper event architecture
 
 # Wing formation state
 var _previous_wings: Array = []  # Previous frame's wings for loyalty preservation
+var _wings_last_formed_at: float = -1.0  # game_time of last form_wings() call
+var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 
 func _ready() -> void:
 	# Allow processing when paused (for initial unpause)
@@ -298,6 +301,9 @@ func _cleanup_destroyed_ships() -> void:
 
 ## Remove ship and entity
 func _remove_ship(ship_id: String) -> void:
+	# Removing a ship can break wing membership (lead death, formation gap).
+	_wings_dirty = true
+
 	# Remove from data
 	var ship = _find_ship_by_id(ship_id)
 	if not ship.is_empty():
@@ -769,11 +775,18 @@ func _update_crew_ai_systems(delta: float) -> void:
 	# Process command chain (information flows up, orders flow down)
 	_crew_list = CommandChainSystem.process_command_chain(_crew_list)
 
-	# Form wings and update ship visual data with wing colors
-	var wings = WingFormationSystem.form_wings(_ships, _crew_list, _previous_wings)
+	# Form wings only when stale or invalidated.  Wings are stable on a
+	# per-second-ish timescale; the per-frame call was pure overhead.
+	# Safety-net interval ensures eventual reform even if no event fires.
+	const WING_REFORM_INTERVAL := 0.5
+	var wings_age = game_time - _wings_last_formed_at
+	if _wings_dirty or wings_age >= WING_REFORM_INTERVAL or _previous_wings.is_empty():
+		_previous_wings = WingFormationSystem.form_wings(_ships, _crew_list, _previous_wings)
+		_wings_last_formed_at = game_time
+		_wings_dirty = false
+	var wings = _previous_wings
 	_update_ship_wing_colors(wings)
 	_update_ship_debug_data(wings)
-	_previous_wings = wings  # Store for next frame's loyalty preservation
 
 	# EVENT-DRIVEN: Only process crew events, don't poll all crew
 	_process_crew_events(_crew_events, delta, game_time)
@@ -807,25 +820,25 @@ func _process_crew_events(events: Array, delta: float, game_time: float) -> void
 			"battle_event":
 				_handle_battle_event(crew, event, game_time)
 
-## Check if any crew need to make decisions (timer expired)
-func _check_crew_decision_timers(delta: float, game_time: float, wings: Array = []) -> void:
-	var decisions = []
+## Check if any crew need to make decisions (timer expired or events pending)
+##
+## Delegates to CrewSchedulerSystem.tick: sleeping crew with no pending events
+## are skipped entirely (no deep-clone, no state update, no decision call).
+## Crew state catches up lazily on wake using game_time - last_state_update_time.
+func _check_crew_decision_timers(_delta: float, game_time: float, wings: Array = []) -> void:
+	var result = CrewSchedulerSystem.tick(_crew_list, game_time, _crew_mailboxes, _ships, wings)
+	_crew_list = result.crew_list
+	_crew_mailboxes = result.mailboxes
+	_rebuild_crew_index()
 
-	for i in range(_crew_list.size()):
-		var crew = _crew_list[i]
+	if not result.decisions.is_empty():
+		_apply_crew_decisions(result.decisions)
 
-		# Check if it's time for this crew to think
-		if game_time >= crew.get("next_decision_time", 0.0):
-			# Make decision based on current state (pass wings for fighter coordination)
-			var result = CrewAISystem.update_crew_member(crew, delta, game_time, _ships, _crew_list, wings)
-			_crew_list[i] = result.crew_data
-
-			if result.has("decision") and not result.decision.is_empty():
-				decisions.append(result.decision)
-
-	# Apply decisions
-	if not decisions.is_empty():
-		_apply_crew_decisions(decisions)
+## Rebuild the crew_id -> crew_data index after the scheduler returns a fresh list.
+func _rebuild_crew_index() -> void:
+	_crew_index.clear()
+	for crew in _crew_list:
+		_crew_index[crew.crew_id] = crew
 
 ## Find crew by ID
 func _find_crew_by_id(crew_id: String) -> Dictionary:
@@ -1015,10 +1028,22 @@ func _check_spatial_awareness_triggers() -> void:
 		_crew_list[i] = updated_crew
 		_crew_index[crew.crew_id] = updated_crew
 
-## Queue an event for a crew member
+## Queue an event for a crew member.
+##
+## Pushes into both:
+##   1. _crew_events: legacy per-frame queue, drained by _process_crew_events
+##      to apply state side effects (awareness, tactical memory).
+##   2. _crew_mailboxes: scheduler-visible mailbox, used for urgent-event
+##      dispatch (missile_locked, threat_appeared, ship_damaged → evade) and
+##      to wake otherwise-sleeping crew.
 func _queue_crew_event(crew_id: String, event_type: String, data: Dictionary) -> void:
-	_crew_events.append({
+	var event := {
 		"crew_id": crew_id,
+		"type": event_type,
+		"data": data
+	}
+	_crew_events.append(event)
+	_crew_mailboxes = CrewMailboxSystem.post_event(_crew_mailboxes, crew_id, {
 		"type": event_type,
 		"data": data
 	})
