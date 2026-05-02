@@ -544,3 +544,89 @@ func _load_scheduler_with_awareness():
 	if not s.has_method("tick_with_awareness"):
 		return null
 	return s
+
+# ============================================================================
+# EVENT SIDE EFFECTS (formerly handled by space_battle_game.gd's _handle_* methods,
+# now consolidated into the scheduler so events flow through one path).
+# ============================================================================
+
+func test_sensor_contact_event_records_threat_in_tactical_memory():
+	var Scheduler = _load_scheduler_with_awareness()
+	var Mailbox = _load_mailbox()
+	if Scheduler == null or Mailbox == null:
+		pending("CrewSchedulerSystem.tick_with_awareness / CrewMailboxSystem not implemented yet.")
+		return
+
+	var pilot = make_pilot()
+	pilot.next_decision_time = 0.0  # due
+	var own_ship = make_test_ship("ship_1", 0, Vector2.ZERO)
+	var enemy = make_test_ship("enemy_1", 1, Vector2(200, 0))
+
+	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
+		"type": "sensor_contact",
+		"data": {"enemy_id": "enemy_1", "position": Vector2(200, 0)}
+	})
+
+	var result = Scheduler.tick_with_awareness(
+		[pilot], 5.0, mailboxes, [own_ship, enemy], [], [])
+
+	var memory = result.crew_list[0].awareness.tactical_memory.recent_events
+	var found = false
+	for ev in memory:
+		if ev.get("type", "") == "threat_detected" and ev.get("entity_id", "") == "enemy_1":
+			found = true
+			break
+	assert_true(found,
+		"sensor_contact event should record a threat_detected entry in tactical memory.")
+
+func test_ship_damaged_event_records_in_tactical_memory():
+	var Scheduler = _load_scheduler_with_awareness()
+	var Mailbox = _load_mailbox()
+	if Scheduler == null or Mailbox == null:
+		pending("CrewSchedulerSystem.tick_with_awareness / CrewMailboxSystem not implemented yet.")
+		return
+
+	var pilot = make_pilot()
+	pilot.awareness.threats = [make_threat("enemy_1", 200.0)]
+	pilot.next_decision_time = 0.0
+	var own_ship = make_test_ship("ship_1", 0, Vector2.ZERO)
+
+	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
+		"type": "ship_damaged",
+		"data": {"damage": 12, "section": "nose", "attacker": "proj_1"}
+	})
+
+	var result = Scheduler.tick_with_awareness(
+		[pilot], 5.0, mailboxes, [own_ship], [], [])
+
+	var memory = result.crew_list[0].awareness.tactical_memory.recent_events
+	var found = false
+	for ev in memory:
+		if ev.get("type", "") == "ship_damaged":
+			found = true
+			break
+	assert_true(found,
+		"ship_damaged event should record a ship_damaged entry in tactical memory.")
+
+func test_target_lost_event_clears_current_target():
+	var Scheduler = _load_scheduler_with_awareness()
+	var Mailbox = _load_mailbox()
+	if Scheduler == null or Mailbox == null:
+		pending("CrewSchedulerSystem.tick_with_awareness / CrewMailboxSystem not implemented yet.")
+		return
+
+	var pilot = make_pilot()
+	pilot.awareness["current_target"] = "enemy_old"
+	pilot.next_decision_time = 0.0
+	var own_ship = make_test_ship("ship_1", 0, Vector2.ZERO)
+
+	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
+		"type": "target_lost",
+		"data": {"enemy_id": "enemy_old"}
+	})
+
+	var result = Scheduler.tick_with_awareness(
+		[pilot], 5.0, mailboxes, [own_ship], [], [])
+
+	assert_eq(result.crew_list[0].awareness.get("current_target", ""), "",
+		"target_lost event should clear awareness.current_target.")
