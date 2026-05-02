@@ -39,7 +39,7 @@ static func update_crew_memory(crew_data: Dictionary, recent_events: Array, game
 
 	return updated
 
-## Record a single event to crew memory (EVENT-DRIVEN)
+## Record a single event to crew memory.
 static func record_event(crew_data: Dictionary, event: Dictionary) -> Dictionary:
 	var updated = crew_data.duplicate(true)
 

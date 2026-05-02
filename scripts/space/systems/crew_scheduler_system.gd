@@ -57,9 +57,9 @@ static func tick(
 
 ## Same as tick(), plus a per-crew awareness refresh on wake.
 ##
-## Drops the per-frame fleet-wide InformationSystem.update_all_crew_awareness
-## call (~6000 distance checks/frame at scale).  Only crew that wake need
-## their awareness rebuilt; sleeping crew keep the snapshot they had.
+## Sleeping crew keep their last awareness snapshot; only crew that wake
+## (timer due or events pending) get their threat / opportunity / known
+## entity lists rebuilt against the current world.
 static func tick_with_awareness(
 	crew_list: Array,
 	game_time: float,

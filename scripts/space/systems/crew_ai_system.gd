@@ -9,21 +9,22 @@ extends RefCounted
 # MAIN API - Process crew decisions
 # ============================================================================
 
-## Update all crew members and generate their decisions
-## EVENT-DRIVEN: Only processes crew when next_decision_time is reached
-## Now includes dynamic wing formation for fighters
+## Update all crew members and generate their decisions.
+##
+## Test-only convenience entry point.  Production runs through
+## CrewSchedulerSystem.tick_with_awareness, which adds mailbox draining,
+## awareness refresh on wake, and lazy state catch-up.  This helper
+## skips those and just does "wake any crew whose timer hit, decide".
 static func update_all_crew(crew_list: Array, delta: float, game_time: float, ships: Array = []) -> Dictionary:
 	var updated_crew = []
 	var decisions = []
 
-	# DYNAMIC WING SYSTEM: Form wings once per update cycle
-	# Wings are based on proximity - nearby same-team fighters form pairs/threes
+	# Wings re-formed every call (proximity-based pairs/threes).
 	var wings = WingFormationSystem.form_wings(ships, crew_list)
 
 	for crew in crew_list:
-		# EVENT-DRIVEN: Only process if it's time to think!
 		if game_time < crew.get("next_decision_time", 0.0):
-			# Still "sleeping" - just update state, no decisions
+			# Sleeping — only state updates, no decision.
 			var updated = update_crew_state(crew, delta)
 			updated_crew.append(updated)
 			continue
@@ -209,7 +210,7 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 
 	updated.orders.current = decision
 	updated.current_action = "evading"
-	# EVENT-DRIVEN: Evasion requires frequent re-evaluation (0.3-0.5s)
+	# Evasion needs frequent re-evaluation as the threat geometry changes.
 	updated.next_decision_time = game_time + randf_range(0.3, 0.5)
 	return {"crew_data": updated, "decision": decision}
 
@@ -231,7 +232,7 @@ static func make_pursuit_decision(crew_data: Dictionary, game_time: float) -> Di
 
 	updated.orders.current = decision
 	updated.current_action = "pursuing"
-	# EVENT-DRIVEN: Pursuit needs updates, but less frequent than evasion (0.7-1.0s)
+	# Pursuit re-evaluates less frequently than evasion (0.7-1.0s).
 	updated.next_decision_time = game_time + randf_range(0.7, 1.0)
 	return {"crew_data": updated, "decision": decision}
 
@@ -378,7 +379,7 @@ static func make_balanced_pilot_decision(crew_data: Dictionary, context: Diction
 static func make_idle_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
 	var updated = crew_data.duplicate(true)
 	updated.current_action = "idle_scan"
-	# EVENT-DRIVEN: Idle = check back in a few seconds
+	# Idle pilots check back every few seconds.
 	updated.next_decision_time = game_time + randf_range(2.0, 4.0)
 	return {"crew_data": updated}
 

@@ -53,7 +53,7 @@ var _initial_paused: bool = true
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
 
-# Crew AI - EVENT-DRIVEN (no polling!)
+# Crew AI state
 var _crew_list: Array = []  # Array of crew_data Dictionaries
 var _crew_mailboxes: Dictionary = {}  # crew_id -> Array[event] for the scheduler
 var _crew_index: Dictionary = {}  # crew_id -> crew_data (O(1) lookup)
@@ -172,7 +172,7 @@ func _process(delta: float) -> void:
 		for projectile_id in collision_result.destroyed_projectile_ids:
 			_remove_projectile(projectile_id)
 
-	# Emit damage events to crew (EVENT-DRIVEN)
+	# Notify crew that their ship took damage (posts to mailbox).
 	if ENABLE_CREW_AI and not collision_result.hits.is_empty():
 		_emit_damage_events(collision_result.hits)
 
@@ -746,7 +746,9 @@ func _enable_event_tracking() -> void:
 		BattleEventLoggerAutoload.service.track_history = true
 		print("Event history tracking enabled")
 
-## Update crew AI systems each frame - EVENT-DRIVEN (no polling!)
+## Update crew AI systems each frame.  Information sharing up the command
+## chain runs always; the per-crew decision/awareness path runs only for
+## crew that wake (timer due or events pending) inside CrewSchedulerSystem.
 func _update_crew_ai_systems(delta: float) -> void:
 	if _crew_list.is_empty():
 		return  # No crew to process
@@ -806,7 +808,8 @@ func _apply_crew_decisions(decisions: Array) -> void:
 	var result = CrewIntegrationSystem.apply_crew_decisions_to_ships(_ships, _crew_list, decisions)
 	_ships = result.ships
 
-## SPATIAL AWARENESS - Check for sensor contacts (EVENT-DRIVEN)
+## Detect newly-visible enemies and lost contacts; post sensor_contact /
+## target_lost events into the mailbox so the scheduler wakes the crew.
 func _check_spatial_awareness_triggers() -> void:
 	# For each crew member, check if enemies enter/exit their awareness range
 	for i in range(_crew_list.size()):

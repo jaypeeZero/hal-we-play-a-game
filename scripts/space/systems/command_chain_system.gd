@@ -63,7 +63,7 @@ static func deliver_order(subordinate: Dictionary, order: Dictionary) -> Diction
 
 	return updated
 
-## Process a single order for one crew member (EVENT-DRIVEN)
+## Process a single order for one crew member.
 static func process_single_order(crew: Dictionary, order: Dictionary) -> Dictionary:
 	# Simply deliver the order to this crew member
 	return deliver_order(crew, order)

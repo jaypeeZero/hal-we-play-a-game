@@ -51,9 +51,23 @@ When working on this codebase:
 - Avoid signal bubbling through multiple parent nodes
 
 **Functional + Data-Driven:**
-- Pure functions process state (DamageResolver, WeaponSystem)
-- Dictionaries/JSON define entities (ships, weapons, armor)
+- Pure functions process state (DamageResolver, WeaponSystem, CrewSchedulerSystem, ...)
+- Dictionaries/JSON define entities (ships, weapons, armor, crew)
 - No global state in game logic
+- One-owner per-frame state (e.g., projectile position) is mutated in place
+  via clearly-named functions (`advance_projectile_in_place`); cross-system
+  values stay immutable
+
+**Crew AI (event-driven scheduler):**
+- Crew dicts carry `next_decision_time` and a per-crew mailbox lives in the game node
+- `CrewSchedulerSystem.tick_with_awareness` processes only crew that wake
+  (timer due or events pending); sleeping crew cost ~zero
+- Event sources (`InformationSystem`, weapon/collision/projectile systems)
+  post into the mailbox via `_queue_crew_event`; the scheduler drains them,
+  applies side effects (tactical memory, current-target clearing, order
+  delivery), refreshes awareness, then runs the role's decision function
+- Urgent events (missile_locked, threat_appeared, ship_damaged) for a pilot
+  with known threats short-circuit to evasion
 
 **Event logging and monitoring:**
 - `BattleEventLogger` - Centralized event stream logger that emits standardized events for all battle interactions
