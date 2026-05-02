@@ -318,38 +318,6 @@ func test_information_sharing_up_chain():
 
 	assert_gt(updated_captain.awareness.threats.size(), 0, "Captain receives pilot's threat info")
 
-# REGRESSION: process_command_chain must tolerate the Dict-format known_entities
-# that _check_spatial_awareness_triggers writes between awareness refreshes.
-# Previously this combination caused a parse error in combine_known_entities,
-# silently corrupting the chain merge for any subordinate with such an entry —
-# manifesting as catatonic squadron-spawned fighters in actual battles.
-func test_process_command_chain_tolerates_dict_known_entities():
-	var alpha = CrewData.create_crew_member(CrewData.Role.PILOT, 1.0)
-	alpha.is_squadron_leader = true
-	var beta = CrewData.create_crew_member(CrewData.Role.PILOT, 1.0)
-	beta.command_chain.superior = alpha.crew_id
-	alpha.command_chain.subordinates = [beta.crew_id]
-
-	# Simulate _check_spatial_awareness_triggers' Dict overwrite
-	alpha.awareness.known_entities = {"ship_x": true}
-	beta.awareness.known_entities = {"ship_y": true, "ship_z": true}
-
-	var crew_list = [alpha, beta]
-	# Must not error and must return both crew members
-	var updated = CommandChainSystem.process_command_chain(crew_list)
-
-	assert_eq(updated.size(), 2,
-		"process_command_chain must return all crew even when known_entities is Dict.")
-	# The merged superior should still have a valid awareness structure
-	var updated_alpha = null
-	for crew in updated:
-		if crew.crew_id == alpha.crew_id:
-			updated_alpha = crew
-			break
-	assert_not_null(updated_alpha, "Squadron leader survives the chain merge.")
-	assert_true(updated_alpha.awareness.has("known_entities"),
-		"awareness.known_entities preserved (any format).")
-
 func test_find_top_commander():
 	var leader = CrewData.create_crew_member(CrewData.Role.SQUADRON_LEADER, 0.8)
 	var captain = CrewData.create_crew_member(CrewData.Role.CAPTAIN, 0.7)

@@ -147,30 +147,16 @@ static func combine_entity_lists(list1: Array, list2: Array, priority_key: Strin
 	return result
 
 ## Combine known entities lists.
-## Accepts either Array (canonical, from InformationSystem) or Dict
-## (legacy {ship_id: true} written by spatial-trigger checks).  Dict entries
-## are normalized to minimal entity-info records so the combined output is
-## always a uniform Array.
-static func combine_known_entities(list1, list2) -> Array:
+static func combine_known_entities(list1: Array, list2: Array) -> Array:
 	var combined = {}
 
-	for entity in _normalize_known_entities(list1):
+	for entity in list1:
 		combined[entity.id] = entity
 
-	for entity in _normalize_known_entities(list2):
+	for entity in list2:
 		combined[entity.id] = entity  # Overwrites if exists
 
 	return combined.values()
-
-static func _normalize_known_entities(list_or_dict) -> Array:
-	if typeof(list_or_dict) == TYPE_DICTIONARY:
-		var out: Array = []
-		for ship_id in list_or_dict.keys():
-			out.append({"id": ship_id, "type": "ship"})
-		return out
-	if typeof(list_or_dict) == TYPE_ARRAY:
-		return list_or_dict
-	return []
 
 ## Limit list size based on role
 static func limit_list_size(list: Array, max_size: int) -> Array:

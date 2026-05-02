@@ -979,24 +979,9 @@ func _check_spatial_awareness_triggers() -> void:
 		var ship_pos = ship.position
 		var sensor_range = 800.0  # TODO: Get from ship stats
 
-		# Get previous contacts (Dict of {ship_id: true} from last frame's snapshot)
-		var previous_contacts = crew.awareness.get("_spatial_seen", {})
-		var current_contacts = {}
-
-		# Helper to check if ID exists in previous contacts (handles both Dict and Array)
-		var has_previous_contact = func(ship_id: String) -> bool:
-			if typeof(previous_contacts) == TYPE_DICTIONARY:
-				return previous_contacts.has(ship_id)
-			elif typeof(previous_contacts) == TYPE_ARRAY:
-				for entity in previous_contacts:
-					if typeof(entity) == TYPE_DICTIONARY:
-						if entity.get("id") == ship_id:
-							return true
-					elif typeof(entity) == TYPE_STRING:
-						if entity == ship_id:
-							return true
-				return false
-			return false
+		# Previous frame's spatial sightings as {ship_id: true}.
+		var previous_contacts: Dictionary = crew.awareness.get("_spatial_seen", {})
+		var current_contacts: Dictionary = {}
 
 		# Check all ships for contacts
 		for other_ship in _ships:
@@ -1011,38 +996,23 @@ func _check_spatial_awareness_triggers() -> void:
 				current_contacts[other_ship.ship_id] = true
 
 				# New contact?
-				if not has_previous_contact.call(other_ship.ship_id):
+				if not previous_contacts.has(other_ship.ship_id):
 					_queue_crew_event(crew.crew_id, "sensor_contact", {
 						"enemy_id": other_ship.ship_id,
 						"position": other_ship.position,
 						"distance": distance
 					})
 
-		# Check for lost contacts
-		# Handle both Dictionary (new format) and Array (from command chain system)
-		var previous_ids = []
-		if typeof(previous_contacts) == TYPE_DICTIONARY:
-			previous_ids = previous_contacts.keys()
-		elif typeof(previous_contacts) == TYPE_ARRAY:
-			# Extract IDs from entity objects
-			for entity in previous_contacts:
-				if typeof(entity) == TYPE_DICTIONARY and entity.has("id"):
-					previous_ids.append(entity.id)
-				elif typeof(entity) == TYPE_STRING:
-					previous_ids.append(entity)
-
-		for previous_id in previous_ids:
+		# Fire target_lost for ships that were visible last frame but aren't now.
+		for previous_id in previous_contacts.keys():
 			if not current_contacts.has(previous_id):
 				_queue_crew_event(crew.crew_id, "target_lost", {
 					"enemy_id": previous_id
 				})
 
-		# Snapshot this frame's spatial sightings for the next-frame diff.
-		# Stored under a dedicated key so we don't clobber awareness.known_entities,
-		# which is the canonical Array of entity-info records owned by
-		# InformationSystem.  Overwriting it with a Dict here used to break
-		# CommandChainSystem.combine_known_entities and silently corrupt the
-		# command-chain merge for squadron crew (catatonia regression).
+		# Snapshot this frame's sightings under a dedicated key — must not
+		# alias awareness.known_entities, which is the Array of entity-info
+		# records owned by InformationSystem.
 		var updated_crew = crew.duplicate(true)
 		updated_crew.awareness["_spatial_seen"] = current_contacts
 		_crew_list[i] = updated_crew
