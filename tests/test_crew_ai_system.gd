@@ -407,7 +407,9 @@ func test_full_crew_ai_cycle():
 
 	# Step 1: Update crew awareness
 	var game_time = 1.0
-	var updated_crew = InformationSystem.update_all_crew_awareness(all_crew, ships, [], game_time)
+	var updated_crew = []
+	for crew in all_crew:
+		updated_crew.append(InformationSystem.update_crew_awareness(crew, ships, [], game_time))
 
 	# Crew should detect enemies
 	var player_pilot = updated_crew[1]  # Index depends on creation order
@@ -416,8 +418,9 @@ func test_full_crew_ai_cycle():
 	# Step 2: Process command chain
 	updated_crew = CommandChainSystem.process_command_chain(updated_crew)
 
-	# Step 3: Make AI decisions
-	var ai_result = CrewAISystem.update_all_crew(updated_crew, 0.1, game_time)
+	# Step 3: Make AI decisions through the production scheduler entry point.
+	var ai_result = CrewSchedulerSystem.tick_with_awareness(
+		updated_crew, game_time, {}, ships, [], [])
 	updated_crew = ai_result.crew_list
 	var decisions = ai_result.decisions
 

@@ -484,8 +484,10 @@ func test_torpedo_boat_gunner_complete_flow():
 	var enemy = create_corvette_ship(Vector2(0, -500), 1)
 	var all_ships = [torpedo_boat, enemy]
 
-	# Step 1: Update awareness
-	var updated_crew_list = InformationSystem.update_all_crew_awareness(crew_list, all_ships, [], 0.0)
+	# Step 1: Update awareness (per crew, same as the scheduler does)
+	var updated_crew_list = []
+	for crew in crew_list:
+		updated_crew_list.append(InformationSystem.update_crew_awareness(crew, all_ships, [], 0.0))
 
 	# Find updated gunner
 	var updated_gunner = null
@@ -512,15 +514,19 @@ func test_torpedo_boat_vs_corvette_fires():
 	var all_ships = [torpedo_boat, corvette]
 	var crew_list = torpedo_boat.crew.duplicate(true)
 
-	# Update awareness for all crew
-	crew_list = InformationSystem.update_all_crew_awareness(crew_list, all_ships, [], 0.0)
+	# Update awareness for all crew (per-crew, same as scheduler does)
+	var awakened_crew = []
+	for crew in crew_list:
+		awakened_crew.append(InformationSystem.update_crew_awareness(crew, all_ships, [], 0.0))
+	crew_list = awakened_crew
 
 	# Force all crew to be ready to decide
 	for i in crew_list.size():
 		crew_list[i].next_decision_time = 0.0
 
-	# Get decisions from all crew
-	var crew_result = CrewAISystem.update_all_crew(crew_list, 0.1, 0.0, all_ships)
+	# Run a scheduler tick (production entry point)
+	var crew_result = CrewSchedulerSystem.tick_with_awareness(
+		crew_list, 0.0, {}, all_ships, [], [])
 	var decisions = crew_result.decisions
 
 	# Should have at least one fire decision from the gunner

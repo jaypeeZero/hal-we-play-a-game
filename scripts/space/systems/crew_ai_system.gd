@@ -9,38 +9,6 @@ extends RefCounted
 # MAIN API - Process crew decisions
 # ============================================================================
 
-## Update all crew members and generate their decisions.
-##
-## Test-only convenience entry point.  Production runs through
-## CrewSchedulerSystem.tick_with_awareness, which adds mailbox draining,
-## awareness refresh on wake, and lazy state catch-up.  This helper
-## skips those and just does "wake any crew whose timer hit, decide".
-static func update_all_crew(crew_list: Array, delta: float, game_time: float, ships: Array = []) -> Dictionary:
-	var updated_crew = []
-	var decisions = []
-
-	# Wings re-formed every call (proximity-based pairs/threes).
-	var wings = WingFormationSystem.form_wings(ships, crew_list)
-
-	for crew in crew_list:
-		if game_time < crew.get("next_decision_time", 0.0):
-			# Sleeping — only state updates, no decision.
-			var updated = update_crew_state(crew, delta)
-			updated_crew.append(updated)
-			continue
-
-		# Time to make a decision - pass wings for fighter coordination
-		var result = update_crew_member(crew, delta, game_time, ships, crew_list, wings)
-		updated_crew.append(result.crew_data)
-		if result.has("decision"):
-			decisions.append(result.decision)
-
-	return {
-		"crew_list": updated_crew,
-		"decisions": decisions,
-		"wings": wings  # Return wings for debugging/visualization
-	}
-
 ## Update single crew member and generate decision
 static func update_crew_member(crew_data: Dictionary, delta: float, game_time: float, ships: Array = [], crew_list: Array = [], wings: Array = []) -> Dictionary:
 	# Update stress/fatigue

@@ -61,7 +61,7 @@ func test_sleeping_crew_produces_no_decision():
 	pilot.next_decision_time = 5.0
 	pilot.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
 
-	var result = CrewAISystem.update_all_crew([pilot], 0.016, 1.0)
+	var result = CrewSchedulerSystem.tick_with_awareness([pilot], 1.0, {})
 
 	assert_eq(result.decisions.size(), 0,
 		"A crew with next_decision_time in the future must not produce a decision.")
@@ -75,7 +75,7 @@ func test_awakened_crew_produces_a_decision():
 	pilot.next_decision_time = 0.5
 	pilot.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
 
-	var result = CrewAISystem.update_all_crew([pilot], 0.016, 1.0)
+	var result = CrewSchedulerSystem.tick_with_awareness([pilot], 1.0, {})
 
 	assert_eq(result.decisions.size(), 1,
 		"A crew whose wake time has passed must produce a decision.")
@@ -102,7 +102,7 @@ func test_all_active_crew_eventually_decide():
 	# Run 30 simulated seconds, ticking every 0.05s
 	for i in range(600):
 		time += 0.05
-		var result = CrewAISystem.update_all_crew(crew_list, 0.05, time)
+		var result = CrewSchedulerSystem.tick_with_awareness(crew_list, time, {})
 		crew_list = result.crew_list
 		for d in result.decisions:
 			who_acted[d.entity_id] = true
@@ -126,13 +126,13 @@ func test_pilots_decide_more_often_than_gunners():
 	var time = 0.0
 	for i in range(200):
 		time += 0.1
-		var p_result = CrewAISystem.update_all_crew([pilot], 0.1, time)
+		var p_result = CrewSchedulerSystem.tick_with_awareness([pilot], time, {})
 		pilot = p_result.crew_list[0]
 		pilot_decisions += p_result.decisions.size()
 
 		# refresh gunner's opportunity each tick (so it has something to fire at)
 		gunner.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
-		var g_result = CrewAISystem.update_all_crew([gunner], 0.1, time)
+		var g_result = CrewSchedulerSystem.tick_with_awareness([gunner], time, {})
 		gunner = g_result.crew_list[0]
 		gunner_decisions += g_result.decisions.size()
 
@@ -152,11 +152,11 @@ func test_captains_decide_less_often_than_pilots():
 	var time = 0.0
 	for i in range(200):
 		time += 0.1
-		var c_result = CrewAISystem.update_all_crew([captain], 0.1, time)
+		var c_result = CrewSchedulerSystem.tick_with_awareness([captain], time, {})
 		captain = c_result.crew_list[0]
 		captain_decisions += c_result.decisions.size()
 
-		var p_result = CrewAISystem.update_all_crew([pilot], 0.1, time)
+		var p_result = CrewSchedulerSystem.tick_with_awareness([pilot], time, {})
 		pilot = p_result.crew_list[0]
 		pilot_decisions += p_result.decisions.size()
 
@@ -178,7 +178,7 @@ func test_heartbeat_fallback_pilot_decides_within_window():
 	var first_decision_at = -1.0
 	for i in range(100):
 		time += 0.05
-		var result = CrewAISystem.update_all_crew([pilot], 0.05, time)
+		var result = CrewSchedulerSystem.tick_with_awareness([pilot], time, {})
 		pilot = result.crew_list[0]
 		if result.decisions.size() > 0 and first_decision_at < 0.0:
 			first_decision_at = time
@@ -196,7 +196,7 @@ func test_sleeping_crew_does_not_mutate_crew_data():
 	pilot.next_decision_time = 100.0
 	var original_skill = pilot.stats.skill
 
-	var result = CrewAISystem.update_all_crew([pilot], 0.016, 1.0)
+	var result = CrewSchedulerSystem.tick_with_awareness([pilot], 1.0, {})
 
 	assert_eq(result.crew_list.size(), 1, "Crew list preserved")
 	# State updates (stress/fatigue) may still happen, but skill must not mutate

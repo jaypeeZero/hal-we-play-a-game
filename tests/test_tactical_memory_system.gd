@@ -7,59 +7,36 @@ extends GutTest
 # MEMORY UPDATE TESTS
 # ============================================================================
 
-func test_update_crew_memory_with_no_events():
+func test_recording_an_event_adds_it_to_recent_events():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.5)
 	crew.assigned_to = "ship_1"
 
-	var updated = TacticalMemorySystem.update_crew_memory(crew, [], 0.0)
+	var updated = TacticalMemorySystem.record_event(crew, {
+		"type": "threat_detected", "entity_id": "enemy_1"
+	})
 
-	assert_eq(updated.awareness.tactical_memory.recent_events.size(), 0)
-	assert_not_null(updated.awareness.tactical_memory.current_situation)
+	assert_eq(updated.awareness.tactical_memory.recent_events.size(), 1)
+	assert_eq(updated.awareness.tactical_memory.recent_events[0].type, "threat_detected")
 
-func test_update_crew_memory_with_events():
+func test_recent_events_capped_at_max():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.5)
 	crew.assigned_to = "ship_1"
 
-	var events = [
-		{"type": "damage_dealt", "data": {"victim_id": "ship_1"}},
-		{"type": "projectile_fired", "data": {"source_id": "ship_2"}}
-	]
+	# Recording more than MAX events should cap, keeping the most recent.
+	for i in range(TacticalMemorySystem.MAX_RECENT_EVENTS + 5):
+		crew = TacticalMemorySystem.record_event(crew, {
+			"type": "test_event", "index": i
+		})
 
-	var updated = TacticalMemorySystem.update_crew_memory(crew, events, 1.0)
-
-	assert_eq(updated.awareness.tactical_memory.recent_events.size(), 2)
-
-func test_recent_events_limited():
-	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.5)
-	crew.assigned_to = "ship_1"
-
-	# Create more events than MAX_RECENT_EVENTS
-	var many_events = []
-	for i in range(15):
-		many_events.append({"type": "test_event", "data": {"index": i}})
-
-	var updated = TacticalMemorySystem.update_crew_memory(crew, many_events, 1.0)
-
-	assert_lte(
-		updated.awareness.tactical_memory.recent_events.size(),
+	assert_eq(
+		crew.awareness.tactical_memory.recent_events.size(),
 		TacticalMemorySystem.MAX_RECENT_EVENTS,
 		"Should not exceed max recent events"
 	)
-
-func test_update_all_crew_memory():
-	var crew_list = [
-		CrewData.create_crew_member(CrewData.Role.PILOT, 0.5),
-		CrewData.create_crew_member(CrewData.Role.GUNNER, 0.5)
-	]
-
-	var events = [{"type": "test", "data": {}}]
-
-	var updated_list = TacticalMemorySystem.update_all_crew_memory(crew_list, events, 1.0)
-
-	assert_eq(updated_list.size(), 2)
-	for crew in updated_list:
-		assert_has(crew.awareness.tactical_memory, "recent_events")
-		assert_has(crew.awareness.tactical_memory, "current_situation")
+	# Newest event retained
+	var last = crew.awareness.tactical_memory.recent_events[-1]
+	assert_eq(last.index, TacticalMemorySystem.MAX_RECENT_EVENTS + 4,
+		"Newest event should still be present.")
 
 # ============================================================================
 # DECISION OUTCOME TRACKING TESTS
@@ -282,29 +259,4 @@ func test_get_memory_stats_with_history():
 	assert_eq(stats.overall_success_rate, 0.6)
 	assert_eq(stats.unique_tactics_tried, 2)
 
-# ============================================================================
-# EVENT FILTERING TESTS
-# ============================================================================
-
-func test_add_to_recent_events():
-	var current = [{"type": "old1"}, {"type": "old2"}]
-	var new_events = [{"type": "new1"}, {"type": "new2"}]
-
-	var combined = TacticalMemorySystem.add_to_recent_events(current, new_events)
-
-	assert_eq(combined.size(), 4)
-	assert_eq(combined[0].type, "old1")
-	assert_eq(combined[3].type, "new2")
-
-func test_add_to_recent_events_overflow():
-	var current = []
-	for i in range(TacticalMemorySystem.MAX_RECENT_EVENTS):
-		current.append({"type": "event", "index": i})
-
-	var new_events = [{"type": "new1"}, {"type": "new2"}]
-
-	var combined = TacticalMemorySystem.add_to_recent_events(current, new_events)
-
-	assert_eq(combined.size(), TacticalMemorySystem.MAX_RECENT_EVENTS, "Should not exceed max")
-	# Should keep most recent events
 	assert_eq(combined[combined.size() - 1].type, "new2")
