@@ -10,6 +10,12 @@ const MovementSystem = preload("res://scripts/space/systems/movement_system.gd")
 const ProjectileSystem = preload("res://scripts/space/systems/projectile_system.gd")
 const CollisionSystem = preload("res://scripts/space/systems/collision_system.gd")
 const VisualEffectSystem = preload("res://scripts/space/systems/visual_effect_system.gd")
+const SpatialGridSystem = preload("res://scripts/space/systems/spatial_grid_system.gd")
+
+# Spatial-grid cell size. Comparable to typical sensor/awareness range tier;
+# tune empirically with the perf harness — too small inflates cells walked,
+# too large inflates candidates per cell.
+const GRID_CELL_SIZE: float = 256.0
 
 # Preload entity classes
 const ShipEntity = preload("res://scripts/space/entities/ship_entity.gd")
@@ -114,7 +120,9 @@ func _ensure_action(action_name: String, key: int) -> void:
 func _process(delta: float) -> void:
 	# 0. CREW AI SYSTEMS - Update crew awareness, tactical memory, and decisions
 	if ENABLE_CREW_AI:
-		_update_crew_ai_systems(delta)
+		var pre_movement_ship_grid = SpatialGridSystem.build(_ships, GRID_CELL_SIZE)
+		var pre_movement_projectile_grid = SpatialGridSystem.build(_projectiles, GRID_CELL_SIZE)
+		_update_crew_ai_systems(delta, pre_movement_ship_grid, pre_movement_projectile_grid)
 
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
 	_ships = MovementSystem.update_all_ships(_ships, delta, _obstacles)
@@ -122,9 +130,14 @@ func _process(delta: float) -> void:
 	# 1a. OBSTACLE MOVEMENT - Update asteroid/debris positions
 	_obstacles = MovementSystem.update_all_obstacles(_obstacles, delta)
 
+	# Rebuild grids against post-movement positions; consumed by spatial
+	# triggers and collision below.
+	var ship_grid = SpatialGridSystem.build(_ships, GRID_CELL_SIZE)
+	var obstacle_grid = SpatialGridSystem.build(_obstacles, GRID_CELL_SIZE)
+
 	# 1b. SPATIAL TRIGGERS - Check for sensor contacts after movement
 	if ENABLE_CREW_AI:
-		_check_spatial_awareness_triggers()
+		_check_spatial_awareness_triggers(ship_grid)
 
 	# 2. WEAPON SYSTEM - Generate fire commands
 	_weapon_update_timer += delta
@@ -157,7 +170,7 @@ func _process(delta: float) -> void:
 		_projectiles = kept
 
 	# 5. COLLISION SYSTEM - Detect hits and apply damage (includes obstacles)
-	var collision_result = CollisionSystem.process_collisions(_ships, _projectiles, _obstacles)
+	var collision_result = CollisionSystem.process_collisions(_ships, _projectiles, _obstacles, ship_grid, obstacle_grid)
 	_ships = collision_result.ships
 	_projectiles = collision_result.projectiles
 	_obstacles = collision_result.obstacles
@@ -749,7 +762,7 @@ func _enable_event_tracking() -> void:
 ## Update crew AI systems each frame.  Information sharing up the command
 ## chain runs always; the per-crew decision/awareness path runs only for
 ## crew that wake (timer due or events pending) inside CrewSchedulerSystem.
-func _update_crew_ai_systems(delta: float) -> void:
+func _update_crew_ai_systems(delta: float, ship_grid: Dictionary, projectile_grid: Dictionary) -> void:
 	if _crew_list.is_empty():
 		return  # No crew to process
 
@@ -778,7 +791,8 @@ func _update_crew_ai_systems(delta: float) -> void:
 	# Run the scheduler — drains mailboxes, applies event side effects,
 	# refreshes awareness on wake, decides, returns updated crew + decisions.
 	var result = CrewSchedulerSystem.tick_with_awareness(
-		_crew_list, game_time, _crew_mailboxes, _ships, _projectiles, wings)
+		_crew_list, game_time, _crew_mailboxes, _ships, _projectiles, wings,
+		ship_grid, projectile_grid)
 	_crew_list = result.crew_list
 	_crew_mailboxes = result.mailboxes
 	_rebuild_crew_index()
@@ -810,7 +824,7 @@ func _apply_crew_decisions(decisions: Array) -> void:
 
 ## Detect newly-visible enemies and lost contacts; post sensor_contact /
 ## target_lost events into the mailbox so the scheduler wakes the crew.
-func _check_spatial_awareness_triggers() -> void:
+func _check_spatial_awareness_triggers(ship_grid: Dictionary) -> void:
 	# For each crew member, check if enemies enter/exit their awareness range
 	for i in range(_crew_list.size()):
 		var crew = _crew_list[i]
@@ -826,8 +840,10 @@ func _check_spatial_awareness_triggers() -> void:
 		var previous_contacts: Dictionary = crew.awareness.get("_spatial_seen", {})
 		var current_contacts: Dictionary = {}
 
-		# Check all ships for contacts
-		for other_ship in _ships:
+		# Candidate set comes from the grid; the per-ship filter below stays
+		# identical so semantics are preserved.
+		var candidates = SpatialGridSystem.query_radius(ship_grid, ship_pos, sensor_range)
+		for other_ship in candidates:
 			if other_ship.ship_id == ship_id:
 				continue  # Skip self
 			if other_ship.team == ship.team:
