@@ -746,8 +746,10 @@ static func _get_squadron_leader_target(crew_data: Dictionary, all_crew: Array) 
 	# Find leader in crew list
 	for crew in all_crew:
 		if crew.get("crew_id", "") == leader_id:
-			# Get leader's current target from their orders
-			var leader_orders = crew.get("orders", {}).get("current", {})
+			# orders.current is null before the leader's first decision; guard it
+			var leader_orders = crew.get("orders", {}).get("current")
+			if leader_orders == null or not leader_orders is Dictionary:
+				return ""
 			return leader_orders.get("target_id", "")
 
 	return ""

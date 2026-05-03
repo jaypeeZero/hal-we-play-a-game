@@ -357,7 +357,10 @@ static func get_lead_target(wing: Dictionary, all_crew: Array) -> String:
 
 	for crew in all_crew:
 		if crew.get("crew_id", "") == lead_crew_id:
-			var orders = crew.get("orders", {}).get("current", {})
+			# orders.current is null until the lead's first decision lands
+			var orders = crew.get("orders", {}).get("current")
+			if orders == null or not orders is Dictionary:
+				return ""
 			return orders.get("target_id", "")
 
 	return ""
@@ -368,7 +371,9 @@ static func get_lead_maneuver(wing: Dictionary, all_crew: Array) -> String:
 
 	for crew in all_crew:
 		if crew.get("crew_id", "") == lead_crew_id:
-			var orders = crew.get("orders", {}).get("current", {})
+			var orders = crew.get("orders", {}).get("current")
+			if orders == null or not orders is Dictionary:
+				return ""
 			return orders.get("subtype", "")
 
 	return ""
