@@ -25,14 +25,16 @@ Space Battle Tactics is a real-time tactical combat game where you command fleet
 ## Controls
 
 ### Spawning Ships
-- **1** - Spawn 3 Fighters (Player Team)
+- **1** - Spawn fighter squadron of 6 in V-formation (Player Team)
 - **2** - Spawn 1 Corvette (Player Team)
 - **3** - Spawn 1 Capital Ship (Player Team)
-- **4** - Spawn 3 Fighters (Enemy Team)
+- **4** - Spawn fighter squadron of 6 in V-formation (Enemy Team)
 - **5** - Spawn 1 Corvette (Enemy Team)
 - **6** - Spawn 1 Capital Ship (Enemy Team)
 
 After pressing a spawn key, click on the battlefield to place the ship(s).
+Squadron-spawned fighters share a command chain (Alpha leads, Beta–Zeta
+follow); single-spawn fighters fly solo.
 
 ### Debug Visualization
 - **F1** - Toggle debug visualizer (shows armor sections, internals, weapon arcs, velocity)
@@ -108,26 +110,58 @@ This creates realistic engagement times and allows for tactical maneuvering.
 ### Core Principles
 1. **Signal-Based**: No direct coupling between systems
 2. **Data-Driven**: Ships defined by JSON-like dictionaries
-3. **Functional**: Pure functions process state (DamageResolver, WeaponSystem)
-4. **Scalable**: Designed to support fleet hierarchies down to individual crew
+3. **Functional**: Pure functions process state (DamageResolver, WeaponSystem, CrewSchedulerSystem, ...)
+4. **Event-driven NPCs**: Crew don't tick every frame — they wake on schedule or when an event lands in their mailbox
+
+### Crew AI flow
+
+NPCs (pilots, gunners, captains, squadron leaders) are processed by an
+event-driven scheduler.  A crew member is only updated when:
+
+- their `next_decision_time` has been reached, **or**
+- their mailbox has pending events posted by another system
+  (`sensor_contact`, `target_lost`, `ship_damaged`, `missile_locked`, ...)
+
+Per tick, the scheduler drains a waking crew's events, applies the
+side effects (tactical-memory recording, current-target clearing, order
+processing), refreshes their awareness against the current world, and
+runs the role-specific decision (pilot / gunner / captain / squadron
+leader).  Sleeping crew with no events cost essentially nothing.
+
+Urgent events (missile lock, fresh threat, damage taken) for a pilot
+with known threats short-circuit to an evasive maneuver, so reactions
+don't wait for the next scheduled wake.
 
 ### Key Classes
 
 #### Data Layer (RefCounted - Pure Data)
-- `ShipData` - Ship templates and factory methods
-- `DamageResolver` - Pure functions for damage calculation
-- `WeaponSystem` - Pure functions for weapon firing logic
+- `ShipData` — Ship templates and factory methods
+- `CrewData` — Crew templates (pilot, gunner, captain, squadron leader) and command-chain helpers
+
+#### Pure-function Systems
+- `DamageResolver` — Damage and armor-penetration calculations
+- `WeaponSystem` — Weapon firing logic
+- `ProjectileSystem` — Projectile movement (mutates in place; one-owner state)
+- `CollisionSystem` — Hit detection and damage application
+- `MovementSystem` — Ship motion and obstacle avoidance
+- `InformationSystem` — Per-crew awareness (visible entities, threats, opportunities)
+- `CommandChainSystem` — Order distribution down the chain, awareness merge up
+- `CrewAISystem` — Role-specific decision functions (pilot, gunner, captain, squadron leader)
+- `CrewMailboxSystem` — Per-crew event queue (10-event cap, oldest dropped)
+- `CrewSchedulerSystem` — Wakes crew on time-or-event, applies event side effects, drives the decision
+- `WingFormationSystem` — Dynamic wing pairing for fighters
+- `TacticalMemorySystem` — Recent-events log on each crew member
 
 #### Entity Layer (Node2D - Scene Tree)
-- `ShipObject` - Main ship entity, extends IRenderable
-- `SpaceProjectile` - Projectile entity
+- `ShipEntity` — Main ship entity, extends IRenderable
+- `ProjectileEntity` — Projectile entity
 
-#### System Layer (Node - Orchestration)
-- `SpaceBattleGame` - Main game orchestrator
-- `ShipDebugVisualizer` - Visual debugging tools
+#### Orchestration
+- `SpaceBattleGame` — Game loop; calls the systems in order each frame
+- `ShipDebugVisualizer` — Debug overlay (armor sections, weapon arcs, velocity)
 
 #### Rendering Layer (IVisualRenderer)
-- `MatrixRenderer` - Matrix-themed green aesthetic renderer
+- `MatrixRenderer` — Matrix-themed green aesthetic renderer
 
 ### Data Structure Example
 
@@ -203,24 +237,32 @@ This creates realistic engagement times and allows for tactical maneuvering.
 ```
 scripts/space/
   ├── data/
-  │   └── ship_data.gd          # Ship templates
+  │   ├── ship_data.gd                # Ship templates and factories
+  │   └── crew_data.gd                # Crew templates + command-chain helpers
   ├── systems/
-  │   ├── damage_resolver.gd    # Damage calculations
-  │   └── weapon_system.gd      # Weapon firing logic
+  │   ├── damage_resolver.gd          # Damage / armor-penetration math
+  │   ├── weapon_system.gd            # Weapon firing logic
+  │   ├── projectile_system.gd        # Projectile movement (in-place)
+  │   ├── collision_system.gd         # Hit detection
+  │   ├── movement_system.gd          # Ship motion
+  │   ├── information_system.gd       # Per-crew awareness
+  │   ├── command_chain_system.gd     # Orders down, awareness up
+  │   ├── crew_ai_system.gd           # Role-specific decisions
+  │   ├── crew_mailbox_system.gd      # Per-crew event queue
+  │   ├── crew_scheduler_system.gd    # Event-driven crew tick
+  │   ├── crew_integration_system.gd  # Apply decisions to ships
+  │   ├── wing_formation_system.gd    # Dynamic wing pairing
+  │   └── tactical_memory_system.gd   # Recent-events log
+  ├── ai/
+  │   ├── fighter_pilot_ai.gd         # Fighter wing/lead/wingman tactics
+  │   └── large_ship_pilot_ai.gd      # Corvette/capital tactics
   ├── entities/
-  │   ├── ship_object.gd        # Main ship entity
-  │   └── space_projectile.gd   # Projectile entity
-  ├── debug/
-  │   └── ship_debug_visualizer.gd  # Debug tools
-  └── space_battle_game.gd      # Game orchestrator
-
-rendering/renderers/
-  └── matrix_renderer.gd        # Matrix-themed renderer
+  │   ├── ship_entity.gd              # Main ship entity
+  │   └── projectile_entity.gd        # Projectile entity
+  └── space_battle_game.gd            # Game orchestrator
 
 tests/
-  ├── test_space_ship_data.gd
-  ├── test_space_damage_resolver.gd
-  └── test_space_weapon_system.gd
+  └── test_<system>.gd                # GUT tests, one file per system
 ```
 
 ### Testing
@@ -258,31 +300,6 @@ static func _create_destroyer_template() -> Dictionary:
 ```
 
 ## Future Expansion
-
-The system is designed to scale to:
-
-### Fleet Hierarchy
-```gdscript
-{
-    "fleets": [{
-        "name": "Alpha Squadron",
-        "flagship": "capital_001",
-        "ships": [...]
-    }]
-}
-```
-
-### Crew System
-```gdscript
-{
-    "crew": [{
-        "name": "Jefferies",
-        "role": "gunner",
-        "stats": {"reaction_time": 0.8, "accuracy": 0.7},
-        "assigned_station": "turret_1"
-    }]
-}
-```
 
 ### Sub-Ships (Recursive)
 ```gdscript

@@ -63,7 +63,7 @@ static func deliver_order(subordinate: Dictionary, order: Dictionary) -> Diction
 
 	return updated
 
-## Process a single order for one crew member (EVENT-DRIVEN)
+## Process a single order for one crew member.
 static func process_single_order(crew: Dictionary, order: Dictionary) -> Dictionary:
 	# Simply deliver the order to this crew member
 	return deliver_order(crew, order)
@@ -146,11 +146,10 @@ static func combine_entity_lists(list1: Array, list2: Array, priority_key: Strin
 	result.sort_custom(func(a, b): return a.get(priority_key, 0.0) > b.get(priority_key, 0.0))
 	return result
 
-## Combine known entities lists
+## Combine known entities lists.
 static func combine_known_entities(list1: Array, list2: Array) -> Array:
 	var combined = {}
 
-	# Add all from both lists (most recent info wins)
 	for entity in list1:
 		combined[entity.id] = entity
 

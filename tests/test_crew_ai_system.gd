@@ -200,6 +200,72 @@ func test_stress_affects_performance():
 	assert_gt(no_stress_skill, high_stress_skill, "Stress reduces effective skill")
 
 # ============================================================================
+# CREW STATE OVER TIME (BEHAVIOR 3)
+# ============================================================================
+
+func test_stress_rises_when_threats_present():
+	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
+	crew.stats.stress = 0.0
+	crew.awareness.threats = [
+		{"id": "enemy_1", "type": "ship", "_threat_priority": 100.0}
+	]
+
+	var updated = CrewAISystem.update_crew_state(crew, 1.0)
+
+	assert_gt(updated.stats.stress, 0.0,
+		"Stress should rise while threats are present.")
+
+func test_stress_decays_when_no_threats():
+	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
+	crew.stats.stress = 0.5
+	crew.awareness.threats = []
+
+	var updated = CrewAISystem.update_crew_state(crew, 1.0)
+
+	assert_lt(updated.stats.stress, 0.5,
+		"Stress should decay when no threats are present.")
+
+# ============================================================================
+# LAZY STATE CATCH-UP (BEHAVIOR 10)
+# Tests that accumulating state in one big dt produces ~the same result as
+# accumulating in small steps.  Required because the new scheduler will only
+# update state on wake, using dt = game_time - last_update_time.
+# ============================================================================
+
+func test_stress_accumulation_is_equivalent_lazy_or_eager():
+	var threat = [{"id": "enemy_1", "type": "ship", "_threat_priority": 100.0}]
+
+	# Eager: 100 steps of dt=0.01
+	var eager = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
+	eager.stats.stress = 0.0
+	eager.awareness.threats = threat
+	for i in range(100):
+		eager = CrewAISystem.update_crew_state(eager, 0.01)
+
+	# Lazy: 1 step of dt=1.0
+	var lazy = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
+	lazy.stats.stress = 0.0
+	lazy.awareness.threats = threat
+	lazy = CrewAISystem.update_crew_state(lazy, 1.0)
+
+	# Linear accumulation: results should match within float epsilon
+	assert_almost_eq(lazy.stats.stress, eager.stats.stress, 0.001,
+		"Lazy and eager stress accumulation should match for linear decay/growth.")
+
+func test_fatigue_accumulation_is_equivalent_lazy_or_eager():
+	var eager = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
+	eager.stats.fatigue = 0.0
+	for i in range(100):
+		eager = CrewAISystem.update_crew_state(eager, 0.01)
+
+	var lazy = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
+	lazy.stats.fatigue = 0.0
+	lazy = CrewAISystem.update_crew_state(lazy, 1.0)
+
+	assert_almost_eq(lazy.stats.fatigue, eager.stats.fatigue, 0.001,
+		"Lazy and eager fatigue accumulation should match for linear growth.")
+
+# ============================================================================
 # COMMAND CHAIN TESTS
 # ============================================================================
 
@@ -341,7 +407,9 @@ func test_full_crew_ai_cycle():
 
 	# Step 1: Update crew awareness
 	var game_time = 1.0
-	var updated_crew = InformationSystem.update_all_crew_awareness(all_crew, ships, [], game_time)
+	var updated_crew = []
+	for crew in all_crew:
+		updated_crew.append(InformationSystem.update_crew_awareness(crew, ships, [], game_time))
 
 	# Crew should detect enemies
 	var player_pilot = updated_crew[1]  # Index depends on creation order
@@ -350,8 +418,9 @@ func test_full_crew_ai_cycle():
 	# Step 2: Process command chain
 	updated_crew = CommandChainSystem.process_command_chain(updated_crew)
 
-	# Step 3: Make AI decisions
-	var ai_result = CrewAISystem.update_all_crew(updated_crew, 0.1, game_time)
+	# Step 3: Make AI decisions through the production scheduler entry point.
+	var ai_result = CrewSchedulerSystem.tick_with_awareness(
+		updated_crew, game_time, {}, ships, [], [])
 	updated_crew = ai_result.crew_list
 	var decisions = ai_result.decisions
 

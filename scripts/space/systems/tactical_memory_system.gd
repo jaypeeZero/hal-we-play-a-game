@@ -16,30 +16,7 @@ const SITUATION_UPDATE_INTERVAL = 1.0  # Seconds between situation updates
 # MEMORY UPDATE - Main API
 # ============================================================================
 
-## Update all crew tactical memory with recent events
-static func update_all_crew_memory(crew_list: Array, recent_events: Array, game_time: float) -> Array:
-	return crew_list.map(func(crew):
-		return update_crew_memory(crew, recent_events, game_time))
-
-## Update single crew member's tactical memory
-static func update_crew_memory(crew_data: Dictionary, recent_events: Array, game_time: float) -> Dictionary:
-	var updated = crew_data.duplicate(true)
-
-	# Filter events relevant to this crew
-	var relevant_events = filter_relevant_events(crew_data, recent_events)
-
-	# Update recent events list (keep last N)
-	updated.awareness.tactical_memory.recent_events = add_to_recent_events(
-		crew_data.awareness.tactical_memory.recent_events,
-		relevant_events
-	)
-
-	# Generate current situation summary
-	updated.awareness.tactical_memory.current_situation = generate_situation_summary(updated)
-
-	return updated
-
-## Record a single event to crew memory (EVENT-DRIVEN)
+## Record a single event to crew memory.
 static func record_event(crew_data: Dictionary, event: Dictionary) -> Dictionary:
 	var updated = crew_data.duplicate(true)
 
@@ -235,25 +212,6 @@ static func _generate_order_summary(order: Dictionary) -> String:
 
 	return ""
 
-# ============================================================================
-# EVENT FILTERING
-# ============================================================================
-
-## Filter events relevant to this crew member
-static func filter_relevant_events(crew_data: Dictionary, all_events: Array) -> Array:
-	# For now, include all events
-	# Later can filter by: events involving their ship, nearby events, etc.
-	return all_events
-
-## Add new events to recent events list (keep last N)
-static func add_to_recent_events(current_events: Array, new_events: Array) -> Array:
-	var combined = current_events + new_events
-
-	# Keep only last N events
-	if combined.size() > MAX_RECENT_EVENTS:
-		return combined.slice(combined.size() - MAX_RECENT_EVENTS, combined.size())
-
-	return combined
 
 # ============================================================================
 # DECISION TACTIC EXTRACTION

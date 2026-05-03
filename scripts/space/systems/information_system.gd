@@ -9,11 +9,6 @@ extends RefCounted
 # MAIN API - Update crew awareness
 # ============================================================================
 
-## Update all crew awareness based on game state
-static func update_all_crew_awareness(crew_list: Array, ships: Array, projectiles: Array, game_time: float) -> Array:
-	return crew_list.map(func(crew):
-		return update_crew_awareness(crew, ships, projectiles, game_time))
-
 ## Update single crew member's awareness
 static func update_crew_awareness(crew_data: Dictionary, ships: Array, projectiles: Array, game_time: float) -> Dictionary:
 	if crew_data.assigned_to == null:
