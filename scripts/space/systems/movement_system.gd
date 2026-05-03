@@ -2132,6 +2132,25 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	# Update velocity with thrust (no drag in space!)
 	var new_velocity = ship_data.velocity + thrust_vector
 
+	# INERTIAL DAMPENING (a.k.a. flight assist): the ship's flight computer
+	# auto-fires lateral thrusters to kill velocity perpendicular to the
+	# nose. The ship is still Newtonian (mass, momentum, no global drag),
+	# but velocity rapidly aligns with facing — fighters curve through
+	# space instead of sliding like boats on ice. Disabled when the pilot
+	# is actively strafing (manual override) or braking (brakes handle
+	# their own deceleration). Tunable per ship via the
+	# `inertial_dampening` stat (1/sec): higher = tighter, 0 = pure
+	# Newtonian.
+	var inertial_dampening: float = ship_data.stats.get("inertial_dampening", 0.0)
+	if inertial_dampening > 0.0 and lateral_thrust_dir == 0 and not pilot_control.get("is_braking", false):
+		var v_along_facing: float = new_velocity.dot(ship_facing)
+		var v_perpendicular: Vector2 = new_velocity - ship_facing * v_along_facing
+		var perp_speed: float = v_perpendicular.length()
+		if perp_speed > 0.1:
+			# Exponential decay capped to not reverse the perpendicular component.
+			var decay: float = min(perp_speed * inertial_dampening * delta, perp_speed)
+			new_velocity -= v_perpendicular / perp_speed * decay
+
 	# Clamp to max speed (engine limitation)
 	if new_velocity.length() > ship_data.stats.max_speed:
 		new_velocity = new_velocity.normalized() * ship_data.stats.max_speed

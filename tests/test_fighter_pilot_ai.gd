@@ -411,3 +411,133 @@ func test_lateral_thrust_physics_applies_perpendicular_acceleration():
 	# Expected: lateral_accel = 100 * 0.3 = 30, so velocity.x should increase by ~30
 	assert_gt(result.velocity.x, 0, "Lateral thrust right should add positive X velocity")
 	assert_almost_eq(result.velocity.x, 30.0, 1.0, "Lateral thrust should apply correct acceleration")
+
+# ============================================================================
+# INERTIAL DAMPENING - Flight assist makes fighters feel tight, not boats on ice
+# ============================================================================
+
+func test_inertial_dampening_kills_perpendicular_drift():
+	# BEHAVIOR: A ship facing forward but drifting sideways should have its
+	# sideways drift reduced by the flight computer (inertial dampening).
+	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	ship.rotation = 0.0  # Facing up: get_visual_forward(0) = Vector2(0, -1)
+	ship.velocity = Vector2(100, 0)  # Drifting purely sideways
+	ship.stats.inertial_dampening = 4.0
+
+	var pilot_control = {
+		"desired_heading": 0.0,
+		"thrust_active": false,
+		"throttle": 0.0
+	}
+
+	var result = MovementSystem.apply_space_physics(ship, pilot_control, 0.1)
+
+	# Sideways component must shrink (the flight computer is killing the drift)
+	assert_lt(abs(result.velocity.x), 100.0, "Inertial dampening should reduce perpendicular velocity")
+	# 4.0 dampening * 0.1 delta = 40% removed
+	assert_almost_eq(result.velocity.x, 60.0, 1.0, "Should remove ~40% of perpendicular drift in 0.1s at rate 4.0")
+
+func test_inertial_dampening_preserves_forward_velocity():
+	# BEHAVIOR: Forward-aligned velocity should NOT be affected by dampening
+	# (only perpendicular drift gets killed).
+	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	ship.rotation = 0.0  # Facing up
+	ship.velocity = Vector2(0, -200)  # Moving forward (aligned with facing)
+	ship.stats.inertial_dampening = 4.0
+
+	var pilot_control = {
+		"desired_heading": 0.0,
+		"thrust_active": false,
+		"throttle": 0.0
+	}
+
+	var result = MovementSystem.apply_space_physics(ship, pilot_control, 0.1)
+
+	# Forward velocity preserved
+	assert_almost_eq(result.velocity.y, -200.0, 0.1, "Forward velocity should be preserved")
+	assert_almost_eq(result.velocity.x, 0.0, 0.1, "No sideways component should appear")
+
+func test_inertial_dampening_disabled_during_lateral_thrust():
+	# BEHAVIOR: When pilot is actively strafing, dampening must NOT cancel the
+	# strafe — the manual lateral thruster takes priority. This preserves the
+	# lateral_break / weave maneuvers.
+	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	ship.rotation = 0.0  # Facing up
+	ship.velocity = Vector2(50, 0)  # Existing perpendicular drift
+	ship.stats.acceleration = 100.0
+	ship.stats.lateral_acceleration = 0.5
+	ship.stats.inertial_dampening = 4.0
+
+	var pilot_control = {
+		"desired_heading": 0.0,
+		"thrust_active": false,
+		"throttle": 0.0,
+		"lateral_thrust": 1  # Pilot actively strafing right
+	}
+
+	var result = MovementSystem.apply_space_physics(ship, pilot_control, 0.1)
+
+	# Strafe pushes right (+X). Dampening would pull it back. Result should
+	# be net positive change (strafe wins; no dampening applied).
+	# Without dampening: x = 50 + 100 * 0.5 * 0.1 = 55
+	# With dampening: would shrink toward 30
+	assert_gt(result.velocity.x, 50.0, "Lateral thrust should overpower (no) dampening — strafe wins")
+
+func test_inertial_dampening_zero_means_pure_newtonian():
+	# BEHAVIOR: Setting inertial_dampening = 0 (or absent) gives pure Newtonian
+	# drift — the old "boats on ice" behavior, used by capital ships.
+	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	ship.rotation = 0.0
+	ship.velocity = Vector2(100, 0)
+	ship.stats.inertial_dampening = 0.0
+
+	var pilot_control = {
+		"desired_heading": 0.0,
+		"thrust_active": false,
+		"throttle": 0.0
+	}
+
+	var result = MovementSystem.apply_space_physics(ship, pilot_control, 0.1)
+
+	# Velocity should be completely unchanged
+	assert_almost_eq(result.velocity.x, 100.0, 0.01, "Zero dampening must preserve drift")
+
+func test_inertial_dampening_disabled_when_braking():
+	# BEHAVIOR: The brake system handles its own deceleration; dampening must
+	# step aside when brake_thrust is engaged so we don't double-decelerate.
+	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	ship.rotation = 0.0
+	ship.velocity = Vector2(100, 0)  # Sideways drift
+	ship.stats.inertial_dampening = 4.0
+
+	var pilot_control = {
+		"desired_heading": 0.0,
+		"thrust_active": false,
+		"throttle": 0.0,
+		"is_braking": true
+	}
+
+	var result = MovementSystem.apply_space_physics(ship, pilot_control, 0.1)
+
+	# Without dampening interference: x decays only via brake_thrust (which is
+	# 0 here), so should be unchanged.
+	assert_almost_eq(result.velocity.x, 100.0, 0.01, "Dampening should yield to the brake system")
+
+func test_inertial_dampening_does_not_reverse_velocity():
+	# BEHAVIOR: Dampening must never overshoot and reverse the perpendicular
+	# component — this would feel jittery and unphysical.
+	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	ship.rotation = 0.0
+	ship.velocity = Vector2(10, 0)  # Tiny sideways drift
+	ship.stats.inertial_dampening = 100.0  # Absurdly high rate
+
+	var pilot_control = {
+		"desired_heading": 0.0,
+		"thrust_active": false,
+		"throttle": 0.0
+	}
+
+	var result = MovementSystem.apply_space_physics(ship, pilot_control, 1.0)  # Huge delta
+
+	# At this rate the drift would mathematically reverse — but it must clamp to 0
+	assert_almost_eq(result.velocity.x, 0.0, 0.01, "Dampening should clamp to 0, never reverse")

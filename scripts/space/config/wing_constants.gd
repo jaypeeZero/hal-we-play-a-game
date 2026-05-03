@@ -172,6 +172,11 @@ const PILOT_ACCEL_MAX = 1.2           # 1.0-skill: 120% acceleration
 const PILOT_LATERAL_MIN = 0.2         # 0-skill: 20% lateral capability
 const PILOT_LATERAL_MAX = 1.0         # 1.0-skill: 100% lateral capability
 
+## Inertial dampening (flight assist) — skilled pilots ride the stick tighter,
+## so the auto-counter-thrust kills perpendicular drift faster.
+const PILOT_DAMPENING_MIN = 0.4       # 0-skill: 40% dampening (sloppy stick)
+const PILOT_DAMPENING_MAX = 1.2       # 1.0-skill: 120% dampening (precision)
+
 # =============================================================================
 # PILOT SKILL - Behavior thresholds
 # =============================================================================
