@@ -953,3 +953,84 @@ func test_squadron_focus_target_gets_score_bonus():
 	# squadron bonus must be larger than that single-engager penalty so the
 	# overall effect is "follow the commander's call."
 	assert_gt(score_focus, score_other, "Squadron commander's target should win on equal alternatives")
+
+# ============================================================================
+# AREA LEASH — ships rotate back toward their assigned operating area
+# ============================================================================
+
+func _ship_with_area(id: String, pos: Vector2, area_center: Vector2, radius: float) -> Dictionary:
+	var ship = create_fighter_ship(id, pos, 0)
+	ship["assigned_area"] = {"center": area_center, "radius": radius}
+	# Sit at low speed so turn rate is sharp and the leash effect is visible per-frame
+	ship.velocity = Vector2.ZERO
+	return ship
+
+func test_inside_zone_leash_does_not_modify_heading():
+	# BEHAVIOR: A ship comfortably inside its zone is unaffected — pilot's
+	# desired heading is preserved exactly.
+	var ship = _ship_with_area("me", Vector2(0, 0), Vector2(0, 0), 500.0)
+	var east_heading: float = MovementSystem.direction_to_heading(Vector2(1, 0))
+	var leashed = MovementSystem.apply_area_leash(ship, east_heading)
+	assert_eq(leashed, east_heading, "Inside the zone, no leash bias should be applied")
+
+func test_outside_zone_at_full_pull_overrides_heading_to_home():
+	# BEHAVIOR: At 2x leash radius, pull = 1.0 — heading is fully replaced
+	# by the direction back to home, ignoring whatever the pilot wanted.
+	var ship = _ship_with_area("me", Vector2(2000, 0), Vector2(0, 0), 500.0)
+	var east_heading: float = MovementSystem.direction_to_heading(Vector2(1, 0))
+	var leashed = MovementSystem.apply_area_leash(ship, east_heading)
+	var west_heading: float = MovementSystem.direction_to_heading(Vector2(-1, 0))
+	# Compare angles modulo 2π via angle_difference (lerp_angle may return ± equivalent)
+	var diff_to_west = abs(MovementSystem.angle_difference(leashed, west_heading))
+	assert_lt(diff_to_west, 0.001,
+		"At full pull (>=2x radius outside), heading must point toward area center")
+
+func test_no_assigned_area_means_no_leash():
+	# BEHAVIOR: Ships without an assigned area behave exactly as before
+	# (backwards compatibility for anything not yet assigned).
+	var ship = create_fighter_ship("me", Vector2(2000, 0), 0)
+	var east_heading: float = MovementSystem.direction_to_heading(Vector2(1, 0))
+	var leashed = MovementSystem.apply_area_leash(ship, east_heading)
+	assert_eq(leashed, east_heading, "With no assigned_area, leash must have no effect")
+
+func test_far_outside_area_triggers_hard_return_override():
+	# BEHAVIOR: At >1.5x leash radius, the AI override fires — pilot drops
+	# the current target and chooses fight_return_to_area instead.
+	var center = Vector2(960, 540)
+	var ship = create_fighter_ship("me", Vector2(960 + 600, 540), 0)  # 600u east of center
+	ship["assigned_area"] = {"center": center, "radius": 335.0}  # threshold ≈ 502u
+	assert_true(FighterPilotAI._is_far_outside_area(ship),
+		"600u from center > 1.5*335 = 502u; should trigger return")
+
+func test_inside_area_does_not_trigger_hard_return():
+	var center = Vector2(960, 540)
+	var ship = create_fighter_ship("me", Vector2(960 + 200, 540), 0)
+	ship["assigned_area"] = {"center": center, "radius": 335.0}
+	assert_false(FighterPilotAI._is_far_outside_area(ship),
+		"200u from center is well inside the leash; no override")
+
+func test_no_assigned_area_never_triggers_return():
+	var ship = create_fighter_ship("me", Vector2(99999, 99999), 0)
+	# No assigned_area set
+	assert_false(FighterPilotAI._is_far_outside_area(ship),
+		"With no assigned area there is no leash to violate")
+
+func test_leash_pull_ramps_with_distance():
+	# BEHAVIOR: Pull is 0 at the edge of the leash and 1 at 2x radius. A
+	# ship further out should have its heading pulled more strongly home.
+	var center = Vector2(0, 0)
+	var radius = 500.0
+	var east_heading: float = MovementSystem.direction_to_heading(Vector2(1, 0))
+	var west_heading: float = MovementSystem.direction_to_heading(Vector2(-1, 0))
+
+	var ship_near = _ship_with_area("a", Vector2(750, 0), center, radius)   # 1.5x → pull 0.5
+	var ship_far = _ship_with_area("b", Vector2(950, 0), center, radius)    # 1.9x → pull 0.9
+
+	var heading_near = MovementSystem.apply_area_leash(ship_near, east_heading)
+	var heading_far = MovementSystem.apply_area_leash(ship_far, east_heading)
+
+	# Distance-from-east measures how much the heading has been pulled toward west
+	var pull_near = abs(MovementSystem.angle_difference(heading_near, east_heading))
+	var pull_far = abs(MovementSystem.angle_difference(heading_far, east_heading))
+	assert_gt(pull_far, pull_near,
+		"Ship further outside the zone should be pulled more strongly back home")

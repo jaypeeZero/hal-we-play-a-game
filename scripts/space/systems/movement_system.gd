@@ -64,6 +64,27 @@ static func direction_to_heading(direction: Vector2) -> float:
 static func get_visual_forward(rotation: float) -> Vector2:
 	return Vector2(sin(rotation), -cos(rotation))
 
+## Bias a desired heading back toward the ship's assigned operating area
+## when the ship is outside it. Ramps from no effect at the edge of the
+## leash radius to total override at 2x the radius. Ships without an
+## `assigned_area` are unaffected.
+static func apply_area_leash(ship_data: Dictionary, desired_heading: float) -> float:
+	var assigned_area = ship_data.get("assigned_area")
+	if assigned_area == null or not assigned_area is Dictionary:
+		return desired_heading
+	var area_radius: float = assigned_area.get("radius", 0.0)
+	if area_radius <= 0.0:
+		return desired_heading
+	var area_center: Vector2 = assigned_area.get("center", Vector2.ZERO)
+	var to_center: Vector2 = area_center - ship_data.get("position", Vector2.ZERO)
+	var dist: float = to_center.length()
+	if dist <= area_radius or dist < 1.0:
+		return desired_heading
+	var return_heading: float = direction_to_heading(to_center)
+	# Pull ramps from 0 at the edge to 1.0 at 2x radius (full override)
+	var pull: float = clamp((dist - area_radius) / area_radius, 0.0, 1.0)
+	return lerp_angle(desired_heading, return_heading, pull)
+
 # ============================================================================
 # MAIN API - Returns new ship_data with updated position/velocity
 # ============================================================================
@@ -354,6 +375,8 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 			return calculate_group_run_swing_around(ship_data, target, nearby_ships, obstacles)
 		"fight_evasive_retreat":
 			return calculate_evasive_retreat(ship_data, target, nearby_ships, obstacles)
+		"fight_return_to_area":
+			return calculate_return_to_area(ship_data)
 		"fight_cautious_approach":
 			return calculate_cautious_approach(ship_data, target, nearby_ships, obstacles)
 		"fight_dodge_and_weave":
@@ -850,6 +873,39 @@ static func calculate_group_run_swing_around(ship_data: Dictionary, target: Dict
 			"engagement_range": 500.0,
 			"current_distance": distance
 		}
+
+## Return to assigned operating area — flies straight back to the area
+## center at full throttle. Used by the AI as a hard override when a pilot
+## has drifted way outside their leash and the gentle physics-level pull
+## isn't enough on its own (e.g. they're in a combat-throttle maneuver
+## that wouldn't otherwise produce forward thrust). Once back in zone the
+## normal AI takes over again.
+static func calculate_return_to_area(ship_data: Dictionary) -> Dictionary:
+	var area = ship_data.get("assigned_area")
+	var area_center: Vector2 = ship_data.get("position", Vector2.ZERO)
+	if area is Dictionary:
+		area_center = area.get("center", area_center)
+	var to_center: Vector2 = area_center - ship_data.get("position", Vector2.ZERO)
+	var distance: float = to_center.length()
+	# When essentially home, just coast — apply_space_physics with throttle=1
+	# would still try to thrust through the center.
+	if distance < 50.0:
+		return {
+			"desired_heading": ship_data.get("rotation", 0.0),
+			"throttle": 0.0,
+			"thrust_active": false,
+			"is_braking": false,
+			"engagement_range": 100.0,
+			"current_distance": distance
+		}
+	return {
+		"desired_heading": direction_to_heading(to_center),
+		"throttle": 1.0,
+		"thrust_active": true,
+		"is_braking": false,
+		"engagement_range": 100.0,
+		"current_distance": distance
+	}
 
 ## Evasive retreat - get away from big ship
 static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
@@ -2091,10 +2147,20 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	var turn_falloff: float = ship_data.stats.get("turn_rate_falloff", 0.0)
 	var effective_turn_rate: float = ship_data.stats.turn_rate * (1.0 - turn_falloff * speed_ratio)
 
-	# Rotate ship toward desired heading
+	# AREA LEASH — every ship has an assigned operating area. Outside it,
+	# the pilot's heading is gradually pulled back toward the area center;
+	# the further out, the stronger the pull. They keep doing whatever they
+	# were doing (still maneuvering, still throttling) but the nose curves
+	# back homeward. The pull becomes total at 2x the leash radius — past
+	# that, the ship is just flying home regardless of what the pilot wanted.
+	var effective_desired_heading: float = apply_area_leash(
+		ship_data, pilot_control.desired_heading
+	)
+
+	# Rotate ship toward desired heading (already biased by area leash above)
 	var new_rotation = rotate_toward_heading(
 		ship_data.rotation,
-		pilot_control.desired_heading,
+		effective_desired_heading,
 		effective_turn_rate,
 		delta
 	)

@@ -209,6 +209,16 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 	if survival_mode != "":
 		return _make_survival_decision(crew_data, ship_data, all_ships, survival_mode, game_time)
 
+	# AREA LEASH (hard override). The physics layer applies a gentle heading
+	# pull when a ship drifts outside its assigned area. That's enough for
+	# pilots in maneuvers that already thrust (approach, repositioning), but
+	# combat-orbit maneuvers run at ~zero throttle, so without an AI-level
+	# kick, a ship stuck dogfighting at the edge of the zone never actually
+	# returns. When a pilot is well outside their leash, they drop the fight
+	# and burn home until they're back in zone.
+	if _is_far_outside_area(ship_data):
+		return _make_return_to_area_decision(crew_data, ship_data, game_time)
+
 	# DYNAMIC WING SYSTEM: Check if we're in a wing and what role
 	var wing_info = WingFormationSystem.get_wing_info(crew_data.get("crew_id", ""), wings)
 
@@ -1343,6 +1353,40 @@ static func _find_closest_enemy_id(ship_data: Dictionary, all_ships: Array) -> S
 			best_d = d
 			best_id = ship.get("ship_id", "")
 	return best_id
+
+# ============================================================================
+# AREA LEASH (AI-LEVEL HARD OVERRIDE)
+# ============================================================================
+# The physics layer in MovementSystem.apply_area_leash gradually pulls a
+# ship's nose toward home when it's outside its assigned area. That handles
+# every maneuver that already thrusts. But combat maneuvers (dogfight, etc.)
+# can sit at zero throttle, so a pilot stuck dogfighting on the edge would
+# rotate to face home but never actually move. This AI override drops the
+# fight and burns home when a pilot is well outside their leash.
+const AREA_HARD_RETURN_MULTIPLIER = 1.5  # > 1.5x leash radius → drop everything and fly home
+
+static func _is_far_outside_area(ship_data: Dictionary) -> bool:
+	var assigned_area = ship_data.get("assigned_area")
+	if assigned_area == null or not assigned_area is Dictionary:
+		return false
+	var radius: float = assigned_area.get("radius", 0.0)
+	if radius <= 0.0:
+		return false
+	var center: Vector2 = assigned_area.get("center", Vector2.ZERO)
+	var dist: float = ship_data.get("position", Vector2.ZERO).distance_to(center)
+	return dist > radius * AREA_HARD_RETURN_MULTIPLIER
+
+static func _make_return_to_area_decision(crew_data: Dictionary, ship_data: Dictionary, game_time: float) -> Dictionary:
+	return {
+		"type": "maneuver",
+		"subtype": "fight_return_to_area",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": "",
+		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
+		"delay": 0.4,
+		"timestamp": game_time
+	}
 
 # ============================================================================
 # ENGAGEMENT-CYCLE FSM — pass / extend / reposition / re-engage
