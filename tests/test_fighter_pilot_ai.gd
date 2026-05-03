@@ -1015,6 +1015,39 @@ func test_no_assigned_area_never_triggers_return():
 	assert_false(FighterPilotAI._is_far_outside_area(ship),
 		"With no assigned area there is no leash to violate")
 
+func test_return_to_area_aims_inside_zone_not_at_center():
+	# BEHAVIOR: A ship returning to its zone should aim for a point INSIDE
+	# the zone, not the dead center. Otherwise N ships all converge on the
+	# same point and pile up there.
+	var ship = create_fighter_ship("me", Vector2(2000, 0), 0)
+	ship["assigned_area"] = {"center": Vector2(0, 0), "radius": 500.0}
+	var control = MovementSystem.calculate_return_to_area(ship)
+	# desired_heading should point toward a target between origin and ship,
+	# not the dead origin. Angle from ship (2000, 0) to origin is "west",
+	# heading = direction_to_heading((-1, 0)) = PI. Target inside zone at
+	# (~300, 0) gives heading also approximately PI but toward (300-2000, 0)
+	# which is also "west". The KEY check: distance returned should be the
+	# distance to the entry point, NOT to the center.
+	assert_lt(control.current_distance, 2000.0,
+		"Return distance should be to the entry point, not all the way to center")
+
+func test_return_to_area_spreads_ships_to_distinct_entry_points():
+	# BEHAVIOR: Two ships at the same external position with different
+	# ship_ids should pick different entry points (per-ship tangential
+	# spread). Without this, N ships pile up on one entry point.
+	var area = {"center": Vector2(0, 0), "radius": 500.0}
+	var ship_a = create_fighter_ship("alpha_lots_of_text_to_change_hash", Vector2(1500, 0), 0)
+	ship_a["assigned_area"] = area
+	var ship_b = create_fighter_ship("beta", Vector2(1500, 0), 0)
+	ship_b["assigned_area"] = area
+
+	var ctrl_a = MovementSystem.calculate_return_to_area(ship_a)
+	var ctrl_b = MovementSystem.calculate_return_to_area(ship_b)
+
+	# At the very least, their headings should differ (we add per-ship tangent)
+	assert_ne(ctrl_a.desired_heading, ctrl_b.desired_heading,
+		"Two ships with different ids returning from the same point should pick different entry headings")
+
 func test_leash_pull_ramps_with_distance():
 	# BEHAVIOR: Pull is 0 at the edge of the leash and 1 at 2x radius. A
 	# ship further out should have its heading pulled more strongly home.

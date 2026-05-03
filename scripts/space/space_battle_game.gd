@@ -541,17 +541,17 @@ func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
 		push_error("Failed to create ship data for type: " + ship_type)
 		return {}
 
-	# Assign the operating area. For now every ship gets the same zone — a
-	# disk centered on the battlefield with five times the area of a single
-	# capital ship. In future versions this can vary per ship/squadron.
-	# The pilot's instinct keeps them within this leash; they can chase
-	# briefly outside it but will always try to return.
-	const CAPITAL_COLLISION_RADIUS: float = 150.0
-	const COMBAT_ZONE_AREA_MULTIPLE: float = 5.0
-	var zone_radius: float = sqrt(COMBAT_ZONE_AREA_MULTIPLE) * CAPITAL_COLLISION_RADIUS
+	# Assign the operating area. For now every ship gets the same patrol
+	# zone — a disk centered on the battlefield, sized so a wing can
+	# actually maneuver inside it ("a few city blocks" relative to a
+	# fighter, ~47x the fighter collision radius). The pilot's instinct
+	# keeps them within this leash; they can chase briefly outside it but
+	# will always try to return. In future versions this can vary per
+	# ship/squadron.
+	const PATROL_ZONE_RADIUS: float = 700.0
 	ship_data["assigned_area"] = {
 		"center": _battlefield_size * 0.5,
-		"radius": zone_radius
+		"radius": PATROL_ZONE_RADIUS
 	}
 
 	# Add to data array

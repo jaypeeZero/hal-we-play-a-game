@@ -874,21 +874,29 @@ static func calculate_group_run_swing_around(ship_data: Dictionary, target: Dict
 			"current_distance": distance
 		}
 
-## Return to assigned operating area — flies straight back to the area
-## center at full throttle. Used by the AI as a hard override when a pilot
-## has drifted way outside their leash and the gentle physics-level pull
-## isn't enough on its own (e.g. they're in a combat-throttle maneuver
-## that wouldn't otherwise produce forward thrust). Once back in zone the
-## normal AI takes over again.
+## Return to assigned operating area — flies back into the patrol zone.
+## Aims for a point INSIDE the zone (not the center) so 26 ships returning
+## simultaneously don't all collide on the same spot. Each ship's return
+## point is on the line from the zone center toward its current position,
+## with a small tangential per-ship offset so they spread along the zone
+## edge instead of stacking on a single entry point.
+const RETURN_DEPTH_RATIO = 0.6   # Aim 60% of the way from edge toward center
+const RETURN_TANGENT_SPREAD = 0.35  # Up to ~20° tangential spread per ship
+
 static func calculate_return_to_area(ship_data: Dictionary) -> Dictionary:
 	var area = ship_data.get("assigned_area")
-	var area_center: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var area_center: Vector2 = my_pos
+	var area_radius: float = 0.0
 	if area is Dictionary:
 		area_center = area.get("center", area_center)
-	var to_center: Vector2 = area_center - ship_data.get("position", Vector2.ZERO)
+		area_radius = float(area.get("radius", 0.0))
+
+	var to_center: Vector2 = area_center - my_pos
 	var distance: float = to_center.length()
-	# When essentially home, just coast — apply_space_physics with throttle=1
-	# would still try to thrust through the center.
+
+	# When essentially home, just coast — full throttle would push us through
+	# and out the other side.
 	if distance < 50.0:
 		return {
 			"desired_heading": ship_data.get("rotation", 0.0),
@@ -898,13 +906,28 @@ static func calculate_return_to_area(ship_data: Dictionary) -> Dictionary:
 			"engagement_range": 100.0,
 			"current_distance": distance
 		}
+
+	# Pick an entry point on the zone edge nearest to me, then offset it
+	# slightly inward and tangentially so 26 ships don't all aim for the
+	# same point. Stable per-ship offset comes from ship_id hash.
+	var return_target: Vector2 = area_center
+	if area_radius > 0.0 and distance > area_radius:
+		var inward: Vector2 = -to_center / distance  # unit vector from center toward me
+		var tangent: Vector2 = Vector2(-inward.y, inward.x)
+		var ship_id: String = ship_data.get("ship_id", "")
+		# Hash to [-1, 1] for stable per-ship spread
+		var spread: float = (float(hash(ship_id) % 2000) / 1000.0 - 1.0) * RETURN_TANGENT_SPREAD
+		var entry_point: Vector2 = area_center + inward * area_radius * RETURN_DEPTH_RATIO
+		return_target = entry_point + tangent * area_radius * spread
+
+	var to_target: Vector2 = return_target - my_pos
 	return {
-		"desired_heading": direction_to_heading(to_center),
+		"desired_heading": direction_to_heading(to_target),
 		"throttle": 1.0,
 		"thrust_active": true,
 		"is_braking": false,
 		"engagement_range": 100.0,
-		"current_distance": distance
+		"current_distance": to_target.length()
 	}
 
 ## Evasive retreat - get away from big ship
