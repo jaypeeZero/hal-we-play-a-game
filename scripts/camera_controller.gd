@@ -23,8 +23,10 @@ var _target_zoom: Vector2
 var _target_position: Vector2
 
 func _ready() -> void:
-	# Set default zoom to be zoomed out by 3 steps (0.7 instead of 1.0)
-	zoom = Vector2(0.7, 0.7)
+	# Default zoom set so the entire battlefield (~5000x3500u) fits in the
+	# viewport at game start. It's a SPACE battle — engagements happen at
+	# range, not in a stadium. Players can zoom in for detail.
+	zoom = Vector2(0.3, 0.3)
 
 	# Store initial camera state
 	_initial_position = position

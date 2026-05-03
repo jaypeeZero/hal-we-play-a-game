@@ -997,8 +997,8 @@ func test_far_outside_area_triggers_hard_return_override():
 	# BEHAVIOR: At >1.5x leash radius, the AI override fires — pilot drops
 	# the current target and chooses fight_return_to_area instead.
 	var center = Vector2(960, 540)
-	var ship = create_fighter_ship("me", Vector2(960 + 600, 540), 0)  # 600u east of center
-	ship["assigned_area"] = {"center": center, "radius": 335.0}  # threshold ≈ 502u
+	var ship = create_fighter_ship("me", Vector2(960 + 600, 540), 0)
+	ship["assigned_area"] = {"center": center, "radius": 335.0}
 	assert_true(FighterPilotAI._is_far_outside_area(ship),
 		"600u from center > 1.5*335 = 502u; should trigger return")
 

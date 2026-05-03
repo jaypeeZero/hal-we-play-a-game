@@ -50,7 +50,7 @@ var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 # ============================================================================
 
 var _pending_spawn: Dictionary = {}
-var _battlefield_size: Vector2 = Vector2(1920, 1080)
+var _battlefield_size: Vector2 = Vector2(5000, 3500)
 
 # Initial pause state
 var _initial_paused: bool = true
