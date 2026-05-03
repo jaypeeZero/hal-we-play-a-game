@@ -151,9 +151,21 @@ const TARGET_SCORE_FRIENDLY_ENGAGING_WEIGHT = 2.0
 ## degenerates into a swarm. Tuned so that ~3 friendlies on a target shifts
 ## a wing to an alternative target up to ~3000u further away.
 const TARGET_SCORE_DECONFLICTION_PENALTY = 4.0
+## Bonus for the squadron commander's designated focus target. Strong enough
+## to overcome a couple thousand units of distance, weak enough that a
+## deconfliction penalty for a target with several engagers on it (4.0 each)
+## still wins. So the squadron *converges* but doesn't *swarm*.
+const TARGET_SCORE_SQUADRON_FOCUS_BONUS = 6.0
 ## Skill below which a lead doesn't yet think about target deconfliction
 ## (rookies fixate; mid+ skill spreads engagement)
 const LEAD_DECONFLICT_SKILL = 0.3
+
+## Aggression thresholds that bias a wing lead's approach doctrine. Two leads
+## with identical skill but different aggression pick different approaches —
+## this gives 6v6 a mix of head-on chargers, flankers, and standoff
+## harassers instead of one uniform suicide rush.
+const LEAD_DOCTRINE_RUSH_AGGRESSION = 0.7   # >= this: commits head-on
+const LEAD_DOCTRINE_FLANK_AGGRESSION = 0.3  # <= this: angles/harasses
 const TARGET_SCORE_THREAT_FACING_WEIGHT = 3.0
 const TARGET_SCORE_THREAT_FACING_ANGLE = 45.0  # degrees
 

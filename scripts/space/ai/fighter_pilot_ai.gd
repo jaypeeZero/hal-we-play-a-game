@@ -168,6 +168,16 @@ const FORMATION_ANGLE_OFFSET = 45.0  # Degrees - wingman stays at 45° behind an
 ## Main decision function - called by CrewAISystem
 ## Now uses dynamic wing formation system
 static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float, wings: Array = []) -> Dictionary:
+	# SELF-PRESERVATION OVERLAY (highest background priority).
+	# Every pilot's mental thread is "stay alive" — they'll throw their life
+	# away only when there's no better option. Modulated by aggression so
+	# personalities show: heroic pilots hold the line through bad odds, timid
+	# ones break off the moment the local picture turns sour. Squadron orders,
+	# wing duties, and individual targeting all defer to this.
+	var survival_mode = _assess_survival_state(crew_data, ship_data, all_ships)
+	if survival_mode != "":
+		return _make_survival_decision(crew_data, ship_data, all_ships, survival_mode, game_time)
+
 	# DYNAMIC WING SYSTEM: Check if we're in a wing and what role
 	var wing_info = WingFormationSystem.get_wing_info(crew_data.get("crew_id", ""), wings)
 
@@ -365,6 +375,16 @@ static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictiona
 		if facing_angle < deg_to_rad(WingConstants.TARGET_SCORE_THREAT_FACING_ANGLE):
 			score += WingConstants.TARGET_SCORE_THREAT_FACING_WEIGHT
 
+	# SQUADRON COMMAND BIAS — when this lead's squadron commander has a focus
+	# target, prefer it. This is what makes "squadron leader's orders" matter:
+	# wings in a squadron converge on the commander's call instead of each
+	# picking independently. The bonus is tunable so it competes with — but
+	# doesn't dominate — distance and deconfliction; survival still trumps it
+	# (the survival overlay short-circuits before scoring).
+	var squadron_focus_id: String = _get_squadron_leader_target(crew_data, all_crew)
+	if squadron_focus_id != "" and target_ship.get("ship_id", "") == squadron_focus_id:
+		score += WingConstants.TARGET_SCORE_SQUADRON_FOCUS_BONUS
+
 	return score
 
 ## Count how many friendlies are engaging a target. Pass `exclude_crew_id`
@@ -394,6 +414,7 @@ static func _count_friendlies_engaging(target_id: String, all_crew: Array, exclu
 static func _make_wingman_decision(crew_data: Dictionary, ship_data: Dictionary, wing_info: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
 	var wing = wing_info.get("wing", {})
 	var position_side = wing_info.get("position_side", 1)
+	var slot_rank = wing_info.get("slot_rank", 0)
 	var skill = crew_data.get("stats", {}).get("skill", 0.5)
 
 	var lead_ship_id = wing.get("lead_ship_id", "")
@@ -408,7 +429,7 @@ static func _make_wingman_decision(crew_data: Dictionary, ship_data: Dictionary,
 
 	if not in_formation:
 		# PRIORITY #1: Rejoin Lead
-		return _make_wing_rejoin_decision(crew_data, ship_data, lead_ship, position_side, skill, game_time)
+		return _make_wing_rejoin_decision(crew_data, ship_data, lead_ship, position_side, slot_rank, skill, game_time)
 
 	# In formation - follow Lead's target and maneuvers
 	var lead_target_id = WingFormationSystem.get_lead_target(wing, all_crew)
@@ -416,18 +437,18 @@ static func _make_wingman_decision(crew_data: Dictionary, ship_data: Dictionary,
 
 	if lead_target_id == "":
 		# Lead has no target - maintain formation while idle
-		return _make_wing_follow_decision(crew_data, ship_data, lead_ship, position_side, skill, "", game_time)
+		return _make_wing_follow_decision(crew_data, ship_data, lead_ship, position_side, slot_rank, skill, "", game_time)
 
 	var target_ship = _get_ship_by_id(lead_target_id, all_ships)
 	if target_ship.is_empty():
-		return _make_wing_follow_decision(crew_data, ship_data, lead_ship, position_side, skill, "", game_time)
+		return _make_wing_follow_decision(crew_data, ship_data, lead_ship, position_side, slot_rank, skill, "", game_time)
 
 	# Engage Lead's target while maintaining formation
-	return _make_wing_engage_decision(crew_data, ship_data, lead_ship, target_ship, position_side, skill, lead_maneuver, game_time)
+	return _make_wing_engage_decision(crew_data, ship_data, lead_ship, target_ship, position_side, slot_rank, skill, lead_maneuver, game_time)
 
 ## Wingman rejoins Lead when out of formation
-static func _make_wing_rejoin_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, position_side: int, skill: float, game_time: float) -> Dictionary:
-	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill)
+static func _make_wing_rejoin_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, position_side: int, slot_rank: int, skill: float, game_time: float) -> Dictionary:
+	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill, slot_rank)
 
 	# Decision frequency based on skill - high skill checks more often
 	var delay = lerp(0.5, 0.2, skill)
@@ -447,8 +468,8 @@ static func _make_wing_rejoin_decision(crew_data: Dictionary, ship_data: Diction
 	}
 
 ## Wingman follows Lead while idle (no target)
-static func _make_wing_follow_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, position_side: int, skill: float, lead_maneuver: String, game_time: float) -> Dictionary:
-	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill)
+static func _make_wing_follow_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, position_side: int, slot_rank: int, skill: float, lead_maneuver: String, game_time: float) -> Dictionary:
+	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill, slot_rank)
 
 	# Delay based on skill
 	var delay = lerp(0.8, 0.3, skill)
@@ -469,8 +490,8 @@ static func _make_wing_follow_decision(crew_data: Dictionary, ship_data: Diction
 	}
 
 ## Wingman engages Lead's target while trying to maintain formation
-static func _make_wing_engage_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, target_ship: Dictionary, position_side: int, skill: float, lead_maneuver: String, game_time: float) -> Dictionary:
-	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill)
+static func _make_wing_engage_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, target_ship: Dictionary, position_side: int, slot_rank: int, skill: float, lead_maneuver: String, game_time: float) -> Dictionary:
+	var formation_pos = WingFormationSystem.calculate_wing_position(lead_ship, position_side, skill, slot_rank)
 	var target_id = target_ship.get("ship_id", "")
 
 	# High skill wingman balances formation with engagement
@@ -542,7 +563,8 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 		position_advantage = "disadvantaged"
 
 	# SKILL-BASED APPROACH: Select approach style and calculate jink params
-	var approach_style = _select_approach_style(skill, position_advantage)
+	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)
+	var approach_style = _select_approach_style(skill, position_advantage, aggression)
 	var jink_params = _calculate_jink_params(skill)
 	var approach_angle = _calculate_approach_angle(skill)
 
@@ -1055,36 +1077,180 @@ static func _make_rejoin_wingman_decision(crew_data: Dictionary, ship_data: Dict
 	}
 
 # ============================================================================
+# SELF-PRESERVATION — "stay alive" runs in every pilot's background
+# ============================================================================
+# Real fighter pilots constantly assess whether the situation has turned
+# bad enough to break off. Two trigger conditions:
+#
+#   1. Hull/armor critical — too damaged to keep fighting; run.
+#   2. Locally outnumbered without support — bail before being swarmed.
+#
+# Both thresholds soften with aggression: a heroic pilot tolerates damage
+# and bad odds; a timid one breaks off early. Returns one of:
+#   ""        — nothing wrong; carry on with squadron/wing/individual logic
+#   "evade"   — bracket out of close combat and pick fights selectively
+#   "retreat" — run hard; don't engage anyone
+
+const SURVIVAL_HULL_CRITICAL_RATIO = 0.30
+const SURVIVAL_HULL_AGGRESSION_TOLERANCE = 0.5  # at max aggression, threshold halves
+const SURVIVAL_NEARBY_ENEMY_RANGE = 1800.0
+const SURVIVAL_NEARBY_FRIEND_RANGE = 1200.0
+const SURVIVAL_MIN_ENEMIES_TO_PANIC = 2
+const SURVIVAL_OUTNUMBERED_SUPPORT_RATIO = 0.5  # below this, bail
+const SURVIVAL_AGGRESSION_TOLERANCE = 0.6       # max aggression cuts threshold by 60%
+
+static func _assess_survival_state(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array) -> String:
+	if not FleetDataManager.is_fighter_class(ship_data.get("type", "")):
+		return ""  # Capitals/corvettes have their own (large_ship) AI
+
+	var aggression: float = crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)
+
+	# 1. CRITICAL HULL — bug out
+	var armor_ratio: float = _compute_total_armor_ratio(ship_data)
+	var hull_threshold: float = SURVIVAL_HULL_CRITICAL_RATIO * (1.0 - aggression * SURVIVAL_HULL_AGGRESSION_TOLERANCE)
+	if armor_ratio < hull_threshold:
+		return "retreat"
+
+	# 2. LOCAL THREAT BALANCE — only triggers when there are real enemies present
+	var counts: Dictionary = _count_nearby_combatants(ship_data, all_ships)
+	var enemies: int = counts.enemies
+	if enemies < SURVIVAL_MIN_ENEMIES_TO_PANIC:
+		return ""
+
+	var support_ratio: float = float(counts.friends + 1) / float(enemies + 1)
+	var ratio_threshold: float = SURVIVAL_OUTNUMBERED_SUPPORT_RATIO * (1.0 - aggression * SURVIVAL_AGGRESSION_TOLERANCE)
+	if support_ratio < ratio_threshold:
+		return "evade"
+
+	return ""
+
+static func _compute_total_armor_ratio(ship_data: Dictionary) -> float:
+	var sections: Array = ship_data.get("armor_sections", [])
+	if sections.is_empty():
+		return 1.0
+	var current_total: float = 0.0
+	var max_total: float = 0.0
+	for section in sections:
+		current_total += float(section.get("current_armor", 0))
+		max_total += float(section.get("max_armor", 0))
+	return current_total / max_total if max_total > 0.0 else 1.0
+
+static func _count_nearby_combatants(ship_data: Dictionary, all_ships: Array) -> Dictionary:
+	var my_team: int = ship_data.get("team", -1)
+	var my_id: String = ship_data.get("ship_id", "")
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var enemies: int = 0
+	var friends: int = 0
+	for ship in all_ships:
+		if ship.get("ship_id", "") == my_id:
+			continue
+		if ship.get("status", "") != "operational":
+			continue
+		# Only fighter-class threats count for outnumbered checks; a single
+		# capital ship in the area shouldn't make a fighter bail.
+		if not FleetDataManager.is_fighter_class(ship.get("type", "")):
+			continue
+		var d: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+		if ship.get("team", -1) == my_team:
+			if d < SURVIVAL_NEARBY_FRIEND_RANGE:
+				friends += 1
+		else:
+			if d < SURVIVAL_NEARBY_ENEMY_RANGE:
+				enemies += 1
+	return {"enemies": enemies, "friends": friends}
+
+static func _make_survival_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, mode: String, game_time: float) -> Dictionary:
+	var skill: float = crew_data.get("stats", {}).get("skill", 0.5)
+	# Pick the closest enemy as the immediate threat to evade from / retreat from
+	var threat_id: String = _find_closest_enemy_id(ship_data, all_ships)
+	var threat_ship: Dictionary = _get_ship_by_id(threat_id, all_ships) if threat_id != "" else {}
+
+	# "retreat" → run away (existing fight_evasive_retreat)
+	# "evade"   → sharp evasive maneuvering near combat (fight_defensive_break)
+	var subtype: String = "fight_evasive_retreat" if mode == "retreat" else "fight_defensive_break"
+	var evasion_dir: int = 0
+	if not threat_ship.is_empty():
+		evasion_dir = _calculate_evasion_direction(ship_data, threat_ship)
+
+	return {
+		"type": "maneuver",
+		"subtype": subtype,
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": threat_id,
+		"skill_factor": skill,
+		"delay": 0.3,  # Re-assess often when in trouble
+		"timestamp": game_time,
+		"evasion_direction": evasion_dir,
+		"survival_mode": mode  # exposed for debugging / future telemetry
+	}
+
+static func _find_closest_enemy_id(ship_data: Dictionary, all_ships: Array) -> String:
+	var my_team: int = ship_data.get("team", -1)
+	var my_id: String = ship_data.get("ship_id", "")
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var best_id: String = ""
+	var best_d: float = INF
+	for ship in all_ships:
+		if ship.get("ship_id", "") == my_id:
+			continue
+		if ship.get("status", "") != "operational":
+			continue
+		if ship.get("team", -1) == my_team:
+			continue
+		var d: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+		if d < best_d:
+			best_d = d
+			best_id = ship.get("ship_id", "")
+	return best_id
+
+# ============================================================================
 # SKILL-BASED APPROACH STYLE SELECTION
 # ============================================================================
 
-## Select approach style based on pilot skill and tactical situation
-## Low skill: always direct approach (fly straight at target)
-## High skill: uses angles, pursuit curves, defensive maneuvers
-static func _select_approach_style(skill: float, position_advantage: String) -> int:
-	# LOW SKILL (< 0.4): Always direct approach - fly straight at target
+## Select approach style based on pilot skill, tactical situation, AND aggression.
+## Aggression is what gives wings personality — two leads with the same skill but
+## different aggression pick different doctrines, so a 6v6 produces a mix of
+## head-on rushers, flankers, and standoff harassers instead of one uniform charge.
+##   high aggression  → bias toward DIRECT (commit head-on, full throttle)
+##   low aggression   → bias toward ANGLED / DEFENSIVE_SPIRAL (flank, harass)
+##   middling         → existing skill-based logic
+static func _select_approach_style(skill: float, position_advantage: String, aggression: float = 0.5) -> int:
+	# LOW SKILL (< 0.4): Always direct approach — rookies don't think in angles
 	if skill < WingConstants.PILOT_APPROACH_ANGLE_SKILL:
 		return ApproachStyle.DIRECT
 
-	# MEDIUM SKILL (0.4-0.6): Basic angle awareness
+	# AGGRESSION DOCTRINE (applies once skill is high enough to choose). High
+	# aggression overrides "circle for advantage" thinking; low aggression
+	# overrides "press the kill" thinking.
+	if aggression >= WingConstants.LEAD_DOCTRINE_RUSH_AGGRESSION:
+		# Hot pilot — commits to the merge regardless of position
+		if position_advantage == "disadvantaged" and skill >= WingConstants.PILOT_DEFENSIVE_MANEUVER_SKILL:
+			return ApproachStyle.DEFENSIVE_SPIRAL  # even rushers break when bounced
+		return ApproachStyle.DIRECT
+	if aggression <= WingConstants.LEAD_DOCTRINE_FLANK_AGGRESSION:
+		# Cautious pilot — never rushes; favors angles and breakaways
+		if position_advantage == "disadvantaged":
+			return ApproachStyle.DEFENSIVE_SPIRAL if skill >= WingConstants.PILOT_DEFENSIVE_MANEUVER_SKILL else ApproachStyle.ANGLED
+		if position_advantage == "behind" and skill >= WingConstants.PILOT_PURSUIT_CURVE_SKILL:
+			return ApproachStyle.ATTACK_RUN  # behind is too good to refuse
+		return ApproachStyle.ANGLED
+
+	# MEDIUM SKILL (0.4-0.6) at moderate aggression: basic angle awareness
 	if skill < WingConstants.PILOT_PURSUIT_CURVE_SKILL:
 		if position_advantage == "behind":
 			return ApproachStyle.DIRECT  # Have advantage, go straight in
 		else:
-			return ApproachStyle.ANGLED  # Try basic angle approach
+			return ApproachStyle.ANGLED
 
-	# HIGH SKILL (0.6+): Full tactical approach selection
+	# HIGH SKILL (0.6+) at moderate aggression: full tactical selection
 	if position_advantage == "disadvantaged":
-		# Enemy is behind us - need to break and reposition
 		if skill >= WingConstants.PILOT_DEFENSIVE_MANEUVER_SKILL:
 			return ApproachStyle.DEFENSIVE_SPIRAL
-		else:
-			return ApproachStyle.ANGLED  # Best we can do at this skill
+		return ApproachStyle.ANGLED
 	elif position_advantage == "behind":
-		# We have advantage - press it
 		return ApproachStyle.ATTACK_RUN
 	else:
-		# Neutral - use pursuit curves to gain advantage
 		return ApproachStyle.PURSUIT_CURVE
 
 ## Calculate jink parameters based on skill

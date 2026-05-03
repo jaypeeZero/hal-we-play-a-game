@@ -762,3 +762,194 @@ func test_rookie_leads_still_fixate_no_deconfliction():
 
 	# Rookie ignores deconfliction — closer target wins on raw distance
 	assert_gt(score_a, score_b, "Rookie should pick closer enemy regardless of friendly engagement")
+
+# ============================================================================
+# WING SIZE — wings can now hold a full squadron (1 lead + 5 wingmen)
+# ============================================================================
+
+func _make_wing_crew_with_skill(crew_id: String, ship_id: String, skill: float) -> Dictionary:
+	var crew = create_pilot_crew(crew_id, ship_id)
+	crew.stats.skill = skill
+	crew.assigned_to = ship_id
+	return crew
+
+func test_wing_can_grow_to_six_ships():
+	# BEHAVIOR: A six-pack squadron spawned together must be able to form
+	# under a single lead, not get split into pair + pair + pair.
+	var ships = []
+	var crew = []
+	for i in range(6):
+		var s = create_fighter_ship("ship_%d" % i, Vector2(i * 50.0, 0), 0)
+		ships.append(s)
+		# Vary skill so the highest becomes lead
+		crew.append(_make_wing_crew_with_skill("c_%d" % i, "ship_%d" % i, 0.9 - i * 0.1))
+
+	var wings = WingFormationSystem.form_wings(ships, crew, [])
+	assert_eq(wings.size(), 1, "Six fighters in proximity should form one wing, not multiple")
+	assert_eq(wings[0].wingmen.size(), 5, "Wing should have 5 wingmen under one lead")
+	assert_eq(wings[0].wing_type, "six", "Wing type should be 'six' for a 6-ship wing")
+
+func test_wingmen_get_distinct_slot_ranks():
+	# BEHAVIOR: Multiple wingmen on the same side need distinct slot_ranks
+	# so calculate_wing_position fans them out instead of stacking.
+	var ships = []
+	var crew = []
+	for i in range(6):
+		ships.append(create_fighter_ship("s_%d" % i, Vector2(i * 50.0, 0), 0))
+		crew.append(_make_wing_crew_with_skill("c_%d" % i, "s_%d" % i, 0.9 - i * 0.1))
+
+	var wings = WingFormationSystem.form_wings(ships, crew, [])
+	var wingmen = wings[0].wingmen
+	# All slot_ranks within a side should be distinct so wingmen fan out.
+	var ranks_right := {}
+	var ranks_left := {}
+	var right_count := 0
+	var left_count := 0
+	for w in wingmen:
+		if w.position_side == 1:
+			ranks_right[w.slot_rank] = true
+			right_count += 1
+		else:
+			ranks_left[w.slot_rank] = true
+			left_count += 1
+	assert_eq(ranks_right.size(), right_count, "All right-side slot_ranks must be unique")
+	assert_eq(ranks_left.size(), left_count, "All left-side slot_ranks must be unique")
+
+# ============================================================================
+# SURVIVAL OVERLAY — "stay alive" overrides everything when desperate
+# ============================================================================
+
+func _set_armor(ship: Dictionary, ratio: float) -> Dictionary:
+	# Replace armor sections with a single section at the given health ratio
+	ship["armor_sections"] = [{
+		"section_id": "front",
+		"current_armor": 100.0 * ratio,
+		"max_armor": 100.0,
+		"arc": {"start": -90, "end": 90}
+	}]
+	return ship
+
+func _set_aggression(crew: Dictionary, value: float) -> Dictionary:
+	crew.stats["skills"] = crew.stats.get("skills", {})
+	crew.stats.skills["aggression"] = value
+	return crew
+
+func test_critical_hull_triggers_retreat():
+	# BEHAVIOR: A heavily damaged fighter should bug out instead of engaging,
+	# regardless of who else is around.
+	var ship = create_fighter_ship("me", Vector2(0, 0), 0)
+	ship = _set_armor(ship, 0.10)  # 10% armor — clearly critical
+	var crew = create_pilot_crew("pilot_me", "me")
+	crew = _set_aggression(crew, 0.3)  # cautious
+
+	var enemy = create_fighter_ship("enemy", Vector2(800, 0), 1)
+
+	var mode = FighterPilotAI._assess_survival_state(crew, ship, [ship, enemy])
+	assert_eq(mode, "retreat", "Critically damaged fighter should retreat")
+
+func test_aggressive_pilot_tolerates_more_damage_than_timid():
+	# BEHAVIOR: Aggression dial — heroic pilots fight on through hits that
+	# make a timid pilot break off.
+	var ship = create_fighter_ship("me", Vector2(0, 0), 0)
+	ship = _set_armor(ship, 0.20)  # mid-band: depends on aggression
+	var enemy = create_fighter_ship("enemy", Vector2(800, 0), 1)
+
+	var aggressive = create_pilot_crew("hero", "me")
+	aggressive = _set_aggression(aggressive, 1.0)
+	var timid = create_pilot_crew("rabbit", "me")
+	timid = _set_aggression(timid, 0.0)
+
+	var hero_mode = FighterPilotAI._assess_survival_state(aggressive, ship, [ship, enemy])
+	var rabbit_mode = FighterPilotAI._assess_survival_state(timid, ship, [ship, enemy])
+
+	assert_eq(hero_mode, "", "Aggressive pilot should still fight at 20% armor")
+	assert_eq(rabbit_mode, "retreat", "Timid pilot should retreat at 20% armor")
+
+func test_outnumbered_isolated_pilot_evades():
+	# BEHAVIOR: Three enemies in range and zero friendly support → evade.
+	var me = create_fighter_ship("me", Vector2(0, 0), 0)
+	var crew = create_pilot_crew("p", "me")
+	crew = _set_aggression(crew, 0.4)
+	var enemies = [
+		create_fighter_ship("e1", Vector2(800, 0), 1),
+		create_fighter_ship("e2", Vector2(0, 800), 1),
+		create_fighter_ship("e3", Vector2(-800, 0), 1)
+	]
+
+	var ships = [me] + enemies
+	var mode = FighterPilotAI._assess_survival_state(crew, me, ships)
+	assert_eq(mode, "evade", "Pilot facing 3 enemies with no support should evade")
+
+func test_engaged_with_support_does_not_evade():
+	# BEHAVIOR: 2 friends + 2 enemies in mutual range — solid odds, hold the line.
+	var me = create_fighter_ship("me", Vector2(0, 0), 0)
+	var crew = create_pilot_crew("p", "me")
+	crew = _set_aggression(crew, 0.5)
+	var ships = [
+		me,
+		create_fighter_ship("f1", Vector2(500, 0), 0),  # friendly
+		create_fighter_ship("f2", Vector2(0, 500), 0),  # friendly
+		create_fighter_ship("e1", Vector2(800, 0), 1),
+		create_fighter_ship("e2", Vector2(0, 800), 1)
+	]
+
+	var mode = FighterPilotAI._assess_survival_state(crew, me, ships)
+	assert_eq(mode, "", "Even odds with support — engage normally")
+
+# ============================================================================
+# DOCTRINE DIVERSITY — same skill, different aggression → different approach
+# ============================================================================
+
+func test_aggressive_lead_rushes_head_on():
+	# BEHAVIOR: A skilled lead with high aggression should pick DIRECT
+	# (commit head-on), even when a less aggressive same-skill lead would
+	# pick a tactical curve.
+	var style_aggressive = FighterPilotAI._select_approach_style(0.7, "neutral", 0.9)
+	var style_balanced = FighterPilotAI._select_approach_style(0.7, "neutral", 0.5)
+	assert_eq(style_aggressive, FighterPilotAI.ApproachStyle.DIRECT,
+		"High aggression at high skill should commit to direct attack")
+	assert_ne(style_balanced, FighterPilotAI.ApproachStyle.DIRECT,
+		"Balanced aggression at the same skill should NOT pick DIRECT")
+
+func test_cautious_lead_flanks_instead_of_charging():
+	# BEHAVIOR: Low aggression at the same skill picks ANGLED — flanks
+	# rather than charging head-on. This is what gives 6v6 a mix of charging
+	# and flanking wings.
+	var style_cautious = FighterPilotAI._select_approach_style(0.5, "neutral", 0.1)
+	assert_eq(style_cautious, FighterPilotAI.ApproachStyle.ANGLED,
+		"Cautious lead should approach from an angle, not directly")
+
+# ============================================================================
+# SQUADRON COMMAND BIAS — squadron leader's focus pulls wings toward it
+# ============================================================================
+
+func test_squadron_focus_target_gets_score_bonus():
+	# BEHAVIOR: When my squadron's leader has a designated target, that
+	# target should score higher than an equivalent alternative — but the
+	# bonus should NOT override deconfliction (a target with several engagers
+	# already on it still gets dropped).
+	var enemy_focus = create_fighter_ship("focus", Vector2(1000, 0), 1)
+	var enemy_other = create_fighter_ship("other", Vector2(1000, 100), 1)
+
+	# Squadron leader (commander), targeting "focus"
+	var commander = _make_wing_crew_with_skill("cmdr", "ship_cmdr", 0.8)
+	commander["command_chain"] = {"superior": ""}  # no superior — top of chain
+	commander = _set_engaging(commander, "focus")
+
+	# A wing lead in the same squadron, scoring targets
+	var wing_lead = _make_wing_crew_with_skill("wlead", "ship_wlead", 0.7)
+	wing_lead["command_chain"] = {"superior": "cmdr"}
+
+	var ship_wlead = create_fighter_ship("ship_wlead", Vector2(0, 0), 0)
+
+	var ships = [ship_wlead, enemy_focus, enemy_other]
+	var crews = [commander, wing_lead]
+	var score_focus = FighterPilotAI._calculate_target_score(wing_lead, enemy_focus, ships, crews)
+	var score_other = FighterPilotAI._calculate_target_score(wing_lead, enemy_other, ships, crews)
+
+	# Without command bias, the two enemies are basically tied (same distance).
+	# WITH command bias, focus should win (commander has tagged it).
+	# But commander is also engaging focus so deconfliction subtracts; the
+	# squadron bonus must be larger than that single-engager penalty so the
+	# overall effect is "follow the commander's call."
+	assert_gt(score_focus, score_other, "Squadron commander's target should win on equal alternatives")
