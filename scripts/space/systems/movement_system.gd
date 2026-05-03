@@ -374,7 +374,7 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 static func calculate_pursue_full_speed(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
-	var desired_heading = direction_to_heading(to_target)
+	var desired_heading = apply_pass_by_offset(ship_data, target, direction_to_heading(to_target))
 
 	# DART AND DASH: Check if we need to brake and change direction
 	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
@@ -1552,11 +1552,15 @@ static func calculate_skill_aware_approach(ship_data: Dictionary, target: Dictio
 			return calculate_direct_approach(ship_data, target)
 
 ## DIRECT APPROACH - Low skill pilots fly straight at target
-## No lateral movement, no prediction, no angles - just point and burn
+## No lateral movement, no prediction, no angles - just point and burn.
+## Pass-by offset still applies even to "direct" approaches — even the
+## sloppiest pilot doesn't fly straight into another ship's nose at full
+## throttle. Without this, two head-on direct approaches converge to a
+## perfect collision on every first pass.
 static func calculate_direct_approach(ship_data: Dictionary, target: Dictionary) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
-	var desired_heading = direction_to_heading(to_target)
+	var desired_heading = apply_pass_by_offset(ship_data, target, direction_to_heading(to_target))
 
 	# Low skill pilots don't brake and adjust - they commit and hope
 	# Only brake if going WAY too fast
@@ -1593,9 +1597,11 @@ static func calculate_angled_approach(ship_data: Dictionary, target: Dictionary,
 	var ship_id = ship_data.get("ship_id", "")
 	var approach_side = 1 if hash(ship_id) % 2 == 0 else -1
 
-	# Offset the approach direction
+	# Offset the approach direction (skill-based bias toward one side)
 	var offset_direction = to_target.rotated(offset_angle * approach_side).normalized()
-	var desired_heading = direction_to_heading(offset_direction)
+	# Layer in pass-by deflection on top — keeps pilots from merging head-on
+	# even if their angled bias happens to point them at the enemy.
+	var desired_heading = apply_pass_by_offset(ship_data, target, direction_to_heading(offset_direction))
 
 	# DART AND DASH check
 	var needs_brake = check_needs_braking(ship_data, desired_heading)
@@ -1630,7 +1636,8 @@ static func calculate_pursuit_curve(ship_data: Dictionary, target: Dictionary, s
 	var predicted_pos = target.position + target_velocity * prediction_time
 	var to_predicted = predicted_pos - ship_data.position
 
-	var desired_heading = direction_to_heading(to_predicted)
+	# Pass-by offset prevents head-on merges even on a lead-pursuit aim point
+	var desired_heading = apply_pass_by_offset(ship_data, target, direction_to_heading(to_predicted))
 
 	# DART AND DASH check
 	var needs_brake = check_needs_braking(ship_data, desired_heading)
@@ -1743,6 +1750,58 @@ static func calculate_attack_run(ship_data: Dictionary, target: Dictionary, skil
 		"engagement_range": 350.0,
 		"current_distance": distance
 	}
+
+## PASS-BY OFFSET — fighters never fly into an opponent's nose at high
+## closure speed. Real pilots offset 15-30° to one side so they pass the
+## enemy and live to bracket around for a second pass. Without this,
+## both AI fighters compute desired_heading = direction_to_target and
+## converge into a perfect head-on collision on every merge.
+##
+## Returns an offset heading. Side is stable per ship_id (one fighter
+## habitually breaks right, another habitually breaks left), preventing
+## flip-flop and producing personality.
+const PASS_BY_RANGE = 1500.0           # Within this range, deflection ramps in
+const PASS_BY_HEAD_ON_THRESHOLD = 0.85 # cos(~32°) — closer than this is "head-on"
+const PASS_BY_MIN_CLOSING_SPEED_RATIO = 0.4  # Of max_speed — only deflect when committed
+const PASS_BY_MIN_OFFSET = 0.10        # ~6° at edge of range
+const PASS_BY_MAX_OFFSET = 0.50        # ~29° at point-blank
+
+static func apply_pass_by_offset(ship_data: Dictionary, target: Dictionary, desired_heading: float) -> float:
+	var to_target: Vector2 = target.position - ship_data.position
+	var distance: float = to_target.length()
+	if distance < 1.0 or distance > PASS_BY_RANGE:
+		return desired_heading
+
+	var to_target_dir: Vector2 = to_target / distance
+	var relative_velocity: Vector2 = ship_data.get("velocity", Vector2.ZERO) - target.get("velocity", Vector2.ZERO)
+	var rel_speed: float = relative_velocity.length()
+	if rel_speed < 1.0:
+		return desired_heading
+
+	# Closing speed (component of relative velocity along the LOS)
+	var closing_speed: float = relative_velocity.dot(to_target_dir)
+	var max_speed: float = ship_data.stats.get("max_speed", 300.0)
+	if closing_speed < max_speed * PASS_BY_MIN_CLOSING_SPEED_RATIO:
+		return desired_heading
+
+	# How head-on is the merge? 1.0 = perfectly nose-to-nose
+	var head_on_factor: float = relative_velocity.dot(to_target_dir) / rel_speed
+	if head_on_factor < PASS_BY_HEAD_ON_THRESHOLD:
+		return desired_heading
+
+	# Stable, SYMMETRIC side selection — both ships in a merge must agree to
+	# offset to the same world-space side (their right vs. each other's right
+	# point opposite in space, so they pass cleanly like cars on a road).
+	# Use a sorted-ID hash so both ships compute the same key.
+	var ship_id: String = ship_data.get("ship_id", "")
+	var target_id: String = target.get("ship_id", "")
+	var pair_key: String = ship_id + "|" + target_id if ship_id < target_id else target_id + "|" + ship_id
+	var side: float = 1.0 if hash(pair_key) % 2 == 0 else -1.0
+
+	# Offset grows as we close (more committed merge = more deflection)
+	var proximity: float = clamp(1.0 - distance / PASS_BY_RANGE, 0.0, 1.0)
+	var offset_angle: float = lerp(PASS_BY_MIN_OFFSET, PASS_BY_MAX_OFFSET, proximity) * side
+	return desired_heading + offset_angle
 
 ## DART AND DASH HELPERS - Make fighters fly with sharp movements, not sliding
 
@@ -2017,11 +2076,26 @@ static func calculate_safe_approach_throttle(
 ## Apply realistic space physics - ships drift, thrust provides acceleration
 ## Now supports continuous throttle (0.0-1.0) for precise speed control
 static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary, delta: float) -> Dictionary:
+	# SPEED-DEPENDENT TURN RATE (WW2 dogfight model): a fighter pivots
+	# sharply at low speed but only sluggishly at top speed — its turn
+	# radius widens with airspeed. This is the core dogfight tradeoff:
+	# slow down to out-turn the enemy and you give up closure rate; stay
+	# fast and you commit to flying past. Emergent behavior: boom-and-zoom
+	# passes, turn fights at low speed, real meaning to "getting on
+	# someone's six". Configured per ship via `turn_rate_falloff`
+	# (0.0 = constant turn rate; 1.0 = freezes at top speed).
+	var speed_ratio: float = 0.0
+	var max_speed: float = ship_data.stats.max_speed
+	if max_speed > 0.0:
+		speed_ratio = clamp(ship_data.velocity.length() / max_speed, 0.0, 1.0)
+	var turn_falloff: float = ship_data.stats.get("turn_rate_falloff", 0.0)
+	var effective_turn_rate: float = ship_data.stats.turn_rate * (1.0 - turn_falloff * speed_ratio)
+
 	# Rotate ship toward desired heading
 	var new_rotation = rotate_toward_heading(
 		ship_data.rotation,
 		pilot_control.desired_heading,
-		ship_data.stats.turn_rate,
+		effective_turn_rate,
 		delta
 	)
 

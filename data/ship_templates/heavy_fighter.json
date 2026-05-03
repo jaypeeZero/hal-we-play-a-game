@@ -74,7 +74,8 @@
 		"mass": 80.0,
 		"max_speed": 200.0,
 		"size": 25.0,
-		"turn_rate": 3.0
+		"turn_rate": 2.7,
+		"turn_rate_falloff": 0.65
 	},
 	"status": "operational",
 	"team": 0,

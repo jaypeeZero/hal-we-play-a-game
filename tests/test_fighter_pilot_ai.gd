@@ -541,3 +541,133 @@ func test_inertial_dampening_does_not_reverse_velocity():
 
 	# At this rate the drift would mathematically reverse — but it must clamp to 0
 	assert_almost_eq(result.velocity.x, 0.0, 0.01, "Dampening should clamp to 0, never reverse")
+
+# ============================================================================
+# SPEED-DEPENDENT TURN RATE — turn radius widens with airspeed (WW2 dogfight)
+# ============================================================================
+
+func test_turn_rate_falloff_slows_rotation_at_high_speed():
+	# BEHAVIOR: A fighter at top speed must turn slower than the same fighter
+	# at low speed. This creates turn radius and prevents instant aim snapping.
+	var fast_ship = create_fighter_ship("ship_fast", Vector2(0, 0), 0)
+	fast_ship.rotation = 0.0  # facing up
+	fast_ship.stats.turn_rate = 4.0
+	fast_ship.stats.turn_rate_falloff = 0.75
+	fast_ship.stats.max_speed = 300.0
+	fast_ship.velocity = Vector2(300, 0)  # at top speed
+
+	var slow_ship = create_fighter_ship("ship_slow", Vector2(0, 0), 0)
+	slow_ship.rotation = 0.0
+	slow_ship.stats.turn_rate = 4.0
+	slow_ship.stats.turn_rate_falloff = 0.75
+	slow_ship.stats.max_speed = 300.0
+	slow_ship.velocity = Vector2(0, 0)  # stopped
+
+	# Both want to turn 90° to the right (target heading = PI/2)
+	var pilot_control = {"desired_heading": PI / 2.0, "throttle": 0.0}
+
+	var fast_result = MovementSystem.apply_space_physics(fast_ship, pilot_control, 0.1)
+	var slow_result = MovementSystem.apply_space_physics(slow_ship, pilot_control, 0.1)
+
+	var fast_turn = abs(fast_result.rotation - 0.0)
+	var slow_turn = abs(slow_result.rotation - 0.0)
+
+	assert_lt(fast_turn, slow_turn, "Fast ship must turn less than slow ship per frame")
+	# Slow at full 4.0 rad/s for 0.1s → 0.4 rad. Fast at 1.0 rad/s for 0.1s → 0.1 rad.
+	assert_almost_eq(slow_turn, 0.4, 0.01, "At zero speed, full turn rate should apply")
+	assert_almost_eq(fast_turn, 0.1, 0.01, "At top speed, falloff should reduce turn rate to 25%")
+
+func test_turn_rate_falloff_zero_means_constant_turn_rate():
+	# BEHAVIOR: Ships without turn_rate_falloff (capital, default) keep
+	# constant turn rate at all speeds. Backward compatibility.
+	var ship = create_fighter_ship("ship", Vector2(0, 0), 0)
+	ship.rotation = 0.0
+	ship.stats.turn_rate = 2.0
+	ship.stats.max_speed = 100.0
+	ship.velocity = Vector2(100, 0)  # at max speed
+
+	var pilot_control = {"desired_heading": PI, "throttle": 0.0}
+	var result = MovementSystem.apply_space_physics(ship, pilot_control, 0.1)
+
+	# Without falloff stat, turn at full rate: 2.0 * 0.1 = 0.2 rad
+	assert_almost_eq(abs(result.rotation - 0.0), 0.2, 0.01, "No falloff stat -> constant turn rate")
+
+# ============================================================================
+# PASS-BY OFFSET — fighters never fly straight into a head-on collision
+# ============================================================================
+
+func test_pass_by_offset_deflects_head_on_approach():
+	# BEHAVIOR: A fighter closing fast head-on must aim slightly off-center,
+	# not at the target's nose. Otherwise both AIs converge into a collision.
+	var ship = create_fighter_ship("ship1", Vector2(0, 0), 0)
+	ship.rotation = 0.0  # facing up (Y-)
+	ship.velocity = Vector2(0, -300)  # closing fast on target above? wait, target below
+	ship.stats.max_speed = 300.0
+
+	var target = create_fighter_ship("ship2", Vector2(0, -800), 1)
+	target.velocity = Vector2(0, 300)  # target rushing at us
+
+	# Direct heading would point straight at target
+	var direct_heading = MovementSystem.direction_to_heading(target.position - ship.position)
+	var offset_heading = MovementSystem.apply_pass_by_offset(ship, target, direct_heading)
+
+	assert_ne(offset_heading, direct_heading, "Head-on closing should produce a deflected heading")
+
+func test_pass_by_offset_no_deflection_when_far_away():
+	# BEHAVIOR: At long range, no deflection — ship aims for target normally.
+	# Only kicks in within PASS_BY_RANGE.
+	var ship = create_fighter_ship("ship1", Vector2(0, 0), 0)
+	ship.velocity = Vector2(0, -300)
+	ship.stats.max_speed = 300.0
+
+	var target = create_fighter_ship("ship2", Vector2(0, -5000), 1)
+	target.velocity = Vector2(0, 300)
+
+	var direct_heading = MovementSystem.direction_to_heading(target.position - ship.position)
+	var offset_heading = MovementSystem.apply_pass_by_offset(ship, target, direct_heading)
+
+	assert_eq(offset_heading, direct_heading, "Outside pass-by range, no deflection")
+
+func test_pass_by_offset_no_deflection_when_not_closing():
+	# BEHAVIOR: If the ship isn't closing fast (e.g. orbiting at combat range),
+	# don't deflect — only the high-speed merge case needs it.
+	var ship = create_fighter_ship("ship1", Vector2(0, 0), 0)
+	ship.velocity = Vector2(50, 0)  # moving sideways, not closing
+	ship.stats.max_speed = 300.0
+
+	var target = create_fighter_ship("ship2", Vector2(0, -800), 1)
+	target.velocity = Vector2(0, 0)
+
+	var direct_heading = MovementSystem.direction_to_heading(target.position - ship.position)
+	var offset_heading = MovementSystem.apply_pass_by_offset(ship, target, direct_heading)
+
+	assert_eq(offset_heading, direct_heading, "Not closing fast -> no deflection")
+
+func test_pass_by_offset_pair_picks_consistent_side():
+	# BEHAVIOR: Both ships in a merge must pick the SAME world-space side so
+	# they pass each other instead of converging. Symmetric hash key over the
+	# ship-id pair guarantees agreement.
+	var ship_a = create_fighter_ship("alpha", Vector2(0, 0), 0)
+	ship_a.velocity = Vector2(0, -300)
+	ship_a.stats.max_speed = 300.0
+
+	var ship_b = create_fighter_ship("beta", Vector2(0, -800), 1)
+	ship_b.velocity = Vector2(0, 300)
+	ship_b.stats.max_speed = 300.0
+
+	# A's direct heading toward B
+	var a_direct = MovementSystem.direction_to_heading(ship_b.position - ship_a.position)
+	var a_offset = MovementSystem.apply_pass_by_offset(ship_a, ship_b, a_direct)
+	var a_deflection = a_offset - a_direct  # signed angle
+
+	# B's direct heading toward A
+	var b_direct = MovementSystem.direction_to_heading(ship_a.position - ship_b.position)
+	var b_offset = MovementSystem.apply_pass_by_offset(ship_b, ship_a, b_direct)
+	var b_deflection = b_offset - b_direct
+
+	# Symmetric pair-key hash means both ships compute the same `side` and
+	# apply the same LOS-frame deflection. Because they face opposite
+	# directions, equal LOS deflections produce opposite world-space
+	# motions — the pair diverges and passes cleanly instead of colliding.
+	assert_almost_eq(a_deflection, b_deflection, 0.001,
+		"Both ships in a pair must pick the same LOS-frame side via symmetric hash")
