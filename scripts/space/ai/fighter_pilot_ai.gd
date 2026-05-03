@@ -34,6 +34,37 @@ const FORMATION_SPACING = 80.0  # Distance to maintain from wingmates
 const BEHIND_ANGLE_TOLERANCE = 20.0  # Degrees - "behind" the enemy
 const COLLISION_DETECTION_RANGE = 2000.0
 
+## ENGAGEMENT-CYCLE FSM — emulates the hit-and-run rhythm of real dogfights.
+## A pilot does NOT stay locked on a target; they make a firing pass, extend
+## out, swing around, and re-engage from a new angle. Without this, fighters
+## just grind on each other in place.
+##
+## Phases:
+##   approach     — closing, target not yet in firing zone (default)
+##   firing_pass  — target in arc + range; face & shoot
+##   extending    — pass over: break briefly to re-cock the engagement
+##   repositioning— turn back toward target for the next pass
+##
+## Aggression modulates timing so pilots have rhythm:
+##   aggressive pilots stay on the trigger longer, extend less
+##   cautious pilots break early, extend wider
+const ENGAGE_FIRE_RANGE = 1800.0          # Within this, firing pass is viable
+const ENGAGE_OVERSHOOT_RANGE = 350.0      # If we get this close, force break
+const ENGAGE_ARC_DOT = 0.78               # cos(~39°) — "in my engagement zone"
+const ENGAGE_FACING_DOT = 0.5             # cos(60°) — "I'm pointed back at target"
+const ENGAGE_FIRING_PASS_BASE_DURATION = 2.5
+const ENGAGE_EXTEND_BASE_DURATION = 1.4
+const ENGAGE_EXTEND_DISTANCE = 1300.0
+const ENGAGE_REPOSITION_TIMEOUT = 4.0
+const ENGAGE_AGGRESSION_TIMING_SPREAD = 1.5  # x at agg=1.0, /x at agg=0.0
+
+## TACTICAL BREAK — interrupt that fires regardless of phase.
+## If an enemy has me in their close-range firing arc (i.e. they're behind me
+## with their nose on my back), break sharply. This is the "stay out of enemy
+## firing arcs" priority.
+const TACTICAL_BREAK_RANGE = 700.0
+const TACTICAL_BREAK_ARC_DOT = 0.85       # cos(~32°) — they have me in arc
+
 ## Approach style enum for skill-based maneuvering
 enum ApproachStyle {
 	DIRECT,            # Fly straight at target (low skill)
@@ -276,19 +307,36 @@ static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wi
 
 	return decision
 
-## Find best target for the wing - Lead's skill affects selection quality
+## Find best target for the wing - Lead's skill affects selection quality.
+##
+## ENGAGEMENT COMMITMENT — once a lead picks a target, they stick with it for
+## several seconds. Without this, every decision tick the scoring shifts (as
+## friendlies move and the deconfliction penalty changes), the lead picks a
+## different "best" target, and the engagement-cycle FSM keeps resetting to
+## the approach phase. Pilots end up grinding on whatever's closest forever.
+##
+## Aggression scales the lock duration so personalities show: aggressive
+## pilots commit longer to a kill, cautious ones reassess sooner.
 static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, all_ships: Array, all_crew: Array) -> String:
 	var skill = crew_data.get("stats", {}).get("skill", 0.5)
 	var situational_awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", skill)
 	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", skill)
+	var combat_state: Dictionary = crew_data.get("combat_state", {})
 
 	var awareness = crew_data.get("awareness", {})
 	var threats = awareness.get("threats", [])
 	var opportunities = awareness.get("opportunities", [])
 
-	# Low skill lead: Target fixation (stick with current target even if bad)
+	# Engagement commitment — keep the locked target unless it's invalid.
+	# Lock expiry is implicit: cleared when the locked ship dies or escapes.
+	var locked_target: String = combat_state.get("locked_target_id", "")
+	var locked_until: float = combat_state.get("target_locked_until", 0.0)
+	var current_game_time: float = Time.get_ticks_msec() / 1000.0
+	if locked_target != "" and _is_ship_valid(locked_target, all_ships) and current_game_time < locked_until:
+		return locked_target
+	# Low skill lead: extreme target fixation (stick with current target even
+	# if "stale") — they don't reassess at all once committed.
 	if skill < WingConstants.LEAD_TARGET_FIXATION_SKILL:
-		var locked_target = crew_data.get("combat_state", {}).get("locked_target_id", "")
 		if locked_target != "" and _is_ship_valid(locked_target, all_ships):
 			return locked_target
 
@@ -312,18 +360,23 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 
 	# High skill lead: Pick best target
 	# Low skill lead: Pick somewhat randomly (poor assessment)
+	var picked: String = ""
 	if skill >= WingConstants.LEAD_PICK_BEST_SKILL:
-		# Sort by score, pick best
 		targets_with_scores.sort_custom(func(a, b): return a.score > b.score)
-		return targets_with_scores[0].id
+		picked = targets_with_scores[0].id
 	elif skill >= WingConstants.LEAD_PICK_TOP_THREE_SKILL:
-		# Pick from top 3
 		targets_with_scores.sort_custom(func(a, b): return a.score > b.score)
 		var max_idx = mini(3, targets_with_scores.size())
-		return targets_with_scores[randi() % max_idx].id
+		picked = targets_with_scores[randi() % max_idx].id
 	else:
-		# Low skill: Random target (poor assessment)
-		return targets_with_scores[randi() % targets_with_scores.size()].id
+		picked = targets_with_scores[randi() % targets_with_scores.size()].id
+
+	# Lock the newly picked target — duration scales with aggression.
+	if picked != "":
+		var lock_duration: float = lerp(4.0, 8.0, aggression)
+		combat_state["locked_target_id"] = picked
+		combat_state["target_locked_until"] = current_game_time + lock_duration
+	return picked
 
 ## Calculate target score based on lead's skills
 static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array) -> float:
@@ -443,8 +496,60 @@ static func _make_wingman_decision(crew_data: Dictionary, ship_data: Dictionary,
 	if target_ship.is_empty():
 		return _make_wing_follow_decision(crew_data, ship_data, lead_ship, position_side, slot_rank, skill, "", game_time)
 
-	# Engage Lead's target while maintaining formation
+	# WING-LEVEL ENGAGEMENT CYCLE — wingmen follow the lead's phase so the
+	# whole wing makes a firing pass, extends, repositions, and re-engages
+	# together. Without this, only the lead cycles while the wingmen grind
+	# on the target indefinitely.
+	var lead_phase: String = _get_lead_engagement_phase(wing, all_crew)
+	if lead_phase == "extending":
+		# Break with the lead — extend away from the engagement
+		return _make_wing_extend_decision(crew_data, ship_data, target_ship, lead_ship, skill, game_time)
+	if lead_phase == "repositioning":
+		# Turn back toward target with the lead
+		return _make_wing_reposition_decision(crew_data, ship_data, target_ship, lead_ship, skill, game_time)
+
+	# Default: engage the lead's target while maintaining formation
 	return _make_wing_engage_decision(crew_data, ship_data, lead_ship, target_ship, position_side, slot_rank, skill, lead_maneuver, game_time)
+
+## Read the lead's current engagement phase so the wing can fly the cycle as a unit.
+static func _get_lead_engagement_phase(wing: Dictionary, all_crew: Array) -> String:
+	var lead_crew_id: String = wing.get("lead_crew_id", "")
+	if lead_crew_id == "":
+		return "approach"
+	for crew in all_crew:
+		if crew.get("crew_id", "") == lead_crew_id:
+			return crew.get("combat_state", {}).get("engagement_phase", "approach")
+	return "approach"
+
+## Wingman follows the lead through the EXTEND phase — break briefly from the target.
+static func _make_wing_extend_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, lead_ship: Dictionary, skill: float, game_time: float) -> Dictionary:
+	return {
+		"type": "maneuver",
+		"subtype": "fight_evasive_retreat",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": target_ship.get("ship_id", ""),
+		"lead_ship_id": lead_ship.get("ship_id", ""),
+		"skill_factor": skill,
+		"delay": 0.3,
+		"timestamp": game_time,
+		"is_wingman": true
+	}
+
+## Wingman follows the lead through the REPOSITION phase — turn back to re-engage.
+static func _make_wing_reposition_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, lead_ship: Dictionary, skill: float, game_time: float) -> Dictionary:
+	return {
+		"type": "maneuver",
+		"subtype": "fight_pursue_tactical",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": target_ship.get("ship_id", ""),
+		"lead_ship_id": lead_ship.get("ship_id", ""),
+		"skill_factor": skill,
+		"delay": 0.3,
+		"timestamp": game_time,
+		"is_wingman": true
+	}
 
 ## Wingman rejoins Lead when out of formation
 static func _make_wing_rejoin_decision(crew_data: Dictionary, ship_data: Dictionary, lead_ship: Dictionary, position_side: int, slot_rank: int, skill: float, game_time: float) -> Dictionary:
@@ -580,6 +685,25 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	# Fallback to basic pursuit if no knowledge match
 	if maneuver_type == "" or maneuver_type == "idle":
 		maneuver_type = "fight_pursue_full_speed"
+
+	# ENGAGEMENT-CYCLE OVERRIDE — drive the firing-pass / extend / reposition
+	# rhythm. The phase machine OVERRIDES the knowledge-driven maneuver pick
+	# during firing_pass / extending / repositioning so pilots actually break
+	# off and re-engage instead of grinding on a target.
+	#
+	# A tactical break (enemy on my six) takes priority over the cycle: drop
+	# everything and shake them off.
+	var phase_info: Dictionary = _step_engagement_phase(crew_data, ship_data, target_ship, game_time)
+	var phase: String = phase_info.phase
+	var threat_on_six: Dictionary = _check_threat_on_my_six(ship_data, all_ships)
+	if not threat_on_six.is_empty():
+		# Break sharply away from whoever's on my back; their ship_id becomes
+		# the target of the evasion maneuver so the maneuver knows who to dodge.
+		maneuver_type = "fight_defensive_break"
+	else:
+		var phase_maneuver: String = _phase_to_maneuver(phase)
+		if phase_maneuver != "":
+			maneuver_type = phase_maneuver
 
 	var target_id = target_ship.get("ship_id", "")
 
@@ -880,17 +1004,25 @@ static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String
 	var awareness = crew_data.get("awareness", {})
 	var threats = awareness.get("threats", [])
 	var opportunities = awareness.get("opportunities", [])
+	var combat_state: Dictionary = crew_data.get("combat_state", {})
 
 	# Get own ship to determine team
 	var ship_id = crew_data.get("assigned_to", "")
 	var own_ship = _get_ship_by_id(ship_id, all_ships)
 	var my_team = own_ship.get("team", -1)
 
-	# Rookie: stick with current target if valid and alive (target fixation)
-	if skill < 0.3:
-		var locked_target = crew_data.get("combat_state", {}).get("locked_target_id", "")
-		if locked_target != "" and _is_ship_valid(locked_target, all_ships):
-			return locked_target  # Tunnel vision - don't re-evaluate
+	# Engagement commitment: stick with our locked target while the lock is
+	# live and the target is still valid. Without this, the engagement-cycle
+	# FSM keeps resetting because awareness ranks keep shuffling.
+	var locked_target = combat_state.get("locked_target_id", "")
+	var locked_until: float = combat_state.get("target_locked_until", 0.0)
+	var current_time: float = Time.get_ticks_msec() / 1000.0
+	if locked_target != "" and _is_ship_valid(locked_target, all_ships) and current_time < locked_until:
+		return locked_target
+
+	# Rookie: extreme target fixation — stick even past lock expiry
+	if skill < 0.3 and locked_target != "" and _is_ship_valid(locked_target, all_ships):
+		return locked_target
 
 	# Normal target selection for average+ pilots
 	var selected_target = ""
@@ -927,9 +1059,15 @@ static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String
 				closest_distance = distance
 				selected_target = ship.get("ship_id", "")
 
-	# Lock in target for rookies (for next decision cycle)
-	if skill < 0.3 and selected_target != "":
-		crew_data.get("combat_state", {})["locked_target_id"] = selected_target
+	# Lock the chosen target so the engagement-cycle FSM has stable footing.
+	# Aggression scales lock duration so personalities show: aggressive pilots
+	# commit longer to a kill, cautious ones reassess sooner. Rookies always
+	# get the longest possible lock (tunnel vision).
+	if selected_target != "":
+		var aggression: float = crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)
+		var lock_duration: float = lerp(4.0, 8.0, aggression) if skill >= 0.3 else 12.0
+		combat_state["locked_target_id"] = selected_target
+		combat_state["target_locked_until"] = current_time + lock_duration
 
 	return selected_target
 
@@ -1205,6 +1343,151 @@ static func _find_closest_enemy_id(ship_data: Dictionary, all_ships: Array) -> S
 			best_d = d
 			best_id = ship.get("ship_id", "")
 	return best_id
+
+# ============================================================================
+# ENGAGEMENT-CYCLE FSM — pass / extend / reposition / re-engage
+# ============================================================================
+
+## Visual forward unit vector (matches MovementSystem.get_visual_forward)
+static func _ship_forward(ship: Dictionary) -> Vector2:
+	var rot: float = ship.get("rotation", 0.0)
+	return Vector2(sin(rot), -cos(rot))
+
+## Alignment of my nose with the line to the target (1.0 = pointed straight at it)
+static func _nose_to_target_dot(ship: Dictionary, target: Dictionary) -> float:
+	var to_target: Vector2 = target.get("position", Vector2.ZERO) - ship.get("position", Vector2.ZERO)
+	if to_target.length() < 1.0:
+		return 0.0
+	return _ship_forward(ship).dot(to_target.normalized())
+
+## Is there an enemy within close range whose nose is pointing at me? — i.e.
+## someone has me in their firing arc and is on my back. Used to interrupt the
+## current engagement and break before they line up a shot.
+static func _check_threat_on_my_six(ship_data: Dictionary, all_ships: Array) -> Dictionary:
+	var my_team: int = ship_data.get("team", -1)
+	var my_id: String = ship_data.get("ship_id", "")
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	for ship in all_ships:
+		if ship.get("ship_id", "") == my_id:
+			continue
+		if ship.get("status", "") != "operational":
+			continue
+		if ship.get("team", -1) == my_team:
+			continue
+		if not FleetDataManager.is_fighter_class(ship.get("type", "")):
+			continue
+		var d: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+		if d > TACTICAL_BREAK_RANGE or d < 1.0:
+			continue
+		# Are they pointed at me? Use _nose_to_target_dot from THEIR perspective.
+		if _nose_to_target_dot(ship, ship_data) >= TACTICAL_BREAK_ARC_DOT:
+			return ship  # found a threat
+	return {}
+
+## Compute the new engagement phase given the current one and tactical state.
+## Aggression spreads phase durations: hot pilots stay in firing_pass longer
+## and extend briefly; cool pilots break early and extend wider.
+static func _compute_engagement_phase(
+	current_phase: String,
+	phase_age: float,
+	ship_data: Dictionary,
+	target_ship: Dictionary,
+	aggression: float
+) -> String:
+	# Aggression-scaled duration multiplier (range ~0.66x..1.5x at 0..1)
+	var spread: float = ENGAGE_AGGRESSION_TIMING_SPREAD
+	var hot_factor: float = lerp(1.0 / spread, spread, aggression)        # firing_pass + reposition
+	var cold_factor: float = lerp(spread, 1.0 / spread, aggression)        # extend (timid extends longer)
+
+	var distance: float = ship_data.get("position", Vector2.ZERO).distance_to(
+		target_ship.get("position", Vector2.ZERO)
+	)
+	var nose_dot: float = _nose_to_target_dot(ship_data, target_ship)
+	var in_engagement_zone: bool = distance <= ENGAGE_FIRE_RANGE and nose_dot >= ENGAGE_ARC_DOT
+
+	match current_phase:
+		"firing_pass":
+			# End the pass when:
+			# * stayed too long (force commit to the cycle), OR
+			# * lost the angle (target slipped out of the front zone), OR
+			# * about to overshoot / collide
+			if phase_age > ENGAGE_FIRING_PASS_BASE_DURATION * hot_factor:
+				return "extending"
+			if not in_engagement_zone and phase_age > 0.4:
+				return "extending"
+			if distance < ENGAGE_OVERSHOOT_RANGE:
+				return "extending"
+			return "firing_pass"
+
+		"extending":
+			# Extend until time-up or we've opened to a useful repositioning distance.
+			if phase_age > ENGAGE_EXTEND_BASE_DURATION * cold_factor:
+				return "repositioning"
+			if distance > ENGAGE_EXTEND_DISTANCE:
+				return "repositioning"
+			return "extending"
+
+		"repositioning":
+			# Turn back to target. Done when nose is back on target, or timeout.
+			if nose_dot >= ENGAGE_FACING_DOT and phase_age > 0.3:
+				return "approach"
+			if phase_age > ENGAGE_REPOSITION_TIMEOUT * hot_factor:
+				return "approach"
+			return "repositioning"
+
+		_:  # "approach" or unknown
+			# Enter firing pass when target is in our zone at firing range
+			if in_engagement_zone:
+				return "firing_pass"
+			return "approach"
+
+## Update and read engagement phase. Mutates crew_data.combat_state in place
+## (same pattern as the existing rookie target lock).
+## Returns: { phase: String, phase_age: float }
+static func _step_engagement_phase(
+	crew_data: Dictionary,
+	ship_data: Dictionary,
+	target_ship: Dictionary,
+	game_time: float
+) -> Dictionary:
+	var combat_state: Dictionary = crew_data.get("combat_state", {})
+	var target_id: String = target_ship.get("ship_id", "")
+	var prev_target: String = combat_state.get("phase_target_id", "")
+	var phase: String = combat_state.get("engagement_phase", "approach")
+	var phase_started_at: float = combat_state.get("phase_started_at", game_time)
+
+	# New target → reset cycle
+	if target_id != prev_target:
+		phase = "approach"
+		phase_started_at = game_time
+
+	var aggression: float = crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)
+	var phase_age: float = max(0.0, game_time - phase_started_at)
+
+	var next_phase: String = _compute_engagement_phase(phase, phase_age, ship_data, target_ship, aggression)
+	if next_phase != phase:
+		phase_started_at = game_time
+		phase = next_phase
+
+	combat_state["engagement_phase"] = phase
+	combat_state["phase_started_at"] = phase_started_at
+	combat_state["phase_target_id"] = target_id
+
+	return {"phase": phase, "phase_age": max(0.0, game_time - phase_started_at)}
+
+## Map an engagement phase to a fighter maneuver subtype.
+## Approach delegates to the caller (returns "" so the existing skill/knowledge
+## flow can pick a specific approach style).
+static func _phase_to_maneuver(phase: String) -> String:
+	match phase:
+		"firing_pass":
+			return "fight_dogfight_maneuver"
+		"extending":
+			return "fight_evasive_retreat"
+		"repositioning":
+			return "fight_pursue_tactical"
+		_:
+			return ""
 
 # ============================================================================
 # SKILL-BASED APPROACH STYLE SELECTION
