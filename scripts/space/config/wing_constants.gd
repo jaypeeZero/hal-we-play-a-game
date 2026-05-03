@@ -145,6 +145,15 @@ const TARGET_SCORE_DISTANCE_DIVISOR = 500.0
 const TARGET_SCORE_DISTANCE_MAX = 5000.0
 const TARGET_SCORE_DAMAGED_WEIGHT = 5.0
 const TARGET_SCORE_FRIENDLY_ENGAGING_WEIGHT = 2.0
+## Per-engager penalty when picking a fighter target — WW2 squadron doctrine:
+## pairs split targets so each engagement is 1-on-1 (or 2-on-1 max). Without
+## this, every wing's scorer favors the same closest enemy and combat
+## degenerates into a swarm. Tuned so that ~3 friendlies on a target shifts
+## a wing to an alternative target up to ~3000u further away.
+const TARGET_SCORE_DECONFLICTION_PENALTY = 4.0
+## Skill below which a lead doesn't yet think about target deconfliction
+## (rookies fixate; mid+ skill spreads engagement)
+const LEAD_DECONFLICT_SKILL = 0.3
 const TARGET_SCORE_THREAT_FACING_WEIGHT = 3.0
 const TARGET_SCORE_THREAT_FACING_ANGLE = 45.0  # degrees
 

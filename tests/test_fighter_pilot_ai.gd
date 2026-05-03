@@ -671,3 +671,94 @@ func test_pass_by_offset_pair_picks_consistent_side():
 	# motions — the pair diverges and passes cleanly instead of colliding.
 	assert_almost_eq(a_deflection, b_deflection, 0.001,
 		"Both ships in a pair must pick the same LOS-frame side via symmetric hash")
+
+# ============================================================================
+# TARGET DECONFLICTION — pairs split onto distinct enemies (no swarm)
+# ============================================================================
+
+func _make_lead_crew(crew_id: String, ship_id: String, skill: float = 0.7) -> Dictionary:
+	var crew = create_pilot_crew(crew_id, ship_id)
+	crew.stats.skill = skill
+	return crew
+
+func _set_engaging(crew: Dictionary, target_id: String) -> Dictionary:
+	crew["orders"] = {"current": {"target_id": target_id}}
+	return crew
+
+func test_count_friendlies_engaging_excludes_self():
+	# BEHAVIOR: When a lead re-evaluates targets, they shouldn't count
+	# themselves as a friendly engager — that would bias every score.
+	var me = _make_lead_crew("me", "ship_me")
+	me = _set_engaging(me, "enemy1")
+	var other = _make_lead_crew("other", "ship_other")
+	other = _set_engaging(other, "enemy1")
+
+	# Without self-exclude: counts 2. With self-exclude: counts 1 (just `other`).
+	var count = FighterPilotAI._count_friendlies_engaging("enemy1", [me, other], "me")
+	assert_eq(count, 1, "Self-exclusion should leave only other engagers in count")
+
+func test_target_deconfliction_splits_wings_onto_distinct_fighters():
+	# BEHAVIOR: Two wing leads scoring the same set of enemies must NOT both
+	# pick the same target when one is already engaged. The deconfliction
+	# penalty should steer the second lead onto a different enemy.
+	var enemy_a = create_fighter_ship("enemy_a", Vector2(900, 0), 1)  # closer
+	var enemy_b = create_fighter_ship("enemy_b", Vector2(1100, 0), 1)  # further
+
+	# Lead 1: already locked onto enemy_a (pretend they decided first)
+	var lead1 = _make_lead_crew("lead1", "ship1", 0.7)
+	lead1.assigned_to = "ship1"
+	lead1 = _set_engaging(lead1, "enemy_a")
+
+	# Lead 2: scoring NOW. Without deconfliction, distance favors enemy_a.
+	var lead2 = _make_lead_crew("lead2", "ship2", 0.7)
+	lead2.assigned_to = "ship2"
+	var ship2 = create_fighter_ship("ship2", Vector2(0, 0), 0)
+
+	var score_a = FighterPilotAI._calculate_target_score(lead2, enemy_a, [ship2, enemy_a, enemy_b], [lead1, lead2])
+	var score_b = FighterPilotAI._calculate_target_score(lead2, enemy_b, [ship2, enemy_a, enemy_b], [lead1, lead2])
+
+	# enemy_a is closer (would normally score higher) but enemy_a has 1 engager
+	# already. Penalty (4.0) > distance advantage (200u / 500 = 0.4). Deconfliction wins.
+	assert_lt(score_a, score_b, "Engaged enemy must score lower than free enemy of similar distance")
+
+func test_concentrate_fire_still_applies_to_capital_targets():
+	# BEHAVIOR: Deconfliction is only for fighter-vs-fighter. Vs. a capital
+	# ship, mass attack is correct doctrine — bonus per friendly engager.
+	var capital = create_capital_ship("cap1", Vector2(1000, 0), 1)
+	var other_capital = create_capital_ship("cap2", Vector2(1500, 0), 1)
+
+	# Lead with skill above the coordinate-fire threshold
+	var lead1 = _make_lead_crew("lead1", "ship1", 0.7)
+	lead1 = _set_engaging(lead1, "cap1")
+
+	var lead2 = _make_lead_crew("lead2", "ship2", 0.7)
+	lead2.assigned_to = "ship2"
+	var ship2 = create_fighter_ship("ship2", Vector2(0, 0), 0)
+
+	var score_cap1 = FighterPilotAI._calculate_target_score(lead2, capital, [ship2, capital, other_capital], [lead1, lead2])
+	var score_cap2 = FighterPilotAI._calculate_target_score(lead2, other_capital, [ship2, capital, other_capital], [lead1, lead2])
+
+	# Capital with friendly already engaging should score higher (concentrate fire),
+	# even though it'd otherwise tie/lose on distance.
+	assert_gt(score_cap1, score_cap2, "Vs capital ships, friendly engagers should INCREASE score (concentrate fire)")
+
+func test_rookie_leads_still_fixate_no_deconfliction():
+	# BEHAVIOR: Below LEAD_DECONFLICT_SKILL, leads don't think tactically —
+	# they pick the closest enemy regardless of who else is on it. This
+	# preserves "rookies fixate" personality.
+	var enemy_a = create_fighter_ship("enemy_a", Vector2(900, 0), 1)
+	var enemy_b = create_fighter_ship("enemy_b", Vector2(1100, 0), 1)
+
+	var lead1 = _make_lead_crew("lead1", "ship1", 0.7)
+	lead1 = _set_engaging(lead1, "enemy_a")
+
+	# Rookie lead — skill below deconflict threshold
+	var rookie = _make_lead_crew("rookie", "ship2", 0.2)
+	rookie.assigned_to = "ship2"
+	var ship2 = create_fighter_ship("ship2", Vector2(0, 0), 0)
+
+	var score_a = FighterPilotAI._calculate_target_score(rookie, enemy_a, [ship2, enemy_a, enemy_b], [lead1, rookie])
+	var score_b = FighterPilotAI._calculate_target_score(rookie, enemy_b, [ship2, enemy_a, enemy_b], [lead1, rookie])
+
+	# Rookie ignores deconfliction — closer target wins on raw distance
+	assert_gt(score_a, score_b, "Rookie should pick closer enemy regardless of friendly engagement")

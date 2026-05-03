@@ -338,11 +338,22 @@ static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictiona
 		var damage_ratio = 1.0 - (float(hull_current) / float(hull_max))
 		score += damage_ratio * WingConstants.TARGET_SCORE_DAMAGED_WEIGHT
 
-	# Targets already engaged by friendlies score higher (concentrate fire)
-	# Only medium+ skill leads coordinate this well
-	if skill >= WingConstants.LEAD_COORDINATE_FIRE_SKILL:
-		var friendly_count = _count_friendlies_engaging(target_ship.get("ship_id", ""), all_crew)
-		score += friendly_count * WingConstants.TARGET_SCORE_FRIENDLY_ENGAGING_WEIGHT
+	# COORDINATION DOCTRINE — depends on target type:
+	#   Fighter target  → DECONFLICT (split targets across wings; WW2 doctrine).
+	#   Large-ship target → CONCENTRATE FIRE (pile on; capitals need overwhelming force).
+	# Without deconfliction, every wing scores the same closest fighter
+	# highest and combat degenerates into a swarm. With it, wings naturally
+	# pair off against distinct enemies — 3 dogfights instead of one scrum.
+	var my_crew_id: String = crew_data.get("crew_id", "")
+	var other_engager_count: int = _count_friendlies_engaging(target_ship.get("ship_id", ""), all_crew, my_crew_id)
+	var target_type: String = target_ship.get("type", "")
+	if FleetDataManager.is_large_ship(target_type):
+		# Concentrate fire on big ships — only mid+ skill leads coordinate this
+		if skill >= WingConstants.LEAD_COORDINATE_FIRE_SKILL:
+			score += other_engager_count * WingConstants.TARGET_SCORE_FRIENDLY_ENGAGING_WEIGHT
+	elif skill >= WingConstants.LEAD_DECONFLICT_SKILL:
+		# Spread engagement across enemy fighters — penalty per existing engager
+		score -= other_engager_count * WingConstants.TARGET_SCORE_DECONFLICTION_PENALTY
 
 	# Targets that are a threat (facing us) score higher - situational awareness
 	var situational_awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", skill)
@@ -356,10 +367,14 @@ static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictiona
 
 	return score
 
-## Count how many friendlies are engaging a target
-static func _count_friendlies_engaging(target_id: String, all_crew: Array) -> int:
+## Count how many friendlies are engaging a target. Pass `exclude_crew_id`
+## to skip a specific crew (typically the one doing the scoring) so the
+## evaluator doesn't double-count themselves.
+static func _count_friendlies_engaging(target_id: String, all_crew: Array, exclude_crew_id: String = "") -> int:
 	var count = 0
 	for crew in all_crew:
+		if exclude_crew_id != "" and crew.get("crew_id", "") == exclude_crew_id:
+			continue
 		var crew_orders = crew.get("orders")
 		if crew_orders == null:
 			continue
