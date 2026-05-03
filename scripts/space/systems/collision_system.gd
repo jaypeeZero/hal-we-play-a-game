@@ -5,12 +5,27 @@ extends RefCounted
 ## Detects hits between projectiles and ships
 ## Following functional programming principles
 
+# Bound on ship/obstacle collision radius. Used as the grid query radius
+# when narrowing the projectile-vs-ship and projectile-vs-obstacle checks
+# from O(n) to O(cells). Set above the largest hull/obstacle radius
+# (capital ship base_size = 150).
+const MAX_HIT_QUERY_RADIUS: float = 200.0
+
 # ============================================================================
 # MAIN API - Detect collisions and apply damage
 # ============================================================================
 
 ## Check all collisions - returns {ships: Array, projectiles: Array, obstacles: Array, hits: Array, visual_effects: Array}
-static func process_collisions(ships: Array, projectiles: Array, obstacles: Array = []) -> Dictionary:
+##
+## Optional ship_grid / obstacle_grid turn the per-projectile O(n) hit scan
+## into an O(cells) range query. Empty grids fall back to the full scan.
+static func process_collisions(
+	ships: Array,
+	projectiles: Array,
+	obstacles: Array = [],
+	ship_grid: Dictionary = {},
+	obstacle_grid: Dictionary = {}
+) -> Dictionary:
 	var hits = []
 	var destroyed_projectile_ids = []
 	var visual_effects = []
@@ -23,7 +38,9 @@ static func process_collisions(ships: Array, projectiles: Array, obstacles: Arra
 
 	# Check each projectile against all ships
 	for projectile in valid_projectiles:
-		var hit = find_hit_for_projectile(projectile, valid_ships)
+		var ship_candidates = valid_ships if ship_grid.is_empty() \
+			else SpatialGridSystem.query_radius(ship_grid, projectile.position, MAX_HIT_QUERY_RADIUS)
+		var hit = find_hit_for_projectile(projectile, ship_candidates)
 		if not hit.is_empty():
 			hits.append(hit)
 			destroyed_projectile_ids.append(projectile.projectile_id)
@@ -40,7 +57,9 @@ static func process_collisions(ships: Array, projectiles: Array, obstacles: Arra
 			continue  # Projectile can only hit one target
 
 		# Check projectile against obstacles
-		var obstacle_hit = find_obstacle_hit_for_projectile(projectile, valid_obstacles)
+		var obstacle_candidates = valid_obstacles if obstacle_grid.is_empty() \
+			else SpatialGridSystem.query_radius(obstacle_grid, projectile.position, MAX_HIT_QUERY_RADIUS)
+		var obstacle_hit = find_obstacle_hit_for_projectile(projectile, obstacle_candidates)
 		if not obstacle_hit.is_empty():
 			destroyed_projectile_ids.append(projectile.projectile_id)
 

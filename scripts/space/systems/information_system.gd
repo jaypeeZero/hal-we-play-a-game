@@ -9,8 +9,19 @@ extends RefCounted
 # MAIN API - Update crew awareness
 # ============================================================================
 
-## Update single crew member's awareness
-static func update_crew_awareness(crew_data: Dictionary, ships: Array, projectiles: Array, game_time: float) -> Dictionary:
+## Update single crew member's awareness.
+##
+## Optional ship_grid / projectile_grid let gather_visible_entities skip the
+## O(n) fleet scan and query a candidate set instead. Empty grids fall back
+## to the full scan (test-friendly).
+static func update_crew_awareness(
+	crew_data: Dictionary,
+	ships: Array,
+	projectiles: Array,
+	game_time: float,
+	ship_grid: Dictionary = {},
+	projectile_grid: Dictionary = {}
+) -> Dictionary:
 	if crew_data.assigned_to == null:
 		return crew_data  # Can't sense without being assigned to an entity
 
@@ -18,7 +29,8 @@ static func update_crew_awareness(crew_data: Dictionary, ships: Array, projectil
 	if own_ship.is_empty():
 		return crew_data
 
-	var visible_entities = gather_visible_entities(own_ship, crew_data, ships, projectiles)
+	var visible_entities = gather_visible_entities(
+		own_ship, crew_data, ships, projectiles, ship_grid, projectile_grid)
 	var threats = identify_threats(visible_entities, own_ship, crew_data, ships)
 	var opportunities = identify_opportunities(visible_entities, own_ship, crew_data, ships)
 
@@ -29,7 +41,14 @@ static func update_crew_awareness(crew_data: Dictionary, ships: Array, projectil
 # ============================================================================
 
 ## Gather all entities visible to this crew member
-static func gather_visible_entities(own_ship: Dictionary, crew_data: Dictionary, ships: Array, projectiles: Array) -> Array:
+static func gather_visible_entities(
+	own_ship: Dictionary,
+	crew_data: Dictionary,
+	ships: Array,
+	projectiles: Array,
+	ship_grid: Dictionary = {},
+	projectile_grid: Dictionary = {}
+) -> Array:
 	var base_range = crew_data.stats.awareness_range
 
 	# Awareness skill modifies effective detection range
@@ -44,15 +63,20 @@ static func gather_visible_entities(own_ship: Dictionary, crew_data: Dictionary,
 
 	var visible = []
 
-	# Check ships
-	for ship in ships:
+	# When the grid is supplied, query the candidate set; otherwise scan the
+	# full fleet (test path).  Per-entity filters below are unchanged.
+	var ship_candidates = ships if ship_grid.is_empty() \
+		else SpatialGridSystem.query_radius(ship_grid, position, effective_range)
+	for ship in ship_candidates:
 		if ship.ship_id != own_ship.ship_id and is_ship_visible(ship):
 			if position.distance_squared_to(ship.position) <= range_sq:
 				visible.append(create_entity_info(ship, "ship"))
 
 	# Check projectiles (if role cares about them)
 	if should_track_projectiles(crew_data.role):
-		for projectile in projectiles:
+		var projectile_candidates = projectiles if projectile_grid.is_empty() \
+			else SpatialGridSystem.query_radius(projectile_grid, position, effective_range)
+		for projectile in projectile_candidates:
 			if projectile.team != own_ship.team:
 				if position.distance_squared_to(projectile.position) <= range_sq:
 					visible.append(create_entity_info(projectile, "projectile"))

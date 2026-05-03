@@ -60,13 +60,18 @@ static func tick(
 ## Sleeping crew keep their last awareness snapshot; only crew that wake
 ## (timer due or events pending) get their threat / opportunity / known
 ## entity lists rebuilt against the current world.
+##
+## Optional ship_grid / projectile_grid turn the per-crew O(n) entity scan
+## into an O(cells) range query inside InformationSystem.
 static func tick_with_awareness(
 	crew_list: Array,
 	game_time: float,
 	mailboxes: Dictionary,
 	ships: Array = [],
 	projectiles: Array = [],
-	wings: Array = []
+	wings: Array = [],
+	ship_grid: Dictionary = {},
+	projectile_grid: Dictionary = {}
 ) -> Dictionary:
 	var updated_crew: Array = []
 	var decisions: Array = []
@@ -81,7 +86,8 @@ static func tick_with_awareness(
 			updated_crew.append(crew)
 			continue
 
-		var aware_crew = InformationSystem.update_crew_awareness(crew, ships, projectiles, game_time)
+		var aware_crew = InformationSystem.update_crew_awareness(
+			crew, ships, projectiles, game_time, ship_grid, projectile_grid)
 
 		var events: Array = []
 		if has_events:

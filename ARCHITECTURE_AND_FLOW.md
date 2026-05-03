@@ -74,6 +74,31 @@ Per-frame work in `_process(delta)`:
 | `WingFormationSystem` | Forms fighter pairs/threes by proximity; preserves existing wings via `previous_wings`. |
 | `TacticalMemorySystem` | Per-crew event log (capped at `MAX_RECENT_EVENTS`) and decision-outcome tracking. |
 | `CrewIntegrationSystem` | Translates crew decisions into ship-orders + crew-skill modifiers. |
+| `SpatialGridSystem` | Uniform spatial grid (`build` / `query_radius`) used to narrow per-frame range queries from O(n) to O(cells). |
+
+### Spatial grid
+
+Per-frame range queries that used to scan the full fleet (sensor-contact
+detection, per-crew visible-entity gathering, projectile hit detection)
+now query a uniform grid keyed by cell coordinate.
+
+- The game node builds two grids in `_process`:
+  1. Pre-movement (`_ships`, `_projectiles`) before `_update_crew_ai_systems`
+     so `InformationSystem` can use them.
+  2. Post-movement (`_ships`, `_obstacles`) consumed by
+     `_check_spatial_awareness_triggers` and `CollisionSystem.process_collisions`.
+- The grid is a value, not a long-lived structure — built fresh each
+  frame from current positions and dropped after the queries.
+- `query_radius` returns a candidate superset; callers do the exact
+  distance check.  Per-entity team / status filters are unchanged, so
+  the optimization preserves the command-chain semantics: capital ships
+  with large awareness ranges still walk many cells and detect distant
+  groups exactly as before — only the inner loop scales differently.
+- `cell_size` is `GRID_CELL_SIZE = 256.0` (tunable).
+- All grid-aware APIs (`InformationSystem.update_crew_awareness`,
+  `CollisionSystem.process_collisions`, `CrewSchedulerSystem.tick_with_awareness`)
+  accept the grid as an optional argument; tests pass `{}` and the
+  system falls back to the full-array scan.
 
 ### Pilot AIs (called by `CrewAISystem`)
 
