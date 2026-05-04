@@ -52,6 +52,15 @@ var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 var _pending_spawn: Dictionary = {}
 var _battlefield_size: Vector2 = Vector2(5000, 3500)
 
+const PATROL_ZONE_RADIUS: float = 700.0
+# Cardinal offsets used to spread squadrons into distinct quadrants
+const PATROL_QUADRANT_DIRS: Array = [
+	Vector2(0, -1),  # North
+	Vector2(0,  1),  # South
+	Vector2(1,  0),  # East
+	Vector2(-1, 0),  # West
+]
+
 # Initial pause state
 var _initial_paused: bool = true
 
@@ -534,23 +543,16 @@ func _execute_squadron_spawn(spawn_position: Vector2) -> void:
 	_pending_spawn = {}
 
 ## Spawn a ship at the given position
-func spawn_ship(ship_type: String, team: int, position: Vector2) -> Dictionary:
+func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: Vector2 = Vector2(-1, -1)) -> Dictionary:
 	# Create ship data
 	var ship_data = ShipData.create_ship_instance(ship_type, team, position)
 	if ship_data.is_empty():
 		push_error("Failed to create ship data for type: " + ship_type)
 		return {}
 
-	# Assign the operating area. For now every ship gets the same patrol
-	# zone — a disk centered on the battlefield, sized so a wing can
-	# actually maneuver inside it ("a few city blocks" relative to a
-	# fighter, ~47x the fighter collision radius). The pilot's instinct
-	# keeps them within this leash; they can chase briefly outside it but
-	# will always try to return. In future versions this can vary per
-	# ship/squadron.
-	const PATROL_ZONE_RADIUS: float = 700.0
+	var zone_center := patrol_center if patrol_center.x >= 0.0 else _battlefield_size * 0.5
 	ship_data["assigned_area"] = {
-		"center": _battlefield_size * 0.5,
+		"center": zone_center,
 		"radius": PATROL_ZONE_RADIUS
 	}
 
@@ -607,23 +609,38 @@ func _spawn_initial_squadrons() -> void:
 	# Team 1 (Enemy) - Right side (Grey/White)
 	var team1_x = _battlefield_size.x - margin
 
-	# Spawn Team 0 ships
-	_spawn_fleet_for_team(team0_fleet, 0, team0_x)
+	# Spawn Team 0 ships — start at quadrant 0 (North), step by 2 per squadron
+	_spawn_fleet_for_team(team0_fleet, 0, team0_x, 0)
 
-	# Spawn Team 1 ships
-	_spawn_fleet_for_team(team1_fleet, 1, team1_x)
+	# Spawn Team 1 ships — start at quadrant 1 (South), step by 2 per squadron
+	_spawn_fleet_for_team(team1_fleet, 1, team1_x, 1)
 
 
-## Spawn all ships for a team based on fleet configuration
-func _spawn_fleet_for_team(fleet: Dictionary, team: int, base_x: float) -> void:
+## Spawn all ships for a team based on fleet configuration.
+## quadrant_offset staggers teams so they patrol different areas of the field.
+func _spawn_fleet_for_team(fleet: Dictionary, team: int, base_x: float, quadrant_offset: int = 0) -> void:
 	print("=== SPAWNING FLEET FOR TEAM %d ===" % team)
 	print("Fleet config: %s" % str(fleet))
 	print("Battlefield height: %s" % _battlefield_size.y)
 	var spawn_positions = ShipData.calculate_fleet_spawn_positions(fleet, base_x, _battlefield_size.y)
 	print("Got %d spawn positions" % spawn_positions.size())
+
+	# Each ship type = one squadron; assign a distinct patrol quadrant so ships
+	# spread out instead of converging on a single point.
+	# Teams are staggered by quadrant_offset so team 0 gets N/E, team 1 gets S/W.
+	var battlefield_center := _battlefield_size * 0.5
+	var squadron_quadrant: Dictionary = {}
+	var squadron_count := 0
 	for spawn_info in spawn_positions:
-		print("  Spawning %s at position %s (size=%.0f)" % [spawn_info["type"], spawn_info["position"], spawn_info["size"]])
-		spawn_ship(spawn_info["type"], team, spawn_info["position"])
+		var ship_type: String = spawn_info["type"]
+		if not squadron_quadrant.has(ship_type):
+			var idx := (quadrant_offset + squadron_count * 2) % PATROL_QUADRANT_DIRS.size()
+			squadron_quadrant[ship_type] = idx
+			squadron_count += 1
+		var dir: Vector2 = PATROL_QUADRANT_DIRS[squadron_quadrant[ship_type]]
+		var patrol_center := battlefield_center + dir * PATROL_ZONE_RADIUS
+		print("  Spawning %s at position %s (size=%.0f) patrol=%s" % [ship_type, spawn_info["position"], spawn_info["size"], patrol_center])
+		spawn_ship(ship_type, team, spawn_info["position"], patrol_center)
 
 ## Spawn initial obstacles at game start
 func _spawn_initial_obstacles() -> void:
