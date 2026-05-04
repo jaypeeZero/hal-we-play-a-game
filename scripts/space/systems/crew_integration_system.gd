@@ -304,6 +304,11 @@ static func get_crew_modified_movement_stats(ship_data: Dictionary) -> Dictionar
 		var lateral_base = stats.get("lateral_acceleration", 0.3)
 		stats.lateral_acceleration = lateral_base * lerp(WingConstants.PILOT_LATERAL_MIN,
 														 WingConstants.PILOT_LATERAL_MAX, skill)
+		# Flight assist tightness — skilled pilots hold the stick precisely
+		var dampening_base = stats.get("inertial_dampening", 0.0)
+		if dampening_base > 0.0:
+			stats.inertial_dampening = dampening_base * lerp(WingConstants.PILOT_DAMPENING_MIN,
+															 WingConstants.PILOT_DAMPENING_MAX, skill)
 
 	# Captain coordination affects overall performance
 	if modifiers.has("captain_coordination"):

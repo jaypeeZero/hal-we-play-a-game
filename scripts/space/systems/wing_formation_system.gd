@@ -1,15 +1,16 @@
 class_name WingFormationSystem
 extends RefCounted
 
-## WingFormationSystem - Dynamically forms and manages wing pairs/threes
+## WingFormationSystem - Dynamically forms and manages wings.
 ##
 ## Wings form when 2+ same-team fighters are alive and within proximity.
 ## The highest-skilled pilot becomes Lead. Lead makes all decisions.
 ## Wingmen's job: stick with Lead, fire at Lead's target.
 ##
-## Wing Types:
-## - Wing-Pair: 1 Lead + 1 Wingman
-## - Wing-Three: 1 Lead + 2 Wingmen (for odd numbers)
+## Wing Types (by size, lead + wingmen):
+##   solo, pair, three, four, five, six
+## A wing can grow up to 1 lead + 5 wingmen so a squadron spawned together
+## can fly under one commander. Use the WingConstants/MAX_WINGMEN cap.
 ##
 ## All constants defined in WingConstants
 
@@ -27,6 +28,20 @@ const WING_COLORS: Array[Color] = [
 
 ## Track next color index for assignment
 static var _next_color_index: int = 0
+
+## Max wingmen a single lead can run. With one lead + 5 wingmen a 6-pack
+## squadron flies as a single wing, matching the doctrine of a real flight.
+const MAX_WINGMEN = 5
+
+## Map a wingman count to a human-readable wing type string.
+static func _wing_type_for_size(wingman_count: int) -> String:
+	match wingman_count:
+		0: return "solo"
+		1: return "pair"
+		2: return "three"
+		3: return "four"
+		4: return "five"
+		_: return "six"
 
 ## Form wings from available fighters on a team
 ## Returns array of wing dictionaries
@@ -63,27 +78,29 @@ static func form_wings(all_ships: Array, all_crew: Array, previous_wings: Array 
 					continue  # Different team
 
 				# Check if wing can accept more wingmen
-				if wing.get("wingmen", []).size() >= 2:
-					continue  # Already has max wingmen
+				if wing.get("wingmen", []).size() >= MAX_WINGMEN:
+					continue  # Already at max
 
 				# Check distance to lead
 				var lead_pos = _get_ship_by_id(wing.get("lead_ship_id", ""), all_ships).get("position", Vector2.ZERO)
 				var solo_pos = solo_fighter.ship.get("position", Vector2.ZERO)
 				if lead_pos.distance_to(solo_pos) <= WingConstants.FORMATION_RANGE:
-					# Add to this wing
+					# Position alternates side so wingmen fan out around the lead.
+					var existing_count = wing.get("wingmen", []).size()
+					var on_right = existing_count % 2 == 0
+					var rank = 0
+					for w in wing.get("wingmen", []):
+						if w.get("position_side", 1) == (1 if on_right else -1):
+							rank += 1
 					wing.wingmen.append({
 						"ship_id": solo_fighter.ship.get("ship_id", ""),
 						"crew_id": solo_fighter.crew.get("crew_id", ""),
 						"skill": solo_fighter.crew.get("stats", {}).get("skill", 0.5),
-						"position_side": 1 if wing.get("wingmen", []).size() == 0 else -1
+						"position_side": 1 if on_right else -1,
+						"slot_rank": rank
 					})
 					assigned_ship_ids[solo_fighter.ship.get("ship_id", "")] = true
-
-					# Update wing type if now has 2 wingmen
-					if wing.get("wingmen", []).size() == 2:
-						wing["wing_type"] = "three"
-					else:
-						wing["wing_type"] = "pair"
+					wing["wing_type"] = _wing_type_for_size(wing.wingmen.size())
 
 					added_to_wing = true
 					break
@@ -159,38 +176,45 @@ static func _form_team_wings(team_fighters: Array, assigned_ship_ids: Dictionary
 			# Solo fighter - no wing
 			continue
 
-		# Form wing: Lead + up to 2 wingmen
+		# Form wing: Lead + up to MAX_WINGMEN wingmen
 		var wing = {
 			"lead_ship_id": ship_id,
 			"lead_crew_id": fighter.crew.get("crew_id", ""),
 			"lead_skill": fighter.crew.get("stats", {}).get("skill", 0.5),
 			"wingmen": [],
-			"wing_type": "pair",  # Will be updated if 3
+			"wing_type": "solo",  # Reclassified below as wingmen are added
 			"team": fighter.ship.get("team", -1),
 			"wing_color": _get_next_wing_color()
 		}
 		assigned_ship_ids[ship_id] = true
 
-		# Add up to 2 wingmen (sorted by skill, highest first)
-		var wingman_count = 0
+		# Add up to MAX_WINGMEN wingmen (already sorted by skill, highest first).
+		# position_side alternates so wingmen fan out symmetrically around the lead.
+		# slot_rank is the index within their own side (0 = innermost slot).
+		var right_count = 0
+		var left_count = 0
 		for wingman in potential_wingmen:
-			if wingman_count >= 2:
+			if wing.wingmen.size() >= MAX_WINGMEN:
 				break
+
+			var on_right = (wing.wingmen.size() % 2 == 0)
+			var slot_rank = right_count if on_right else left_count
+			if on_right:
+				right_count += 1
+			else:
+				left_count += 1
 
 			var wm_ship_id = wingman.ship.get("ship_id", "")
 			wing.wingmen.append({
 				"ship_id": wm_ship_id,
 				"crew_id": wingman.crew.get("crew_id", ""),
 				"skill": wingman.crew.get("stats", {}).get("skill", 0.5),
-				"position_side": 1 if wingman_count == 0 else -1  # First right, second left
+				"position_side": 1 if on_right else -1,
+				"slot_rank": slot_rank
 			})
 			assigned_ship_ids[wm_ship_id] = true
-			wingman_count += 1
 
-		# Update wing type
-		if wing.wingmen.size() == 2:
-			wing.wing_type = "three"
-
+		wing.wing_type = _wing_type_for_size(wing.wingmen.size())
 		wings.append(wing)
 
 	return wings
@@ -258,14 +282,18 @@ static func get_wing_info(crew_id: String, wings: Array) -> Dictionary:
 				return {
 					"wing": wing,
 					"role": "wingman",
-					"position_side": wingman.get("position_side", 1)
+					"position_side": wingman.get("position_side", 1),
+					"slot_rank": wingman.get("slot_rank", 0)
 				}
 
 	return {}  # Not in a wing
 
-## Calculate ideal formation position for a wingman
+## Calculate ideal formation position for a wingman.
 ## position_side: 1 = right, -1 = left
-static func calculate_wing_position(lead_ship: Dictionary, position_side: int, wingman_skill: float) -> Vector2:
+## slot_rank: 0-based index of this wingman among same-side wingmen — used to
+##            fan multiple wingmen out at distinct angles/distances. Default 0
+##            keeps prior pair/three behavior unchanged.
+static func calculate_wing_position(lead_ship: Dictionary, position_side: int, wingman_skill: float, slot_rank: int = 0) -> Vector2:
 	var lead_pos = lead_ship.get("position", Vector2.ZERO)
 	var lead_velocity = lead_ship.get("velocity", Vector2.ZERO)
 
@@ -276,14 +304,18 @@ static func calculate_wing_position(lead_ship: Dictionary, position_side: int, w
 	else:
 		lead_heading = lead_ship.get("rotation", 0.0)
 
-	# Calculate position behind and to the side
-	# High skill wingman stays tighter, low skill has more variance
-	var angle_offset = deg_to_rad(WingConstants.POSITION_ANGLE) * position_side
-	var formation_angle = lead_heading + PI + angle_offset  # Behind and to the side
+	# Calculate position behind and to the side. Each additional slot rank
+	# on the same side adds a step of angle and distance, so 4-6 ship wings
+	# fan out into a "finger six" rather than piling onto the same point.
+	var base_angle = deg_to_rad(WingConstants.POSITION_ANGLE) * position_side
+	var rank_angle = deg_to_rad(WingConstants.POSITION_ANGLE * 0.6) * position_side * slot_rank
+	var formation_angle = lead_heading + PI + base_angle + rank_angle
 
-	# Distance varies by skill - high skill stays closer
+	# Distance varies by skill - high skill stays closer. Outer slots sit
+	# slightly further out so they're not stacked on the inner pair.
 	var skill_distance_modifier = lerp(WingConstants.POSITION_SKILL_FAR_MODIFIER, WingConstants.POSITION_SKILL_CLOSE_MODIFIER, wingman_skill)
-	var actual_distance = WingConstants.POSITION_DISTANCE * skill_distance_modifier
+	var rank_distance_modifier = 1.0 + 0.35 * float(slot_rank)
+	var actual_distance = WingConstants.POSITION_DISTANCE * skill_distance_modifier * rank_distance_modifier
 
 	var formation_offset = Vector2(cos(formation_angle), sin(formation_angle)) * actual_distance
 
@@ -325,7 +357,10 @@ static func get_lead_target(wing: Dictionary, all_crew: Array) -> String:
 
 	for crew in all_crew:
 		if crew.get("crew_id", "") == lead_crew_id:
-			var orders = crew.get("orders", {}).get("current", {})
+			# orders.current is null until the lead's first decision lands
+			var orders = crew.get("orders", {}).get("current")
+			if orders == null or not orders is Dictionary:
+				return ""
 			return orders.get("target_id", "")
 
 	return ""
@@ -336,7 +371,9 @@ static func get_lead_maneuver(wing: Dictionary, all_crew: Array) -> String:
 
 	for crew in all_crew:
 		if crew.get("crew_id", "") == lead_crew_id:
-			var orders = crew.get("orders", {}).get("current", {})
+			var orders = crew.get("orders", {}).get("current")
+			if orders == null or not orders is Dictionary:
+				return ""
 			return orders.get("subtype", "")
 
 	return ""

@@ -417,6 +417,33 @@ func test_get_lead_maneuver():
 	assert_eq(maneuver, "flank_behind", "Should retrieve lead's maneuver")
 
 
+func test_get_lead_target_handles_null_current_orders():
+	# REGRESSION: orders.current is null until the lead's first decision lands.
+	# Wingmen polling get_lead_target before that point used to crash with
+	# "Nonexistent function 'get' in base 'Nil'" — exposed when wings grew to
+	# 6 ships because more wingmen polled the same lead in the first frame.
+	var wing = {
+		"lead_crew_id": "crew_1",
+		"wingmen": []
+	}
+	var crew = [
+		{
+			"crew_id": "crew_1",
+			"orders": {
+				"received": null,
+				"current": null,
+				"issued": []
+			}
+		}
+	]
+
+	var target_id = WingFormationSystem.get_lead_target(wing, crew)
+	assert_eq(target_id, "", "Null orders.current must return empty target, not crash")
+
+	var maneuver = WingFormationSystem.get_lead_maneuver(wing, crew)
+	assert_eq(maneuver, "", "Null orders.current must return empty maneuver, not crash")
+
+
 # =============================================================================
 # WING LOYALTY TESTS - Preserve memberships across frames
 # =============================================================================

@@ -102,6 +102,7 @@
 		"brake_heat_capacity": 200.0,
 		"brake_heat_dissipation": 8.0,
 		"brake_heat_per_second": 50.0,
+		"inertial_dampening": 0.5,
 		"lateral_acceleration": 0.15,
 		"mass": 200.0,
 		"max_speed": 150.0,
