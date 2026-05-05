@@ -1,0 +1,56 @@
+{
+  "image": "ships_atlas.png",
+  "frames": {
+    "capital": {
+      "x": 4,
+      "y": 4,
+      "w": 384,
+      "h": 926,
+      "anchor": [
+        192,
+        644
+      ]
+    },
+    "corvette": {
+      "x": 400,
+      "y": 4,
+      "w": 256,
+      "h": 628,
+      "anchor": [
+        128,
+        338
+      ]
+    },
+    "heavy_fighter": {
+      "x": 4,
+      "y": 942,
+      "w": 126,
+      "h": 244,
+      "anchor": [
+        63,
+        140
+      ]
+    },
+    "torpedo_boat": {
+      "x": 142,
+      "y": 942,
+      "w": 107,
+      "h": 212,
+      "anchor": [
+        53,
+        119
+      ]
+    },
+    "fighter": {
+      "x": 261,
+      "y": 942,
+      "w": 90,
+      "h": 230,
+      "anchor": [
+        45,
+        138
+      ]
+    }
+  },
+  "notes": "Sprites are grayscale; multiply by faction color to tint. Anchor is the rotation center."
+}
