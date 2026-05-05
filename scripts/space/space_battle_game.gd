@@ -23,6 +23,9 @@ const ProjectileEntity = preload("res://scripts/space/entities/projectile_entity
 const VisualEffectEntity = preload("res://scripts/space/entities/visual_effect_entity.gd")
 const ObstacleEntity = preload("res://scripts/space/entities/obstacle_entity.gd")
 
+# Preload debug overlay
+const DebugOverlay = preload("res://scripts/space/debug_overlay.gd")
+
 signal game_started()
 signal game_ended(winner: int)
 signal ship_spawned(ship_id: String)
@@ -83,6 +86,8 @@ var _previous_wings: Array = []  # Previous frame's wings for loyalty preservati
 var _wings_last_formed_at: float = -1.0  # game_time of last form_wings() call
 var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 
+var _debug_overlay: DebugOverlay
+
 func _ready() -> void:
 	# Allow processing when paused (for initial unpause)
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
@@ -100,6 +105,11 @@ func _ready() -> void:
 
 	# Pause the game on start
 	get_tree().paused = true
+
+	_debug_overlay = DebugOverlay.new()
+	_debug_overlay._game = self
+	_debug_overlay.z_index = 100
+	add_child(_debug_overlay)
 
 	game_started.emit()
 
