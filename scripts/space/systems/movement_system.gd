@@ -131,7 +131,7 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 		var target = find_ship_by_id(targets, target_id) if target_id else find_nearest_enemy(ship_data, targets)
 		if target.is_empty():
 			return apply_space_drift(ship_data, delta)
-		var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "large_ship_approach")
+		var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "large_ship_close_to_broadside")
 		pilot_control = _calculate_large_ship_control(ship_data, target, maneuver_subtype)
 
 	else:
@@ -1187,45 +1187,72 @@ static func calculate_rejoin_wingman(ship_data: Dictionary, target: Dictionary, 
 # ============================================================================
 
 ## Calculate large ship pilot control - returns pilot_control dictionary for apply_space_physics
-## These are simpler than fighter maneuvers - less aggressive turning, more lateral thrust
+## These are simpler than fighter maneuvers - less aggressive turning, more lateral thrust.
+## One arm per LargeShipPilotAI engagement-cycle phase, no fallback.
 static func _calculate_large_ship_control(ship_data: Dictionary, target: Dictionary, maneuver: String) -> Dictionary:
 	match maneuver:
-		"large_ship_approach":
-			return _calculate_large_ship_approach(ship_data, target)
-		"large_ship_broadside":
-			return _calculate_large_ship_broadside(ship_data, target)
+		"large_ship_close_to_broadside":
+			return _calculate_large_ship_close_to_broadside(ship_data, target)
+		"large_ship_hold_broadside":
+			return _calculate_large_ship_hold_broadside(ship_data, target)
 		"large_ship_kite":
 			return _calculate_large_ship_kite(ship_data, target)
-		"large_ship_orbit":
-			return _calculate_large_ship_orbit(ship_data, target)
+		"large_ship_reposition_arc":
+			return _calculate_large_ship_reposition_arc(ship_data, target)
+		"large_ship_fighting_withdrawal":
+			return _calculate_large_ship_fighting_withdrawal(ship_data, target)
+		"large_ship_present_thickest_armor":
+			return _calculate_large_ship_present_thickest_armor(ship_data, target)
 		_:
-			# Default: approach target
-			return _calculate_large_ship_approach(ship_data, target)
+			push_error("Unknown large ship maneuver: " + maneuver)
+			return _calculate_large_ship_close_to_broadside(ship_data, target)
 
-## Approach target at moderate speed - returns pilot_control
-static func _calculate_large_ship_approach(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+## CLOSING — full burn toward optimal broadside range, biased off-axis so we
+## arrive on a broadside-ready heading instead of nose-on. Removes the
+## "stop-and-pivot-90°" pause that made approach feel like a passive grind.
+const LARGE_SHIP_CLOSE_THROTTLE = 1.0
+const LARGE_SHIP_CLOSE_OFFSET_DEG = 25.0
+static func _calculate_large_ship_close_to_broadside(ship_data: Dictionary, target: Dictionary) -> Dictionary:
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var target_pos = target.get("position", Vector2.ZERO)
 
-	# Face target and thrust forward
 	var to_target = (target_pos - my_pos).normalized()
 	var distance = my_pos.distance_to(target_pos)
 
-	# Convert angle to visual heading (ships face "up" visually)
-	var desired_heading = direction_to_heading(to_target)
+	# Pick the off-axis side closer to current rotation so we don't flip-flop.
+	var current_rotation = ship_data.get("rotation", 0.0)
+	var base_angle = to_target.angle()
+	var offset = deg_to_rad(LARGE_SHIP_CLOSE_OFFSET_DEG)
+	var dir_left = Vector2(cos(base_angle + offset), sin(base_angle + offset))
+	var dir_right = Vector2(cos(base_angle - offset), sin(base_angle - offset))
+	var heading_left = direction_to_heading(dir_left)
+	var heading_right = direction_to_heading(dir_right)
+	var desired_heading: float
+	if abs(angle_difference(current_rotation, heading_left)) < abs(angle_difference(current_rotation, heading_right)):
+		desired_heading = heading_left
+	else:
+		desired_heading = heading_right
 
 	return {
 		"desired_heading": desired_heading,
-		"throttle": 0.8,  # Large ships don't go full speed
+		"throttle": LARGE_SHIP_CLOSE_THROTTLE,
 		"thrust_active": true,
 		"is_braking": false,
 		"lateral_thrust": 0.0,
 		"current_distance": distance
 	}
 
-## Present broadside to target - perpendicular facing for maximum turret coverage
-## The ship commits to presenting one side (left or right) based on current rotation
-static func _calculate_large_ship_broadside(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+## BROADSIDE — actively orbit the target while keeping nose perpendicular.
+## A capital sitting still in broadside looks identical to a passive ship,
+## so we drive lateral thrust hard and modulate forward throttle to *crab*
+## around the enemy at the optimal range. Range-keeping is the single biggest
+## reason this maneuver should feel different from "approach and shoot".
+const LARGE_SHIP_BROADSIDE_OPTIMAL_RANGE = 1200.0
+const LARGE_SHIP_BROADSIDE_TOO_CLOSE = 500.0
+const LARGE_SHIP_BROADSIDE_LATERAL = 1.0          # full crab thrust — visible motion
+const LARGE_SHIP_BROADSIDE_FORWARD_PUSH = 0.6     # forward burn while too far
+const LARGE_SHIP_BROADSIDE_REVERSE_PUSH = -0.6    # reverse burn while too close
+static func _calculate_large_ship_hold_broadside(ship_data: Dictionary, target: Dictionary) -> Dictionary:
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var target_pos = target.get("position", Vector2.ZERO)
 	var current_rotation = ship_data.get("rotation", 0.0)
@@ -1233,75 +1260,141 @@ static func _calculate_large_ship_broadside(ship_data: Dictionary, target: Dicti
 	var to_target = (target_pos - my_pos).normalized()
 	var distance = my_pos.distance_to(target_pos)
 
-	# Broadside = perpendicular to target (rotate 90 degrees from facing target)
-	# Two options: present left side (+90) or right side (-90)
+	# Two perpendicular options; pick whichever is closer to our current
+	# rotation so we commit to one orbit direction instead of flip-flopping.
 	var perpendicular_left = Vector2(-to_target.y, to_target.x)
 	var perpendicular_right = Vector2(to_target.y, -to_target.x)
-
 	var heading_left = direction_to_heading(perpendicular_left)
 	var heading_right = direction_to_heading(perpendicular_right)
-
-	# Pick whichever side is closer to current rotation to avoid jerky flip-flopping
 	var diff_left = abs(angle_difference(current_rotation, heading_left))
 	var diff_right = abs(angle_difference(current_rotation, heading_right))
+	var presenting_port = diff_left < diff_right
+	var desired_heading = heading_left if presenting_port else heading_right
 
-	var desired_heading = heading_left if diff_left < diff_right else heading_right
+	# Lateral thrust always crabs in the direction that keeps us perpendicular
+	# while traversing AROUND the target. The sign convention matches the
+	# perpendicular side we chose. Magnitude is full so the ship visibly orbits.
+	var lateral = LARGE_SHIP_BROADSIDE_LATERAL if presenting_port else -LARGE_SHIP_BROADSIDE_LATERAL
 
-	# Use lateral thrust to slide toward/away from target while maintaining broadside
-	var lateral: float
-	if distance < 1500.0:
-		lateral = -0.5  # Strafe away
+	# Forward axis is range-keeping: forward when too far, brake/reverse when
+	# too close. (Our nose is perpendicular to target, so "forward" along the
+	# nose is tangential to the target — this also helps the orbit.)
+	var throttle: float
+	var is_braking: bool = false
+	if distance > LARGE_SHIP_BROADSIDE_OPTIMAL_RANGE:
+		throttle = LARGE_SHIP_BROADSIDE_FORWARD_PUSH
+	elif distance < LARGE_SHIP_BROADSIDE_TOO_CLOSE:
+		throttle = 0.0
+		is_braking = true
 	else:
-		lateral = 0.3  # Strafe closer
+		# In the sweet spot — light tangential maintenance only.
+		throttle = 0.2
 
 	return {
 		"desired_heading": desired_heading,
-		"throttle": 0.2,  # Slow, controlled movement
+		"throttle": throttle,
+		"thrust_active": true,
+		"is_braking": is_braking,
+		"lateral_thrust": lateral,
+		"current_distance": distance
+	}
+
+## KITE — face the target (forward turrets on), reverse-thrust to open range,
+## and add lateral juke so we're not a straight-line target for fighters.
+const LARGE_SHIP_KITE_LATERAL = 0.7
+static func _calculate_large_ship_kite(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+	var current_rotation = ship_data.get("rotation", 0.0)
+
+	var to_target = (target_pos - my_pos).normalized()
+	var distance = my_pos.distance_to(target_pos)
+	var desired_heading = direction_to_heading(to_target)
+
+	# Pick a juke direction based on current rotation parity so ship commits
+	# to one side per kite session rather than oscillating.
+	var lateral = LARGE_SHIP_KITE_LATERAL if sin(current_rotation) >= 0.0 else -LARGE_SHIP_KITE_LATERAL
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": 0.0,
+		"thrust_active": false,
+		"is_braking": true,
+		"lateral_thrust": lateral,
+		"current_distance": distance
+	}
+
+## REPOSITIONING — broadside lost; swing hard for a fresh arc. Aim ~80° off
+## the target line and lean on lateral thrust so the ship visibly *swings*
+## rather than drifting back to broadside.
+const LARGE_SHIP_REPOSITION_OFFSET_DEG = 80.0
+const LARGE_SHIP_REPOSITION_THROTTLE = 0.7
+const LARGE_SHIP_REPOSITION_LATERAL = 1.0
+static func _calculate_large_ship_reposition_arc(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var target_pos = target.get("position", Vector2.ZERO)
+
+	var to_target = (target_pos - my_pos).normalized()
+	var distance = my_pos.distance_to(target_pos)
+
+	var current_rotation = ship_data.get("rotation", 0.0)
+	var base_angle = to_target.angle()
+	var offset = deg_to_rad(LARGE_SHIP_REPOSITION_OFFSET_DEG)
+	var arc_left = Vector2(cos(base_angle + offset), sin(base_angle + offset))
+	var arc_right = Vector2(cos(base_angle - offset), sin(base_angle - offset))
+	var heading_left = direction_to_heading(arc_left)
+	var heading_right = direction_to_heading(arc_right)
+
+	var diff_left = abs(angle_difference(current_rotation, heading_left))
+	var diff_right = abs(angle_difference(current_rotation, heading_right))
+	var pick_left = diff_left < diff_right
+	var desired_heading = heading_left if pick_left else heading_right
+	var lateral = LARGE_SHIP_REPOSITION_LATERAL if pick_left else -LARGE_SHIP_REPOSITION_LATERAL
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": LARGE_SHIP_REPOSITION_THROTTLE,
 		"thrust_active": true,
 		"is_braking": false,
 		"lateral_thrust": lateral,
 		"current_distance": distance
 	}
 
-## Kite target - back away while facing them
-static func _calculate_large_ship_kite(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+## FIGHTING WITHDRAWAL — disengage along the line away from the target while
+## still facing roughly toward them, so working turrets keep firing as we go.
+static func _calculate_large_ship_fighting_withdrawal(ship_data: Dictionary, target: Dictionary) -> Dictionary:
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var target_pos = target.get("position", Vector2.ZERO)
 
 	var to_target = (target_pos - my_pos).normalized()
 	var distance = my_pos.distance_to(target_pos)
+	var away_heading = direction_to_heading(-to_target)
 
-	# Face target (for forward turrets) - convert to visual heading
-	var desired_heading = direction_to_heading(to_target)
-
-	# Kiting means we want to move backward while facing the target
-	# Since ships thrust in their facing direction, we need to use braking/reverse
 	return {
-		"desired_heading": desired_heading,
-		"throttle": 0.0,  # No forward thrust
-		"thrust_active": false,
-		"is_braking": true,  # Apply reverse thrust
+		"desired_heading": away_heading,
+		"throttle": 1.0,
+		"thrust_active": true,
+		"is_braking": false,
 		"lateral_thrust": 0.0,
 		"current_distance": distance
 	}
 
-## Orbit target at current range
-static func _calculate_large_ship_orbit(ship_data: Dictionary, target: Dictionary) -> Dictionary:
+## TACTICAL BREAK — present thickest (front) armor toward the threat. Hard
+## turn to face them, light forward thrust to drive the bow on.
+static func _calculate_large_ship_present_thickest_armor(ship_data: Dictionary, target: Dictionary) -> Dictionary:
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var target_pos = target.get("position", Vector2.ZERO)
 
 	var to_target = (target_pos - my_pos).normalized()
 	var distance = my_pos.distance_to(target_pos)
-
-	# Face target - convert to visual heading
 	var desired_heading = direction_to_heading(to_target)
 
 	return {
 		"desired_heading": desired_heading,
-		"throttle": 0.1,  # Slow forward movement
+		"throttle": 0.4,
 		"thrust_active": true,
 		"is_braking": false,
-		"lateral_thrust": 0.6,  # Strong lateral thrust to orbit
+		"lateral_thrust": 0.0,
 		"current_distance": distance
 	}
 

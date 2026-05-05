@@ -264,12 +264,16 @@ static func _get_large_ship_decision_delay(maneuver_subtype: String) -> float:
 	match maneuver_subtype:
 		"large_ship_kite":
 			return randf_range(0.5, 0.8)  # Moderate updates for defensive kiting
-		"large_ship_broadside":
+		"large_ship_hold_broadside":
 			return randf_range(0.6, 0.9)  # Measured updates for tactical positioning
-		"large_ship_approach":
-			return randf_range(0.7, 1.0)  # Less frequent for straightforward approach
-		"large_ship_orbit":
-			return randf_range(0.5, 0.8)  # Moderate updates for orbital positioning
+		"large_ship_close_to_broadside":
+			return randf_range(0.7, 1.0)  # Less frequent for straightforward closing
+		"large_ship_reposition_arc":
+			return randf_range(0.4, 0.7)  # Tighter loop while turning for arc
+		"large_ship_fighting_withdrawal":
+			return randf_range(0.3, 0.5)  # Re-assess often when running
+		"large_ship_present_thickest_armor":
+			return randf_range(0.3, 0.5)  # Tactical break — quick re-check
 		"idle":
 			return randf_range(2.0, 4.0)  # Slow when idle
 		_:

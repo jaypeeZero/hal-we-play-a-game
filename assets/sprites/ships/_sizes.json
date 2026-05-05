@@ -1,0 +1,22 @@
+{
+  "fighter": [
+    90,
+    230
+  ],
+  "heavy_fighter": [
+    126,
+    244
+  ],
+  "torpedo_boat": [
+    107,
+    212
+  ],
+  "corvette": [
+    256,
+    628
+  ],
+  "capital": [
+    384,
+    926
+  ]
+}

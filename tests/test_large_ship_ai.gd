@@ -112,7 +112,7 @@ func test_large_ship_finds_enemy_target():
 			"Maneuver should be a large ship maneuver: " + result.decision.get("subtype", ""))
 
 func test_large_ship_approaches_at_far_range():
-	# BEHAVIOR: When enemy is far away, corvette should approach
+	# BEHAVIOR: When enemy is far away, corvette should close to broadside range
 	var my_corvette = create_corvette_ship("corvette1", Vector2(0, 0), 0)
 	var enemy = create_fighter_ship("enemy1", Vector2(5000, 0), 1)  # Far away
 	var crew = create_corvette_pilot("pilot1", "corvette1")
@@ -121,21 +121,21 @@ func test_large_ship_approaches_at_far_range():
 
 	assert_true(result.has("decision"), "Should make a decision")
 	if result.has("decision"):
-		assert_eq(result.decision.subtype, "large_ship_approach",
-			"Should approach when far: " + result.decision.get("subtype", ""))
+		assert_eq(result.decision.subtype, "large_ship_close_to_broadside",
+			"Should close to broadside range when far: " + result.decision.get("subtype", ""))
 
 func test_large_ship_broadside_at_mid_range():
-	# BEHAVIOR: At mid-range, corvette should present broadside
+	# BEHAVIOR: At mid-range with broadside arc, corvette should hold broadside
 	var my_corvette = create_corvette_ship("corvette1", Vector2(0, 0), 0)
-	var enemy = create_corvette_ship("enemy1", Vector2(2500, 0), 1)  # Mid range
+	var enemy = create_corvette_ship("enemy1", Vector2(1800, 0), 1)  # Mid range, has arc
 	var crew = create_corvette_pilot("pilot1", "corvette1")
 
 	var result = LargeShipPilotAI.make_decision(crew, my_corvette, [my_corvette, enemy], game_time)
 
 	assert_true(result.has("decision"), "Should make a decision")
 	if result.has("decision"):
-		assert_eq(result.decision.subtype, "large_ship_broadside",
-			"Should broadside at mid range: " + result.decision.get("subtype", ""))
+		assert_eq(result.decision.subtype, "large_ship_hold_broadside",
+			"Should hold broadside at mid range with arc: " + result.decision.get("subtype", ""))
 
 func test_large_ship_kites_close_fighters():
 	# BEHAVIOR: When fighters are too close, corvette should kite (back away)
@@ -229,7 +229,7 @@ func test_movement_system_executes_large_ship_maneuver():
 	var my_corvette = create_corvette_ship("corvette1", Vector2(0, 0), 0)
 	my_corvette.orders.current_order = "large_ship_engage"
 	my_corvette.orders.target_id = "enemy1"
-	my_corvette.orders.maneuver_subtype = "large_ship_approach"
+	my_corvette.orders.maneuver_subtype = "large_ship_close_to_broadside"
 
 	var enemy = create_fighter_ship("enemy1", Vector2(2000, 0), 1)
 	var all_ships = [my_corvette, enemy]

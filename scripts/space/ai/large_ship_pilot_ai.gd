@@ -1,137 +1,119 @@
-## LargeShipPilotAI - Corvette and Capital ship pilot behavior
-##
-## Distance ranges (larger than fighters):
-## - FAR_RANGE: > 3000 units - approach at full speed
-## - MID_RANGE: 1500-3000 units - tactical positioning
-## - CLOSE_RANGE: < 1500 units - maintain range, present broadside
-##
-## Core behaviors:
-## - Present broadside to maximize turret coverage
-## - Maintain safe distance from fighters (kite them)
-## - Use lateral thrust to strafe while keeping turrets on target
-
 extends RefCounted
 class_name LargeShipPilotAI
 
-const FAR_RANGE = 3000.0
-const MID_RANGE = 1500.0
-const CLOSE_RANGE = 800.0
-const SAFE_RANGE_VS_FIGHTERS = 2000.0
+## LargeShipPilotAI - Corvette and capital ship pilot behavior.
+##
+## A capital does not dogfight; it manages range and arcs. The pilot loops
+## through an engagement-cycle FSM (closing → broadside → kiting →
+## repositioning → fighting_withdrawal) modulated by skill, aggression, and
+## composure, with a self-preservation overlay and a tactical-break interrupt
+## for arc threats. Same shape as `fighter_pilot_ai.gd`; different numbers and
+## states because broadside warfare is a different problem.
 
-## Main decision function - called by CrewAISystem
+## ---------------------------------------------------------------------------
+## RANGE BANDS — broadside warfare lives in a wider, slower band than fighters,
+## but the bands have to fit inside the patrol-area leash radius for large
+## ships, otherwise the leash forcibly rotates the ship homeward and kills
+## any perpendicular broadside heading the FSM is asking for.
+## ---------------------------------------------------------------------------
+const BROADSIDE_FAR_RANGE = 2200.0          # Beyond this we are still closing
+const BROADSIDE_OPTIMAL_RANGE = 1200.0      # Sweet spot for arc-on broadside
+const BROADSIDE_TOO_CLOSE = 500.0           # Inside this we must reposition
+const BROADSIDE_ARC_DOT = 0.30              # cos(~72°) — perpendicular ±18°
+const SAFE_RANGE_VS_FIGHTERS = 1100.0       # Inside this fighters are kited
+
+## Phase-machine timing
+const PHASE_MIN_DURATION = 1.0              # Commit briefly before re-evaluating
+const PHASE_REPOSITION_TIMEOUT = 6.0        # Cap reposition phase length
+const PERSONALITY_TIMING_SPREAD = 1.6       # Hot vs. cold timing multiplier
+
+## Personality range modulation: ±20% on optimal/safe ranges via aggression
+const RANGE_AGGRESSION_SPREAD = 0.20
+
+## ---------------------------------------------------------------------------
+## SELF-PRESERVATION — capital ships withdraw rather than bail
+## ---------------------------------------------------------------------------
+const SECTION_CRITICAL_RATIO = 0.20         # Any principal section below this → withdraw
+const OUTGUNNED_RANGE = 4000.0              # Local capital balance evaluated within this
+const OUTGUNNED_AGGRESSION_THRESHOLD = 0.7  # Heroic captains ignore the count
+
+## ---------------------------------------------------------------------------
+## TACTICAL BREAK — interrupts the FSM regardless of phase
+## ---------------------------------------------------------------------------
+const TACTICAL_BREAK_RANGE_LARGE = 800.0    # Capital-class threat radius for break
+const TACTICAL_BREAK_ARC_DOT = 0.85         # cos(~32°) — they have us in arc
+
+## ---------------------------------------------------------------------------
+## AREA LEASH — pull a wandering capital home (matches fighter convention)
+## ---------------------------------------------------------------------------
+const AREA_HARD_RETURN_MULTIPLIER = 1.5     # Beyond 1.5x leash → drop fight, go home
+
+## ---------------------------------------------------------------------------
+## DECISION CADENCE
+## ---------------------------------------------------------------------------
+const DECISION_DELAY_NORMAL_MIN = 0.5
+const DECISION_DELAY_NORMAL_MAX = 1.0
+const DECISION_DELAY_URGENT = 0.3           # Tactical break / withdrawal
+const DECISION_DELAY_IDLE_MIN = 1.0
+const DECISION_DELAY_IDLE_MAX = 2.0
+
+## Composure stress impact (mirrors FighterPilotAI)
+const COMPOSURE_STRESS_DECAY = 0.5
+
+## ---------------------------------------------------------------------------
+## MAIN ENTRY
+## ---------------------------------------------------------------------------
 static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
-	var ship_type = ship_data.get("type", "corvette")
-	var target = _find_best_target(crew_data, ship_data, all_ships)
+	# AREA LEASH (hard override) — same shape as FighterPilotAI: a capital
+	# holding broadside at the edge of its zone runs at low throttle, so the
+	# physics-layer leash isn't enough to bring it home. Drop the fight and
+	# burn back to the assigned area.
+	if _is_far_outside_area(ship_data):
+		return _make_return_to_area_decision(crew_data, ship_data, game_time)
 
+	var target := _find_best_target(crew_data, ship_data, all_ships)
 	if target.is_empty():
 		return _make_idle_decision(crew_data, game_time)
 
-	var target_type = target.get("type", "fighter")
-	var distance = ship_data.get("position", Vector2.ZERO).distance_to(target.get("position", Vector2.ZERO))
+	# SELF-PRESERVATION — assessed every tick. Triggers force the FSM to
+	# fighting_withdrawal until the trigger clears (hull stabilises or contact
+	# is broken).
+	var survival_mode := _assess_survival_state(crew_data, ship_data, all_ships)
 
-	# Generate situation string for knowledge query
-	var situation = _generate_situation(ship_type, target_type, distance, crew_data, ship_data, target)
+	# Step the FSM. The phase persists in crew_data.combat_state across ticks.
+	var phase_info := _step_engagement_phase(crew_data, ship_data, target, survival_mode, game_time)
+	var phase: String = phase_info.phase
 
-	# Query knowledge system
-	var maneuver = _query_large_ship_knowledge(situation, crew_data)
+	# TACTICAL BREAK — overrides the current phase for one decision when the
+	# threat sensor finds a capital-class nose on us at close range.
+	var threat := _check_tactical_break(ship_data, all_ships, crew_data)
+	if not threat.is_empty():
+		return _make_tactical_break_decision(crew_data, ship_data, threat, game_time)
 
-	if maneuver == "":
-		maneuver = _get_default_maneuver(ship_type, target_type, distance)
+	return _emit_phase_maneuver(crew_data, ship_data, target, phase, game_time)
 
-	return _create_maneuver_decision(crew_data, ship_data, target, maneuver, game_time)
 
-## Generate situation string for knowledge query
-## Format: "{ship_type} vs {target_type} {distance_category} {position_advantage}"
-static func _generate_situation(ship_type: String, target_type: String, distance: float, crew_data: Dictionary, ship_data: Dictionary, target: Dictionary) -> String:
-	var parts = [ship_type]
-
-	# Target type category
-	if FleetDataManager.is_fighter_class(target_type):
-		parts.append("fighters")
-	elif target_type == "corvette":
-		parts.append("corvette")
-	else:
-		parts.append("capital")
-
-	# Distance category
-	if distance > FAR_RANGE:
-		parts.append("far")
-	elif distance > MID_RANGE:
-		parts.append("mid")
-	else:
-		parts.append("close")
-
-	# Broadside status
-	if _is_presenting_broadside(ship_data, target):
-		parts.append("broadside")
-	else:
-		parts.append("not_broadside")
-
-	return " ".join(parts)
-
-## Check if ship is presenting broadside to target (perpendicular)
-static func _is_presenting_broadside(ship_data: Dictionary, target: Dictionary) -> bool:
-	var my_pos = ship_data.get("position", Vector2.ZERO)
-	var my_rotation = ship_data.get("rotation", 0.0)
-	var target_pos = target.get("position", Vector2.ZERO)
-
-	var to_target = (target_pos - my_pos).normalized()
-	var my_facing = Vector2(cos(my_rotation), sin(my_rotation))
-
-	# Broadside = perpendicular = angle ~90 degrees
-	var angle = abs(my_facing.angle_to(to_target))
-	return abs(angle - PI/2) < deg_to_rad(30.0)  # Within 30 degrees of perpendicular
-
-## Get default maneuver when knowledge query returns empty
-static func _get_default_maneuver(ship_type: String, target_type: String, distance: float) -> String:
-	if FleetDataManager.is_fighter_class(target_type):
-		if distance < SAFE_RANGE_VS_FIGHTERS:
-			return "large_ship_kite"  # Back away from fighters
-		else:
-			return "large_ship_broadside"  # Present broadside at safe range
-	else:
-		# vs corvette/capital
-		if distance > FAR_RANGE:
-			return "large_ship_approach"
-		else:
-			return "large_ship_broadside"
-
-## Query knowledge system for large ship tactics
-static func _query_large_ship_knowledge(situation: String, crew_data: Dictionary) -> String:
-	var knowledge = TacticalKnowledgeSystem.query_pilot_knowledge(situation, 3)
-	if knowledge.is_empty():
-		return ""
-
-	# Select maneuver based on skill (same pattern as FighterPilotAI)
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
-	var content = knowledge[0].get("content", {})
-	var maneuvers = content.get("maneuvers", [])
-	var skill_requirements = content.get("skill_requirements", {})
-
-	for m in maneuvers:
-		var required = skill_requirements.get(m, 0.0)
-		if skill >= required:
-			return m
-
-	return maneuvers[-1] if maneuvers.size() > 0 else ""
-
+## ---------------------------------------------------------------------------
+## TARGETING
+## ---------------------------------------------------------------------------
 static func _find_best_target(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array) -> Dictionary:
-	var my_team = ship_data.get("team", -1)
-	var my_pos = ship_data.get("position", Vector2.ZERO)
-	var best_target = {}
-	var best_score = -1.0
+	var my_team: int = ship_data.get("team", -1)
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var best_target := {}
+	var best_score: float = -INF
 
 	for ship in all_ships:
 		if ship.get("team", -1) == my_team:
 			continue
-		if ship.get("status", "") == "destroyed":
+		var status := str(ship.get("status", ""))
+		if status == "destroyed" or status == "exploding" or status == "disabled":
 			continue
 
-		var distance = my_pos.distance_to(ship.get("position", Vector2.ZERO))
-		var score = 10000.0 - distance  # Prefer closer targets
+		var distance: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+		var score: float = 10000.0 - distance
 
-		# Prefer damaged targets
-		if ship.get("status", "") == "damaged":
+		# Soft-damaged targets (anything wounded) are a little more attractive.
+		if status == "damaged":
 			score += 5000.0
 
 		if score > best_score:
@@ -140,23 +122,426 @@ static func _find_best_target(crew_data: Dictionary, ship_data: Dictionary, all_
 
 	return best_target
 
+
+## ---------------------------------------------------------------------------
+## ENGAGEMENT-CYCLE FSM
+## ---------------------------------------------------------------------------
+## Phases:
+##   closing                 — beyond optimal range, close in
+##   broadside               — in the optimal band with arc on target
+##   kiting                  — vs fighters inside SAFE_RANGE_VS_FIGHTERS
+##   repositioning           — broadside lost, swing for a new arc
+##   fighting_withdrawal     — survival overlay; held until trigger clears
+
+## Update and read the current FSM phase. Mutates crew_data.combat_state
+## in place (same pattern as FighterPilotAI).
+static func _step_engagement_phase(
+	crew_data: Dictionary,
+	ship_data: Dictionary,
+	target: Dictionary,
+	survival_mode: String,
+	game_time: float
+) -> Dictionary:
+	var combat_state: Dictionary = crew_data.get("combat_state", {})
+	if not crew_data.has("combat_state"):
+		crew_data["combat_state"] = combat_state
+
+	var target_id: String = str(target.get("ship_id", ""))
+	var prev_target: String = str(combat_state.get("phase_target_id", ""))
+	var phase: String = str(combat_state.get("engagement_phase", "closing"))
+	var phase_started_at: float = float(combat_state.get("phase_started_at", game_time))
+
+	# New target → reset cycle
+	if target_id != prev_target:
+		phase = "closing"
+		phase_started_at = game_time
+
+	var phase_age: float = max(0.0, game_time - phase_started_at)
+	var next_phase: String = _compute_next_phase(phase, phase_age, ship_data, target, crew_data, survival_mode)
+	if next_phase != phase:
+		phase_started_at = game_time
+		phase = next_phase
+
+	combat_state["engagement_phase"] = phase
+	combat_state["phase_started_at"] = phase_started_at
+	combat_state["phase_target_id"] = target_id
+
+	return {"phase": phase, "phase_age": max(0.0, game_time - phase_started_at)}
+
+
+static func _compute_next_phase(
+	current: String,
+	age: float,
+	ship_data: Dictionary,
+	target: Dictionary,
+	crew_data: Dictionary,
+	survival_mode: String
+) -> String:
+	# Survival overlay forces fighting_withdrawal; once cleared we re-enter
+	# the cycle from closing so the captain reacquires posture before fighting.
+	if survival_mode == "withdraw":
+		return "fighting_withdrawal"
+	if current == "fighting_withdrawal":
+		# Survival is no longer active — exit to closing and let the normal
+		# phase rules take over from there.
+		if age < PHASE_MIN_DURATION:
+			return "fighting_withdrawal"
+		return "closing"
+
+	var aggression: float = _read_aggression(crew_data)
+	var optimal: float = _scaled_optimal_range(aggression)
+	var safe_vs_fighters: float = _scaled_safe_range(aggression)
+	var timing_factor: float = _phase_timing_factor(aggression)
+
+	var distance: float = ship_data.get("position", Vector2.ZERO).distance_to(target.get("position", Vector2.ZERO))
+	var fighter_target: bool = FleetDataManager.is_fighter_class(str(target.get("type", "")))
+	var arc_on_target: bool = _has_broadside_arc(ship_data, target)
+
+	# Fighter-swarm rule overrides everything below: if a fighter wanders
+	# inside our safety bubble, we kite regardless of the prior phase.
+	if fighter_target and distance < safe_vs_fighters:
+		return "kiting"
+
+	match current:
+		"closing":
+			if distance <= optimal:
+				return "broadside"
+			if distance <= BROADSIDE_FAR_RANGE and arc_on_target:
+				return "broadside"
+			return "closing"
+
+		"broadside":
+			if age < PHASE_MIN_DURATION:
+				return "broadside"
+			if distance < BROADSIDE_TOO_CLOSE:
+				return "repositioning"
+			if not arc_on_target:
+				return "repositioning"
+			if distance > BROADSIDE_FAR_RANGE:
+				return "closing"
+			return "broadside"
+
+		"kiting":
+			if fighter_target and distance < safe_vs_fighters:
+				return "kiting"
+			if distance > BROADSIDE_FAR_RANGE:
+				return "closing"
+			return "broadside"
+
+		"repositioning":
+			if age > PHASE_REPOSITION_TIMEOUT * timing_factor:
+				return "broadside" if distance <= BROADSIDE_FAR_RANGE else "closing"
+			if arc_on_target and distance <= BROADSIDE_FAR_RANGE and distance >= BROADSIDE_TOO_CLOSE:
+				return "broadside"
+			return "repositioning"
+
+		_:
+			return "closing"
+
+
+## Map a phase tag to a maneuver subtype consumed by MovementSystem.
+static func _phase_to_maneuver(phase: String) -> String:
+	match phase:
+		"closing":
+			return "large_ship_close_to_broadside"
+		"broadside":
+			return "large_ship_hold_broadside"
+		"kiting":
+			return "large_ship_kite"
+		"repositioning":
+			return "large_ship_reposition_arc"
+		"fighting_withdrawal":
+			return "large_ship_fighting_withdrawal"
+		_:
+			return "large_ship_close_to_broadside"
+
+
+## ---------------------------------------------------------------------------
+## PERSONALITY — skill / aggression / composure
+## ---------------------------------------------------------------------------
+## Same axes the fighter uses. Aggression modulates ranges and phase timing;
+## composure (degraded by stress) modulates *effective* skill — it doesn't
+## introduce a new axis.
+
+static func _read_aggression(crew_data: Dictionary) -> float:
+	return clamp(float(crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)), 0.0, 1.0)
+
+static func _read_skill(crew_data: Dictionary) -> float:
+	return clamp(float(crew_data.get("stats", {}).get("skill", 0.5)), 0.0, 1.0)
+
+## Effective skill — pure skill scaled by composure under stress. A stressed,
+## low-composure captain misjudges the situation as if they were less skilled.
+static func calculate_effective_skill(crew_data: Dictionary) -> float:
+	var skill: float = _read_skill(crew_data)
+	var composure: float = float(crew_data.get("stats", {}).get("skills", {}).get("composure", skill))
+	var stress: float = float(crew_data.get("stats", {}).get("stress", 0.0))
+	var effective_composure: float = clamp(composure * (1.0 - stress * COMPOSURE_STRESS_DECAY), 0.0, 1.0)
+	return clamp(skill * effective_composure, 0.0, 1.0)
+
+## Aggressive captains close in; cautious captains keep the gap wider.
+static func _scaled_optimal_range(aggression: float) -> float:
+	# (aggression-0.5)*2 → -1..+1; high aggression shrinks the optimal range.
+	return BROADSIDE_OPTIMAL_RANGE * (1.0 - (aggression - 0.5) * 2.0 * RANGE_AGGRESSION_SPREAD)
+
+static func _scaled_safe_range(aggression: float) -> float:
+	# Hot captains let fighters get closer before kiting.
+	return SAFE_RANGE_VS_FIGHTERS * (1.0 - (aggression - 0.5) * 2.0 * RANGE_AGGRESSION_SPREAD)
+
+## Hot captains commit longer to phases; cold captains break early.
+static func _phase_timing_factor(aggression: float) -> float:
+	return lerp(1.0 / PERSONALITY_TIMING_SPREAD, PERSONALITY_TIMING_SPREAD, aggression)
+
+
+## ---------------------------------------------------------------------------
+## ARC GEOMETRY
+## ---------------------------------------------------------------------------
+## Visual forward — matches MovementSystem.get_visual_forward. Ships face "up"
+## visually at rotation 0, so forward is (sin r, -cos r), not (cos r, sin r).
+static func _ship_forward(ship: Dictionary) -> Vector2:
+	var rot: float = float(ship.get("rotation", 0.0))
+	return Vector2(sin(rot), -cos(rot))
+
+## True when our broadside (port or starboard) is pointed at the target —
+## i.e. our nose is roughly perpendicular to the line of sight.
+static func _has_broadside_arc(ship_data: Dictionary, target: Dictionary) -> bool:
+	var to_target: Vector2 = target.get("position", Vector2.ZERO) - ship_data.get("position", Vector2.ZERO)
+	if to_target.length() < 1.0:
+		return false
+	var forward := _ship_forward(ship_data)
+	var alignment: float = abs(forward.dot(to_target.normalized()))
+	return alignment <= BROADSIDE_ARC_DOT
+
+## Nose-on-target alignment for tactical-break detection.
+static func _nose_to_target_dot(ship: Dictionary, target: Dictionary) -> float:
+	var to_target: Vector2 = target.get("position", Vector2.ZERO) - ship.get("position", Vector2.ZERO)
+	if to_target.length() < 1.0:
+		return 0.0
+	return _ship_forward(ship).dot(to_target.normalized())
+
+
+## ---------------------------------------------------------------------------
+## SELF-PRESERVATION
+## ---------------------------------------------------------------------------
+## Returns "withdraw" when the captain should disengage, "" otherwise.
+## Triggers (any one fires):
+##   1. Critical-section trigger    — any armor section below 20%.
+##   2. Engine-damaged trigger      — engine internal damaged or destroyed.
+##   3. Outgunned trigger           — local enemy capitals > friendly capitals
+##                                    AND aggression below the heroic threshold.
+static func _assess_survival_state(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array) -> String:
+	if _has_critical_section(ship_data):
+		return "withdraw"
+	if _is_engine_damaged(ship_data):
+		return "withdraw"
+	if _is_outgunned(crew_data, ship_data, all_ships):
+		return "withdraw"
+	return ""
+
+static func _has_critical_section(ship_data: Dictionary) -> bool:
+	var sections: Array = ship_data.get("armor_sections", [])
+	for section in sections:
+		var max_armor: float = float(section.get("max_armor", 0))
+		if max_armor <= 0.0:
+			continue
+		var current: float = float(section.get("current_armor", 0))
+		if current / max_armor < SECTION_CRITICAL_RATIO:
+			return true
+	return false
+
+static func _is_engine_damaged(ship_data: Dictionary) -> bool:
+	var internals: Array = ship_data.get("internals", [])
+	for internal in internals:
+		if str(internal.get("type", "")) != "engine":
+			continue
+		var status := str(internal.get("status", ""))
+		if status == "damaged" or status == "destroyed":
+			return true
+	return false
+
+## Heroic captains (aggression ≥ threshold) never bail on bad odds; everyone
+## else withdraws when the local capital balance tips against them.
+static func _is_outgunned(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array) -> bool:
+	var aggression: float = _read_aggression(crew_data)
+	if aggression >= OUTGUNNED_AGGRESSION_THRESHOLD:
+		return false
+
+	var counts := _count_nearby_capitals(ship_data, all_ships)
+	var enemies: int = counts.enemies
+	# Count ourselves as a friendly so 1-1 doesn't trigger and 1v2 does.
+	var friends: int = counts.friends + 1
+	return enemies > friends
+
+static func _count_nearby_capitals(ship_data: Dictionary, all_ships: Array) -> Dictionary:
+	var my_team: int = ship_data.get("team", -1)
+	var my_id: String = str(ship_data.get("ship_id", ""))
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var enemies: int = 0
+	var friends: int = 0
+	for ship in all_ships:
+		if str(ship.get("ship_id", "")) == my_id:
+			continue
+		if str(ship.get("status", "")) != "operational":
+			continue
+		if not FleetDataManager.is_large_ship(str(ship.get("type", ""))):
+			continue
+		var d: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+		if d > OUTGUNNED_RANGE:
+			continue
+		if ship.get("team", -1) == my_team:
+			friends += 1
+		else:
+			enemies += 1
+	return {"enemies": enemies, "friends": friends}
+
+
+## ---------------------------------------------------------------------------
+## TACTICAL BREAK
+## ---------------------------------------------------------------------------
+## Interrupts the FSM when:
+##   - any awareness threat is flagged "missile_locked" / "torpedo_locked", OR
+##   - a capital-class enemy is within TACTICAL_BREAK_RANGE_LARGE with their
+##     nose on us. Returns the offending threat ship dict, or {}.
+static func _check_tactical_break(ship_data: Dictionary, all_ships: Array, crew_data: Dictionary) -> Dictionary:
+	if _has_lock_alarm(crew_data):
+		var threat_id := _find_closest_capital_threat(ship_data, all_ships)
+		if threat_id != "":
+			return _get_ship_by_id(threat_id, all_ships)
+
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var my_id: String = str(ship_data.get("ship_id", ""))
+	var my_team: int = ship_data.get("team", -1)
+	for ship in all_ships:
+		if str(ship.get("ship_id", "")) == my_id:
+			continue
+		if ship.get("team", -1) == my_team:
+			continue
+		if str(ship.get("status", "")) != "operational":
+			continue
+		if not FleetDataManager.is_large_ship(str(ship.get("type", ""))):
+			continue
+		var d: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+		if d > TACTICAL_BREAK_RANGE_LARGE or d < 1.0:
+			continue
+		# Are they pointed at us?
+		if _nose_to_target_dot(ship, ship_data) >= TACTICAL_BREAK_ARC_DOT:
+			return ship
+	return {}
+
+static func _has_lock_alarm(crew_data: Dictionary) -> bool:
+	var threats: Array = crew_data.get("awareness", {}).get("threats", [])
+	for threat in threats:
+		if not (threat is Dictionary):
+			continue
+		var tag := str(threat.get("type", ""))
+		if tag == "missile_locked" or tag == "torpedo_locked":
+			return true
+		if bool(threat.get("missile_locked", false)) or bool(threat.get("torpedo_locked", false)):
+			return true
+	return false
+
+static func _find_closest_capital_threat(ship_data: Dictionary, all_ships: Array) -> String:
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var my_team: int = ship_data.get("team", -1)
+	var best_id: String = ""
+	var best_d: float = INF
+	for ship in all_ships:
+		if ship.get("team", -1) == my_team:
+			continue
+		if not FleetDataManager.is_large_ship(str(ship.get("type", ""))):
+			continue
+		var d: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+		if d < best_d:
+			best_d = d
+			best_id = str(ship.get("ship_id", ""))
+	return best_id
+
+
+## ---------------------------------------------------------------------------
+## AREA LEASH
+## ---------------------------------------------------------------------------
+static func _is_far_outside_area(ship_data: Dictionary) -> bool:
+	var assigned_area = ship_data.get("assigned_area")
+	if assigned_area == null or not (assigned_area is Dictionary):
+		return false
+	var radius: float = float(assigned_area.get("radius", 0.0))
+	if radius <= 0.0:
+		return false
+	var center: Vector2 = assigned_area.get("center", Vector2.ZERO)
+	var dist: float = ship_data.get("position", Vector2.ZERO).distance_to(center)
+	return dist > radius * AREA_HARD_RETURN_MULTIPLIER
+
+
+## ---------------------------------------------------------------------------
+## DECISION EMISSION
+## ---------------------------------------------------------------------------
+static func _emit_phase_maneuver(
+	crew_data: Dictionary,
+	ship_data: Dictionary,
+	target: Dictionary,
+	phase: String,
+	game_time: float
+) -> Dictionary:
+	var maneuver: String = _phase_to_maneuver(phase)
+	var delay: float = DECISION_DELAY_URGENT if phase == "fighting_withdrawal" else randf_range(DECISION_DELAY_NORMAL_MIN, DECISION_DELAY_NORMAL_MAX)
+	return _build_decision(crew_data, ship_data, target.get("ship_id", ""), maneuver, game_time, delay, {
+		"engagement_phase": phase,
+	})
+
+static func _make_tactical_break_decision(
+	crew_data: Dictionary,
+	ship_data: Dictionary,
+	threat: Dictionary,
+	game_time: float
+) -> Dictionary:
+	# Tactical break presents thickest armor (front) toward the threat. The
+	# pilot may keep its locked target id; the maneuver itself orients on
+	# the threat ship via target_id.
+	return _build_decision(crew_data, ship_data, threat.get("ship_id", ""), "large_ship_present_thickest_armor", game_time, DECISION_DELAY_URGENT, {
+		"tactical_break": true,
+	})
+
+static func _make_return_to_area_decision(crew_data: Dictionary, ship_data: Dictionary, game_time: float) -> Dictionary:
+	return _build_decision(crew_data, ship_data, "", "large_ship_close_to_broadside", game_time, DECISION_DELAY_URGENT, {
+		"return_to_area": true,
+	})
+
 static func _make_idle_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
-	var updated = crew_data.duplicate(true)
-	updated.next_decision_time = game_time + randf_range(1.0, 2.0)
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated.next_decision_time = game_time + randf_range(DECISION_DELAY_IDLE_MIN, DECISION_DELAY_IDLE_MAX)
 	return {"crew_data": updated}
 
-static func _create_maneuver_decision(crew_data: Dictionary, ship_data: Dictionary, target: Dictionary, maneuver: String, game_time: float) -> Dictionary:
-	var updated = crew_data.duplicate(true)
+static func _build_decision(
+	crew_data: Dictionary,
+	ship_data: Dictionary,
+	target_id: Variant,
+	maneuver: String,
+	game_time: float,
+	delay: float,
+	extra: Dictionary = {}
+) -> Dictionary:
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated.next_decision_time = game_time + delay
 
-	var decision = {
+	var decision: Dictionary = {
 		"type": "maneuver",
 		"subtype": maneuver,
 		"crew_id": crew_data.get("crew_id", ""),
-		"entity_id": crew_data.get("assigned_to", ""),
-		"target_id": target.get("ship_id", ""),
-		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
-		"timestamp": game_time
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": target_id,
+		"skill_factor": calculate_effective_skill(crew_data),
+		"timestamp": game_time,
 	}
+	for key in extra.keys():
+		decision[key] = extra[key]
 
-	updated.next_decision_time = game_time + randf_range(0.5, 1.0)
 	return {"crew_data": updated, "decision": decision}
+
+
+## ---------------------------------------------------------------------------
+## SHIP LOOKUP
+## ---------------------------------------------------------------------------
+static func _get_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
+	for ship in all_ships:
+		if str(ship.get("ship_id", "")) == ship_id:
+			return ship
+	return {}
