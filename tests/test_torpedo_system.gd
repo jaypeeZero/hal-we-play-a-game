@@ -438,7 +438,7 @@ func test_gunner_makes_fire_decision_with_opportunities():
 	]
 
 	# Make gunner decision
-	var result = CrewAISystem.make_gunner_decision(gunner, 0.0)
+	var result = GunnerAI.make_decision(gunner, 0.0)
 
 	assert_true(result.has("decision"), "Gunner should produce a decision when opportunities exist")
 	assert_eq(result.decision.type, "fire", "Decision should be fire type")
@@ -453,7 +453,7 @@ func test_gunner_no_decision_without_opportunities():
 	# Empty opportunities
 	gunner.awareness.opportunities = []
 
-	var result = CrewAISystem.make_gunner_decision(gunner, 0.0)
+	var result = GunnerAI.make_decision(gunner, 0.0)
 
 	# Should not have a fire decision
 	var has_fire_decision = result.has("decision") and result.decision.get("type") == "fire" and result.decision.get("subtype") != "hold_fire"
@@ -501,7 +501,7 @@ func test_torpedo_boat_gunner_complete_flow():
 
 	# Step 2: Make decision
 	updated_gunner.next_decision_time = 0.0  # Force decision now
-	var result = CrewAISystem.make_gunner_decision(updated_gunner, 0.0)
+	var result = GunnerAI.make_decision(updated_gunner, 0.0)
 
 	assert_true(result.has("decision"), "Gunner should make a decision")
 	assert_eq(result.decision.type, "fire", "Decision should be fire type")
