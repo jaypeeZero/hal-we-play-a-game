@@ -53,6 +53,10 @@ var _pending_spawn: Dictionary = {}
 var _battlefield_size: Vector2 = Vector2(5000, 3500)
 
 const PATROL_ZONE_RADIUS: float = 700.0
+# Large ships need a wider operating zone — broadside warfare requires room
+# to maneuver at range. A capital fenced into 700u can't actually orbit a
+# target without being yanked home by the area leash.
+const LARGE_SHIP_PATROL_ZONE_RADIUS: float = 1500.0
 # Cardinal offsets used to spread squadrons into distinct quadrants
 const PATROL_QUADRANT_DIRS: Array = [
 	Vector2(0, -1),  # North
@@ -551,9 +555,10 @@ func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: 
 		return {}
 
 	var zone_center := patrol_center if patrol_center.x >= 0.0 else _battlefield_size * 0.5
+	var zone_radius: float = LARGE_SHIP_PATROL_ZONE_RADIUS if FleetDataManager.is_large_ship(ship_type) else PATROL_ZONE_RADIUS
 	ship_data["assigned_area"] = {
 		"center": zone_center,
-		"radius": PATROL_ZONE_RADIUS
+		"radius": zone_radius
 	}
 
 	# Add to data array
