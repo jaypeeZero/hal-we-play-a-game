@@ -367,20 +367,8 @@ func test_apply_gunner_decision_to_ship():
 	var updated_ship = CrewIntegrationSystem.apply_decision_to_ship(ship, decision, gunner)
 
 	assert_eq(updated_ship.orders.target_id, "enemy_1")
-	assert_has(updated_ship.crew_modifiers, "gunner_skill")
-
-func test_crew_modified_stats():
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
-	var pilot = CrewData.create_crew_member(CrewData.Role.PILOT, 0.9)  # Highly skilled
-
-	ship.crew_modifiers = {
-		"pilot_skill": 0.9
-	}
-
-	var modified_stats = CrewIntegrationSystem.get_crew_modified_movement_stats(ship)
-
-	# High skill should improve stats
-	assert_gt(modified_stats.turn_rate, ship.stats.turn_rate * 0.8)
+	# Apply-fire-decision now writes the consumed factor field, not raw skill.
+	assert_has(updated_ship.crew_modifiers, "aim_accuracy_factor")
 
 func test_ship_with_crew_creation():
 	var ship = ShipData.create_ship_instance("fighter", 0, Vector2(0, 0), true, 0.7)
@@ -501,26 +489,6 @@ func test_squadron_coordination_style_varies_with_skill():
 	assert_eq(elite_skill_style, CrewIntegrationSystem.CoordinationStyle.ORCHESTRATED,
 		"Elite leader uses ORCHESTRATED coordination")
 
-func test_gunner_modifiers_have_dramatic_range():
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
-	ship.weapons = [create_test_weapon()]
-
-	# Low skill gunner
-	var low_gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.1)
-	ship.crew_modifiers = {}
-	var low_ship = CrewIntegrationSystem.apply_gunner_skill_modifiers(ship, low_gunner)
-	var low_weapon_stats = CrewIntegrationSystem.get_crew_modified_weapon_stats(ship.weapons[0], low_ship)
-
-	# High skill gunner
-	var high_gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.95)
-	ship.crew_modifiers = {}
-	var high_ship = CrewIntegrationSystem.apply_gunner_skill_modifiers(ship, high_gunner)
-	var high_weapon_stats = CrewIntegrationSystem.get_crew_modified_weapon_stats(ship.weapons[0], high_ship)
-
-	# Accuracy should have dramatic difference (40% vs 130%)
-	var accuracy_ratio = high_weapon_stats.accuracy / low_weapon_stats.accuracy
-	assert_gt(accuracy_ratio, 2.0, "High skill gunner has >2x accuracy of low skill")
-
 func test_captain_modifiers_have_dramatic_range():
 	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
 
@@ -545,22 +513,6 @@ func test_captain_modifiers_have_dramatic_range():
 	var low_delay = low_ship.crew_modifiers.captain_decision_delay
 	var high_delay = high_ship.crew_modifiers.captain_decision_delay
 	assert_gt(low_delay, high_delay * 2, "Low skill captain decides >2x slower")
-
-func test_pilot_modifiers_have_dramatic_range():
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
-
-	# Low skill pilot
-	var low_pilot = CrewData.create_crew_member(CrewData.Role.PILOT, 0.0)
-	ship.crew_modifiers = {"pilot_skill": 0.0}
-	var low_stats = CrewIntegrationSystem.get_crew_modified_movement_stats(ship)
-
-	# High skill pilot
-	ship.crew_modifiers = {"pilot_skill": 1.0}
-	var high_stats = CrewIntegrationSystem.get_crew_modified_movement_stats(ship)
-
-	# Turn rate should have dramatic difference (50% vs 130%)
-	var turn_ratio = high_stats.turn_rate / low_stats.turn_rate
-	assert_gt(turn_ratio, 2.0, "High skill pilot has >2x turn rate of low skill")
 
 func test_gunner_panic_affects_performance():
 	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)

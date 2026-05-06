@@ -77,7 +77,8 @@ static func create_projectile(fire_command: Dictionary, team: int) -> Dictionary
 		weapon_size = fire_command.get("weapon_size", 1),
 		projectile_type = "explosive" if is_torpedo else "standard",
 		explosion_radius = explosion_radius,
-		explosion_damage = explosion_damage
+		explosion_damage = explosion_damage,
+		intended_subsystem = fire_command.get("intended_subsystem", "")
 	}
 
 ## Spawn projectiles from fire commands - returns Array of projectile_data

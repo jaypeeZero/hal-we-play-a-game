@@ -37,6 +37,32 @@ const LATERAL_THRUST_RANGE = 1500.0  # Use lateral thrust when closer than this 
 const BRAKE_OVERHEAT_THRESHOLD = 1.0  # 100% of capacity = overheat
 const BRAKE_RECOVERY_THRESHOLD = 0.5  # Must cool to 50% before brakes work again
 
+# ============================================================================
+# CREW MODIFIER READS
+# ============================================================================
+# Pilot skill is baked onto ship_data.crew_modifiers by CrewIntegrationSystem
+# (factor fields, not raw skill). MovementSystem just consumes — no callback,
+# no recomputation. Defaults of 1.0 mean "no crew assigned" doesn't punish
+# stats. Hot-path lookups; keep them O(1).
+
+static func _read_modified_turn_rate(ship_data: Dictionary) -> float:
+	var base: float = ship_data.stats.turn_rate
+	var factor: float = ship_data.get("crew_modifiers", {}).get("pilot_turn_factor", 1.0)
+	return base * factor
+
+static func _read_modified_acceleration(ship_data: Dictionary) -> float:
+	var base: float = ship_data.stats.acceleration
+	var factor: float = ship_data.get("crew_modifiers", {}).get("pilot_accel_factor", 1.0)
+	return base * factor
+
+static func _read_modified_lateral_factor(ship_data: Dictionary) -> float:
+	return ship_data.get("crew_modifiers", {}).get("pilot_lateral_factor", 1.0)
+
+static func _read_modified_dampening(ship_data: Dictionary) -> float:
+	var base: float = ship_data.stats.get("inertial_dampening", 0.0)
+	var factor: float = ship_data.get("crew_modifiers", {}).get("pilot_damp_factor", 1.0)
+	return base * factor
+
 ## Check if front brakes are currently overheated (locked out)
 static func is_brake_overheated(ship_data: Dictionary) -> bool:
 	return ship_data.get("brake_overheated", false)
@@ -2261,7 +2287,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	if max_speed > 0.0:
 		speed_ratio = clamp(ship_data.velocity.length() / max_speed, 0.0, 1.0)
 	var turn_falloff: float = ship_data.stats.get("turn_rate_falloff", 0.0)
-	var effective_turn_rate: float = ship_data.stats.turn_rate * (1.0 - turn_falloff * speed_ratio)
+	var effective_turn_rate: float = _read_modified_turn_rate(ship_data) * (1.0 - turn_falloff * speed_ratio)
 
 	# AREA LEASH — every ship has an assigned operating area. Outside it,
 	# the pilot's heading is gradually pulled back toward the area center;
@@ -2317,7 +2343,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		# Beyond 90° - no thrust, ship needs to turn first
 
 		# Apply throttle and alignment to acceleration
-		var effective_acceleration = ship_data.stats.acceleration * throttle * alignment_factor
+		var effective_acceleration = _read_modified_acceleration(ship_data) * throttle * alignment_factor
 
 		# Thrust is ALWAYS in ship_facing direction (engines push from behind)
 		thrust_vector = ship_facing * effective_acceleration * delta
@@ -2328,8 +2354,11 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	if lateral_thrust_dir != 0:
 		# Perpendicular to ship facing (90° rotation)
 		var perpendicular = Vector2(-ship_facing.y, ship_facing.x)
-		# Lateral acceleration is weaker than main engines
-		var lateral_accel = ship_data.stats.acceleration * ship_data.stats.get("lateral_acceleration", 0.3)
+		# Lateral acceleration is weaker than main engines; pilot skill gates
+		# how much of that base lateral capacity actually delivers.
+		var lateral_accel = _read_modified_acceleration(ship_data) \
+			* ship_data.stats.get("lateral_acceleration", 0.3) \
+			* _read_modified_lateral_factor(ship_data)
 		thrust_vector += perpendicular * lateral_accel * lateral_thrust_dir * delta
 		maneuvering_direction = perpendicular * lateral_thrust_dir
 
@@ -2338,7 +2367,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	var reverse_thrust_amount = pilot_control.get("reverse_thrust", 0.0)  # 0.0 to 1.0
 	if reverse_thrust_amount > 0.0:
 		# Thrust opposite to ship facing direction
-		var reverse_accel = ship_data.stats.acceleration * ship_data.stats.get("reverse_acceleration", 0.4)
+		var reverse_accel = _read_modified_acceleration(ship_data) * ship_data.stats.get("reverse_acceleration", 0.4)
 		thrust_vector -= ship_facing * reverse_accel * reverse_thrust_amount * delta
 
 	# FRONT BRAKE THRUST: Emergency braking - powerful but heat-limited
@@ -2360,7 +2389,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 			# Brake direction is opposite to velocity (stops the ship regardless of facing)
 			var brake_direction = -ship_data.velocity.normalized()
 			# Brake acceleration is as powerful as main engines
-			var brake_accel = ship_data.stats.acceleration * ship_data.stats.get("brake_acceleration", 1.0)
+			var brake_accel = _read_modified_acceleration(ship_data) * ship_data.stats.get("brake_acceleration", 1.0)
 			var brake_force = brake_direction * brake_accel * brake_thrust_amount * delta
 
 			# Don't overshoot - limit braking to not reverse direction
@@ -2397,7 +2426,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	# their own deceleration). Tunable per ship via the
 	# `inertial_dampening` stat (1/sec): higher = tighter, 0 = pure
 	# Newtonian.
-	var inertial_dampening: float = ship_data.stats.get("inertial_dampening", 0.0)
+	var inertial_dampening: float = _read_modified_dampening(ship_data)
 	if inertial_dampening > 0.0 and lateral_thrust_dir == 0 and not pilot_control.get("is_braking", false):
 		var v_along_facing: float = new_velocity.dot(ship_facing)
 		var v_perpendicular: Vector2 = new_velocity - ship_facing * v_along_facing

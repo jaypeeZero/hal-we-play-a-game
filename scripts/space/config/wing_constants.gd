@@ -398,3 +398,27 @@ const FLEET_RESERVE_MAX = 0.3                # 1.0-skill: holds 30% in reserve
 ## Engagement timing accuracy
 const FLEET_TIMING_MIN = 0.5                 # 0-skill: poor timing
 const FLEET_TIMING_MAX = 1.0                 # 1.0-skill: optimal timing
+
+# =============================================================================
+# SUBSYSTEM TARGETING - elite gunner damage routing
+# =============================================================================
+
+## Probability that a hit from a SUBSYSTEM-aimed shot routes its internal
+## damage to the explicitly intended subsystem (vs. closest-component fallback).
+const SUBSYSTEM_INTENDED_HIT_BIAS = 0.7
+
+# =============================================================================
+# DEBUG OVERLAY - floating crew table
+# =============================================================================
+
+## Pixel offset between the ship's hull bottom-right and the table corner.
+const OVERLAY_HULL_OFFSET_PX = Vector2(8.0, 8.0)
+
+## Color thresholds for the 0–20 stat gradient. Buckets: red 0–6, yellow 7–13,
+## green 14–20. A "dim" gray is used for stats the role does not read.
+const OVERLAY_STAT_COLOR_LOW = Color(0.95, 0.35, 0.35, 1.0)
+const OVERLAY_STAT_COLOR_MID = Color(0.95, 0.85, 0.30, 1.0)
+const OVERLAY_STAT_COLOR_HIGH = Color(0.45, 0.95, 0.45, 1.0)
+const OVERLAY_STAT_COLOR_DIM = Color(0.55, 0.55, 0.55, 0.7)
+const OVERLAY_STAT_LOW_MAX = 6
+const OVERLAY_STAT_MID_MAX = 13
