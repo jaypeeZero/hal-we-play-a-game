@@ -65,11 +65,14 @@ func create_corvette_pilot(id: String, ship_id: String, has_captain: bool = true
 		"role": CrewData.Role.PILOT,
 		"assigned_to": ship_id,
 		"stats": {
-			"skill": 0.7,
 			"reaction_time": 0.1,
 			"stress": 0.0,
 			"fatigue": 0.0,
-			"decision_time": 0.3
+			"decision_time": 0.3,
+			"skills": {
+				"aim": 0.7, "piloting": 0.7, "awareness": 0.7,
+				"tactics": 0.7, "composure": 0.7, "aggression": 0.5
+			}
 		},
 		"awareness": {
 			"threats": [],

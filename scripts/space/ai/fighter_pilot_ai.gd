@@ -11,7 +11,7 @@ class_name FighterPilotAI
 ##
 ## Skill Impact:
 ## - Lead skill affects: target selection, maneuver quality, prediction accuracy
-## - Wingman skill affects: formation tightness, reaction speed, anticipation
+## - Wingman skill affects: formation tightness, reaction speed, prediction
 ##
 ## Distance-based speed control:
 ## - Far away (>5000): full speed approach
@@ -141,7 +141,7 @@ static func _generate_fighter_situation(ship_data: Dictionary, target_ship: Dict
 
 ## Select best maneuver from knowledge based on crew skills
 static func _select_maneuver_from_knowledge(knowledge: Dictionary, crew_data: Dictionary) -> String:
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	var composure = crew_data.get("stats", {}).get("skills", {}).get("composure", skill)
 	var stress = crew_data.get("stats", {}).get("stress", 0.0)
 
@@ -287,7 +287,7 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 ## Skill heavily influences decision quality
 static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wing_info: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
 	var wing = wing_info.get("wing", {})
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	var skills = crew_data.get("stats", {}).get("skills", {})
 
 	# LEAD TARGET SELECTION: Skill affects quality
@@ -328,8 +328,7 @@ static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wi
 ## Aggression scales the lock duration so personalities show: aggressive
 ## pilots commit longer to a kill, cautious ones reassess sooner.
 static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, all_ships: Array, all_crew: Array) -> String:
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
-	var situational_awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", skill)
+	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", skill)
 	var combat_state: Dictionary = crew_data.get("combat_state", {})
 
@@ -390,7 +389,7 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 
 ## Calculate target score based on lead's skills
 static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array) -> float:
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	var my_ship_id = crew_data.get("assigned_to", "")
 	var my_ship = _get_ship_by_id(my_ship_id, all_ships)
 	var my_pos = my_ship.get("position", Vector2.ZERO) if not my_ship.is_empty() else Vector2.ZERO
@@ -429,8 +428,8 @@ static func _calculate_target_score(crew_data: Dictionary, target_ship: Dictiona
 		score -= other_engager_count * WingConstants.TARGET_SCORE_DECONFLICTION_PENALTY
 
 	# Targets that are a threat (facing us) score higher - situational awareness
-	var situational_awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", skill)
-	if situational_awareness >= WingConstants.LEAD_NOTICE_THREATS_SKILL:
+	var awareness_skill = crew_data.get("stats", {}).get("skills", {}).get("awareness", skill)
+	if awareness_skill >= WingConstants.LEAD_NOTICE_THREATS_SKILL:
 		var target_rotation = target_ship.get("rotation", 0.0)
 		var target_facing = Vector2(cos(target_rotation), sin(target_rotation))
 		var to_me = (my_pos - target_pos).normalized()
@@ -478,7 +477,7 @@ static func _make_wingman_decision(crew_data: Dictionary, ship_data: Dictionary,
 	var wing = wing_info.get("wing", {})
 	var position_side = wing_info.get("position_side", 1)
 	var slot_rank = wing_info.get("slot_rank", 0)
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 
 	var lead_ship_id = wing.get("lead_ship_id", "")
 	var lead_ship = _get_ship_by_id(lead_ship_id, all_ships)
@@ -660,11 +659,11 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 	var distance = my_pos.distance_to(target_pos)
 
 	# Get skill for prediction accuracy
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
-	var anticipation = crew_data.get("stats", {}).get("skills", {}).get("anticipation", skill)
+	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
+	var aim = crew_data.get("stats", {}).get("skills", {}).get("aim", skill)
 
 	# Calculate behind position for pursuit maneuvers
-	var behind_position = _calculate_behind_position(target_ship, anticipation)
+	var behind_position = _calculate_behind_position(target_ship, aim)
 
 	# Check formation status with wingmates
 	var wingmates = _find_wingmates(crew_data, all_crew, all_ships)
@@ -751,7 +750,7 @@ static func _make_fighter_vs_capital_decision(crew_data: Dictionary, ship_data: 
 	var my_pos = ship_data.get("position", Vector2.ZERO)
 	var target_pos = target_ship.get("position", Vector2.ZERO)
 	var distance = my_pos.distance_to(target_pos)
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 
 	# Count friendly fighters nearby
 	var nearby_fighters = _count_nearby_friendly_fighters(ship_data, all_ships)
@@ -843,9 +842,10 @@ static func _am_i_in_front_of_target(my_ship: Dictionary, target_ship: Dictionar
 	# In front means target is behind (180 degrees +/- tolerance)
 	return abs(abs(angle_diff) - 180.0) < BEHIND_ANGLE_TOLERANCE
 
-## Calculate position behind target (for pursuit)
-## Now uses anticipation skill with error margin for low-skill pilots
-static func _calculate_behind_position(target_ship: Dictionary, anticipation: float = 0.5) -> Vector2:
+## Calculate position behind target (for pursuit). Uses the pilot's `aim`
+## skill (which folds in lead-prediction quality) with an error margin for
+## low-aim pilots.
+static func _calculate_behind_position(target_ship: Dictionary, aim: float = 0.5) -> Vector2:
 	var target_pos = target_ship.get("position", Vector2.ZERO)
 	var target_rotation = target_ship.get("rotation", 0.0)
 	var target_velocity = target_ship.get("velocity", Vector2.ZERO)
@@ -855,16 +855,13 @@ static func _calculate_behind_position(target_ship: Dictionary, anticipation: fl
 	var ideal_distance = (MIN_COMBAT_RANGE + CLOSE_RANGE) / 2.0  # ~550 units
 	var behind_offset = Vector2(cos(target_rotation + PI), sin(target_rotation + PI)) * ideal_distance
 
-	# Prediction lookahead scales with anticipation skill
-	# 0.0 anticipation = 0.1s ahead
-	# 0.5 anticipation = 0.3s ahead
-	# 1.0 anticipation = 0.8s ahead
-	var prediction_time = lerp(0.1, 0.8, anticipation)
+	# Prediction lookahead scales with aim: 0.0 → 0.1s, 0.5 → 0.3s, 1.0 → 0.8s
+	var prediction_time = lerp(0.1, 0.8, aim)
 
 	var predicted_pos = target_pos + target_velocity * prediction_time
 
-	# Low anticipation adds prediction error (missing where target actually is)
-	var error_magnitude = (1.0 - anticipation) * 100.0  # 0-100 units of error
+	# Low aim adds prediction error (missing where target actually is)
+	var error_magnitude = (1.0 - aim) * 100.0
 	var error_angle = randf_range(0, TAU)
 	var error_offset = Vector2(cos(error_angle), sin(error_angle)) * error_magnitude
 
@@ -1010,7 +1007,7 @@ static func _count_nearby_friendly_fighters(my_ship: Dictionary, all_ships: Arra
 
 ## Find best target from awareness, with fallback to scanning all ships
 static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String:
-	var skill = crew_data.get("stats", {}).get("skill", 0.5)
+	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	var awareness = crew_data.get("awareness", {})
 	var threats = awareness.get("threats", [])
 	var opportunities = awareness.get("opportunities", [])
@@ -1101,7 +1098,7 @@ static func _make_idle_decision(crew_data: Dictionary, game_time: float) -> Dict
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": crew_data.get("assigned_to", ""),
 		"target_id": "",
-		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
+		"skill_factor": crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5),
 		"delay": 2.0,  # Check again in 2 seconds
 		"timestamp": game_time
 	}
@@ -1114,7 +1111,7 @@ static func _make_pursuit_decision(crew_data: Dictionary, ship_data: Dictionary,
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": target_ship.get("ship_id", ""),
-		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
+		"skill_factor": crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5),
 		"delay": crew_data.get("stats", {}).get("reaction_time", 0.1),
 		"timestamp": game_time
 	}
@@ -1221,7 +1218,7 @@ static func _make_rejoin_wingman_decision(crew_data: Dictionary, ship_data: Dict
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": partner_ship.get("ship_id", ""),  # Target is the lead ship
 		"formation_position": formation_pos,
-		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
+		"skill_factor": crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5),
 		"delay": 0.3,  # Check frequently when rejoining
 		"timestamp": game_time
 	}
@@ -1310,7 +1307,7 @@ static func _count_nearby_combatants(ship_data: Dictionary, all_ships: Array) ->
 	return {"enemies": enemies, "friends": friends}
 
 static func _make_survival_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, mode: String, game_time: float) -> Dictionary:
-	var skill: float = crew_data.get("stats", {}).get("skill", 0.5)
+	var skill: float = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	# Pick the closest enemy as the immediate threat to evade from / retreat from
 	var threat_id: String = _find_closest_enemy_id(ship_data, all_ships)
 	var threat_ship: Dictionary = _get_ship_by_id(threat_id, all_ships) if threat_id != "" else {}
@@ -1383,7 +1380,7 @@ static func _make_return_to_area_decision(crew_data: Dictionary, ship_data: Dict
 		"crew_id": crew_data.get("crew_id", ""),
 		"entity_id": ship_data.get("ship_id", ""),
 		"target_id": "",
-		"skill_factor": crew_data.get("stats", {}).get("skill", 0.5),
+		"skill_factor": crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5),
 		"delay": 0.4,
 		"timestamp": game_time
 	}

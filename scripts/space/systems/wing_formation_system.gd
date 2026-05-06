@@ -95,7 +95,7 @@ static func form_wings(all_ships: Array, all_crew: Array, previous_wings: Array 
 					wing.wingmen.append({
 						"ship_id": solo_fighter.ship.get("ship_id", ""),
 						"crew_id": solo_fighter.crew.get("crew_id", ""),
-						"skill": solo_fighter.crew.get("stats", {}).get("skill", 0.5),
+						"skill": solo_fighter.crew.get("stats", {}).get("skills", {}).get("piloting", 0.5),
 						"position_side": 1 if on_right else -1,
 						"slot_rank": rank
 					})
@@ -158,8 +158,8 @@ static func _form_team_wings(team_fighters: Array, assigned_ship_ids: Dictionary
 	# Sort by skill (highest first) - high skill pilots become leads
 	var sorted_fighters = team_fighters.duplicate()
 	sorted_fighters.sort_custom(func(a, b):
-		var skill_a = a.crew.get("stats", {}).get("skill", 0.5)
-		var skill_b = b.crew.get("stats", {}).get("skill", 0.5)
+		var skill_a = a.crew.get("stats", {}).get("skills", {}).get("piloting", 0.5)
+		var skill_b = b.crew.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 		return skill_a > skill_b  # Descending
 	)
 
@@ -180,7 +180,7 @@ static func _form_team_wings(team_fighters: Array, assigned_ship_ids: Dictionary
 		var wing = {
 			"lead_ship_id": ship_id,
 			"lead_crew_id": fighter.crew.get("crew_id", ""),
-			"lead_skill": fighter.crew.get("stats", {}).get("skill", 0.5),
+			"lead_skill": fighter.crew.get("stats", {}).get("skills", {}).get("piloting", 0.5),
 			"wingmen": [],
 			"wing_type": "solo",  # Reclassified below as wingmen are added
 			"team": fighter.ship.get("team", -1),
@@ -208,7 +208,7 @@ static func _form_team_wings(team_fighters: Array, assigned_ship_ids: Dictionary
 			wing.wingmen.append({
 				"ship_id": wm_ship_id,
 				"crew_id": wingman.crew.get("crew_id", ""),
-				"skill": wingman.crew.get("stats", {}).get("skill", 0.5),
+				"skill": wingman.crew.get("stats", {}).get("skills", {}).get("piloting", 0.5),
 				"position_side": 1 if on_right else -1,
 				"slot_rank": slot_rank
 			})
@@ -240,8 +240,8 @@ static func _find_nearby_unassigned(lead_fighter: Dictionary, all_fighters: Arra
 
 	# Sort by skill (prefer higher-skilled wingmen)
 	nearby.sort_custom(func(a, b):
-		var skill_a = a.crew.get("stats", {}).get("skill", 0.5)
-		var skill_b = b.crew.get("stats", {}).get("skill", 0.5)
+		var skill_a = a.crew.get("stats", {}).get("skills", {}).get("piloting", 0.5)
+		var skill_b = b.crew.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 		return skill_a > skill_b
 	)
 

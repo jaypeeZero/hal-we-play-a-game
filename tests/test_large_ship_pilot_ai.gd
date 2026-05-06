@@ -53,11 +53,17 @@ func _make_pilot(id: String, ship_id: String, aggression: float = 0.5, skill: fl
 		"role": CrewData.Role.PILOT,
 		"assigned_to": ship_id,
 		"stats": {
-			"skill": skill,
 			"reaction_time": 0.1,
 			"stress": 0.0,
 			"fatigue": 0.0,
-			"skills": {"aggression": aggression, "composure": skill},
+			"skills": {
+				"aim": skill,
+				"piloting": skill,
+				"awareness": skill,
+				"tactics": skill,
+				"composure": skill,
+				"aggression": aggression
+			},
 		},
 		"awareness": {"threats": [], "opportunities": [], "known_entities": []},
 		"orders": {"received": null, "current": null},

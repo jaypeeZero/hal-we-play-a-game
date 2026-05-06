@@ -317,7 +317,7 @@ const CAPTAIN_DECISION_DELAY_MAX = 1.5       # 0-skill: slow, hesitant
 # CAPTAIN SKILL - Behavior thresholds
 # =============================================================================
 # Low skill captains react slowly with poor priorities
-# Higher skill enables anticipation and adaptation
+# Higher skill enables foresight and adaptation
 
 ## Skill for reactive command (only responds to immediate threats)
 const CAPTAIN_REACTIVE_SKILL = 0.3
@@ -406,6 +406,34 @@ const FLEET_TIMING_MAX = 1.0                 # 1.0-skill: optimal timing
 ## Probability that a hit from a SUBSYSTEM-aimed shot routes its internal
 ## damage to the explicitly intended subsystem (vs. closest-component fallback).
 const SUBSYSTEM_INTENDED_HIT_BIAS = 0.7
+
+# =============================================================================
+# AWARENESS & DETECTION (Phase 03)
+# =============================================================================
+# Skill-based detection latency. Awareness gates how quickly a crew member's
+# mailbox actually receives a `threat_appeared` event after the world fires
+# it; rookie crew lag, elites snap to it. Damage is felt faster than threats
+# are spotted, but still not instant.
+
+## Maximum mailbox delivery delay for `threat_appeared` (seconds).
+## A 0.0-awareness crew waits this long; a 1.0-awareness crew is immediate.
+const MAX_DETECTION_LAG = 0.9
+
+## Same for `ship_damaged` — you feel a hit faster than you spot a fighter.
+const MAX_DAMAGE_PERCEPTION_LAG = 0.25
+
+## How many threats the highest-awareness crew can hold on their list. The
+## visible cap scales as `floor(awareness * MAX_VISIBLE_THREATS)` (min 1).
+const MAX_VISIBLE_THREATS = 8
+
+## At/above this `tactics`, threat ordering is clean. Below it, ranking is
+## perturbed by random noise (low-tactics crew sometimes attack the wrong
+## threat first).
+const HIGH_TACTICS_THRESHOLD = 0.7
+
+## Multiplicative urgency noise applied to low-tactics crew's threat
+## ranking. ±this fraction at zero tactics; tapers to 0 at HIGH_TACTICS_THRESHOLD.
+const TACTICS_NOISE = 0.5
 
 # =============================================================================
 # DEBUG OVERLAY - floating crew table

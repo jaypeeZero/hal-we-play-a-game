@@ -325,7 +325,7 @@ static func calculate_weapon_world_position(ship_data: Dictionary, weapon: Dicti
 ## Calculate lead position based on gunner skill and targeting style
 ## SIMPLE: No lead - aims at current position
 ## LEADING: Basic velocity prediction with skill-based accuracy
-## PREDICTIVE: Full prediction with anticipation
+## PREDICTIVE: Full prediction (anticipates target maneuvers)
 ## SUBSYSTEM: Perfect lead plus weak point targeting
 static func calculate_lead_position(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> Vector2:
 	if not target.has("velocity"):
@@ -349,7 +349,7 @@ static func calculate_lead_position(ship_data: Dictionary, weapon: Dictionary, t
 		# Blend between current position and perfect lead based on skill
 		return target.position.lerp(perfect_lead, lead_accuracy * 0.7)
 
-	# PREDICTIVE targeting: Full prediction with anticipation of maneuvers
+	# PREDICTIVE targeting: full prediction that anticipates maneuvers
 	if targeting_style == CrewIntegrationSystem.TargetingStyle.PREDICTIVE:
 		# Use full lead calculation with small error margin
 		var error_margin = (1.0 - lead_accuracy) * 0.2

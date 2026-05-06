@@ -25,13 +25,13 @@ func create_test_crew(crew_id: String, ship_id: String, skill: float = 0.5) -> D
 		"assigned_to": ship_id,
 		"role": CrewData.Role.PILOT,
 		"stats": {
-			"skill": skill,
 			"skills": {
-				"situational_awareness": skill,
-				"aggression": skill,
+				"aim": skill,
+				"piloting": skill,
+				"awareness": skill,
+				"tactics": skill,
 				"composure": skill,
-				"anticipation": skill,
-				"marksmanship": skill
+				"aggression": skill
 			}
 		},
 		"orders": {"current": {}},

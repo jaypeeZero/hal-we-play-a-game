@@ -23,18 +23,6 @@ const STAT_NAMES: Array = [
 	"aim", "piloting", "awareness", "tactics", "composure", "aggression"
 ]
 
-# Pre-Phase-03 the canonical six aren't all present on `stats.skills`. Map
-# the new names back to whatever stats currently exist; missing keys fall
-# back to the legacy aggregate `stats.skill`. This mapping disappears after
-# Phase 03's rename pass.
-const LEGACY_STAT_FALLBACK: Dictionary = {
-	"aim": "marksmanship",
-	"awareness": "situational_awareness",
-	"composure": "composure",
-	"aggression": "aggression",
-	# piloting, tactics — no legacy field, fall back to stats.skill
-}
-
 # Which stats each role actually reads (per 01_overview.md §3.4). Other
 # stats render dimmed gray to distinguish "high but unused" from "high and
 # used."
@@ -166,14 +154,13 @@ func _draw_crew_table(ship: Dictionary) -> void:
 		var role_label: String = row.role_label
 		var role_key: String = row.role_key
 		var skills: Dictionary = row.skills
-		var aggregate_skill: float = row.aggregate_skill
 		var read_set: Dictionary = _role_read_set(role_key)
 
 		_draw_text(role_label, Vector2(anchor.x, row_y + TABLE_LINE_HEIGHT - 2), TABLE_ROLE_COLOR)
 
 		for i in STAT_NAMES.size():
 			var stat_name: String = STAT_NAMES[i]
-			var raw: float = _resolve_stat(stat_name, skills, aggregate_skill)
+			var raw: float = float(skills.get(stat_name, 0.5))
 			var value_int: int = int(round(clamp(raw, 0.0, 1.0) * 20.0))
 			var is_read: bool = read_set.get(stat_name, false)
 			var color: Color = _stat_color(value_int, is_read)
@@ -206,7 +193,6 @@ func _collect_crew_rows(ship: Dictionary) -> Array:
 			"role_label": role_label,
 			"role_key": role_key,
 			"skills": stats.get("skills", {}),
-			"aggregate_skill": float(stats.get("skill", 0.5)),
 		})
 	return rows
 
@@ -221,15 +207,6 @@ func _table_anchor(ship: Dictionary) -> Vector2:
 	var corner: Vector2 = ship_pos + Vector2(size, size)
 	var anchor: Vector2 = corner + WingConstants.OVERLAY_HULL_OFFSET_PX
 	return anchor
-
-
-func _resolve_stat(stat_name: String, skills: Dictionary, aggregate: float) -> float:
-	if skills.has(stat_name):
-		return float(skills.get(stat_name, aggregate))
-	var legacy_key: String = LEGACY_STAT_FALLBACK.get(stat_name, "")
-	if legacy_key != "" and skills.has(legacy_key):
-		return float(skills.get(legacy_key, aggregate))
-	return aggregate
 
 
 func _role_read_set(role_key: String) -> Dictionary:

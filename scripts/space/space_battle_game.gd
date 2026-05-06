@@ -867,8 +867,13 @@ func _apply_crew_decisions(decisions: Array) -> void:
 	var result = CrewIntegrationSystem.apply_crew_decisions_to_ships(_ships, _crew_list, decisions)
 	_ships = result.ships
 
-## Detect newly-visible enemies and lost contacts; post sensor_contact /
+## Detect newly-visible enemies and lost contacts; post threat_appeared /
 ## target_lost events into the mailbox so the scheduler wakes the crew.
+##
+## Detection latency is per-crew: a high-awareness pilot perceives the
+## threat almost immediately; a rookie pilot's mailbox event is held back
+## by up to MAX_DETECTION_LAG seconds via the event's `deliver_at`. This
+## is the foundation of S1 ("The First Burst").
 func _check_spatial_awareness_triggers(ship_grid: Dictionary) -> void:
 	# For each crew member, check if enemies enter/exit their awareness range
 	for i in range(_crew_list.size()):
@@ -901,11 +906,13 @@ func _check_spatial_awareness_triggers(ship_grid: Dictionary) -> void:
 
 				# New contact?
 				if not previous_contacts.has(other_ship.ship_id):
-					_queue_crew_event(crew.crew_id, "sensor_contact", {
+					var awareness: float = clamp(float(crew.get("stats", {}).get("skills", {}).get("awareness", 0.5)), 0.0, 1.0)
+					var latency: float = (1.0 - awareness) * WingConstants.MAX_DETECTION_LAG
+					_queue_crew_event(crew.crew_id, "threat_appeared", {
 						"enemy_id": other_ship.ship_id,
 						"position": other_ship.position,
 						"distance": distance
-					})
+					}, latency)
 
 		# Fire target_lost for ships that were visible last frame but aren't now.
 		for previous_id in previous_contacts.keys():
@@ -925,13 +932,22 @@ func _check_spatial_awareness_triggers(ship_grid: Dictionary) -> void:
 ## Queue an event for a crew member.  Wakes them on the next scheduler tick
 ## and supplies the event to apply_event_side_effects (tactical memory,
 ## current_target updates, urgent-event dispatch).
-func _queue_crew_event(crew_id: String, event_type: String, data: Dictionary) -> void:
-	_crew_mailboxes = CrewMailboxSystem.post_event(_crew_mailboxes, crew_id, {
+##
+## `latency_seconds` lets perception be skill-gated: a low-awareness crew
+## sees a `threat_appeared` event hundreds of ms after a high-awareness one.
+func _queue_crew_event(crew_id: String, event_type: String, data: Dictionary, latency_seconds: float = 0.0) -> void:
+	var event: Dictionary = {
 		"type": event_type,
 		"data": data
-	})
+	}
+	if latency_seconds > 0.0:
+		var game_time: float = Time.get_ticks_msec() / 1000.0
+		event["deliver_at"] = game_time + latency_seconds
+	_crew_mailboxes = CrewMailboxSystem.post_event(_crew_mailboxes, crew_id, event)
 
-## Emit damage events to crew of damaged ships
+## Emit damage events to crew of damaged ships. Damage is felt fast — but
+## not instantly: a low-awareness pilot still loses ~MAX_DAMAGE_PERCEPTION_LAG
+## sorting out what just hit them.
 func _emit_damage_events(hits: Array) -> void:
 	for hit in hits:
 		var target_id = hit.get("target_id", "")
@@ -941,11 +957,13 @@ func _emit_damage_events(hits: Array) -> void:
 		# Find crew assigned to this ship
 		for crew in _crew_list:
 			if crew.assigned_to == target_id:
+				var awareness: float = clamp(float(crew.get("stats", {}).get("skills", {}).get("awareness", 0.5)), 0.0, 1.0)
+				var latency: float = (1.0 - awareness) * WingConstants.MAX_DAMAGE_PERCEPTION_LAG
 				_queue_crew_event(crew.crew_id, "ship_damaged", {
 					"damage": hit.get("damage", 0),
 					"section": hit.get("section", ""),
 					"attacker": hit.get("projectile_id", "")
-				})
+				}, latency)
 
 ## Create and assign crew to a ship
 func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> void:

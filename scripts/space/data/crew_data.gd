@@ -61,20 +61,22 @@ static func _generate_stats_for_role(role: Role, skill_level: float) -> Dictiona
 	# Base stats that vary by role
 	var role_modifiers = _get_role_modifiers(role)
 
+	var base = clamp(skill_level, 0.0, 1.0)
 	return {
-		"skill": clamp(skill_level, 0.0, 1.0),  # Base competency
 		"reaction_time": _calculate_reaction_time(skill_level, role_modifiers.reaction_base),
 		"awareness_range": role_modifiers.awareness_range,
 		"decision_time": _calculate_decision_time(skill_level, role_modifiers.decision_base),
 		"stress": 0.0,  # Increases in combat, reduces performance
 		"fatigue": 0.0,  # Increases over time
-		# NEW: Discrete skills (each 0.0-1.0)
+		# Six-stat schema. Every stat is mechanically wired; what changes by
+		# role is *which* stats are read.
 		"skills": {
-			"situational_awareness": skill_level,  # Detection, threat tracking
-			"aggression": skill_level,             # Engagement distance, closing behavior
-			"composure": skill_level,              # Performance under pressure
-			"anticipation": skill_level,           # Target prediction accuracy
-			"marksmanship": skill_level            # Weapon accuracy
+			"aim": base,        # Weapon accuracy, lead quality, prediction
+			"piloting": base,   # Turn rate, accel, lateral, dampening, jink, evasion commit
+			"awareness": base,  # Sensor range, detection latency, threat prioritization
+			"tactics": base,    # Command-style, squadron coord, retreat, target prio, DC speed
+			"composure": base,  # Performance under stress; gates panic
+			"aggression": base  # Engagement bias / persistence — personality, not skill
 		}
 	}
 
@@ -156,7 +158,7 @@ static func create_heavy_fighter_crew(skill_level: float = 0.5) -> Array:
 static func create_torpedo_boat_crew(skill_level: float = 0.5) -> Array:
 	var pilot = create_crew_member(Role.PILOT, skill_level)
 
-	# Torpedo operator - needs good anticipation for slow projectiles
+	# Torpedo operator — slow projectiles reward strong aim/lead prediction.
 	var torpedo_operator = create_crew_member(Role.GUNNER, skill_level * 0.95)
 
 	# Torpedo operator reports to pilot
@@ -314,7 +316,7 @@ static func create_crew_member_with_varied_skills(role: Role, skill_level: float
 	var crew = create_crew_member(role, skill_level)
 
 	# Generate varied discrete skills around the base skill_level
-	var skill_names = ["situational_awareness", "aggression", "composure", "anticipation", "marksmanship"]
+	var skill_names = ["aim", "piloting", "awareness", "tactics", "composure", "aggression"]
 	for skill_name in skill_names:
 		var variance = randf_range(-0.15, 0.15)
 		crew.stats.skills[skill_name] = clamp(skill_level + variance, 0.0, 1.0)
@@ -330,23 +332,24 @@ static func create_pilot_archetype(archetype: String, skill_level: float = 0.5) 
 		"aggressive_ace":
 			skills["aggression"] = 0.9
 			skills["composure"] = 0.7
-			skills["anticipation"] = clamp(skill_level + 0.1, 0.0, 1.0)
-			skills["situational_awareness"] = clamp(skill_level + 0.05, 0.0, 1.0)
+			skills["aim"] = clamp(skill_level + 0.1, 0.0, 1.0)
+			skills["awareness"] = clamp(skill_level + 0.05, 0.0, 1.0)
 		"calculating_ace":
 			skills["aggression"] = 0.4
-			skills["anticipation"] = 0.95
-			skills["situational_awareness"] = 0.9
+			skills["aim"] = 0.95
+			skills["awareness"] = 0.9
+			skills["tactics"] = 0.9
 			skills["composure"] = clamp(skill_level + 0.1, 0.0, 1.0)
 		"survivor":
 			skills["composure"] = 0.95
-			skills["situational_awareness"] = 0.9
+			skills["awareness"] = 0.9
 			skills["aggression"] = 0.3
-			skills["anticipation"] = clamp(skill_level + 0.1, 0.0, 1.0)
+			skills["piloting"] = clamp(skill_level + 0.1, 0.0, 1.0)
 		"hot_head":
 			skills["aggression"] = 0.95
 			skills["composure"] = 0.2
-			skills["anticipation"] = 0.3
-			skills["marksmanship"] = clamp(skill_level + 0.15, 0.0, 1.0)
+			skills["tactics"] = 0.3
+			skills["aim"] = clamp(skill_level + 0.15, 0.0, 1.0)
 		_:
 			pass  # Use varied skills as generated
 

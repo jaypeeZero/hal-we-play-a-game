@@ -56,10 +56,13 @@ func create_pilot_crew(id: String, ship_id: String) -> Dictionary:
 		"role": CrewData.Role.PILOT,
 		"assigned_to": ship_id,
 		"stats": {
-			"skill": 0.8,
 			"reaction_time": 0.1,
 			"stress": 0.0,
-			"fatigue": 0.0
+			"fatigue": 0.0,
+			"skills": {
+				"aim": 0.8, "piloting": 0.8, "awareness": 0.8,
+				"tactics": 0.8, "composure": 0.8, "aggression": 0.5
+			}
 		},
 		"awareness": {
 			"threats": [],
@@ -370,7 +373,7 @@ func test_skilled_pilot_chooses_lateral_break_on_collision():
 	enemy.rotation = PI
 
 	var crew = create_pilot_crew("pilot1", "fighter1")
-	crew.stats.skill = 0.8  # Skilled pilot
+	crew.stats.skills.piloting = 0.8  # Skilled pilot
 	crew.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, enemy], [crew], game_time)
@@ -678,7 +681,7 @@ func test_pass_by_offset_pair_picks_consistent_side():
 
 func _make_lead_crew(crew_id: String, ship_id: String, skill: float = 0.7) -> Dictionary:
 	var crew = create_pilot_crew(crew_id, ship_id)
-	crew.stats.skill = skill
+	crew.stats.skills.piloting = skill
 	return crew
 
 func _set_engaging(crew: Dictionary, target_id: String) -> Dictionary:
@@ -769,7 +772,7 @@ func test_rookie_leads_still_fixate_no_deconfliction():
 
 func _make_wing_crew_with_skill(crew_id: String, ship_id: String, skill: float) -> Dictionary:
 	var crew = create_pilot_crew(crew_id, ship_id)
-	crew.stats.skill = skill
+	crew.stats.skills.piloting = skill
 	crew.assigned_to = ship_id
 	return crew
 

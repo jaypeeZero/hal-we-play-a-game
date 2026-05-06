@@ -12,7 +12,7 @@ func test_create_pilot():
 
 	assert_not_null(pilot.crew_id)
 	assert_eq(pilot.role, CrewData.Role.PILOT)
-	assert_eq(pilot.stats.skill, 0.7)
+	assert_eq(pilot.stats.skills.piloting, 0.7)
 	assert_gt(pilot.stats.awareness_range, 0)
 	assert_has(pilot, "awareness")
 	assert_has(pilot, "orders")

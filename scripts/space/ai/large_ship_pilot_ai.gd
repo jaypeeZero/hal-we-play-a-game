@@ -266,8 +266,11 @@ static func _phase_to_maneuver(phase: String) -> String:
 static func _read_aggression(crew_data: Dictionary) -> float:
 	return clamp(float(crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)), 0.0, 1.0)
 
+## Capital pilots are read for `tactics` (broadside warfare is range/arc
+## management, not fly-by-wire). See 01_overview.md role-stat table.
 static func _read_skill(crew_data: Dictionary) -> float:
-	return clamp(float(crew_data.get("stats", {}).get("skill", 0.5)), 0.0, 1.0)
+	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
+	return clamp(float(skills.get("tactics", 0.5)), 0.0, 1.0)
 
 ## Effective skill — pure skill scaled by composure under stress. A stressed,
 ## low-composure captain misjudges the situation as if they were less skilled.
@@ -397,16 +400,10 @@ static func _count_nearby_capitals(ship_data: Dictionary, all_ships: Array) -> D
 ## ---------------------------------------------------------------------------
 ## TACTICAL BREAK
 ## ---------------------------------------------------------------------------
-## Interrupts the FSM when:
-##   - any awareness threat is flagged "missile_locked" / "torpedo_locked", OR
-##   - a capital-class enemy is within TACTICAL_BREAK_RANGE_LARGE with their
-##     nose on us. Returns the offending threat ship dict, or {}.
-static func _check_tactical_break(ship_data: Dictionary, all_ships: Array, crew_data: Dictionary) -> Dictionary:
-	if _has_lock_alarm(crew_data):
-		var threat_id := _find_closest_capital_threat(ship_data, all_ships)
-		if threat_id != "":
-			return _get_ship_by_id(threat_id, all_ships)
-
+## Interrupts the FSM when a capital-class enemy is within
+## TACTICAL_BREAK_RANGE_LARGE with their nose on us. Returns the offending
+## threat ship dict, or {}.
+static func _check_tactical_break(ship_data: Dictionary, all_ships: Array, _crew_data: Dictionary) -> Dictionary:
 	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
 	var my_id: String = str(ship_data.get("ship_id", ""))
 	var my_team: int = ship_data.get("team", -1)
@@ -426,34 +423,6 @@ static func _check_tactical_break(ship_data: Dictionary, all_ships: Array, crew_
 		if _nose_to_target_dot(ship, ship_data) >= TACTICAL_BREAK_ARC_DOT:
 			return ship
 	return {}
-
-static func _has_lock_alarm(crew_data: Dictionary) -> bool:
-	var threats: Array = crew_data.get("awareness", {}).get("threats", [])
-	for threat in threats:
-		if not (threat is Dictionary):
-			continue
-		var tag := str(threat.get("type", ""))
-		if tag == "missile_locked" or tag == "torpedo_locked":
-			return true
-		if bool(threat.get("missile_locked", false)) or bool(threat.get("torpedo_locked", false)):
-			return true
-	return false
-
-static func _find_closest_capital_threat(ship_data: Dictionary, all_ships: Array) -> String:
-	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
-	var my_team: int = ship_data.get("team", -1)
-	var best_id: String = ""
-	var best_d: float = INF
-	for ship in all_ships:
-		if ship.get("team", -1) == my_team:
-			continue
-		if not FleetDataManager.is_large_ship(str(ship.get("type", ""))):
-			continue
-		var d: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
-		if d < best_d:
-			best_d = d
-			best_id = str(ship.get("ship_id", ""))
-	return best_id
 
 
 ## ---------------------------------------------------------------------------

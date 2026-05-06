@@ -62,9 +62,22 @@ static func can_make_decisions(crew_data: Dictionary) -> bool:
 	# High stress/fatigue slows decisions but doesn't stop them
 	return crew_data.assigned_to != null
 
-## Calculate effective skill with stress/fatigue penalties
+## Calculate effective skill with stress/fatigue penalties.
+## Reads the role-appropriate primary stat (Phase 03 default).  Phase 07
+## replaces this with per-stat decay rates.
 static func calculate_effective_skill(crew_data: Dictionary) -> float:
-	var base_skill = crew_data.stats.skill
+	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
+	var role = crew_data.get("role", -1)
+	var base_skill: float = 0.5
+	match role:
+		CrewData.Role.PILOT:
+			base_skill = float(skills.get("piloting", 0.5))
+		CrewData.Role.GUNNER:
+			base_skill = float(skills.get("aim", 0.5))
+		CrewData.Role.CAPTAIN, CrewData.Role.SQUADRON_LEADER, CrewData.Role.FLEET_COMMANDER:
+			base_skill = float(skills.get("tactics", 0.5))
+		_:
+			base_skill = 0.5
 	var stress_penalty = crew_data.stats.stress * 0.3  # Up to 30% penalty
 	var fatigue_penalty = crew_data.stats.fatigue * 0.2  # Up to 20% penalty
 	return max(0.1, base_skill - stress_penalty - fatigue_penalty)

@@ -179,7 +179,11 @@ func test_crew_skill_level_applied():
 	var high_skill_ship = ShipData.create_ship_instance("fighter", 0, Vector2(0, 0), true, 0.9)
 	var low_skill_ship = ShipData.create_ship_instance("fighter", 0, Vector2(0, 0), true, 0.3)
 
-	assert_gt(high_skill_ship.crew[0].stats.skill, low_skill_ship.crew[0].stats.skill, "Crew skill should match specified level")
+	# Six-stat schema: skill_level seeds every stat, so any one of them serves
+	# as a witness that the level was applied.
+	var hi_piloting = high_skill_ship.crew[0].stats.skills.piloting
+	var lo_piloting = low_skill_ship.crew[0].stats.skills.piloting
+	assert_gt(hi_piloting, lo_piloting, "Crew skill should match specified level")
 
 # ============================================================================
 # SHIP VALIDATION TESTS
