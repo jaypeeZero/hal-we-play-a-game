@@ -617,9 +617,14 @@ func _request_obstacle_spawn(obstacle_type: String) -> void:
 
 ## Spawn initial squadrons at game start based on saved fleet configurations
 func _spawn_initial_squadrons() -> void:
-	# Load fleet configurations from saved files (or use defaults)
-	var team0_fleet := FleetDataManager.load_fleet(0)
-	var team1_fleet := FleetDataManager.load_fleet(1)
+	var team0_fleet: Dictionary
+	var team1_fleet: Dictionary
+	if RoguelikeRun.active:
+		team0_fleet = RoguelikeRun.fleet
+		team1_fleet = RoguelikeRun.ENEMY_FLEET
+	else:
+		team0_fleet = FleetDataManager.load_fleet(0)
+		team1_fleet = FleetDataManager.load_fleet(1)
 
 	# Calculate spawn positions on opposite sides of the map
 	var margin = 200.0
@@ -780,6 +785,40 @@ func _end_game(winner: int) -> void:
 		BattleEventLoggerAutoload.service.log_event("game_ended", {"winner": winner})
 
 	print("Game Over! Team %d wins!" % winner)
+
+	if RoguelikeRun.active:
+		_handle_roguelike_battle_end()
+
+
+func _handle_roguelike_battle_end() -> void:
+	var surviving := _count_surviving_team_ships(0)
+	RoguelikeRun.update_fleet_after_battle(surviving)
+
+	var next_scene: String
+	if RoguelikeRun.is_fleet_empty():
+		RoguelikeRun.end_run()
+		next_scene = "res://scenes/fleet_management.tscn"
+	else:
+		next_scene = "res://scenes/roguelite_map.tscn"
+
+	get_tree().call_deferred("change_scene_to_file", next_scene)
+
+
+func _count_surviving_team_ships(team: int) -> Dictionary:
+	var counts := {}
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		counts[ship_type] = 0
+	for ship in _ships:
+		if ship == null:
+			continue
+		if ship.team != team:
+			continue
+		if ship.status == "destroyed":
+			continue
+		var ship_type: String = ship.type
+		if counts.has(ship_type):
+			counts[ship_type] += 1
+	return counts
 
 # ============================================================================
 # PUBLIC API (for testing)
