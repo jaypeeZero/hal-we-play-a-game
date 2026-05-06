@@ -153,7 +153,14 @@ static func execute_pilot_order(crew_data: Dictionary, game_time: float) -> Dict
 		"decision": create_movement_decision(updated, order, game_time)
 	}
 
-## Make evasive maneuver decision
+## Make evasive maneuver decision.
+##
+## Evasion is a *reactive* decision and goes through the pending-intent
+## buffer (Phase 04): we mark the decision with `intent_type` / `commit_at`
+## so `_apply_crew_decisions` stashes it on the ship and PendingIntentSystem
+## applies it once game time crosses commit_at. Elite pilots commit in
+## ~80 ms; rookies in ~700 ms. Stress beyond the composure buffer adds
+## further delay.
 static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
 	var top_threat = crew_data.awareness.threats[0]
 	var updated = crew_data.duplicate(true)
@@ -179,6 +186,7 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 					evasion_subtype = maneuver
 					break
 
+	var commit_delay = calculate_reaction_delay(crew_data, "piloting")
 	var decision = {
 		"type": "maneuver",
 		"subtype": evasion_subtype,
@@ -188,7 +196,10 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 		"urgency": calculate_threat_urgency(top_threat),
 		"skill_factor": calculate_effective_skill(crew_data),
 		"delay": crew_data.stats.reaction_time,
-		"timestamp": game_time
+		"timestamp": game_time,
+		"intent_type": "evasive",
+		"decided_at": game_time,
+		"commit_at": game_time + commit_delay
 	}
 
 	updated.orders.current = decision
@@ -196,6 +207,21 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 	# Evasion needs frequent re-evaluation as the threat geometry changes.
 	updated.next_decision_time = game_time + randf_range(0.3, 0.5)
 	return {"crew_data": updated, "decision": decision}
+
+## Reaction commit delay for a reactive decision.
+##
+## Gated by the named skill (`piloting` for pilots, `tactics` for capital
+## captains). Stress above the composure buffer scales the delay up by
+## REACTION_STRESS_PENALTY_FACTOR — a panicking ace reacts slower than
+## usual; a steady rookie performs above their baseline.
+static func calculate_reaction_delay(crew_data: Dictionary, skill_key: String) -> float:
+	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
+	var skill = clamp(float(skills.get(skill_key, 0.5)), 0.0, 1.0)
+	var base = (1.0 - skill) * WingConstants.MAX_REACTION_DELAY
+	var composure = float(skills.get("composure", 0.5))
+	var stress = float(crew_data.get("stats", {}).get("stress", 0.0))
+	var stress_penalty = max(0.0, stress - composure * 0.4)
+	return base * (1.0 + stress_penalty * WingConstants.REACTION_STRESS_PENALTY_FACTOR)
 
 ## Make pursuit decision
 static func make_pursuit_decision(crew_data: Dictionary, game_time: float) -> Dictionary:

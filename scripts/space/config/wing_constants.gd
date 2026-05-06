@@ -447,6 +447,21 @@ const HIGH_TACTICS_THRESHOLD = 0.7
 const TACTICS_NOISE = 0.5
 
 # =============================================================================
+# REACTION LATENCY (Phase 04)
+# =============================================================================
+# Pilots/captains commit a reactive decision after a delay gated by skill.
+# Composes with detection latency: rookies are doubly slow.
+
+## Maximum commit delay for a reactive decision (seconds). A 0.0-piloting
+## pilot waits this long between deciding to evade and the order taking
+## effect; a 1.0-piloting pilot commits immediately.
+const MAX_REACTION_DELAY = 0.7
+
+## Multiplier applied to commit delay when stress exceeds the crew's
+## composure buffer. Low-composure aces under fire react slower than usual.
+const REACTION_STRESS_PENALTY_FACTOR = 1.5
+
+# =============================================================================
 # DEBUG OVERLAY - floating crew table
 # =============================================================================
 
