@@ -22,12 +22,15 @@ Player should notice:
 1. **Doctrine FSM** at each level (squadron / fleet)
 2. **Order tempo** — a commander cannot issue a new strategic shift more
    often than `STRATEGIC_TEMPO`. Mirrors captain commit duration.
-3. **Personality** — same axes (skill, aggression, decisiveness) extended
-   one tier up.
-4. **Loss-driven posture shifts** — analogue to self-preservation, scaled
+3. **Loss-driven posture shifts** — analogue to self-preservation, scaled
    to "how is the squadron / fleet doing?"
-5. **Tactical-break analogue** at strategic scope.
-6. **Heavy GUT coverage** of all transitions.
+4. **Tactical-break analogue** at strategic scope.
+5. **Heavy GUT coverage** of all transitions.
+
+This plan sits on top of the canonical six-stat schema in
+[`../crew_quality/01_overview.md`](../crew_quality/01_overview.md). All
+stat reads use `effective(crew, stat_name)` — the per-stat API defined
+in [`../crew_quality/07_stress_per_stat.md`](../crew_quality/07_stress_per_stat.md).
 
 ## Shared infrastructure (do this first inside Phase 4)
 
@@ -69,12 +72,26 @@ const SUBORDINATE_CRITICAL_HULL = 0.35
 const SQUADRON_LOSS_FORCE_REGROUP = 0.34   # lost ≥ 1/3 → reform
 ```
 
-### Personality
+### Stat reads
 
-Same three axes (skill, aggression, decisiveness). Aggression dictates how
-willing the squadron is to push into a numerical disadvantage. Decisiveness
-dictates how stable the target assignment is — flighty squadron leads
-reassign too often, breaking concentrated fire.
+Per the canonical role-read table, squadron leaders are primarily
+`tactics` + `awareness`, with `composure` and `aggression` as secondary:
+
+- `effective(crew, "tactics")` — squadron coordination tier, target
+  assignment quality. The `TARGET_REASSIGN_COOLDOWN` floor still
+  applies regardless of tactics — high-tactics leads pick the right
+  target the first time.
+- `effective(crew, "awareness")` — feeds threat sensing across the
+  squadron's frontage.
+- `effective(crew, "composure")` — holds the FSM steady under cascading
+  loss events.
+- `aggression` — willingness to push into a numerical disadvantage;
+  modulates the loss thresholds at which `mutual_support` overrides
+  `coordinated_attack`.
+
+Personality is expressed through the canonical `aggression` and
+`composure` stats — see `../crew_quality/01_overview.md`. No
+role-specific axis.
 
 ### Loss-driven shifts
 
@@ -95,8 +112,8 @@ reassign too often, breaking concentrated fire.
 - scattered formation forces `forming_up`
 - losing 1/3 of squadron forces regroup
 - mutual support triggers on a damaged subordinate
-- two leads, same skill, different aggression, different willingness to
-  press attack against equal numbers
+- two leads, same `tactics`, different `aggression` → different
+  willingness to press attack against equal numbers
 
 ---
 
@@ -126,12 +143,23 @@ const FLANK_COLLAPSE_RATIO = 0.6           # one flank lost 60%+ of its strength
 const STRATEGIC_REASSESS_COOLDOWN = 1.5
 ```
 
-### Personality
+### Stat reads
 
-Same axes. Decisiveness here especially matters — an indecisive commander
-at high skill still makes correct calls but slowly, producing the
-"too late to matter" feel. Aggression governs `RESERVE_COMMIT_DECISIVE_RATIO`
-and how readily `concentrate_force` is chosen vs `hold_line`.
+Per the canonical role-read table, fleet commanders are primarily
+`tactics` + `awareness`, with `composure` as secondary:
+
+- `effective(crew, "tactics")` — quality of doctrine selection, force
+  scoring, flank-collapse recognition. Strategic-level command tier.
+- `effective(crew, "awareness")` — feeds the picture of where the
+  fight is (which flank is collapsing, which objective is contested).
+- `effective(crew, "composure")` — degrades less under the cascading
+  stress of fleet-scale losses.
+- `aggression` — governs `RESERVE_COMMIT_DECISIVE_RATIO` and how
+  readily `concentrate_force` is chosen vs `hold_line`.
+
+Personality is expressed through the canonical `aggression` and
+`composure` stats — see `../crew_quality/01_overview.md`. No
+role-specific axis.
 
 ### Loss-driven shifts
 
@@ -154,8 +182,8 @@ and how readily `concentrate_force` is chosen vs `hold_line`.
 - 25% loss with low aggression → `hold_line`
 - 45% loss → `strategic_withdrawal` regardless of aggression
 - flank collapse triggers `shift_focus`
-- two commanders, same skill, different decisiveness, measurable
-  difference in time-to-react on the same loss event
+- two commanders, same `tactics`, different `aggression` → measurably
+  different doctrine choices on the same situation
 
 ---
 
@@ -167,14 +195,12 @@ and how readily `concentrate_force` is chosen vs `hold_line`.
   (no premature abstraction)
 - [ ] All literals are named constants
 - [ ] No `# legacy`, no commented-out blocks, no warnings
-- [ ] `decisiveness` available to squadron-leader and commander stat
-  generation in `crew_data.gd` (already added in Phase 3 for captain)
 - [ ] All new tests pass; `test_crew_ai_system.gd` still green
 - [ ] In playtest: a fleet under heavy loss visibly withdraws as a unit
 - [ ] In playtest: a squadron that loses 1/3 strength reforms instead of
   charging in piecemeal
-- [ ] In playtest: two commanders with the same skill but different
-  aggression produce noticeably different battles on the same map
+- [ ] In playtest: two commanders with the same `tactics` but different
+  `aggression` produce noticeably different battles on the same map
 
 ## Out of scope
 

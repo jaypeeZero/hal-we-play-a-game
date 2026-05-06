@@ -1,17 +1,19 @@
-# Crew & ship-AI quality rework — plan index
+# Plans
 
-These plans extend the quality bar set by PR #51 (fighter pilot rework) to the
-rest of the ship and crew AI. Run in order; each phase is one PR.
+Multi-phase design plans for the game, grouped by sub-project. Each
+sub-project has its own folder, README, and ordered phase files.
 
-| # | File | What it does | Depends on |
-|---|---|---|---|
-| 0 | [00_crew_ai_split.md](00_crew_ai_split.md) | Split `crew_ai_system.gd` monolith into per-role modules. Pure refactor, no behavior change. | — |
-| 1 | [01_large_ship_pilot_rework.md](01_large_ship_pilot_rework.md) | Bring corvette + capital pilots to PR #51 quality (FSM, personality, self-preservation, leash). | 0 |
-| 2 | [02_gunner_rework.md](02_gunner_rework.md) | Fire-discipline FSM, temperament axis, section-targeting commitment. | 0 |
-| 3 | [03_captain_rework.md](03_captain_rework.md) | Command-tempo FSM, decisiveness axis, posture commitment, damage-driven shifts. | 0 |
-| 4 | [04_squadron_and_commander_rework.md](04_squadron_and_commander_rework.md) | Strategic FSM at squadron and fleet scope. | 0, 3 |
+| Sub-project | Status | Description |
+|---|---|---|
+| [`crew_ai_rework/`](crew_ai_rework/) | Phase 0 done; 1–4 partial | Bring every crew role (large-ship pilot, gunner, captain, squadron leader, fleet commander) up to the PR #51 quality bar set by the fighter pilot rework — FSMs, personality axes, self-preservation, hard-override interrupts. |
+| [`crew_quality/`](crew_quality/) | Not started | Make crew stats **mechanically dramatic**. Wire up the disconnected modifiers, consolidate stats to a six-stat schema (`aim`, `piloting`, `awareness`, `tactics`, `composure`, `aggression`), add reaction-latency / detection-latency / squadron plays, plus an always-on debug overlay. |
 
-## Coding standards (every phase must satisfy)
+`crew_quality/` runs after (or alongside) `crew_ai_rework/`. Where they
+overlap (gunner, captain, squadron-leader behavior), `crew_quality/`
+extends what `crew_ai_rework/` lays down — it does not duplicate or
+replace that work.
+
+## Coding standards (every plan must satisfy)
 
 Lifted from `CLAUDE.md` and PR #51 itself:
 
@@ -22,11 +24,11 @@ Lifted from `CLAUDE.md` and PR #51 itself:
 - **Named constants only**: no magic numbers. Every literal at the top
   of the file with a one-line comment explaining what it represents.
 - **No fallback / legacy code**: do not leave old behavior next to new.
-  Delete what's replaced.
+  Delete what's replaced. No aliases, no back-compat shims.
 - **Zero compile warnings**: warnings are unresolved errors.
 - **Behavior-only tests**: assert capabilities, not specific data values
   (per CLAUDE.md "Testing Standards").
-- **Personality**: every role gets at least one axis beyond `skill`,
+- **Personality**: every role gets at least one axis beyond raw skill,
   matching how PR #51 used `aggression` to give wings personality.
 - **Self-preservation analogue**: every role has a "don't fight to the
   death pointlessly" trigger appropriate to its scale.
@@ -38,8 +40,8 @@ Lifted from `CLAUDE.md` and PR #51 itself:
 
 Each phase ships only when:
 
-1. The relevant `tests/test_<role>_ai.gd` passes
-2. `./test.sh` is green
+1. The relevant `tests/test_<role>_ai.gd` passes.
+2. `./test.sh` is green.
 3. A playtest of the relevant scenario shows the change is visible to
-   a player without telemetry
-4. The acceptance checklist in that phase's plan is fully ticked
+   a player without telemetry.
+4. The acceptance checklist in that phase's plan is fully ticked.

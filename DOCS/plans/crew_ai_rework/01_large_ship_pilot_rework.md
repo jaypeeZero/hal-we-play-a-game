@@ -15,12 +15,17 @@ Each of these is a section in `fighter_pilot_ai.gd`. Replicate the **shape**,
 not the literals — large ships need different numbers and different states.
 
 1. **Engagement-cycle FSM** — replaces "always emit one maneuver"
-2. **Skill × aggression personality** — replaces uniform behavior at a given skill
+2. **Stat-driven personality** — uses the canonical six-stat schema
 3. **Self-preservation** — replaces "fight until destroyed"
 4. **Area leash (AI-level hard override)** — pulls a wandering capital home
 5. **Tactical break (interrupt)** — fires regardless of FSM phase
 6. **Knowledge integration** — already present, keep but route through the FSM
 7. **Heavy GUT coverage** of the FSM transitions and survival triggers
+
+This plan sits on top of the canonical six-stat schema in
+[`../crew_quality/01_overview.md`](../crew_quality/01_overview.md). All
+stat reads use `effective(crew, stat_name)` — the per-stat API defined
+in [`../crew_quality/07_stress_per_stat.md`](../crew_quality/07_stress_per_stat.md).
 
 ## FSM design
 
@@ -47,25 +52,33 @@ const BROADSIDE_ARC_DOT = 0.30          # cos(~72°) — perpendicular ±18°
 const SAFE_RANGE_VS_FIGHTERS = 2000.0   # already in current file; reuse
 const PHASE_MIN_DURATION = 1.0          # commit to a phase briefly
 const PHASE_REPOSITION_TIMEOUT = 6.0
-const PERSONALITY_TIMING_SPREAD = 1.6
+const AGGRESSION_TIMING_SPREAD = 1.6
 ```
 
 No magic numbers anywhere else.
 
-## Personality
+## Stat reads
 
-Same axes the fighter uses:
+Per the canonical role-read table, large-ship pilots are primarily
+`piloting` + `tactics`, with `awareness`, `composure`, `aggression` as
+secondary. Concretely:
 
-- `skill` — selects between maneuver tiers from knowledge query
-- `aggression` (from `crew_data.stats.skills.aggression`) — modulates:
+- `effective(crew, "piloting")` — selects between maneuver tiers from
+  the knowledge query (tighter arcs, less bleed-off at the top end).
+- `effective(crew, "tactics")` — gates posture-style choices (when to
+  reposition vs hold, when to commit a withdrawal vector).
+- `effective(crew, "awareness")` — feeds threat range / prioritization;
+  perception of incoming threats arrives via mailbox latency from
+  `../crew_quality/03_awareness_detection.md`.
+- `aggression` modulates:
   - `BROADSIDE_OPTIMAL_RANGE` ± up to 20% (aggressive captains close in)
   - `SAFE_RANGE_VS_FIGHTERS` ± up to 20%
-  - phase durations via `PERSONALITY_TIMING_SPREAD` (mirror
-    `ENGAGE_AGGRESSION_TIMING_SPREAD`)
+  - phase durations via `AGGRESSION_TIMING_SPREAD`
   - survival-trigger thresholds (see below)
 
-`composure` (already in `crew_data.stats.skills`) modulates how much stress
-shrinks effective skill in `calculate_effective_skill`. Don't add a new axis.
+Personality is expressed through the canonical `aggression` and
+`composure` stats — see `../crew_quality/01_overview.md`. No
+role-specific axis.
 
 ## Self-preservation (capital scale)
 
@@ -93,10 +106,12 @@ zone, add the same hard override `fighter_pilot_ai.gd` uses (see "AREA LEASH
 
 ## Tactical break
 
-If a torpedo is locked or a capital-class threat has nose on us inside
+If a `threat_appeared` event arrives flagged with a heavy weapon class
+(torpedo, capital cannon) or a capital-class threat has nose on us inside
 `TACTICAL_BREAK_RANGE_LARGE = 1500.0`, interrupt the current phase and
-emit a hard-turn maneuver to put thickest armor toward the threat.
-Mirrors fighter `TACTICAL_BREAK_RANGE` (line 65).
+emit a hard-turn maneuver to put thickest armor toward the threat. A
+`ship_damaged` event also triggers reassessment. Mirrors fighter
+`TACTICAL_BREAK_RANGE` (line 65).
 
 ## Maneuver subtypes the AI emits
 
@@ -120,8 +135,8 @@ Behavior-only, per CLAUDE.md testing standards. Each FSM transition gets a test:
 - broadside → kiting when fighter enters `SAFE_RANGE_VS_FIGHTERS`
 - any phase → fighting_withdrawal when section drops below critical
 - aggression high vs low → different optimal-range commitment (range, not literal)
-- two captains, same skill, different aggression → different phase choice
-  in the same situation
+- two pilots, same `piloting`, different aggression → different phase
+  choice in the same situation
 - tactical break interrupts mid-broadside
 
 Plus update `tests/test_large_ship_ai.gd` so its existing assertions still hold.
