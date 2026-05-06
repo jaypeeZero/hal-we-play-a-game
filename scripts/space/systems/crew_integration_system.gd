@@ -171,10 +171,9 @@ static func apply_fire_decision(ship_data: Dictionary, decision: Dictionary, cre
 	return updated
 
 ## Apply gunner skill modifiers to weapons.
-## Writes factor fields directly onto ship_data.crew_modifiers; WeaponSystem
-## consumes aim_accuracy_factor in calculate_final_accuracy. The same field
-## is also written by fighter pilots whose forward-fixed weapons aim with
-## piloting+aim — caller picks crew based on weapon type.
+## Writes raw aim skill onto ship_data.crew_modifiers; WeaponSystem reads it
+## for the spread cone. Also written by fighter pilots whose forward-fixed
+## weapons aim with piloting+aim — caller picks crew based on weapon type.
 ## DRAMATIC skill differences: 0-skill sprays wildly, 1.0-skill lands precise shots.
 static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dictionary) -> Dictionary:
 	var updated = ship_data.duplicate(true)
@@ -183,19 +182,16 @@ static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dicti
 	if not updated.has("crew_modifiers"):
 		updated.crew_modifiers = {}
 
-	# Check for panic state (low composure under stress) before computing
-	# the accuracy factor — panic overrides the skill curve.
+	# Panic state: low composure under stress overrides the skill curve.
 	var composure = crew_data.get("stats", {}).get("skills", {}).get("composure", skill_factor)
 	var stress = crew_data.get("stats", {}).get("stress", 0.0)
 	var effective_composure = composure * (1.0 - stress * 0.5)
 	var is_panicking = effective_composure < WingConstants.GUNNER_PANIC_COMPOSURE
 
-	if is_panicking:
-		updated.crew_modifiers.aim_accuracy_factor = WingConstants.GUNNER_PANIC_ACCURACY_PENALTY
-	else:
-		updated.crew_modifiers.aim_accuracy_factor = lerp(WingConstants.GUNNER_ACCURACY_MIN,
-														  WingConstants.GUNNER_ACCURACY_MAX, skill_factor)
-
+	# Raw aim skill drives the spread cone. Stress/fatigue degrade
+	# `skill_factor` for other downstream effects, but the cone uses raw aim
+	# so a 20-aim crew stays tight even under fire — composure gates panic.
+	updated.crew_modifiers.aim_skill = float(crew_data.get("stats", {}).get("skills", {}).get("aim", skill_factor))
 	updated.crew_modifiers.gunner_panicking = is_panicking
 	updated.crew_modifiers.gunner_reaction = crew_data.stats.reaction_time
 

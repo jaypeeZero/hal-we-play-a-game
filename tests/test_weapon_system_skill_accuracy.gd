@@ -1,15 +1,18 @@
 extends GutTest
 
-## WeaponSystem must consume aim_accuracy_factor from crew_modifiers and the
-## downstream hit-rate must order strictly with that factor. Behavior-only:
-## we do not assert specific accuracies, just that better aim hits more.
+## WeaponSystem's spread cone is driven by raw `aim_skill` from crew_modifiers
+## and the shooter's patrol-area diameter. Behavior-only: we don't assert
+## specific spreads, just that better aim hits more — and that an elite
+## (1.0-aim) gunner reliably tags a fighter at one patrol diameter range.
 
 const ACCURACY_TRIALS: int = 400
-const TARGET_DISTANCE: float = 600.0
+const PATROL_RADIUS: float = 700.0
+const TARGET_DISTANCE: float = PATROL_RADIUS * 2.0  # one patrol diameter
 const MUZZLE_HIT_BAND: float = 8.0  # half-width of "near-target" cone in deg
+const ELITE_HIT_RATE: float = 0.95  # 1.0-aim should clear this comfortably
 
 
-func _make_ship_with_aim(aim_factor: float) -> Dictionary:
+func _make_ship_with_aim(aim_skill: float) -> Dictionary:
 	return {
 		"ship_id": "shooter",
 		"type": "fighter",
@@ -18,8 +21,9 @@ func _make_ship_with_aim(aim_factor: float) -> Dictionary:
 		"rotation": 0.0,
 		"status": "operational",
 		"stats": {"max_speed": 0.0},
+		"assigned_area": {"center": Vector2.ZERO, "radius": PATROL_RADIUS},
 		"crew_modifiers": {
-			"aim_accuracy_factor": aim_factor,
+			"aim_skill": aim_skill,
 			"targeting_style": CrewIntegrationSystem.TargetingStyle.LEADING,
 			"lead_accuracy": 0.5,
 		},
@@ -33,7 +37,7 @@ func _make_ship_with_aim(aim_factor: float) -> Dictionary:
 				"damage": 10,
 				"rate_of_fire": 2.0,
 				"projectile_speed": 800.0,
-				"range": 1500.0,
+				"range": 4000.0,
 				"accuracy": 0.5,
 			},
 			"cooldown_remaining": 0.0,
@@ -47,53 +51,54 @@ func _make_static_target() -> Dictionary:
 		"ship_id": "target",
 		"type": "fighter",
 		"team": 1,
-		"position": Vector2(0, -TARGET_DISTANCE),  # ship faces UP
+		"position": Vector2(0, -TARGET_DISTANCE),
 		"velocity": Vector2.ZERO,
 		"status": "operational",
 	}
 
 
-## Count fire commands whose direction lands inside a tight cone toward the
-## target. We're testing the spread/accuracy step end-to-end, not picking
-## apart the function.
-func _hit_count(aim_factor: float, trials: int) -> int:
+## Count fire commands whose direction would actually land on a fighter-sized
+## target at patrol-diameter range. End-to-end test of the spread step.
+func _hit_count(aim_skill: float, trials: int) -> int:
 	var hits := 0
+	var target_radius: float = WingConstants.GUNNER_AIM_TARGET_RADIUS
 	for _i in trials:
-		var ship: Dictionary = _make_ship_with_aim(aim_factor)
+		var ship: Dictionary = _make_ship_with_aim(aim_skill)
 		var target: Dictionary = _make_static_target()
 		var result: Dictionary = WeaponSystem.update_weapons(ship, [target], 0.1)
 		if result.fire_commands.is_empty():
 			continue
 		var cmd: Dictionary = result.fire_commands[0]
-		var dir: Vector2 = cmd.direction
 		var perfect_dir: Vector2 = (target.position - ship.position).normalized()
-		var deviation_deg: float = abs(rad_to_deg(dir.angle_to(perfect_dir)))
-		if deviation_deg <= MUZZLE_HIT_BAND:
+		var deviation_rad: float = abs(cmd.direction.angle_to(perfect_dir))
+		var lateral_at_target: float = TARGET_DISTANCE * tan(deviation_rad)
+		if lateral_at_target <= target_radius:
 			hits += 1
 	return hits
 
 
-func test_hit_rate_strictly_increases_with_aim_factor():
-	var low: int = _hit_count(0.4, ACCURACY_TRIALS)
-	var mid: int = _hit_count(0.85, ACCURACY_TRIALS)
-	var high: int = _hit_count(1.3, ACCURACY_TRIALS)
+func test_hit_rate_strictly_increases_with_aim_skill():
+	var low: int = _hit_count(0.0, ACCURACY_TRIALS)
+	var mid: int = _hit_count(0.5, ACCURACY_TRIALS)
+	var high: int = _hit_count(1.0, ACCURACY_TRIALS)
 
-	assert_lt(low, mid, "Mid aim factor lands more shots than low")
-	assert_lt(mid, high, "High aim factor lands more shots than mid")
-
-
-func test_default_modifiers_do_not_change_accuracy():
-	var base: float = 0.6
-	var ship_no_mod: Dictionary = _make_ship_with_aim(1.0)
-	ship_no_mod.crew_modifiers = {}
-	var passthrough: float = WeaponSystem.calculate_final_accuracy(base, ship_no_mod)
-	assert_eq(passthrough, base, "No crew modifiers means no accuracy change")
+	assert_lt(low, mid, "Mid aim skill lands more shots than low")
+	assert_lt(mid, high, "High aim skill lands more shots than mid")
 
 
-func test_captain_coordination_compounds_with_aim():
-	var ship: Dictionary = _make_ship_with_aim(1.0)
-	var base: float = 0.6
-	var only_aim: float = WeaponSystem.calculate_final_accuracy(base, ship)
-	ship.crew_modifiers["captain_coordination"] = 1.2
-	var with_captain: float = WeaponSystem.calculate_final_accuracy(base, ship)
-	assert_gt(with_captain, only_aim, "Captain coordination multiplies accuracy on top of aim")
+func test_elite_aim_almost_never_misses_at_patrol_diameter():
+	var hits: int = _hit_count(1.0, ACCURACY_TRIALS)
+	var rate: float = float(hits) / float(ACCURACY_TRIALS)
+	assert_gte(rate, ELITE_HIT_RATE,
+		"1.0-aim crew should reliably hit fighters at one patrol diameter (got %.2f)" % rate)
+
+
+func test_panic_widens_the_cone():
+	# Even an elite gunner sprays when panicking.
+	var ship_calm: Dictionary = _make_ship_with_aim(1.0)
+	var ship_panic: Dictionary = _make_ship_with_aim(1.0)
+	ship_panic.crew_modifiers["gunner_panicking"] = true
+
+	var calm_spread: float = WeaponSystem.calculate_aim_spread_angle(ship_calm)
+	var panic_spread: float = WeaponSystem.calculate_aim_spread_angle(ship_panic)
+	assert_gt(panic_spread, calm_spread, "Panic produces a wider spread cone than calm aim")

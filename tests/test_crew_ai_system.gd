@@ -367,8 +367,8 @@ func test_apply_gunner_decision_to_ship():
 	var updated_ship = CrewIntegrationSystem.apply_decision_to_ship(ship, decision, gunner)
 
 	assert_eq(updated_ship.orders.target_id, "enemy_1")
-	# Apply-fire-decision now writes the consumed factor field, not raw skill.
-	assert_has(updated_ship.crew_modifiers, "aim_accuracy_factor")
+	# Apply-fire-decision writes raw aim skill — WeaponSystem reads it for spread.
+	assert_has(updated_ship.crew_modifiers, "aim_skill")
 
 func test_ship_with_crew_creation():
 	var ship = ShipData.create_ship_instance("fighter", 0, Vector2(0, 0), true, 0.7)

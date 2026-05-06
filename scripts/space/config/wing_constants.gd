@@ -243,10 +243,6 @@ const PILOT_APPROACH_ANGLE_MAX = 0.7          # ~40 degrees offset
 # A 0-skill gunner sprays wildly and can't track moving targets
 # A 1.0-skill gunner lands precise shots on specific subsystems
 
-## Accuracy modifier range (multiplied by base accuracy)
-const GUNNER_ACCURACY_MIN = 0.4              # 0-skill: 40% accuracy
-const GUNNER_ACCURACY_MAX = 1.3              # 1.0-skill: 130% accuracy
-
 ## Rate of fire modifier range
 const GUNNER_ROF_MIN = 0.7                   # 0-skill: 70% fire rate (hesitant)
 const GUNNER_ROF_MAX = 1.2                   # 1.0-skill: 120% fire rate
@@ -288,11 +284,26 @@ const GUNNER_TARGET_SWITCH_PENALTY_MIN = 0.2  # 1.0-skill: 0.2s penalty
 ## Panic fire threshold - below this composure, gunner panics
 const GUNNER_PANIC_COMPOSURE = 0.3
 
-## Panic fire accuracy penalty
-const GUNNER_PANIC_ACCURACY_PENALTY = 0.5    # 50% accuracy when panicking
+## Panic fire spread cone (overrides the skill curve when panicking)
+const GUNNER_AIM_PANIC_SPREAD_RAD = PI / 12.0  # 15°
 
 ## Panic fire rate bonus (spray and pray)
 const GUNNER_PANIC_ROF_BONUS = 1.3           # 130% fire rate when panicking
+
+# =============================================================================
+# GUNNER SKILL - Spread cone (aim-driven)
+# =============================================================================
+# Spread cone is driven directly by raw `aim` skill. At 1.0 aim the cone is
+# zero (perfect line). At 0.0 aim it matches roughly what the legacy mid-skill
+# default felt like, so untrained crew "feel current" rather than absurd.
+
+## Spread cone at zero aim. ~7.5° — close to the pre-rework default mid-skill
+## spread, which becomes the new floor for untrained gunners.
+const GUNNER_AIM_WORST_SPREAD_RAD = PI / 24.0
+
+## Reference target radius (smallest hostile, fighter base_size). Used by tests
+## to assert "almost never miss at one patrol diameter" for elite crew.
+const GUNNER_AIM_TARGET_RADIUS = 15.0
 
 # =============================================================================
 # CAPTAIN SKILL - Ship coordination modifiers

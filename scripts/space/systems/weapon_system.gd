@@ -312,7 +312,6 @@ static func create_fire_command(ship_data: Dictionary, weapon: Dictionary, targe
 		speed = weapon.stats.projectile_speed,
 		target_id = target.ship_id,
 		delay = generate_reaction_delay(),
-		accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data),
 		weapon_size = weapon.stats.get("size", 1),
 		explosion_radius = weapon.stats.get("explosion_radius", 0.0),
 		explosion_damage = weapon.stats.get("explosion_damage", 0.0),
@@ -413,16 +412,25 @@ static func predict_target_position(current_pos: Vector2, velocity: Vector2, tim
 
 static func calculate_firing_direction(weapon_pos: Vector2, target_pos: Vector2, ship_data: Dictionary, weapon: Dictionary) -> Vector2:
 	var perfect_direction = calculate_direction_to_target(weapon_pos, target_pos)
-	var accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data)
-	return apply_accuracy_spread(perfect_direction, accuracy)
-
-static func apply_accuracy_spread(direction: Vector2, accuracy: float) -> Vector2:
-	var spread_angle = calculate_spread_angle(accuracy)
+	var spread_angle = calculate_aim_spread_angle(ship_data)
 	var random_spread = generate_random_spread(spread_angle)
-	return direction.rotated(random_spread)
+	return perfect_direction.rotated(random_spread)
 
-static func calculate_spread_angle(accuracy: float) -> float:
-	return (1.0 - accuracy) * PI / 6.0  # Up to 30 degrees at 0 accuracy
+## Spread cone driven by raw aim skill. Linear from the worst-case cone at
+## skill 0 to a perfect line at skill 1.0 — a 20-aim gunner has zero spread,
+## matching the prior clamped-accuracy ceiling. Captain coordination can pull
+## a near-elite gunner all the way to perfect; panic overrides everything.
+static func calculate_aim_spread_angle(ship_data: Dictionary) -> float:
+	var modifiers: Dictionary = ship_data.get("crew_modifiers", {})
+
+	# Panic overrides the skill curve — a panicking gunner sprays wide.
+	if modifiers.get("gunner_panicking", false):
+		return WingConstants.GUNNER_AIM_PANIC_SPREAD_RAD
+
+	var aim_skill: float = clamp(float(modifiers.get("aim_skill", 0.0)), 0.0, 1.0)
+	var captain_factor: float = clamp(float(modifiers.get("captain_coordination", 1.0)), 0.5, 1.5)
+	var effective: float = clamp(aim_skill * captain_factor, 0.0, 1.0)
+	return WingConstants.GUNNER_AIM_WORST_SPREAD_RAD * (1.0 - effective)
 
 static func generate_random_spread(max_spread: float) -> float:
 	return randf_range(-max_spread, max_spread)
@@ -432,20 +440,6 @@ static func generate_reaction_delay() -> float:
 
 static func calculate_projectile_velocity(direction: Vector2, speed: float) -> Vector2:
 	return direction * speed
-
-# ============================================================================
-# CREW-MODIFIED ACCURACY
-# ============================================================================
-
-## Accuracy is the only weapon stat the crew modulates. Damage scales by
-## weapon tier — adding a crew multiplier on top muddies that design.
-static func calculate_final_accuracy(base_accuracy: float, ship_data: Dictionary) -> float:
-	var modifiers: Dictionary = ship_data.get("crew_modifiers", {})
-	if modifiers.is_empty():
-		return base_accuracy
-	var aim_factor: float = modifiers.get("aim_accuracy_factor", 1.0)
-	var captain_factor: float = modifiers.get("captain_coordination", 1.0)
-	return clamp(base_accuracy * aim_factor * captain_factor, 0.0, 1.0)
 
 # ============================================================================
 # PUBLIC QUERY FUNCTIONS
