@@ -144,6 +144,13 @@ static func apply_pilot_skill_modifiers(ship_data: Dictionary, crew_data: Dictio
 													WingConstants.PILOT_DAMPENING_MAX, skill_factor)
 	updated.crew_modifiers.pilot_reaction = crew_data.stats.reaction_time
 
+	# Aggression is the leash dial: low aggression hugs the patrol area,
+	# high aggression chases targets anywhere. MovementSystem.apply_area_leash
+	# reads this. Falls back to the legacy aggregate skill so unconfigured
+	# crew get baseline behavior.
+	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
+	updated.crew_modifiers.pilot_aggression = float(skills.get("aggression", skill_factor))
+
 	return updated
 
 # ============================================================================

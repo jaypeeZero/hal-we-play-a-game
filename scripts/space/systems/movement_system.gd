@@ -90,10 +90,22 @@ static func direction_to_heading(direction: Vector2) -> float:
 static func get_visual_forward(rotation: float) -> Vector2:
 	return Vector2(sin(rotation), -cos(rotation))
 
+# Leash-vs-aggression dial. The pilot's aggression scales how hard the
+# leash pulls when the ship has an enemy target:
+#   aggression = 0.0  → 2× pull (hugs patrol area, won't chase past edge)
+#   aggression = 0.5  → 1× pull (baseline; matches the original behavior)
+#   aggression ≥ 0.95 → bypass (no leash; chase anywhere)
+# Without a target the leash always applies normally — high-aggression
+# pilots return to patrol when there's nothing to fight.
+const LEASH_AGGRESSION_BYPASS_THRESHOLD: float = 0.95
+const LEASH_PULL_SCALE_AT_AGGRESSION_ZERO: float = 2.0
+const LEASH_PULL_SCALE_AT_AGGRESSION_FULL: float = 0.0
+
 ## Bias a desired heading back toward the ship's assigned operating area
 ## when the ship is outside it. Ramps from no effect at the edge of the
 ## leash radius to total override at 2x the radius. Ships without an
-## `assigned_area` are unaffected.
+## `assigned_area` are unaffected. The pilot's aggression dial scales the
+## pull when an enemy target is set; see constants above.
 static func apply_area_leash(ship_data: Dictionary, desired_heading: float) -> float:
 	var assigned_area = ship_data.get("assigned_area")
 	if assigned_area == null or not assigned_area is Dictionary:
@@ -106,10 +118,36 @@ static func apply_area_leash(ship_data: Dictionary, desired_heading: float) -> f
 	var dist: float = to_center.length()
 	if dist <= area_radius or dist < 1.0:
 		return desired_heading
+
+	var pull_scale: float = _leash_pull_scale(ship_data)
+	if pull_scale <= 0.0:
+		return desired_heading
+
 	var return_heading: float = direction_to_heading(to_center)
-	# Pull ramps from 0 at the edge to 1.0 at 2x radius (full override)
-	var pull: float = clamp((dist - area_radius) / area_radius, 0.0, 1.0)
+	# Base ramp: pull = 0 at the edge, 1.0 at 2× radius. Aggression scales it.
+	var raw_pull: float = clamp((dist - area_radius) / area_radius, 0.0, 1.0)
+	var pull: float = clamp(raw_pull * pull_scale, 0.0, 1.0)
 	return lerp_angle(desired_heading, return_heading, pull)
+
+## Pull-scale dial. Returns 1.0 (baseline) when the ship has no target or no
+## aggression configured; with a target, lerps from 2× (timid) at agg=0 to
+## 0 (loose) at agg=1, with a hard bypass at LEASH_AGGRESSION_BYPASS_THRESHOLD.
+static func _leash_pull_scale(ship_data: Dictionary) -> float:
+	var orders: Dictionary = ship_data.get("orders", {})
+	var target_id = orders.get("target_id", "")
+	var has_target: bool = target_id != null and str(target_id) != ""
+	if not has_target:
+		return 1.0
+
+	var modifiers: Dictionary = ship_data.get("crew_modifiers", {})
+	if not modifiers.has("pilot_aggression"):
+		return 1.0
+	var aggression: float = float(modifiers.pilot_aggression)
+	if aggression >= LEASH_AGGRESSION_BYPASS_THRESHOLD:
+		return 0.0
+	return lerp(LEASH_PULL_SCALE_AT_AGGRESSION_ZERO,
+				LEASH_PULL_SCALE_AT_AGGRESSION_FULL,
+				clamp(aggression, 0.0, 1.0))
 
 # ============================================================================
 # MAIN API - Returns new ship_data with updated position/velocity
