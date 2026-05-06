@@ -350,13 +350,10 @@ const CAPTAIN_THREAT_ASSESSMENT_MAX = 1.0    # 1.0-skill: accurate assessment
 # A 0-skill squadron leader has ships fighting individually
 # A 1.0-skill squadron leader orchestrates complex maneuvers
 
-## Skill for basic wingman pairing to work
-const SQUADRON_PAIRED_SKILL = 0.4
+## Skill for loose coordination (wingman pairing, mutual support, focus fire)
+const SQUADRON_LOOSE_SKILL = 0.4
 
-## Skill for coordinated attacks (focus fire, timing)
-const SQUADRON_COORDINATED_SKILL = 0.6
-
-## Skill for complex tactics (feints, traps, combined arms)
+## Skill for play-driven orchestrated coordination (pincer, bracket, kill-box)
 const SQUADRON_ORCHESTRATED_SKILL = 0.8
 
 # =============================================================================
@@ -398,3 +395,20 @@ const FLEET_RESERVE_MAX = 0.3                # 1.0-skill: holds 30% in reserve
 ## Engagement timing accuracy
 const FLEET_TIMING_MIN = 0.5                 # 0-skill: poor timing
 const FLEET_TIMING_MAX = 1.0                 # 1.0-skill: optimal timing
+
+# =============================================================================
+# SQUADRON PLAYS - Coordinated multi-fighter maneuvers (pincer, bracket, ...)
+# =============================================================================
+# Plays are defined as data in data/squadron_plays.json. The leader's tactics
+# stat gates which plays unlock and how cleanly they execute. Low-tactics
+# leaders scatter offsets and drift phase timing; elites hit marks tightly.
+
+## Max position scatter (units) for a leader at 0.0 effective tactics.
+## Scales linearly with (1 - tactics).
+const PLAY_JITTER_MAX_OFFSET = 80.0
+
+## Max phase-transition jitter (seconds) for a leader at 0.0 tactics.
+const PLAY_JITTER_MAX_TIMING = 1.2
+
+## Leader re-evaluates which play to run on this interval (seconds).
+const PLAY_REPLAN_INTERVAL = 6.0

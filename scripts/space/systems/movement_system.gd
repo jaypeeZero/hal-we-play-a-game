@@ -389,6 +389,8 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 			return calculate_wing_follow(ship_data, target, nearby_ships, obstacles)
 		"fight_wing_engage":
 			return calculate_wing_engage(ship_data, target, nearby_ships, obstacles)
+		"fight_play_waypoint":
+			return calculate_play_waypoint(ship_data, target, nearby_ships, obstacles)
 		_:
 			# Fallback to standard pilot control
 			return calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
@@ -1100,6 +1102,36 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		"engagement_range": 1400.0,
 		"current_distance": distance
 	}
+
+## Squadron-play waypoint — fly toward a tactical offset assigned by the
+## squadron leader's active play. The pilot aims at `formation_position` at
+## tactical-pursuit throttle; once close, FighterPilotAI stops emitting this
+## maneuver and engagement resumes.
+static func calculate_play_waypoint(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var waypoint: Vector2 = ship_data.get("orders", {}).get("formation_position", Vector2.ZERO)
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var to_waypoint := waypoint - my_pos
+	var distance := to_waypoint.length()
+	if distance < 1.0:
+		return {
+			"desired_heading": ship_data.get("rotation", 0.0),
+			"throttle": 0.0,
+			"thrust_active": false,
+			"is_braking": false,
+			"engagement_range": 0.0,
+			"current_distance": 0.0,
+		}
+	var desired_heading := direction_to_heading(to_waypoint)
+	var throttle := calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": false,
+		"engagement_range": 0.0,
+		"current_distance": distance,
+	}
+
 
 ## Rejoin wingman - return to formation position
 ## Distance-aware: Far uses main thrust, close uses lateral to slide into formation

@@ -91,6 +91,12 @@ static func calculate_decision_delay(crew_data: Dictionary) -> float:
 
 ## Pilot makes tactical maneuvering decisions
 static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = [], wings: Array = []) -> Dictionary:
+	# Squadron-play orders are persistent constraints, not one-shot orders.
+	# Lift them off `orders.received` into `play_assignment` so the pilot's
+	# normal decision flow can read them as a navigation hint without the
+	# generic "execute order" path consuming them as a one-time movement.
+	crew_data = _absorb_play_order(crew_data)
+
 	# Check for orders from captain - ALWAYS respect superior orders
 	if crew_data.orders.received != null:
 		return execute_pilot_order(crew_data, game_time)
@@ -125,6 +131,29 @@ static func infer_ship_type(crew_data: Dictionary) -> String:
 	else:
 		# Solo pilot = fighter
 		return "fighter"
+
+## Lift incoming "play" orders into the persistent `play_assignment` slot,
+## clearing them from `orders.received`. Plays span multiple decision ticks
+## while normal received orders are consume-once, so they need separate
+## storage. Returns the (possibly mutated) crew dict.
+static func _absorb_play_order(crew_data: Dictionary) -> Dictionary:
+	var received = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+	if received.get("type", "") != "play":
+		return crew_data
+	var updated = crew_data.duplicate(true)
+	updated.play_assignment = {
+		"play_id": received.get("play_id", ""),
+		"play_role": received.get("play_role", ""),
+		"phase": received.get("phase", 0),
+		"action": received.get("action", "merge_attack"),
+		"target_offset": received.get("target_offset", Vector2.ZERO),
+		"target_id": received.get("target_id", ""),
+		"received_at": received.get("timestamp", 0.0),
+	}
+	updated.orders.received = null
+	return updated
 
 ## Execute order from captain
 static func execute_pilot_order(crew_data: Dictionary, game_time: float) -> Dictionary:
@@ -222,6 +251,12 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 		# Fallback to balanced decision if no ship data available
 		return make_balanced_pilot_decision(crew_data, context, game_time)
 
+	# Fighter-squadron leadership doesn't go through SquadronLeaderAI — the
+	# leader is just a PILOT with `is_squadron_leader = true`. Run the play
+	# system here so the leader can issue per-fighter play orders to the rest
+	# of the squadron alongside its own combat decision.
+	crew_data = _maybe_run_fighter_squadron_play(crew_data, ship_data, all_ships, game_time)
+
 	# Use FighterPilotAI to make decision - now with wing formations!
 	# Wings enable Lead/Wingman coordination based on proximity
 	var decision = FighterPilotAI.make_decision(crew_data, ship_data, all_ships, all_crew, game_time, wings)
@@ -236,6 +271,78 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 	updated.next_decision_time = game_time + next_delay
 
 	return {"crew_data": updated, "decision": decision}
+
+## When a fighter pilot is also the squadron leader, drive the play system
+## here. Sets `orders.issued` so CommandChainSystem distributes play orders
+## to subordinate pilots. Returns the (possibly mutated) crew dict.
+static func _maybe_run_fighter_squadron_play(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
+	if not crew_data.get("is_squadron_leader", false):
+		return crew_data
+	var subordinates: Array = crew_data.get("command_chain", {}).get("subordinates", [])
+	if subordinates.size() < 2:
+		return crew_data
+
+	var geometry := _build_fighter_play_geometry(crew_data, ship_data, all_ships)
+	if geometry.is_empty():
+		return crew_data
+
+	var wing_state := {"fighters": subordinates}
+	var result := SquadronPlaySystem.tick_squadron_play(crew_data, wing_state, geometry, game_time)
+	if not result.get("selected", false):
+		# No play this tick — clear any stale issued orders so we don't
+		# re-deliver them after the play tier drops out.
+		var cleared = result.get("crew_data", crew_data)
+		if cleared.has("orders"):
+			cleared.orders.issued = []
+		return cleared
+	var updated: Dictionary = result.get("crew_data", crew_data)
+	updated.orders.issued = result.get("orders", [])
+	return updated
+
+## Build geometry for a fighter-squadron leader's play. Picks the highest-
+## priority enemy from awareness as the target; falls back to scanning
+## `all_ships` for any operational enemy if awareness hasn't populated yet.
+static func _build_fighter_play_geometry(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array) -> Dictionary:
+	var opportunities: Array = crew_data.get("awareness", {}).get("opportunities", [])
+	if not opportunities.is_empty():
+		var top = opportunities[0]
+		var pos: Vector2 = top.get("position", Vector2.ZERO)
+		var vel: Vector2 = top.get("velocity", Vector2.ZERO)
+		var facing := vel.normalized() if vel.length() > 1.0 else Vector2.RIGHT
+		return {
+			"target_id": top.get("id", ""),
+			"target_position": pos,
+			"target_facing": facing,
+		}
+	# Fallback: scan all_ships for the closest operational enemy.
+	var my_team: int = ship_data.get("team", -1)
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var best_id := ""
+	var best_d2: float = INF
+	var best_pos := Vector2.ZERO
+	var best_vel := Vector2.ZERO
+	for ship in all_ships:
+		if ship == null:
+			continue
+		if ship.get("team", -1) == my_team or ship.get("team", -1) < 0:
+			continue
+		if ship.get("status", "") != "operational":
+			continue
+		var p: Vector2 = ship.get("position", Vector2.ZERO)
+		var d2: float = my_pos.distance_squared_to(p)
+		if d2 < best_d2:
+			best_d2 = d2
+			best_id = ship.get("ship_id", "")
+			best_pos = p
+			best_vel = ship.get("velocity", Vector2.ZERO)
+	if best_id == "":
+		return {}
+	var facing := best_vel.normalized() if best_vel.length() > 1.0 else Vector2.RIGHT
+	return {
+		"target_id": best_id,
+		"target_position": best_pos,
+		"target_facing": facing,
+	}
 
 ## Get decision delay for fighter maneuvers
 static func _get_fighter_decision_delay(maneuver_subtype: String) -> float:

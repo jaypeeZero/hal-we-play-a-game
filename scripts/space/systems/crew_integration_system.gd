@@ -28,11 +28,14 @@ enum CommandStyle {
 # =============================================================================
 # COORDINATION STYLE ENUM - Unlocked by squadron leader skill
 # =============================================================================
+# Three tiers: independent fighting, loose mutual support, or full play-driven
+# orchestration. The earlier PAIRED / COORDINATED split was decorative — the
+# only behavior gate that mattered was whether plays could fire — so they
+# collapsed into LOOSE.
 enum CoordinationStyle {
 	INDIVIDUAL,   # Ships fight independently (low skill)
-	PAIRED,       # Basic wingman pairing works (medium skill)
-	COORDINATED,  # Focus fire, mutual support, timing (high skill)
-	ORCHESTRATED  # Complex maneuvers, feints, traps (elite skill)
+	LOOSE,        # Basic wingman pairing, mutual support, focus fire (mid skill)
+	ORCHESTRATED  # Play-driven coordinated maneuvers (elite skill)
 }
 
 # ============================================================================
@@ -269,10 +272,8 @@ static func _select_command_style(skill: float) -> int:
 static func _select_coordination_style(skill: float) -> int:
 	if skill >= WingConstants.SQUADRON_ORCHESTRATED_SKILL:
 		return CoordinationStyle.ORCHESTRATED
-	elif skill >= WingConstants.SQUADRON_COORDINATED_SKILL:
-		return CoordinationStyle.COORDINATED
-	elif skill >= WingConstants.SQUADRON_PAIRED_SKILL:
-		return CoordinationStyle.PAIRED
+	elif skill >= WingConstants.SQUADRON_LOOSE_SKILL:
+		return CoordinationStyle.LOOSE
 	else:
 		return CoordinationStyle.INDIVIDUAL
 
