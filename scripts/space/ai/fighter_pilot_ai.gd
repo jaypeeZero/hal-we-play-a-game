@@ -219,6 +219,15 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 	if _is_far_outside_area(ship_data):
 		return _make_return_to_area_decision(crew_data, ship_data, game_time)
 
+	# SQUADRON-PLAY CONSTRAINT. If the squadron leader assigned this pilot a
+	# play role with a positional offset (e.g. "loop_wide_left",
+	# "approach_target_six"), fly toward that waypoint until the play hits its
+	# merge phase. Self-preservation has already taken precedence; merge_attack
+	# falls through to the normal engagement flow.
+	var play_decision := _make_play_waypoint_decision(crew_data, ship_data, all_ships, game_time)
+	if not play_decision.is_empty():
+		return play_decision
+
 	# DYNAMIC WING SYSTEM: Check if we're in a wing and what role
 	var wing_info = WingFormationSystem.get_wing_info(crew_data.get("crew_id", ""), wings)
 
@@ -1663,3 +1672,52 @@ static func _calculate_evasion_direction(my_ship: Dictionary, target_ship: Dicti
 		# Evade in the direction we're already slightly moving
 		var my_lateral = my_velocity.dot(perpendicular_right)
 		return 1 if my_lateral >= 0 else -1
+
+
+# ============================================================================
+# SQUADRON-PLAY WAYPOINT
+# ============================================================================
+
+## Distance at which the pilot considers the play offset "reached" and
+## drops back to normal engagement. Generous so wingmen don't oscillate
+## around the offset point.
+const PLAY_WAYPOINT_REACHED_DISTANCE = 250.0
+
+## When a play is in flight and this pilot has a non-merge offset, fly to
+## that offset. Returns {} if no play is active or the action is "merge_attack"
+## (the merge phase intentionally hands control back to normal engagement).
+static func _make_play_waypoint_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
+	var play: Dictionary = crew_data.get("play_assignment", {})
+	if play.is_empty():
+		return {}
+	var action: String = play.get("action", "merge_attack")
+	if action == "" or action == "merge_attack":
+		return {}
+	var offset: Vector2 = play.get("target_offset", Vector2.ZERO)
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	if my_pos.distance_to(offset) <= PLAY_WAYPOINT_REACHED_DISTANCE:
+		# Reached the play position — let the engagement layer take over.
+		return {}
+
+	var skill: float = crew_data.get("stats", {}).get("skill", 0.5)
+	# Prefer the actual target as the maneuver's target (so range/aspect
+	# calculations downstream still make sense), falling back to a phantom
+	# target keyed off the offset when no target ship is around.
+	var target_id: String = play.get("target_id", "")
+	if target_id != "" and _get_ship_by_id(target_id, all_ships).is_empty():
+		target_id = ""
+
+	return {
+		"type": "maneuver",
+		"subtype": "fight_play_waypoint",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": target_id,
+		"formation_position": offset,
+		"skill_factor": skill,
+		"play_id": play.get("play_id", ""),
+		"play_role": play.get("play_role", ""),
+		"phase": play.get("phase", 0),
+		"delay": 0.3,
+		"timestamp": game_time,
+	}

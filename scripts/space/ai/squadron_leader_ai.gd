@@ -30,6 +30,15 @@ const DEFAULT_TARGET_DISTANCE = 1000.0
 static func make_decision(crew_data: Dictionary, game_time: float) -> Dictionary:
 	var updated = crew_data.duplicate(true)
 
+	# SQUADRON PLAYS — try a coordinated multi-fighter maneuver before
+	# falling through to the legacy assign-targets / mutual-support flow.
+	# A play stays in flight across decisions; tick_squadron_play handles
+	# selection, advancement, and replanning. If no play qualifies (rookie
+	# leader, undersized wing, no target), we drop through unchanged.
+	var play_result := _try_run_squadron_play(updated, game_time)
+	if not play_result.is_empty():
+		return play_result
+
 	# Query knowledge for squadron guidance
 	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
 	var knowledge = TacticalKnowledgeSystem.query_squadron_knowledge(situation, 3)
@@ -113,9 +122,9 @@ static func make_decision(crew_data: Dictionary, game_time: float) -> Dictionary
 
 ## Select squadron action from knowledge and COORDINATION STYLE
 ## INDIVIDUAL: Ships fight independently, no coordination
-## PAIRED: Basic wingman pairing works
-## COORDINATED: Focus fire, mutual support, timing
-## ORCHESTRATED: Complex maneuvers, feints, traps
+## LOOSE: Wingman pairing, mutual support, focus fire, tactical retreats
+## ORCHESTRATED: Play-driven coordinated maneuvers (handled separately by
+##               _try_run_squadron_play before this function runs)
 static func _select_action_from_knowledge(knowledge: Array, crew_data: Dictionary, has_threats: bool, has_opportunities: bool, has_damaged_subordinate: bool, is_scattered: bool) -> String:
 	var skill = CrewAISystem.calculate_effective_skill(crew_data)
 	var coordination_style = CrewIntegrationSystem._select_coordination_style(skill)
@@ -133,16 +142,9 @@ static func _select_action_from_knowledge(knowledge: Array, crew_data: Dictionar
 			return "assign_targets"
 		return ""
 
-	# PAIRED style - basic wingman support
-	if coordination_style == CrewIntegrationSystem.CoordinationStyle.PAIRED:
-		if has_damaged_subordinate:
-			return "call_mutual_support"
-		if has_opportunities:
-			return "assign_targets"
-		return action
-
-	# COORDINATED style - can do focus fire and tactical retreats
-	if coordination_style == CrewIntegrationSystem.CoordinationStyle.COORDINATED:
+	# LOOSE style - mutual support, focus fire, retreats; everything short of
+	# play-driven orchestration.
+	if coordination_style == CrewIntegrationSystem.CoordinationStyle.LOOSE:
 		if has_damaged_subordinate:
 			return "call_mutual_support"
 		if is_scattered and not has_threats:
@@ -345,6 +347,87 @@ static func _create_coordinated_attack_orders(crew_data: Dictionary, target: Dic
 		})
 
 	return orders
+
+
+## Drive the squadron play system. Returns the standard {crew_data,
+## decision} envelope when a play is active, or {} to indicate the legacy
+## flow should run.
+static func _try_run_squadron_play(crew_data: Dictionary, game_time: float) -> Dictionary:
+	var subordinates: Array = crew_data.get("command_chain", {}).get("subordinates", [])
+	if subordinates.size() < 2:
+		return {}
+
+	var geometry := _build_play_geometry(crew_data)
+	if geometry.is_empty():
+		return {}
+
+	var wing_state := {"fighters": subordinates}
+	var result := SquadronPlaySystem.tick_squadron_play(crew_data, wing_state, geometry, game_time)
+	if not result.get("selected", false):
+		return {}
+
+	var updated: Dictionary = result.get("crew_data", crew_data)
+	var orders: Array = result.get("orders", [])
+	var active_play: Dictionary = updated.get("squadron_state", {}).get("active_play", {})
+
+	updated.orders.issued = orders
+	var decision := {
+		"type": "squadron_command",
+		"subtype": "execute_play",
+		"crew_id": updated.crew_id,
+		"play_id": active_play.get("play_id", ""),
+		"phase": active_play.get("phase_index", 0),
+		"target_id": active_play.get("target_id", ""),
+		"delay": CrewAISystem.calculate_decision_delay(updated),
+		"timestamp": game_time,
+	}
+	updated.orders.current = decision
+	# Tick more frequently than the replan interval so phases advance smoothly.
+	updated.next_decision_time = game_time + randf_range(REDECIDE_MIN, REDECIDE_MAX)
+
+	# Emit observability event so post-hoc analysis can correlate plays with
+	# tactics and outcomes (see plan §05.5 / overview.md observability).
+	_log_play_executed(updated, active_play)
+
+	return {"crew_data": updated, "decision": decision}
+
+
+## Build geometry for the play system from leader awareness. Picks the top
+## opportunity as the target and infers facing from its velocity.
+static func _build_play_geometry(crew_data: Dictionary) -> Dictionary:
+	var opportunities: Array = crew_data.get("awareness", {}).get("opportunities", [])
+	if opportunities.is_empty():
+		return {}
+	var top = opportunities[0]
+	var target_id: String = top.get("id", "")
+	if target_id == "":
+		return {}
+	var pos: Vector2 = top.get("position", Vector2.ZERO)
+	var vel: Vector2 = top.get("velocity", Vector2.ZERO)
+	var facing := vel.normalized() if vel.length() > 1.0 else Vector2.RIGHT
+	return {
+		"target_id": target_id,
+		"target_position": pos,
+		"target_facing": facing,
+	}
+
+
+static func _log_play_executed(leader_crew: Dictionary, active_play: Dictionary) -> void:
+	var loop := Engine.get_main_loop()
+	if loop == null or not loop is SceneTree:
+		return
+	var root := (loop as SceneTree).root
+	if root == null or not root.has_node("BattleEventLoggerAutoload"):
+		return
+	var logger := root.get_node("BattleEventLoggerAutoload")
+	var fighters: Array = active_play.get("role_assignments", {}).keys()
+	logger.log_event("play_executed", {
+		"leader_crew_id": leader_crew.get("crew_id", ""),
+		"play_id": active_play.get("play_id", ""),
+		"phase": active_play.get("phase_index", 0),
+		"fighters": fighters.size(),
+		"target_id": active_play.get("target_id", ""),
+	})
 
 
 ## Create screen withdrawal orders - rearguard action

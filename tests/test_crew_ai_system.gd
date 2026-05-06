@@ -474,17 +474,12 @@ func test_squadron_coordination_style_varies_with_skill():
 	assert_eq(low_skill_style, CrewIntegrationSystem.CoordinationStyle.INDIVIDUAL,
 		"Low skill leader uses INDIVIDUAL coordination")
 
-	# Medium skill leader uses PAIRED coordination
-	var medium_skill_style = CrewIntegrationSystem._select_coordination_style(0.5)
-	assert_eq(medium_skill_style, CrewIntegrationSystem.CoordinationStyle.PAIRED,
-		"Medium skill leader uses PAIRED coordination")
+	# Mid-skill leaders use LOOSE coordination (mutual support, focus fire)
+	var mid_skill_style = CrewIntegrationSystem._select_coordination_style(0.5)
+	assert_eq(mid_skill_style, CrewIntegrationSystem.CoordinationStyle.LOOSE,
+		"Mid skill leader uses LOOSE coordination")
 
-	# High skill leader uses COORDINATED coordination
-	var high_skill_style = CrewIntegrationSystem._select_coordination_style(0.7)
-	assert_eq(high_skill_style, CrewIntegrationSystem.CoordinationStyle.COORDINATED,
-		"High skill leader uses COORDINATED coordination")
-
-	# Elite leader uses ORCHESTRATED coordination
+	# Elite leader uses ORCHESTRATED coordination (play-driven)
 	var elite_skill_style = CrewIntegrationSystem._select_coordination_style(0.9)
 	assert_eq(elite_skill_style, CrewIntegrationSystem.CoordinationStyle.ORCHESTRATED,
 		"Elite leader uses ORCHESTRATED coordination")
