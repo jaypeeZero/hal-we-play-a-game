@@ -127,6 +127,13 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 ## Writes factor fields directly onto ship_data.crew_modifiers; MovementSystem
 ## reads these in its hot path. No intermediate aggregate (e.g. raw skill)
 ## is kept around — that just begs to be ignored downstream.
+##
+## Solo fighter pilots are also their own gunner — their forward-fixed
+## weapons read crew_modifiers.aim_skill / targeting_style / lead_accuracy,
+## and nothing else writes those for fighters since fighter_pilot_ai only
+## produces "maneuver" decisions. So the pilot path writes the gunner-side
+## fields too. A real gunner on a heavier ship overwrites these via their
+## own fire decision (last writer wins, one shared modifier set per ship).
 static func apply_pilot_skill_modifiers(ship_data: Dictionary, crew_data: Dictionary) -> Dictionary:
 	var updated = ship_data.duplicate(true)
 	var skill_factor = CrewAISystem.calculate_effective_skill(crew_data)
@@ -150,6 +157,18 @@ static func apply_pilot_skill_modifiers(ship_data: Dictionary, crew_data: Dictio
 	# crew get baseline behavior.
 	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
 	updated.crew_modifiers.pilot_aggression = float(skills.get("aggression", skill_factor))
+
+	# Pilot-as-gunner fields for solo fighters. See function doc.
+	var aim_skill: float = float(skills.get("aim", skill_factor))
+	var composure: float = float(skills.get("composure", skill_factor))
+	var stress: float = float(crew_data.get("stats", {}).get("stress", 0.0))
+	var effective_composure: float = composure * (1.0 - stress * 0.5)
+	updated.crew_modifiers.aim_skill = aim_skill
+	updated.crew_modifiers.gunner_panicking = effective_composure < WingConstants.GUNNER_PANIC_COMPOSURE
+	updated.crew_modifiers.gunner_reaction = crew_data.stats.reaction_time
+	updated.crew_modifiers.targeting_style = _select_targeting_style(aim_skill)
+	updated.crew_modifiers.lead_accuracy = lerp(WingConstants.GUNNER_LEAD_MIN,
+												WingConstants.GUNNER_LEAD_MAX, aim_skill)
 
 	return updated
 
