@@ -10,10 +10,12 @@ const MESSAGES := [
 ]
 
 @onready var _messages_list: VBoxContainer = $MarginContainer/VBoxContainer/MessagesContainer/MessagesList
+@onready var _status_label: Label = $MarginContainer/VBoxContainer/StatusLabel
 
 
 func _ready() -> void:
 	_populate_messages()
+	_status_label.text = ""
 
 
 func _populate_messages() -> void:
@@ -82,4 +84,16 @@ func _create_message_item(msg: Dictionary) -> PanelContainer:
 
 
 func _on_fleet_launch_pressed() -> void:
+	var initial_fleet := FleetDataManager.load_fleet(0)
+	if FleetDataManager.get_fleet_ship_count(initial_fleet) == 0:
+		_status_label.text = "Configure at least one ship before launch."
+		_status_label.modulate = Color.RED
+		return
+
+	RoguelikeRun.start_run(initial_fleet)
 	get_tree().change_scene_to_file("res://scenes/roguelite_map.tscn")
+
+
+func _on_edit_fleet_pressed() -> void:
+	RoguelikeRun.editor_return_scene = "res://scenes/fleet_management.tscn"
+	get_tree().change_scene_to_file("res://scenes/fleet_editor.tscn")

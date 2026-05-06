@@ -82,4 +82,9 @@ func _clear_status() -> void:
 
 
 func _on_back_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	var return_scene := RoguelikeRun.editor_return_scene
+	if return_scene != "":
+		RoguelikeRun.editor_return_scene = ""
+		get_tree().change_scene_to_file(return_scene)
+	else:
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")

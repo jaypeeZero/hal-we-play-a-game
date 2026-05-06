@@ -42,12 +42,23 @@ text = "Fleet Command"
 theme_override_font_sizes/font_size = 32
 alignment = 1
 
+[node name="EditFleetButton" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 2
+size_flags_vertical = 4
+text = "Edit Fleet"
+custom_minimum_size = Vector2(150, 50)
+
 [node name="FleetLaunchButton" type="Button" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 2
 size_flags_vertical = 4
 text = "Fleet Launch"
 custom_minimum_size = Vector2(150, 50)
+
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+horizontal_alignment = 1
 
 [node name="MessagesContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -64,4 +75,5 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
+[connection signal="pressed" from="MarginContainer/VBoxContainer/EditFleetButton" to="." method="_on_edit_fleet_pressed"]
 [connection signal="pressed" from="MarginContainer/VBoxContainer/FleetLaunchButton" to="." method="_on_fleet_launch_pressed"]

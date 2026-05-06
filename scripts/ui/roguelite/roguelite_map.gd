@@ -43,9 +43,30 @@ var _connections: Array = []  # Array of {from_id, to_id}
 
 
 func _ready() -> void:
-	_generate_map()
+	if RoguelikeRun.has_map_state():
+		_restore_map_state()
+	else:
+		_generate_map()
 	_build_ui()
 	_update_node_states()
+
+
+func _restore_map_state() -> void:
+	var state := RoguelikeRun.load_map_state()
+	_map_nodes = state.get("nodes", []).duplicate(true)
+	_connections = state.get("connections", []).duplicate(true)
+	_current_row = int(state.get("current_row", -1))
+
+	# The pending battle node (if any) survived the round-trip; mark it visited
+	# now and refresh accessibility for the next row.
+	var battle_node_id: String = RoguelikeRun.pending_battle_node_id
+	if battle_node_id != "":
+		var battle_node := _get_node_by_id(battle_node_id)
+		if not battle_node.is_empty():
+			battle_node["visited"] = true
+			_current_row = battle_node["row"]
+			_update_accessibility_after_selection(battle_node_id)
+		RoguelikeRun.pending_battle_node_id = ""
 
 
 func _generate_map() -> void:
@@ -228,10 +249,14 @@ func _update_node_states() -> void:
 
 func _on_node_pressed(node_id: String) -> void:
 	var node := _get_node_by_id(node_id)
-	if node == null:
+	if node.is_empty():
 		return
 
-	# Mark node as visited
+	if node["type"] == NodeType.BATTLE:
+		_launch_battle(node)
+		return
+
+	# Non-battle nodes: mark visited immediately
 	node["visited"] = true
 	_current_row = node["row"]
 
@@ -247,10 +272,19 @@ func _on_node_pressed(node_id: String) -> void:
 		# Delay before returning to fleet management
 		await get_tree().create_timer(2.0).timeout
 		map_completed.emit()
+		RoguelikeRun.end_run()
 		get_tree().change_scene_to_file("res://scenes/fleet_management.tscn")
 		return
 
 	_update_node_states()
+
+
+func _launch_battle(node: Dictionary) -> void:
+	RoguelikeRun.started_first_battle = true
+	RoguelikeRun.pending_battle_node_id = node["id"]
+	RoguelikeRun.save_map_state(_map_nodes, _connections, _current_row)
+	node_selected.emit(node)
+	get_tree().change_scene_to_file("res://scenes/space_battle.tscn")
 
 
 func _update_accessibility_after_selection(selected_id: String) -> void:
