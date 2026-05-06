@@ -55,7 +55,7 @@ static func gather_visible_entities(
 	# 0.0 awareness = 70% range
 	# 0.5 awareness = 100% range
 	# 1.0 awareness = 130% range
-	var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
+	var awareness = crew_data.get("stats", {}).get("skills", {}).get("awareness", 0.5)
 	var effective_range = base_range * (0.7 + awareness * 0.6)
 	var range_sq = effective_range * effective_range
 
@@ -118,25 +118,87 @@ static func create_entity_info(entity: Dictionary, entity_type: String) -> Dicti
 # THREAT IDENTIFICATION
 # ============================================================================
 
-## Identify and prioritize threats
-static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array) -> Array:
+## Identify and prioritize threats. Awareness gates how many threats appear
+## on the crew's list at all; tactics shapes whether they are *correctly*
+## ordered by urgency (high-tactics: clean ranking; low-tactics: noisy).
+static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, _all_ships: Array) -> Array:
 	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team)
 
 	# All enemies are potential threats (weapons can damage any target, just at reduced effectiveness)
-	# Prioritization happens at the weapon system level
-	var threats = enemies \
+	var scored: Array = enemies \
 		.map(func(e): return add_threat_priority(e, own_ship, crew_data)) \
 		.filter(func(e): return e._threat_priority > 0.0)
-	threats.sort_custom(func(a, b): return a._threat_priority > b._threat_priority)
 
-	# Limit number of threats tracked based on situational awareness
-	var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
-	# Max threats scales with awareness
-	# 0.0 awareness = 1 threat
-	# 0.5 awareness = 2-3 threats
-	# 1.0 awareness = 4+ threats
-	var max_threats = int(1 + awareness * 4)
-	return threats.slice(0, min(max_threats, threats.size()))
+	return prioritize_threats(scored, crew_data, own_ship)
+
+## Order threats by urgency and clip the visible set by awareness.
+##
+## - High-tactics crew: low noise, clean ordering by urgency (closing speed,
+##   weapon threat, aspect bias).
+## - Low-tactics crew: noisy ordering — sometimes mis-prioritises which
+##   threat to react to first.
+## - Awareness sets how many threats appear on the list at all
+##   (`floor(awareness * MAX_VISIBLE_THREATS)`, minimum 1).
+static func prioritize_threats(threats: Array, crew_data: Dictionary, own_ship: Dictionary) -> Array:
+	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
+	var tactics: float = clamp(float(skills.get("tactics", 0.5)), 0.0, 1.0)
+	var awareness: float = clamp(float(skills.get("awareness", 0.5)), 0.0, 1.0)
+
+	var ranked: Array = []
+	for threat in threats:
+		var entry = threat.duplicate(true)
+		var urgency: float = _compute_urgency(entry, own_ship)
+		if tactics < WingConstants.HIGH_TACTICS_THRESHOLD:
+			# Below the threshold, ranking gets noisy. Noise scales with the
+			# gap between this crew's tactics and the clean-ranking floor.
+			var noise_scale: float = 1.0 - (tactics / WingConstants.HIGH_TACTICS_THRESHOLD)
+			var noise: float = WingConstants.TACTICS_NOISE * noise_scale
+			urgency *= randf_range(1.0 - noise, 1.0 + noise)
+		entry["_threat_urgency"] = urgency
+		ranked.append(entry)
+
+	ranked.sort_custom(func(a, b): return a._threat_urgency > b._threat_urgency)
+
+	# Awareness caps how many threats the crew can hold in their head.
+	var max_visible: int = max(1, int(floor(awareness * WingConstants.MAX_VISIBLE_THREATS)))
+	if max_visible > ranked.size():
+		max_visible = ranked.size()
+	return ranked.slice(0, max_visible)
+
+## Pure urgency score from threat geometry — higher means "react first".
+## Combines closing speed, weapon-threat heuristic, and aspect (are they
+## pointing at us?). Uses small EPSILON to avoid div-by-zero on stationary
+## threats; result then gets noisy-multiplied for low-tactics crew.
+static func _compute_urgency(threat: Dictionary, own_ship: Dictionary) -> float:
+	const EPSILON: float = 0.001
+
+	var threat_pos: Vector2 = threat.get("position", Vector2.ZERO)
+	var threat_vel: Vector2 = threat.get("velocity", Vector2.ZERO)
+	var own_pos: Vector2 = own_ship.get("position", Vector2.ZERO)
+
+	var to_own: Vector2 = own_pos - threat_pos
+	var distance: float = max(to_own.length(), EPSILON)
+	var to_own_dir: Vector2 = to_own / distance
+
+	# Closing speed: positive when the threat is approaching.
+	var closing_speed: float = max(threat_vel.dot(to_own_dir), 0.0)
+	var time_to_intercept: float = distance / max(closing_speed, EPSILON)
+
+	# Threat priority already encodes weapon/type danger.
+	var weapon_threat: float = max(float(threat.get("_threat_priority", 1.0)), 1.0)
+
+	# Aspect bias: a threat with their nose on us is far more dangerous than
+	# one we're tailing. `velocity` direction stands in for facing — fighters
+	# point where they're going and ships point near where they're going.
+	# `to_own_dir` is FROM threat TO own; when their heading matches that
+	# direction, dot is +1 (heading straight at us); -1 when fleeing.
+	var aspect_bias: float = 1.0
+	if threat_vel.length() > EPSILON:
+		var heading: Vector2 = threat_vel.normalized()
+		var dot: float = heading.dot(to_own_dir)
+		aspect_bias = 1.0 + dot  # range: 0..2
+
+	return (closing_speed / time_to_intercept) * weapon_threat * aspect_bias
 
 ## Calculate threat priority for an entity
 static func add_threat_priority(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> Dictionary:
@@ -216,7 +278,7 @@ static func identify_opportunities(visible_entities: Array, own_ship: Dictionary
 	opportunities.sort_custom(func(a, b): return a._opportunity_score > b._opportunity_score)
 
 	# Limit number of opportunities tracked (same as threats)
-	var awareness = crew_data.get("stats", {}).get("skills", {}).get("situational_awareness", 0.5)
+	var awareness = crew_data.get("stats", {}).get("skills", {}).get("awareness", 0.5)
 	var max_opportunities = int(1 + awareness * 4)
 	return opportunities.slice(0, min(max_opportunities, opportunities.size()))
 

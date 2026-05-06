@@ -10,7 +10,9 @@ extends RefCounted
 ## Pure functions; the caller passes in crew_list and mailboxes, and gets back
 ## an updated copy of each.  No internal state.
 
-const URGENT_EVENT_TYPES = ["missile_locked", "threat_appeared", "ship_damaged"]
+## Missile lock is not a real game mechanic — reaction-latency triggers off
+## `threat_appeared` and `ship_damaged` only.
+const URGENT_EVENT_TYPES = ["threat_appeared", "ship_damaged"]
 
 ## Process all due crew this tick.
 ## Returns {crew_list, decisions, mailboxes}.
@@ -27,7 +29,7 @@ static func tick(
 
 	for crew in crew_list:
 		var crew_id = crew.crew_id
-		var has_events = CrewMailboxSystem.has_pending(current_mailboxes, crew_id)
+		var has_events = CrewMailboxSystem.has_pending(current_mailboxes, crew_id, game_time)
 		var is_due = game_time >= crew.get("next_decision_time", 0.0)
 
 		if not has_events and not is_due:
@@ -37,7 +39,7 @@ static func tick(
 		var events: Array = []
 		var working_crew = crew
 		if has_events:
-			var drained = CrewMailboxSystem.drain_events(current_mailboxes, crew_id)
+			var drained = CrewMailboxSystem.drain_events(current_mailboxes, crew_id, game_time)
 			events = drained.events
 			current_mailboxes = drained.mailboxes
 			working_crew = apply_event_side_effects(working_crew, events, game_time)
@@ -79,7 +81,7 @@ static func tick_with_awareness(
 
 	for crew in crew_list:
 		var crew_id = crew.crew_id
-		var has_events = CrewMailboxSystem.has_pending(current_mailboxes, crew_id)
+		var has_events = CrewMailboxSystem.has_pending(current_mailboxes, crew_id, game_time)
 		var is_due = game_time >= crew.get("next_decision_time", 0.0)
 
 		if not has_events and not is_due:
@@ -91,7 +93,7 @@ static func tick_with_awareness(
 
 		var events: Array = []
 		if has_events:
-			var drained = CrewMailboxSystem.drain_events(current_mailboxes, crew_id)
+			var drained = CrewMailboxSystem.drain_events(current_mailboxes, crew_id, game_time)
 			events = drained.events
 			current_mailboxes = drained.mailboxes
 			aware_crew = apply_event_side_effects(aware_crew, events, game_time)
@@ -122,7 +124,7 @@ static func apply_event_side_effects(crew: Dictionary, events: Array, game_time:
 
 static func _apply_one_event(crew: Dictionary, event: Dictionary, game_time: float) -> Dictionary:
 	match event.get("type", ""):
-		"sensor_contact":
+		"threat_appeared":
 			return TacticalMemorySystem.record_event(crew, {
 				"type": "threat_detected",
 				"entity_id": event.get("data", {}).get("enemy_id", ""),
@@ -147,9 +149,9 @@ static func _apply_one_event(crew: Dictionary, event: Dictionary, game_time: flo
 			return crew
 
 ## Make a single crew member's decision, considering pending events.
-## URGENT events (missile_locked, threat_appeared, ship_damaged) for pilots
-## with known threats short-circuit to an evasive maneuver.  Other events fall
-## through to the standard role-based decision path.
+## URGENT events (threat_appeared, ship_damaged) for pilots with known
+## threats short-circuit to an evasive maneuver. Other events fall through
+## to the standard role-based decision path.
 ##
 ## State (stress, fatigue) catches up lazily: dt is the time since this crew's
 ## last state update, not the engine frame's delta.

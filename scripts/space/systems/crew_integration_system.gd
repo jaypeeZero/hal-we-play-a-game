@@ -28,11 +28,14 @@ enum CommandStyle {
 # =============================================================================
 # COORDINATION STYLE ENUM - Unlocked by squadron leader skill
 # =============================================================================
+# Three tiers: independent fighting, loose mutual support, or full play-driven
+# orchestration. The earlier PAIRED / COORDINATED split was decorative — the
+# only behavior gate that mattered was whether plays could fire — so they
+# collapsed into LOOSE.
 enum CoordinationStyle {
 	INDIVIDUAL,   # Ships fight independently (low skill)
-	PAIRED,       # Basic wingman pairing works (medium skill)
-	COORDINATED,  # Focus fire, mutual support, timing (high skill)
-	ORCHESTRATED  # Complex maneuvers, feints, traps (elite skill)
+	LOOSE,        # Basic wingman pairing, mutual support, focus fire (mid skill)
+	ORCHESTRATED  # Play-driven coordinated maneuvers (elite skill)
 }
 
 # ============================================================================
@@ -123,18 +126,52 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 
 	return updated
 
-## Apply pilot skill modifiers to ship performance
+## Apply pilot skill modifiers to ship performance.
+## Writes factor fields directly onto ship_data.crew_modifiers; MovementSystem
+## reads these in its hot path. No intermediate aggregate (e.g. raw skill)
+## is kept around — that just begs to be ignored downstream.
+##
+## Solo fighter pilots are also their own gunner — their forward-fixed
+## weapons read crew_modifiers.aim_skill / targeting_style / lead_accuracy,
+## and nothing else writes those for fighters since fighter_pilot_ai only
+## produces "maneuver" decisions. So the pilot path writes the gunner-side
+## fields too. A real gunner on a heavier ship overwrites these via their
+## own fire decision (last writer wins, one shared modifier set per ship).
 static func apply_pilot_skill_modifiers(ship_data: Dictionary, crew_data: Dictionary) -> Dictionary:
 	var updated = ship_data.duplicate(true)
 	var skill_factor = CrewAISystem.calculate_effective_skill(crew_data)
 
-	# Skilled pilots get better ship performance
-	# Store as temporary modifiers (would be applied by MovementSystem)
 	if not updated.has("crew_modifiers"):
 		updated.crew_modifiers = {}
 
-	updated.crew_modifiers.pilot_skill = skill_factor
+	updated.crew_modifiers.pilot_turn_factor = lerp(WingConstants.PILOT_TURN_RATE_MIN,
+													WingConstants.PILOT_TURN_RATE_MAX, skill_factor)
+	updated.crew_modifiers.pilot_accel_factor = lerp(WingConstants.PILOT_ACCEL_MIN,
+													 WingConstants.PILOT_ACCEL_MAX, skill_factor)
+	updated.crew_modifiers.pilot_lateral_factor = lerp(WingConstants.PILOT_LATERAL_MIN,
+													   WingConstants.PILOT_LATERAL_MAX, skill_factor)
+	updated.crew_modifiers.pilot_damp_factor = lerp(WingConstants.PILOT_DAMPENING_MIN,
+													WingConstants.PILOT_DAMPENING_MAX, skill_factor)
 	updated.crew_modifiers.pilot_reaction = crew_data.stats.reaction_time
+
+	# Aggression is the leash dial: low aggression hugs the patrol area,
+	# high aggression chases targets anywhere. MovementSystem.apply_area_leash
+	# reads this. Falls back to the legacy aggregate skill so unconfigured
+	# crew get baseline behavior.
+	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
+	updated.crew_modifiers.pilot_aggression = float(skills.get("aggression", skill_factor))
+
+	# Pilot-as-gunner fields for solo fighters. See function doc.
+	var aim_skill: float = float(skills.get("aim", skill_factor))
+	var composure: float = float(skills.get("composure", skill_factor))
+	var stress: float = float(crew_data.get("stats", {}).get("stress", 0.0))
+	var effective_composure: float = composure * (1.0 - stress * 0.5)
+	updated.crew_modifiers.aim_skill = aim_skill
+	updated.crew_modifiers.gunner_panicking = effective_composure < WingConstants.GUNNER_PANIC_COMPOSURE
+	updated.crew_modifiers.gunner_reaction = crew_data.stats.reaction_time
+	updated.crew_modifiers.targeting_style = _select_targeting_style(aim_skill)
+	updated.crew_modifiers.lead_accuracy = lerp(WingConstants.GUNNER_LEAD_MIN,
+												WingConstants.GUNNER_LEAD_MAX, aim_skill)
 
 	return updated
 
@@ -155,8 +192,11 @@ static func apply_fire_decision(ship_data: Dictionary, decision: Dictionary, cre
 
 	return updated
 
-## Apply gunner skill modifiers to weapons
-## DRAMATIC skill differences: 0-skill sprays wildly, 1.0-skill lands precise shots
+## Apply gunner skill modifiers to weapons.
+## Writes raw aim skill onto ship_data.crew_modifiers; WeaponSystem reads it
+## for the spread cone. Also written by fighter pilots whose forward-fixed
+## weapons aim with piloting+aim — caller picks crew based on weapon type.
+## DRAMATIC skill differences: 0-skill sprays wildly, 1.0-skill lands precise shots.
 static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dictionary) -> Dictionary:
 	var updated = ship_data.duplicate(true)
 	var skill_factor = CrewAISystem.calculate_effective_skill(crew_data)
@@ -164,7 +204,17 @@ static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dicti
 	if not updated.has("crew_modifiers"):
 		updated.crew_modifiers = {}
 
-	updated.crew_modifiers.gunner_skill = skill_factor
+	# Panic state: low composure under stress overrides the skill curve.
+	var composure = crew_data.get("stats", {}).get("skills", {}).get("composure", skill_factor)
+	var stress = crew_data.get("stats", {}).get("stress", 0.0)
+	var effective_composure = composure * (1.0 - stress * 0.5)
+	var is_panicking = effective_composure < WingConstants.GUNNER_PANIC_COMPOSURE
+
+	# Raw aim skill drives the spread cone. Stress/fatigue degrade
+	# `skill_factor` for other downstream effects, but the cone uses raw aim
+	# so a 20-aim crew stays tight even under fire — composure gates panic.
+	updated.crew_modifiers.aim_skill = float(crew_data.get("stats", {}).get("skills", {}).get("aim", skill_factor))
+	updated.crew_modifiers.gunner_panicking = is_panicking
 	updated.crew_modifiers.gunner_reaction = crew_data.stats.reaction_time
 
 	# Select targeting style based on skill
@@ -173,12 +223,6 @@ static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dicti
 	# Calculate lead accuracy (how well gunner predicts target position)
 	updated.crew_modifiers.lead_accuracy = lerp(WingConstants.GUNNER_LEAD_MIN,
 												WingConstants.GUNNER_LEAD_MAX, skill_factor)
-
-	# Check for panic state (low composure under stress)
-	var composure = crew_data.get("stats", {}).get("skills", {}).get("composure", skill_factor)
-	var stress = crew_data.get("stats", {}).get("stress", 0.0)
-	var effective_composure = composure * (1.0 - stress * 0.5)
-	updated.crew_modifiers.gunner_panicking = effective_composure < WingConstants.GUNNER_PANIC_COMPOSURE
 
 	return updated
 
@@ -269,91 +313,10 @@ static func _select_command_style(skill: float) -> int:
 static func _select_coordination_style(skill: float) -> int:
 	if skill >= WingConstants.SQUADRON_ORCHESTRATED_SKILL:
 		return CoordinationStyle.ORCHESTRATED
-	elif skill >= WingConstants.SQUADRON_COORDINATED_SKILL:
-		return CoordinationStyle.COORDINATED
-	elif skill >= WingConstants.SQUADRON_PAIRED_SKILL:
-		return CoordinationStyle.PAIRED
+	elif skill >= WingConstants.SQUADRON_LOOSE_SKILL:
+		return CoordinationStyle.LOOSE
 	else:
 		return CoordinationStyle.INDIVIDUAL
-
-# ============================================================================
-# CREW-MODIFIED SHIP STATS
-# ============================================================================
-
-## Get movement stats modified by crew skill
-## DRAMATIC skill differences: 0-skill flies straight, 1.0-skill dances circles
-static func get_crew_modified_movement_stats(ship_data: Dictionary) -> Dictionary:
-	var stats = ship_data.stats.duplicate()
-
-	if not ship_data.has("crew_modifiers"):
-		return stats
-
-	var modifiers = ship_data.crew_modifiers
-
-	# Pilot skill affects turn rate, acceleration, and lateral thrust
-	# Using WIDE ranges for dramatic skill differences
-	if modifiers.has("pilot_skill"):
-		var skill = modifiers.pilot_skill
-		# Turn rate: 50% to 130% - huge impact on dogfighting
-		stats.turn_rate *= lerp(WingConstants.PILOT_TURN_RATE_MIN,
-								WingConstants.PILOT_TURN_RATE_MAX, skill)
-		# Acceleration: 60% to 120%
-		stats.acceleration *= lerp(WingConstants.PILOT_ACCEL_MIN,
-								   WingConstants.PILOT_ACCEL_MAX, skill)
-		# Lateral thrust: 20% to 100% - critical for evasion
-		var lateral_base = stats.get("lateral_acceleration", 0.3)
-		stats.lateral_acceleration = lateral_base * lerp(WingConstants.PILOT_LATERAL_MIN,
-														 WingConstants.PILOT_LATERAL_MAX, skill)
-		# Flight assist tightness — skilled pilots hold the stick precisely
-		var dampening_base = stats.get("inertial_dampening", 0.0)
-		if dampening_base > 0.0:
-			stats.inertial_dampening = dampening_base * lerp(WingConstants.PILOT_DAMPENING_MIN,
-															 WingConstants.PILOT_DAMPENING_MAX, skill)
-
-	# Captain coordination affects overall performance
-	if modifiers.has("captain_coordination"):
-		stats.max_speed *= modifiers.captain_coordination
-		stats.turn_rate *= modifiers.captain_coordination
-
-	return stats
-
-## Get weapon stats modified by crew skill
-## DRAMATIC skill differences using constants for wide ranges
-static func get_crew_modified_weapon_stats(weapon: Dictionary, ship_data: Dictionary) -> Dictionary:
-	var stats = weapon.stats.duplicate()
-
-	if not ship_data.has("crew_modifiers"):
-		return stats
-
-	var modifiers = ship_data.crew_modifiers
-
-	# Gunner skill affects accuracy, rate of fire, and tracking
-	if modifiers.has("gunner_skill"):
-		var skill = modifiers.gunner_skill
-
-		# Check for panic state - overrides normal modifiers
-		if modifiers.get("gunner_panicking", false):
-			stats.accuracy *= WingConstants.GUNNER_PANIC_ACCURACY_PENALTY
-			stats.rate_of_fire *= WingConstants.GUNNER_PANIC_ROF_BONUS
-		else:
-			# Normal skill-based modifiers with WIDE ranges
-			# Accuracy: 40% to 130% (was 70-120%)
-			stats.accuracy *= lerp(WingConstants.GUNNER_ACCURACY_MIN,
-								   WingConstants.GUNNER_ACCURACY_MAX, skill)
-			# Rate of fire: 70% to 120% (was 90-110%)
-			stats.rate_of_fire *= lerp(WingConstants.GUNNER_ROF_MIN,
-									   WingConstants.GUNNER_ROF_MAX, skill)
-
-		# Tracking speed: 30% to 110% (new)
-		if stats.has("tracking_speed"):
-			stats.tracking_speed *= lerp(WingConstants.GUNNER_TRACKING_MIN,
-										 WingConstants.GUNNER_TRACKING_MAX, skill)
-
-		# Add targeting style for weapon system to use
-		stats.targeting_style = modifiers.get("targeting_style", TargetingStyle.SIMPLE)
-		stats.lead_accuracy = modifiers.get("lead_accuracy", 0.0)
-
-	return stats
 
 # ============================================================================
 # CREW AWARENESS TO TARGET SELECTION

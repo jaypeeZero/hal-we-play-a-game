@@ -1,0 +1,71 @@
+{
+  "pincer": {
+    "min_tactics": 0.5,
+    "min_wing_size": 4,
+    "phases": [
+      {
+        "duration": 3.0,
+        "roles": {
+          "A": "engage_frontal",
+          "B": "loop_wide_left"
+        }
+      },
+      {
+        "duration": 4.5,
+        "roles": {
+          "A": "hold_pressure",
+          "B": "approach_target_six"
+        }
+      },
+      {
+        "duration": 0.0,
+        "roles": {
+          "A": "merge_attack",
+          "B": "merge_attack"
+        }
+      }
+    ]
+  },
+  "bracket": {
+    "min_tactics": 0.6,
+    "min_wing_size": 4,
+    "phases": [
+      {
+        "duration": 3.5,
+        "roles": {
+          "A": "flank_left",
+          "B": "flank_right"
+        }
+      },
+      {
+        "duration": 0.0,
+        "roles": {
+          "A": "merge_attack",
+          "B": "merge_attack"
+        }
+      }
+    ]
+  },
+  "kill_box": {
+    "min_tactics": 0.75,
+    "min_wing_size": 6,
+    "phases": [
+      {
+        "duration": 4.0,
+        "roles": {
+          "A": "engage_frontal",
+          "B": "flank_left",
+          "C": "flank_right"
+        }
+      },
+      {
+        "duration": 0.0,
+        "roles": {
+          "A": "merge_attack",
+          "B": "merge_attack",
+          "C": "merge_attack"
+        }
+      }
+    ]
+  }
+}

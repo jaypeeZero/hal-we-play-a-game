@@ -37,6 +37,32 @@ const LATERAL_THRUST_RANGE = 1500.0  # Use lateral thrust when closer than this 
 const BRAKE_OVERHEAT_THRESHOLD = 1.0  # 100% of capacity = overheat
 const BRAKE_RECOVERY_THRESHOLD = 0.5  # Must cool to 50% before brakes work again
 
+# ============================================================================
+# CREW MODIFIER READS
+# ============================================================================
+# Pilot skill is baked onto ship_data.crew_modifiers by CrewIntegrationSystem
+# (factor fields, not raw skill). MovementSystem just consumes — no callback,
+# no recomputation. Defaults of 1.0 mean "no crew assigned" doesn't punish
+# stats. Hot-path lookups; keep them O(1).
+
+static func _read_modified_turn_rate(ship_data: Dictionary) -> float:
+	var base: float = ship_data.stats.turn_rate
+	var factor: float = ship_data.get("crew_modifiers", {}).get("pilot_turn_factor", 1.0)
+	return base * factor
+
+static func _read_modified_acceleration(ship_data: Dictionary) -> float:
+	var base: float = ship_data.stats.acceleration
+	var factor: float = ship_data.get("crew_modifiers", {}).get("pilot_accel_factor", 1.0)
+	return base * factor
+
+static func _read_modified_lateral_factor(ship_data: Dictionary) -> float:
+	return ship_data.get("crew_modifiers", {}).get("pilot_lateral_factor", 1.0)
+
+static func _read_modified_dampening(ship_data: Dictionary) -> float:
+	var base: float = ship_data.stats.get("inertial_dampening", 0.0)
+	var factor: float = ship_data.get("crew_modifiers", {}).get("pilot_damp_factor", 1.0)
+	return base * factor
+
 ## Check if front brakes are currently overheated (locked out)
 static func is_brake_overheated(ship_data: Dictionary) -> bool:
 	return ship_data.get("brake_overheated", false)
@@ -64,10 +90,22 @@ static func direction_to_heading(direction: Vector2) -> float:
 static func get_visual_forward(rotation: float) -> Vector2:
 	return Vector2(sin(rotation), -cos(rotation))
 
+# Leash-vs-aggression dial. The pilot's aggression scales how hard the
+# leash pulls when the ship has an enemy target:
+#   aggression = 0.0  → 2× pull (hugs patrol area, won't chase past edge)
+#   aggression = 0.5  → 1× pull (baseline; matches the original behavior)
+#   aggression ≥ 0.95 → bypass (no leash; chase anywhere)
+# Without a target the leash always applies normally — high-aggression
+# pilots return to patrol when there's nothing to fight.
+const LEASH_AGGRESSION_BYPASS_THRESHOLD: float = 0.95
+const LEASH_PULL_SCALE_AT_AGGRESSION_ZERO: float = 2.0
+const LEASH_PULL_SCALE_AT_AGGRESSION_FULL: float = 0.0
+
 ## Bias a desired heading back toward the ship's assigned operating area
 ## when the ship is outside it. Ramps from no effect at the edge of the
 ## leash radius to total override at 2x the radius. Ships without an
-## `assigned_area` are unaffected.
+## `assigned_area` are unaffected. The pilot's aggression dial scales the
+## pull when an enemy target is set; see constants above.
 static func apply_area_leash(ship_data: Dictionary, desired_heading: float) -> float:
 	var assigned_area = ship_data.get("assigned_area")
 	if assigned_area == null or not assigned_area is Dictionary:
@@ -80,10 +118,36 @@ static func apply_area_leash(ship_data: Dictionary, desired_heading: float) -> f
 	var dist: float = to_center.length()
 	if dist <= area_radius or dist < 1.0:
 		return desired_heading
+
+	var pull_scale: float = _leash_pull_scale(ship_data)
+	if pull_scale <= 0.0:
+		return desired_heading
+
 	var return_heading: float = direction_to_heading(to_center)
-	# Pull ramps from 0 at the edge to 1.0 at 2x radius (full override)
-	var pull: float = clamp((dist - area_radius) / area_radius, 0.0, 1.0)
+	# Base ramp: pull = 0 at the edge, 1.0 at 2× radius. Aggression scales it.
+	var raw_pull: float = clamp((dist - area_radius) / area_radius, 0.0, 1.0)
+	var pull: float = clamp(raw_pull * pull_scale, 0.0, 1.0)
 	return lerp_angle(desired_heading, return_heading, pull)
+
+## Pull-scale dial. Returns 1.0 (baseline) when the ship has no target or no
+## aggression configured; with a target, lerps from 2× (timid) at agg=0 to
+## 0 (loose) at agg=1, with a hard bypass at LEASH_AGGRESSION_BYPASS_THRESHOLD.
+static func _leash_pull_scale(ship_data: Dictionary) -> float:
+	var orders: Dictionary = ship_data.get("orders", {})
+	var target_id = orders.get("target_id", "")
+	var has_target: bool = target_id != null and str(target_id) != ""
+	if not has_target:
+		return 1.0
+
+	var modifiers: Dictionary = ship_data.get("crew_modifiers", {})
+	if not modifiers.has("pilot_aggression"):
+		return 1.0
+	var aggression: float = float(modifiers.pilot_aggression)
+	if aggression >= LEASH_AGGRESSION_BYPASS_THRESHOLD:
+		return 0.0
+	return lerp(LEASH_PULL_SCALE_AT_AGGRESSION_ZERO,
+				LEASH_PULL_SCALE_AT_AGGRESSION_FULL,
+				clamp(aggression, 0.0, 1.0))
 
 # ============================================================================
 # MAIN API - Returns new ship_data with updated position/velocity
@@ -389,6 +453,8 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 			return calculate_wing_follow(ship_data, target, nearby_ships, obstacles)
 		"fight_wing_engage":
 			return calculate_wing_engage(ship_data, target, nearby_ships, obstacles)
+		"fight_play_waypoint":
+			return calculate_play_waypoint(ship_data, target, nearby_ships, obstacles)
 		_:
 			# Fallback to standard pilot control
 			return calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
@@ -1100,6 +1166,36 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		"engagement_range": 1400.0,
 		"current_distance": distance
 	}
+
+## Squadron-play waypoint — fly toward a tactical offset assigned by the
+## squadron leader's active play. The pilot aims at `formation_position` at
+## tactical-pursuit throttle; once close, FighterPilotAI stops emitting this
+## maneuver and engagement resumes.
+static func calculate_play_waypoint(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var waypoint: Vector2 = ship_data.get("orders", {}).get("formation_position", Vector2.ZERO)
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var to_waypoint := waypoint - my_pos
+	var distance := to_waypoint.length()
+	if distance < 1.0:
+		return {
+			"desired_heading": ship_data.get("rotation", 0.0),
+			"throttle": 0.0,
+			"thrust_active": false,
+			"is_braking": false,
+			"engagement_range": 0.0,
+			"current_distance": 0.0,
+		}
+	var desired_heading := direction_to_heading(to_waypoint)
+	var throttle := calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": false,
+		"engagement_range": 0.0,
+		"current_distance": distance,
+	}
+
 
 ## Rejoin wingman - return to formation position
 ## Distance-aware: Far uses main thrust, close uses lateral to slide into formation
@@ -2261,7 +2357,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	if max_speed > 0.0:
 		speed_ratio = clamp(ship_data.velocity.length() / max_speed, 0.0, 1.0)
 	var turn_falloff: float = ship_data.stats.get("turn_rate_falloff", 0.0)
-	var effective_turn_rate: float = ship_data.stats.turn_rate * (1.0 - turn_falloff * speed_ratio)
+	var effective_turn_rate: float = _read_modified_turn_rate(ship_data) * (1.0 - turn_falloff * speed_ratio)
 
 	# AREA LEASH — every ship has an assigned operating area. Outside it,
 	# the pilot's heading is gradually pulled back toward the area center;
@@ -2317,7 +2413,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		# Beyond 90° - no thrust, ship needs to turn first
 
 		# Apply throttle and alignment to acceleration
-		var effective_acceleration = ship_data.stats.acceleration * throttle * alignment_factor
+		var effective_acceleration = _read_modified_acceleration(ship_data) * throttle * alignment_factor
 
 		# Thrust is ALWAYS in ship_facing direction (engines push from behind)
 		thrust_vector = ship_facing * effective_acceleration * delta
@@ -2328,8 +2424,11 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	if lateral_thrust_dir != 0:
 		# Perpendicular to ship facing (90° rotation)
 		var perpendicular = Vector2(-ship_facing.y, ship_facing.x)
-		# Lateral acceleration is weaker than main engines
-		var lateral_accel = ship_data.stats.acceleration * ship_data.stats.get("lateral_acceleration", 0.3)
+		# Lateral acceleration is weaker than main engines; pilot skill gates
+		# how much of that base lateral capacity actually delivers.
+		var lateral_accel = _read_modified_acceleration(ship_data) \
+			* ship_data.stats.get("lateral_acceleration", 0.3) \
+			* _read_modified_lateral_factor(ship_data)
 		thrust_vector += perpendicular * lateral_accel * lateral_thrust_dir * delta
 		maneuvering_direction = perpendicular * lateral_thrust_dir
 
@@ -2338,7 +2437,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	var reverse_thrust_amount = pilot_control.get("reverse_thrust", 0.0)  # 0.0 to 1.0
 	if reverse_thrust_amount > 0.0:
 		# Thrust opposite to ship facing direction
-		var reverse_accel = ship_data.stats.acceleration * ship_data.stats.get("reverse_acceleration", 0.4)
+		var reverse_accel = _read_modified_acceleration(ship_data) * ship_data.stats.get("reverse_acceleration", 0.4)
 		thrust_vector -= ship_facing * reverse_accel * reverse_thrust_amount * delta
 
 	# FRONT BRAKE THRUST: Emergency braking - powerful but heat-limited
@@ -2360,7 +2459,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 			# Brake direction is opposite to velocity (stops the ship regardless of facing)
 			var brake_direction = -ship_data.velocity.normalized()
 			# Brake acceleration is as powerful as main engines
-			var brake_accel = ship_data.stats.acceleration * ship_data.stats.get("brake_acceleration", 1.0)
+			var brake_accel = _read_modified_acceleration(ship_data) * ship_data.stats.get("brake_acceleration", 1.0)
 			var brake_force = brake_direction * brake_accel * brake_thrust_amount * delta
 
 			# Don't overshoot - limit braking to not reverse direction
@@ -2397,7 +2496,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	# their own deceleration). Tunable per ship via the
 	# `inertial_dampening` stat (1/sec): higher = tighter, 0 = pure
 	# Newtonian.
-	var inertial_dampening: float = ship_data.stats.get("inertial_dampening", 0.0)
+	var inertial_dampening: float = _read_modified_dampening(ship_data)
 	if inertial_dampening > 0.0 and lateral_thrust_dir == 0 and not pilot_control.get("is_braking", false):
 		var v_along_facing: float = new_velocity.dot(ship_facing)
 		var v_perpendicular: Vector2 = new_velocity - ship_facing * v_along_facing

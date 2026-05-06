@@ -243,10 +243,6 @@ const PILOT_APPROACH_ANGLE_MAX = 0.7          # ~40 degrees offset
 # A 0-skill gunner sprays wildly and can't track moving targets
 # A 1.0-skill gunner lands precise shots on specific subsystems
 
-## Accuracy modifier range (multiplied by base accuracy)
-const GUNNER_ACCURACY_MIN = 0.4              # 0-skill: 40% accuracy
-const GUNNER_ACCURACY_MAX = 1.3              # 1.0-skill: 130% accuracy
-
 ## Rate of fire modifier range
 const GUNNER_ROF_MIN = 0.7                   # 0-skill: 70% fire rate (hesitant)
 const GUNNER_ROF_MAX = 1.2                   # 1.0-skill: 120% fire rate
@@ -288,11 +284,26 @@ const GUNNER_TARGET_SWITCH_PENALTY_MIN = 0.2  # 1.0-skill: 0.2s penalty
 ## Panic fire threshold - below this composure, gunner panics
 const GUNNER_PANIC_COMPOSURE = 0.3
 
-## Panic fire accuracy penalty
-const GUNNER_PANIC_ACCURACY_PENALTY = 0.5    # 50% accuracy when panicking
+## Panic fire spread cone (overrides the skill curve when panicking)
+const GUNNER_AIM_PANIC_SPREAD_RAD = PI / 12.0  # 15°
 
 ## Panic fire rate bonus (spray and pray)
 const GUNNER_PANIC_ROF_BONUS = 1.3           # 130% fire rate when panicking
+
+# =============================================================================
+# GUNNER SKILL - Spread cone (aim-driven)
+# =============================================================================
+# Spread cone is driven directly by raw `aim` skill. At 1.0 aim the cone is
+# zero (perfect line). At 0.0 aim it matches roughly what the legacy mid-skill
+# default felt like, so untrained crew "feel current" rather than absurd.
+
+## Spread cone at zero aim. ~7.5° — close to the pre-rework default mid-skill
+## spread, which becomes the new floor for untrained gunners.
+const GUNNER_AIM_WORST_SPREAD_RAD = PI / 24.0
+
+## Reference target radius (smallest hostile, fighter base_size). Used by tests
+## to assert "almost never miss at one patrol diameter" for elite crew.
+const GUNNER_AIM_TARGET_RADIUS = 15.0
 
 # =============================================================================
 # CAPTAIN SKILL - Ship coordination modifiers
@@ -317,7 +328,7 @@ const CAPTAIN_DECISION_DELAY_MAX = 1.5       # 0-skill: slow, hesitant
 # CAPTAIN SKILL - Behavior thresholds
 # =============================================================================
 # Low skill captains react slowly with poor priorities
-# Higher skill enables anticipation and adaptation
+# Higher skill enables foresight and adaptation
 
 ## Skill for reactive command (only responds to immediate threats)
 const CAPTAIN_REACTIVE_SKILL = 0.3
@@ -350,13 +361,10 @@ const CAPTAIN_THREAT_ASSESSMENT_MAX = 1.0    # 1.0-skill: accurate assessment
 # A 0-skill squadron leader has ships fighting individually
 # A 1.0-skill squadron leader orchestrates complex maneuvers
 
-## Skill for basic wingman pairing to work
-const SQUADRON_PAIRED_SKILL = 0.4
+## Skill for loose coordination (wingman pairing, mutual support, focus fire)
+const SQUADRON_LOOSE_SKILL = 0.4
 
-## Skill for coordinated attacks (focus fire, timing)
-const SQUADRON_COORDINATED_SKILL = 0.6
-
-## Skill for complex tactics (feints, traps, combined arms)
+## Skill for play-driven orchestrated coordination (pincer, bracket, kill-box)
 const SQUADRON_ORCHESTRATED_SKILL = 0.8
 
 # =============================================================================
@@ -398,3 +406,87 @@ const FLEET_RESERVE_MAX = 0.3                # 1.0-skill: holds 30% in reserve
 ## Engagement timing accuracy
 const FLEET_TIMING_MIN = 0.5                 # 0-skill: poor timing
 const FLEET_TIMING_MAX = 1.0                 # 1.0-skill: optimal timing
+
+# =============================================================================
+# SUBSYSTEM TARGETING - elite gunner damage routing
+# =============================================================================
+
+## Probability that a hit from a SUBSYSTEM-aimed shot routes its internal
+## damage to the explicitly intended subsystem (vs. closest-component fallback).
+const SUBSYSTEM_INTENDED_HIT_BIAS = 0.7
+
+# =============================================================================
+# AWARENESS & DETECTION (Phase 03)
+# =============================================================================
+# Skill-based detection latency. Awareness gates how quickly a crew member's
+# mailbox actually receives a `threat_appeared` event after the world fires
+# it; rookie crew lag, elites snap to it. Damage is felt faster than threats
+# are spotted, but still not instant.
+
+## Maximum mailbox delivery delay for `threat_appeared` (seconds).
+## A 0.0-awareness crew waits this long; a 1.0-awareness crew is immediate.
+const MAX_DETECTION_LAG = 0.9
+
+## Same for `ship_damaged` — you feel a hit faster than you spot a fighter.
+const MAX_DAMAGE_PERCEPTION_LAG = 0.25
+
+## How many threats the highest-awareness crew can hold on their list. The
+## visible cap scales as `floor(awareness * MAX_VISIBLE_THREATS)` (min 1).
+const MAX_VISIBLE_THREATS = 8
+
+## At/above this `tactics`, threat ordering is clean. Below it, ranking is
+## perturbed by random noise (low-tactics crew sometimes attack the wrong
+## threat first).
+const HIGH_TACTICS_THRESHOLD = 0.7
+
+## Multiplicative urgency noise applied to low-tactics crew's threat
+## ranking. ±this fraction at zero tactics; tapers to 0 at HIGH_TACTICS_THRESHOLD.
+const TACTICS_NOISE = 0.5
+
+# =============================================================================
+# REACTION LATENCY (Phase 04)
+# =============================================================================
+# Pilots/captains commit a reactive decision after a delay gated by skill.
+# Composes with detection latency: rookies are doubly slow.
+
+## Maximum commit delay for a reactive decision (seconds). A 0.0-piloting
+## pilot waits this long between deciding to evade and the order taking
+## effect; a 1.0-piloting pilot commits immediately.
+const MAX_REACTION_DELAY = 0.7
+
+## Multiplier applied to commit delay when stress exceeds the crew's
+## composure buffer. Low-composure aces under fire react slower than usual.
+const REACTION_STRESS_PENALTY_FACTOR = 1.5
+
+# =============================================================================
+# DEBUG OVERLAY - floating crew table
+# =============================================================================
+
+## Pixel offset between the ship's hull bottom-right and the table corner.
+const OVERLAY_HULL_OFFSET_PX = Vector2(8.0, 8.0)
+
+## Color thresholds for the 0–20 stat gradient. Buckets: red 0–6, yellow 7–13,
+## green 14–20. A "dim" gray is used for stats the role does not read.
+const OVERLAY_STAT_COLOR_LOW = Color(0.95, 0.35, 0.35, 1.0)
+const OVERLAY_STAT_COLOR_MID = Color(0.95, 0.85, 0.30, 1.0)
+const OVERLAY_STAT_COLOR_HIGH = Color(0.45, 0.95, 0.45, 1.0)
+const OVERLAY_STAT_COLOR_DIM = Color(0.55, 0.55, 0.55, 0.7)
+const OVERLAY_STAT_LOW_MAX = 6
+const OVERLAY_STAT_MID_MAX = 13
+
+# =============================================================================
+# SQUADRON PLAYS - Coordinated multi-fighter maneuvers (pincer, bracket, ...)
+# =============================================================================
+# Plays are defined as data in data/squadron_plays.json. The leader's tactics
+# stat gates which plays unlock and how cleanly they execute. Low-tactics
+# leaders scatter offsets and drift phase timing; elites hit marks tightly.
+
+## Max position scatter (units) for a leader at 0.0 effective tactics.
+## Scales linearly with (1 - tactics).
+const PLAY_JITTER_MAX_OFFSET = 80.0
+
+## Max phase-transition jitter (seconds) for a leader at 0.0 tactics.
+const PLAY_JITTER_MAX_TIMING = 1.2
+
+## Leader re-evaluates which play to run on this interval (seconds).
+const PLAY_REPLAN_INTERVAL = 6.0

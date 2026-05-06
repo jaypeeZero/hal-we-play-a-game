@@ -194,14 +194,14 @@ func test_heartbeat_fallback_pilot_decides_within_window():
 func test_sleeping_crew_does_not_mutate_crew_data():
 	var pilot = make_pilot()
 	pilot.next_decision_time = 100.0
-	var original_skill = pilot.stats.skill
+	var original_piloting = pilot.stats.skills.piloting
 
 	var result = CrewSchedulerSystem.tick_with_awareness([pilot], 1.0, {})
 
 	assert_eq(result.crew_list.size(), 1, "Crew list preserved")
-	# State updates (stress/fatigue) may still happen, but skill must not mutate
-	assert_eq(result.crew_list[0].stats.skill, original_skill,
-		"Sleeping crew's skill must not change.")
+	# State updates (stress/fatigue) may still happen, but base stats must not mutate
+	assert_eq(result.crew_list[0].stats.skills.piloting, original_piloting,
+		"Sleeping crew's base skills must not change.")
 	assert_eq(result.decisions.size(), 0, "No decisions produced for sleeping crew.")
 
 # ============================================================================
@@ -228,34 +228,6 @@ func test_mailbox_event_wakes_sleeping_crew():
 
 	assert_eq(result.decisions.size(), 1,
 		"Posting an event for a sleeping crew should wake them this tick.")
-
-# ============================================================================
-# BEHAVIOR 7: Event reaches the decision context
-# ============================================================================
-
-func test_pilot_under_missile_lock_makes_evasive_decision():
-	var Mailbox = _load_mailbox()
-	var Scheduler = _load_scheduler()
-	if Mailbox == null or Scheduler == null:
-		pending("CrewMailboxSystem / CrewSchedulerSystem not implemented yet.")
-		return
-
-	var pilot = make_pilot(0.7)
-	pilot.awareness.threats = [make_threat("missile_1", 200.0)]
-
-	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
-		"type": "missile_locked",
-		"data": {"missile_id": "missile_1"}
-	})
-
-	var result = Scheduler.tick([pilot], 1.0, mailboxes)
-
-	assert_eq(result.decisions.size(), 1, "Pilot should react to missile lock.")
-	var decision = result.decisions[0]
-	assert_eq(decision.type, "maneuver",
-		"A pilot waking on missile_locked should produce a maneuver, not idle.")
-	assert_eq(decision.subtype, "evade",
-		"Maneuver in response to missile lock should be evasive.")
 
 # ============================================================================
 # BEHAVIOR 11: Pilot reacts to a new high-priority threat appearing mid-sleep
@@ -489,7 +461,7 @@ func test_mid_game_pilot_continues_to_act_across_multiple_ticks():
 func test_mid_game_pilot_with_no_visible_enemies_eventually_sees_arrivals():
 	# Repro scenario: pilot spawns far from action.  Their initial awareness
 	# is empty, they go idle.  Then an enemy moves into range.  They should
-	# wake (via sensor_contact event) and act.
+	# wake (via threat_appeared event) and act.
 	var Scheduler = _load_scheduler_with_awareness()
 	var Mailbox = _load_mailbox()
 	if Scheduler == null or Mailbox == null:
@@ -550,7 +522,7 @@ func _load_scheduler_with_awareness():
 # now consolidated into the scheduler so events flow through one path).
 # ============================================================================
 
-func test_sensor_contact_event_records_threat_in_tactical_memory():
+func test_threat_appeared_event_records_threat_in_tactical_memory():
 	var Scheduler = _load_scheduler_with_awareness()
 	var Mailbox = _load_mailbox()
 	if Scheduler == null or Mailbox == null:
@@ -563,7 +535,7 @@ func test_sensor_contact_event_records_threat_in_tactical_memory():
 	var enemy = make_test_ship("enemy_1", 1, Vector2(200, 0))
 
 	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
-		"type": "sensor_contact",
+		"type": "threat_appeared",
 		"data": {"enemy_id": "enemy_1", "position": Vector2(200, 0)}
 	})
 
@@ -577,7 +549,7 @@ func test_sensor_contact_event_records_threat_in_tactical_memory():
 			found = true
 			break
 	assert_true(found,
-		"sensor_contact event should record a threat_detected entry in tactical memory.")
+		"threat_appeared event should record a threat_detected entry in tactical memory.")
 
 func test_ship_damaged_event_records_in_tactical_memory():
 	var Scheduler = _load_scheduler_with_awareness()

@@ -308,14 +308,14 @@ static func create_fire_command(ship_data: Dictionary, weapon: Dictionary, targe
 		spawn_position = weapon_pos,
 		direction = direction,
 		velocity = calculate_projectile_velocity(direction, weapon.stats.projectile_speed),
-		damage = calculate_final_damage(weapon.stats.damage, ship_data),
+		damage = weapon.stats.damage,
 		speed = weapon.stats.projectile_speed,
 		target_id = target.ship_id,
 		delay = generate_reaction_delay(),
-		accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data),
 		weapon_size = weapon.stats.get("size", 1),
 		explosion_radius = weapon.stats.get("explosion_radius", 0.0),
-		explosion_damage = weapon.stats.get("explosion_damage", 0.0)
+		explosion_damage = weapon.stats.get("explosion_damage", 0.0),
+		intended_subsystem = pick_intended_subsystem(ship_data, target)
 	}
 
 static func calculate_weapon_world_position(ship_data: Dictionary, weapon: Dictionary) -> Vector2:
@@ -324,7 +324,7 @@ static func calculate_weapon_world_position(ship_data: Dictionary, weapon: Dicti
 ## Calculate lead position based on gunner skill and targeting style
 ## SIMPLE: No lead - aims at current position
 ## LEADING: Basic velocity prediction with skill-based accuracy
-## PREDICTIVE: Full prediction with anticipation
+## PREDICTIVE: Full prediction (anticipates target maneuvers)
 ## SUBSYSTEM: Perfect lead plus weak point targeting
 static func calculate_lead_position(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> Vector2:
 	if not target.has("velocity"):
@@ -348,14 +348,61 @@ static func calculate_lead_position(ship_data: Dictionary, weapon: Dictionary, t
 		# Blend between current position and perfect lead based on skill
 		return target.position.lerp(perfect_lead, lead_accuracy * 0.7)
 
-	# PREDICTIVE targeting: Full prediction with anticipation of maneuvers
+	# PREDICTIVE targeting: full prediction that anticipates maneuvers
 	if targeting_style == CrewIntegrationSystem.TargetingStyle.PREDICTIVE:
 		# Use full lead calculation with small error margin
 		var error_margin = (1.0 - lead_accuracy) * 0.2
 		return target.position.lerp(perfect_lead, 1.0 - error_margin)
 
-	# SUBSYSTEM targeting: Perfect lead (fall through for elite gunners)
-	return perfect_lead
+	# SUBSYSTEM targeting: aim a perfect lead at the chosen subsystem's
+	# projected world position rather than ship center.
+	var subsystem = pick_target_subsystem(target)
+	if subsystem.is_empty():
+		return perfect_lead
+	var subsystem_offset: Vector2 = subsystem.get("position_offset", Vector2.ZERO)
+	var target_rotation: float = target.get("rotation", 0.0)
+	var subsystem_world: Vector2 = target.position + subsystem_offset.rotated(target_rotation)
+	return predict_target_position(subsystem_world, target.velocity, time_to_impact)
+
+# ============================================================================
+# SUBSYSTEM SELECTION - elite gunners pick weak points
+# ============================================================================
+
+## Pick a subsystem to aim at: prefer high tactical value × already-damaged.
+## Returns {} when target has no internals.
+static func pick_target_subsystem(target: Dictionary) -> Dictionary:
+	var internals: Array = target.get("internals", [])
+	if internals.is_empty():
+		return {}
+	var best: Dictionary = {}
+	var best_score: float = -INF
+	for component in internals:
+		if component.get("status", "") == "destroyed":
+			continue
+		var max_health: float = float(component.get("max_health", 1.0))
+		if max_health <= 0.0:
+			continue
+		var current_health: float = float(component.get("current_health", max_health))
+		var damage_pct: float = clamp(1.0 - current_health / max_health, 0.0, 1.0)
+		var tactical_value: float = float(component.get("tactical_value", 1.0))
+		# Slight floor on damage_pct so undamaged but valuable subsystems
+		# (engines, weapons) are still picked early in the fight.
+		var score: float = tactical_value * (0.25 + damage_pct)
+		if score > best_score:
+			best_score = score
+			best = component
+	return best
+
+## Returns the component_id of the chosen subsystem when the gunner is in
+## SUBSYSTEM mode and a candidate exists; "" otherwise. Lives on the
+## projectile so the damage resolver can route the hit to it.
+static func pick_intended_subsystem(ship_data: Dictionary, target: Dictionary) -> String:
+	var modifiers: Dictionary = ship_data.get("crew_modifiers", {})
+	var style = modifiers.get("targeting_style", CrewIntegrationSystem.TargetingStyle.SIMPLE)
+	if style != CrewIntegrationSystem.TargetingStyle.SUBSYSTEM:
+		return ""
+	var sub: Dictionary = pick_target_subsystem(target)
+	return sub.get("component_id", "")
 
 static func calculate_time_to_impact(from: Vector2, to: Vector2, projectile_speed: float) -> float:
 	return calculate_distance(from, to) / projectile_speed
@@ -365,16 +412,25 @@ static func predict_target_position(current_pos: Vector2, velocity: Vector2, tim
 
 static func calculate_firing_direction(weapon_pos: Vector2, target_pos: Vector2, ship_data: Dictionary, weapon: Dictionary) -> Vector2:
 	var perfect_direction = calculate_direction_to_target(weapon_pos, target_pos)
-	var accuracy = calculate_final_accuracy(weapon.stats.accuracy, ship_data)
-	return apply_accuracy_spread(perfect_direction, accuracy)
-
-static func apply_accuracy_spread(direction: Vector2, accuracy: float) -> Vector2:
-	var spread_angle = calculate_spread_angle(accuracy)
+	var spread_angle = calculate_aim_spread_angle(ship_data)
 	var random_spread = generate_random_spread(spread_angle)
-	return direction.rotated(random_spread)
+	return perfect_direction.rotated(random_spread)
 
-static func calculate_spread_angle(accuracy: float) -> float:
-	return (1.0 - accuracy) * PI / 6.0  # Up to 30 degrees at 0 accuracy
+## Spread cone driven by raw aim skill. Linear from the worst-case cone at
+## skill 0 to a perfect line at skill 1.0 — a 20-aim gunner has zero spread,
+## matching the prior clamped-accuracy ceiling. Captain coordination can pull
+## a near-elite gunner all the way to perfect; panic overrides everything.
+static func calculate_aim_spread_angle(ship_data: Dictionary) -> float:
+	var modifiers: Dictionary = ship_data.get("crew_modifiers", {})
+
+	# Panic overrides the skill curve — a panicking gunner sprays wide.
+	if modifiers.get("gunner_panicking", false):
+		return WingConstants.GUNNER_AIM_PANIC_SPREAD_RAD
+
+	var aim_skill: float = clamp(float(modifiers.get("aim_skill", 0.0)), 0.0, 1.0)
+	var captain_factor: float = clamp(float(modifiers.get("captain_coordination", 1.0)), 0.5, 1.5)
+	var effective: float = clamp(aim_skill * captain_factor, 0.0, 1.0)
+	return WingConstants.GUNNER_AIM_WORST_SPREAD_RAD * (1.0 - effective)
 
 static func generate_random_spread(max_spread: float) -> float:
 	return randf_range(-max_spread, max_spread)
@@ -384,16 +440,6 @@ static func generate_reaction_delay() -> float:
 
 static func calculate_projectile_velocity(direction: Vector2, speed: float) -> Vector2:
 	return direction * speed
-
-# ============================================================================
-# DAMAGE MODIFIERS - Find, don't mutate
-# ============================================================================
-
-static func calculate_final_damage(base_damage: int, ship_data: Dictionary) -> int:
-	return base_damage
-
-static func calculate_final_accuracy(base_accuracy: float, ship_data: Dictionary) -> float:
-	return base_accuracy
 
 # ============================================================================
 # PUBLIC QUERY FUNCTIONS

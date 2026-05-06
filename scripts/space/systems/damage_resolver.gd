@@ -10,20 +10,22 @@ extends RefCounted
 # ============================================================================
 
 ## Resolve a projectile hit - returns {ship_data: Dictionary, hit_result: Dictionary}
-static func resolve_hit(ship_data: Dictionary, hit_position: Vector2, damage: int, projectile_angle: float, weapon_size: int = 999) -> Dictionary:
+## `intended_subsystem` (component_id or "") biases internal damage routing for
+## elite SUBSYSTEM-style fire — see apply_damage_to_internals.
+static func resolve_hit(ship_data: Dictionary, hit_position: Vector2, damage: int, projectile_angle: float, weapon_size: int = 999, intended_subsystem: String = "") -> Dictionary:
 	var hit_angle = calculate_hit_angle(ship_data, hit_position)
 	var section = find_armor_section_at_angle(ship_data, hit_angle)
 
 	if section.is_empty():
 		return create_miss_result(ship_data)
 
-	return apply_damage_to_ship(ship_data, section, hit_position, damage, hit_angle, weapon_size)
+	return apply_damage_to_ship(ship_data, section, hit_position, damage, hit_angle, weapon_size, intended_subsystem)
 
 # ============================================================================
 # HIT RESOLUTION
 # ============================================================================
 
-static func apply_damage_to_ship(ship_data: Dictionary, section: Dictionary, hit_pos: Vector2, damage: int, hit_angle: float, weapon_size: int) -> Dictionary:
+static func apply_damage_to_ship(ship_data: Dictionary, section: Dictionary, hit_pos: Vector2, damage: int, hit_angle: float, weapon_size: int, intended_subsystem: String = "") -> Dictionary:
 	var armor_result = apply_damage_to_armor(section, damage, weapon_size)
 	var updated_ship = replace_armor_section(ship_data, armor_result.get("section"))
 
@@ -31,7 +33,7 @@ static func apply_damage_to_ship(ship_data: Dictionary, section: Dictionary, hit
 		return create_armor_hit_result(updated_ship, armor_result, hit_pos)
 
 	# Armor penetrated - damage internals
-	var internal_result = apply_damage_to_internals(updated_ship, hit_pos, armor_result.get("remaining_damage"))
+	var internal_result = apply_damage_to_internals(updated_ship, hit_pos, armor_result.get("remaining_damage"), intended_subsystem)
 	return create_penetration_result(internal_result.get("ship_data"), armor_result, internal_result.get("hit_result"), hit_pos)
 
 # ============================================================================
@@ -111,13 +113,16 @@ static func replace_armor_section(ship_data: Dictionary, new_section: Dictionary
 # INTERNAL DAMAGE - Pure Functions
 # ============================================================================
 
-static func apply_damage_to_internals(ship_data: Dictionary, hit_pos: Vector2, damage: int) -> Dictionary:
-	var closest = find_closest_internal(ship_data, hit_pos)
+static func apply_damage_to_internals(ship_data: Dictionary, hit_pos: Vector2, damage: int, intended_subsystem: String = "") -> Dictionary:
+	# Elite gunners aim at a specific subsystem; bias damage routing toward
+	# that intended target. Falls back to closest-component when there is no
+	# intent or the intended subsystem is already destroyed.
+	var target_component = pick_internal_to_damage(ship_data, hit_pos, intended_subsystem)
 
-	if closest.is_empty():
+	if target_component.is_empty():
 		return {"ship_data": ship_data, "hit_result": {}}
 
-	var damaged_component = apply_damage_to_component(closest, damage)
+	var damaged_component = apply_damage_to_component(target_component, damage)
 	var updated_ship = replace_internal_component(ship_data, damaged_component.get("component"))
 	var final_ship = apply_component_effects(updated_ship, damaged_component.get("component"), damaged_component.get("status_changed"))
 
@@ -125,6 +130,27 @@ static func apply_damage_to_internals(ship_data: Dictionary, hit_pos: Vector2, d
 		"ship_data": final_ship,
 		"hit_result": create_internal_hit_info(damaged_component, hit_pos)
 	}
+
+## Choose which internal component absorbs the damage. With an intent set,
+## roll SUBSYSTEM_INTENDED_HIT_BIAS to route to it; otherwise fall back to
+## closest-component. The intent only applies when the component is still
+## functional.
+static func pick_internal_to_damage(ship_data: Dictionary, hit_pos: Vector2, intended_subsystem: String) -> Dictionary:
+	if intended_subsystem != "":
+		var intended := find_internal_by_id(ship_data, intended_subsystem)
+		if not intended.is_empty() and intended.get("status", "") != "destroyed":
+			if randf() < WingConstants.SUBSYSTEM_INTENDED_HIT_BIAS:
+				return intended
+	return find_closest_internal(ship_data, hit_pos)
+
+static func find_internal_by_id(ship_data: Dictionary, component_id: String) -> Dictionary:
+	var internals = ship_data.get("internals", [])
+	if not (internals is Array):
+		return {}
+	for component in internals:
+		if component.get("component_id") == component_id:
+			return component
+	return {}
 
 static func find_closest_internal(ship_data: Dictionary, hit_pos: Vector2) -> Dictionary:
 	var internals = ship_data.get("internals", [])
