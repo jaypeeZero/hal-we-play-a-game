@@ -55,19 +55,6 @@ var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 var _pending_spawn: Dictionary = {}
 var _battlefield_size: Vector2 = Vector2(5000, 3500)
 
-const PATROL_ZONE_RADIUS: float = 700.0
-# Large ships need a wider operating zone — broadside warfare requires room
-# to maneuver at range. A capital fenced into 700u can't actually orbit a
-# target without being yanked home by the area leash.
-const LARGE_SHIP_PATROL_ZONE_RADIUS: float = 1500.0
-# Cardinal offsets used to spread squadrons into distinct quadrants
-const PATROL_QUADRANT_DIRS: Array = [
-	Vector2(0, -1),  # North
-	Vector2(0,  1),  # South
-	Vector2(1,  0),  # East
-	Vector2(-1, 0),  # West
-]
-
 # Weapon update timer
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
@@ -95,8 +82,7 @@ func _ready() -> void:
 	# Obstacle spawning disabled for better user interaction
 	# _spawn_initial_obstacles()
 
-	# Spawn 2 squadrons per team on opposite sides of the map
-	_spawn_initial_squadrons()
+	_spawn_from_battle_plan()
 
 	_debug_overlay = DebugOverlay.new()
 	_debug_overlay._game = self
@@ -480,7 +466,9 @@ func _execute_spawn(spawn_position: Vector2) -> void:
 			ship_position.x = clamp(ship_position.x, 50, _battlefield_size.x - 50)
 			ship_position.y = clamp(ship_position.y, 50, _battlefield_size.y - 50)
 
-			spawn_ship(ship_type, team, ship_position)
+			var patrol_center := _battlefield_size * 0.5
+			var patrol_radius: float = BattlePlanner.LARGE_SHIP_PATROL_ZONE_RADIUS if FleetDataManager.is_large_ship(ship_type) else BattlePlanner.PATROL_ZONE_RADIUS
+			spawn_ship(ship_type, team, ship_position, patrol_center, patrol_radius)
 
 	_pending_spawn = {}
 
@@ -548,18 +536,16 @@ func _execute_squadron_spawn(spawn_position: Vector2) -> void:
 	_pending_spawn = {}
 
 ## Spawn a ship at the given position
-func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: Vector2 = Vector2(-1, -1)) -> Dictionary:
+func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: Vector2, patrol_radius: float) -> Dictionary:
 	# Create ship data
 	var ship_data = ShipData.create_ship_instance(ship_type, team, position)
 	if ship_data.is_empty():
 		push_error("Failed to create ship data for type: " + ship_type)
 		return {}
 
-	var zone_center := patrol_center if patrol_center.x >= 0.0 else _battlefield_size * 0.5
-	var zone_radius: float = LARGE_SHIP_PATROL_ZONE_RADIUS if FleetDataManager.is_large_ship(ship_type) else PATROL_ZONE_RADIUS
 	ship_data["assigned_area"] = {
-		"center": zone_center,
-		"radius": zone_radius
+		"center": patrol_center,
+		"radius": patrol_radius,
 	}
 
 	# Add to data array
@@ -600,58 +586,36 @@ func _request_obstacle_spawn(obstacle_type: String) -> void:
 	}
 	print("Click to spawn %s obstacle" % obstacle_type)
 
-## Spawn initial squadrons at game start based on saved fleet configurations
-func _spawn_initial_squadrons() -> void:
-	var team0_fleet: Dictionary
-	var team1_fleet: Dictionary
-	if RoguelikeRun.active:
-		team0_fleet = RoguelikeRun.fleet
-		team1_fleet = RoguelikeRun.ENEMY_FLEET
+## Spawn all ships for the upcoming battle from BattlePlan. The pre-battle
+## scene populates the plan; if a developer launches space_battle.tscn
+## directly the planner builds defaults from the on-disk fleets, so this
+## is shared code, not a fallback path.
+func _spawn_from_battle_plan() -> void:
+	if not BattlePlan.has_plan():
+		var team0_fleet: Dictionary
+		var team1_fleet: Dictionary
+		if RoguelikeRun.active:
+			team0_fleet = RoguelikeRun.fleet
+			team1_fleet = RoguelikeRun.ENEMY_FLEET
+		else:
+			team0_fleet = FleetDataManager.load_fleet(0)
+			team1_fleet = FleetDataManager.load_fleet(1)
+		BattlePlan.battlefield_size = _battlefield_size
+		BattlePlan.entries = BattlePlanner.build_default_plan(team0_fleet, team1_fleet, _battlefield_size)
 	else:
-		team0_fleet = FleetDataManager.load_fleet(0)
-		team1_fleet = FleetDataManager.load_fleet(1)
+		_battlefield_size = BattlePlan.battlefield_size
 
-	# Calculate spawn positions on opposite sides of the map
-	var margin = 200.0
+	for entry in BattlePlan.entries:
+		spawn_ship(
+			entry["ship_type"],
+			int(entry["team"]),
+			entry["position"],
+			entry["patrol_center"],
+			float(entry["patrol_radius"])
+		)
 
-	# Team 0 (Player) - Left side (Green)
-	var team0_x = margin
-
-	# Team 1 (Enemy) - Right side (Grey/White)
-	var team1_x = _battlefield_size.x - margin
-
-	# Spawn Team 0 ships — start at quadrant 0 (North), step by 2 per squadron
-	_spawn_fleet_for_team(team0_fleet, 0, team0_x, 0)
-
-	# Spawn Team 1 ships — start at quadrant 1 (South), step by 2 per squadron
-	_spawn_fleet_for_team(team1_fleet, 1, team1_x, 1)
-
-
-## Spawn all ships for a team based on fleet configuration.
-## quadrant_offset staggers teams so they patrol different areas of the field.
-func _spawn_fleet_for_team(fleet: Dictionary, team: int, base_x: float, quadrant_offset: int = 0) -> void:
-	print("=== SPAWNING FLEET FOR TEAM %d ===" % team)
-	print("Fleet config: %s" % str(fleet))
-	print("Battlefield height: %s" % _battlefield_size.y)
-	var spawn_positions = ShipData.calculate_fleet_spawn_positions(fleet, base_x, _battlefield_size.y)
-	print("Got %d spawn positions" % spawn_positions.size())
-
-	# Each ship type = one squadron; assign a distinct patrol quadrant so ships
-	# spread out instead of converging on a single point.
-	# Teams are staggered by quadrant_offset so team 0 gets N/E, team 1 gets S/W.
-	var battlefield_center := _battlefield_size * 0.5
-	var squadron_quadrant: Dictionary = {}
-	var squadron_count := 0
-	for spawn_info in spawn_positions:
-		var ship_type: String = spawn_info["type"]
-		if not squadron_quadrant.has(ship_type):
-			var idx := (quadrant_offset + squadron_count * 2) % PATROL_QUADRANT_DIRS.size()
-			squadron_quadrant[ship_type] = idx
-			squadron_count += 1
-		var dir: Vector2 = PATROL_QUADRANT_DIRS[squadron_quadrant[ship_type]]
-		var patrol_center := battlefield_center + dir * PATROL_ZONE_RADIUS
-		print("  Spawning %s at position %s (size=%.0f) patrol=%s" % [ship_type, spawn_info["position"], spawn_info["size"], patrol_center])
-		spawn_ship(ship_type, team, spawn_info["position"], patrol_center)
+	# Plan is consumed: re-entering battle requires a fresh plan.
+	BattlePlan.clear()
 
 ## Spawn initial obstacles at game start
 func _spawn_initial_obstacles() -> void:
