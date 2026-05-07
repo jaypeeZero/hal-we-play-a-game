@@ -8,6 +8,10 @@ signal log_message_written(message: String, level: String)
 
 enum LogLevel { DEBUG, INFO, WARN, ERROR }
 
+const LOG_DIR: String = "user://logs"
+const MAX_LOG_FILES: int = 5
+const LOG_FILE_REGEX: String = "^\\d{2}-\\d{2}-\\d{2}-\\d+\\.log$"
+
 var enabled: bool = true
 var log_history: Array[String] = []
 var track_history: bool = true
@@ -22,9 +26,59 @@ var debounce_window: float = 0.05  # 50ms base window for batching
 var current_window: float = 0.05  # Extends with each repeated log
 var max_window: float = 1.0  # Maximum window (1 second)
 
+# File output
+var log_file: FileAccess = null
+var log_file_path: String = ""
+
 func _ready() -> void:
 	start_time = Time.get_ticks_msec() / 1000.0
+	_open_log_file()
 	write_log("GameLogger initialized", "INFO")
+
+func _exit_tree() -> void:
+	_flush_pending()
+	if log_file != null:
+		log_file.close()
+		log_file = null
+
+func _open_log_file() -> void:
+	DirAccess.make_dir_recursive_absolute(LOG_DIR)
+	_rotate_log_files()
+	log_file_path = "%s/%s.log" % [LOG_DIR, _build_log_filename()]
+	log_file = FileAccess.open(log_file_path, FileAccess.WRITE)
+	if log_file == null:
+		push_warning("GameLogger: failed to open log file at %s (err %d)" % [log_file_path, FileAccess.get_open_error()])
+
+func _build_log_filename() -> String:
+	var now: Dictionary = Time.get_datetime_dict_from_system()
+	var date_part: String = "%02d-%02d-%02d" % [now.month, now.day, now.year % 100]
+	var unix_ts: int = Time.get_unix_time_from_system()
+	return "%s-%d" % [date_part, unix_ts]
+
+func _rotate_log_files() -> void:
+	var dir: DirAccess = DirAccess.open(LOG_DIR)
+	if dir == null:
+		return
+	var pattern: RegEx = RegEx.new()
+	pattern.compile(LOG_FILE_REGEX)
+	var files: Array[String] = []
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while entry != "":
+		if not dir.current_is_dir() and pattern.search(entry) != null:
+			files.append(entry)
+		entry = dir.get_next()
+	dir.list_dir_end()
+
+	# Sort by modified time ascending (oldest first)
+	files.sort_custom(func(a: String, b: String) -> bool:
+		return FileAccess.get_modified_time("%s/%s" % [LOG_DIR, a]) < FileAccess.get_modified_time("%s/%s" % [LOG_DIR, b])
+	)
+
+	# Remove oldest until at most MAX_LOG_FILES - 1 remain (we're about to create one)
+	while files.size() >= MAX_LOG_FILES:
+		var victim: String = files.pop_front()
+		dir.remove(victim)
 
 func _process(_delta: float) -> void:
 	# Periodically flush pending logs to avoid holding them forever
@@ -113,6 +167,9 @@ func _flush_pending() -> void:
 		log_history.append(output)
 
 	print(output)
+	if log_file != null:
+		log_file.store_line(output)
+		log_file.flush()
 	log_message_written.emit(output, pending_level)
 
 	pending_message = ""
