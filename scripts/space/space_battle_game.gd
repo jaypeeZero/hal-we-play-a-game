@@ -68,9 +68,6 @@ const PATROL_QUADRANT_DIRS: Array = [
 	Vector2(-1, 0),  # West
 ]
 
-# Initial pause state
-var _initial_paused: bool = true
-
 # Weapon update timer
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
@@ -89,8 +86,6 @@ var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 var _debug_overlay: DebugOverlay
 
 func _ready() -> void:
-	# Allow processing when paused (for initial unpause)
-	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	_setup_input_actions()
 
 	if ENABLE_CREW_AI:
@@ -102,9 +97,6 @@ func _ready() -> void:
 
 	# Spawn 2 squadrons per team on opposite sides of the map
 	_spawn_initial_squadrons()
-
-	# Pause the game on start
-	get_tree().paused = true
 
 	_debug_overlay = DebugOverlay.new()
 	_debug_overlay._game = self
@@ -418,13 +410,6 @@ func _sync_all_entities() -> void:
 # ============================================================================
 
 func _input(event: InputEvent) -> void:
-	# Handle initial unpause with spacebar
-	if _initial_paused and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
-		get_tree().paused = false
-		_initial_paused = false
-		get_viewport().set_input_as_handled()
-		return
-
 	# Ship spawn requests
 	if event.is_action_pressed("spawn_fighter"):
 		_request_squadron_spawn("fighter", 0)  # Spawn squadron of 6 fighters
