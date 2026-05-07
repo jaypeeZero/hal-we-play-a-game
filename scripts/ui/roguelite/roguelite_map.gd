@@ -284,7 +284,7 @@ func _launch_battle(node: Dictionary) -> void:
 	RoguelikeRun.pending_battle_node_id = node["id"]
 	RoguelikeRun.save_map_state(_map_nodes, _connections, _current_row)
 	node_selected.emit(node)
-	get_tree().change_scene_to_file("res://scenes/space_battle.tscn")
+	get_tree().change_scene_to_file("res://scenes/pre_battle.tscn")
 
 
 func _update_accessibility_after_selection(selected_id: String) -> void:

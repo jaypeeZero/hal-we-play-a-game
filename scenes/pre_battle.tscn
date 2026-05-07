@@ -1,0 +1,29 @@
+[gd_scene load_steps=3 format=3 uid="uid://b2xq8v9k3prebattle"]
+
+[ext_resource type="Script" path="res://scripts/ui/pre_battle/pre_battle.gd" id="1_pre_battle"]
+[ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
+
+[node name="PreBattle" type="Node2D"]
+script = ExtResource("1_pre_battle")
+
+[node name="Camera" type="Camera2D" parent="."]
+position = Vector2(2500, 1750)
+script = ExtResource("2_camera")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TitleLabel" type="Label" parent="UI"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 500.0
+offset_bottom = 40.0
+text = "Pre-Battle: review the battlefield, then start."
+
+[node name="StartBattleButton" type="Button" parent="UI"]
+offset_left = 10.0
+offset_top = 60.0
+offset_right = 180.0
+offset_bottom = 100.0
+text = "Start Battle"
+
+[connection signal="pressed" from="UI/StartBattleButton" to="." method="_on_start_battle_pressed"]
