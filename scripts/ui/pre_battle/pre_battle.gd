@@ -6,11 +6,11 @@ extends Node2D
 ## renders dotted patrol circles. Clicking Start Battle hands off to
 ## space_battle.tscn, which consumes BattlePlan.entries directly.
 ##
-## Phase 4: ships are draggable and selectable. The selected ship's
-## patrol ring renders prominently and can be dragged to relocate the
-## patrol center. PreBattleInput owns the state machine; this controller
-## just translates events, repositions ShipEntity nodes, and triggers
-## redraws.
+## Selection is multi: plain click picks a single ship, ctrl-click toggles
+## a ship in/out of the selection, and shift-drag draws a box that replaces
+## the selection with every ship inside. Dragging a selected ship moves the
+## whole group in formation; dragging anywhere inside a selected ship's
+## patrol disc collapses every selected ring to the cursor.
 
 const ShipEntity = preload("res://scripts/space/entities/ship_entity.gd")
 
@@ -24,6 +24,9 @@ const TEAM_COLORS: Array = [
 ]
 const SELECTED_RING_COLOR: Color = Color(1.0, 1.0, 1.0, 1.0)
 const SELECTED_RING_LINE_WIDTH: float = 3.0
+const BOX_FILL_COLOR: Color = Color(1.0, 1.0, 1.0, 0.08)
+const BOX_BORDER_COLOR: Color = Color(1.0, 1.0, 1.0, 0.9)
+const BOX_BORDER_WIDTH: float = 2.0
 
 var _input: PreBattleInput
 var _preview_entities: Dictionary = {}
@@ -75,7 +78,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		if _input.selected_index >= 0:
+		if _input.selected_indices.size() > 0:
 			_input.clear_selection()
 			queue_redraw()
 			get_viewport().set_input_as_handled()
@@ -86,19 +89,23 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		var world_pos := get_global_mouse_position()
 		if event.pressed:
-			var result := _input.on_mouse_down(world_pos)
+			var result := _input.on_mouse_down(world_pos, event.shift_pressed, event.ctrl_pressed)
 			if result != PreBattleInput.RESULT_NONE:
 				queue_redraw()
 				get_viewport().set_input_as_handled()
 		else:
+			var was_box_select := _input.state == PreBattleInput.STATE_BOX_SELECT
 			var released := _input.on_mouse_up()
-			if released >= 0:
+			if released >= 0 or was_box_select:
+				queue_redraw()
 				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
-		var idx := _input.on_mouse_motion(get_global_mouse_position())
-		if idx >= 0:
-			if _input.state == PreBattleInput.STATE_DRAGGING_SHIP:
-				_preview_entities[idx].global_position = BattlePlan.entries[idx]["position"]
+		_input.on_mouse_motion(get_global_mouse_position())
+		if _input.state == PreBattleInput.STATE_DRAGGING_SHIP:
+			for i in _input.ship_drag_offsets.keys():
+				_preview_entities[i].global_position = BattlePlan.entries[i]["position"]
+			queue_redraw()
+		elif _input.state == PreBattleInput.STATE_DRAGGING_CIRCLE or _input.state == PreBattleInput.STATE_BOX_SELECT:
 			queue_redraw()
 
 
@@ -119,8 +126,13 @@ func _draw() -> void:
 		DottedDraw.draw_dotted_line(self, ship_pos, line_end, color)
 		DottedDraw.draw_dotted_circle(self, center, radius, color)
 
-		if i == _input.selected_index:
+		if _input.is_selected(i):
 			DottedDraw.draw_dotted_circle(self, center, radius, SELECTED_RING_COLOR, SELECTED_RING_LINE_WIDTH)
+
+	if _input.state == PreBattleInput.STATE_BOX_SELECT:
+		var rect := _input.get_box_rect()
+		draw_rect(rect, BOX_FILL_COLOR, true)
+		draw_rect(rect, BOX_BORDER_COLOR, false, BOX_BORDER_WIDTH)
 
 
 func _on_start_battle_pressed() -> void:
