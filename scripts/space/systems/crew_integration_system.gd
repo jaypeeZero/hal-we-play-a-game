@@ -85,10 +85,10 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 	# Handle special non-fighter cases
 	if subtype == "evade":
 		updated.orders.current_order = "evade"
-		updated.orders.threat_id = decision.get("target_id")
+		updated.orders.threat_id = decision.get("target_id", "")
 	elif subtype == "pursue":
 		updated.orders.current_order = "engage"
-		updated.orders.target_id = decision.get("target_id")
+		updated.orders.target_id = decision.get("target_id", "")
 	elif subtype == "idle":
 		updated.orders.current_order = ""
 		updated.orders.target_id = ""
@@ -184,7 +184,7 @@ static func apply_fire_decision(ship_data: Dictionary, decision: Dictionary, cre
 	var updated = ship_data.duplicate(true)
 
 	# Set target for weapon system
-	updated.orders.target_id = decision.get("target_id")
+	updated.orders.target_id = decision.get("target_id", "")
 
 	# Apply gunner skill to weapon accuracy
 	if crew_data and crew_data.has("stats"):
@@ -248,7 +248,7 @@ static func apply_tactical_decision(ship_data: Dictionary, decision: Dictionary,
 	match decision.get("subtype"):
 		"engage":
 			updated.orders.current_order = "engage"
-			updated.orders.target_id = decision.get("target_id")
+			updated.orders.target_id = decision.get("target_id", "")
 		"hold":
 			updated.orders.current_order = "hold"
 		"withdraw":
@@ -371,9 +371,9 @@ static func extract_immediate_actions(decisions: Array) -> Array:
 static func create_fire_action(decision: Dictionary) -> Dictionary:
 	return {
 		"type": "crew_fire_command",
-		"entity_id": decision.get("entity_id"),
-		"target_id": decision.get("target_id"),
-		"crew_id": decision.get("crew_id"),
+		"entity_id": decision.get("entity_id", ""),
+		"target_id": decision.get("target_id", ""),
+		"crew_id": decision.get("crew_id", ""),
 		"skill_factor": decision.get("skill_factor", 0.5),
 		"delay": decision.get("delay", 0.2)
 	}

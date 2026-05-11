@@ -296,6 +296,17 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 	# of the squadron alongside its own combat decision.
 	crew_data = _maybe_run_fighter_squadron_play(crew_data, ship_data, all_ships, game_time)
 
+	# Check whether the current target just died (before calling make_decision,
+	# so we can shorten the next delay for elite pilots who spot the kill fast).
+	var target_just_died: bool = false
+	var current_order = crew_data.get("orders", {}).get("current")
+	if current_order != null and current_order is Dictionary:
+		var current_target_id: String = current_order.get("target_id", "")
+		if current_target_id != "":
+			var current_target: Dictionary = _find_ship_by_id(current_target_id, all_ships)
+			if not current_target.is_empty() and current_target.get("status", "") != "operational":
+				target_just_died = true
+
 	# Use FighterPilotAI to make decision - now with wing formations!
 	# Wings enable Lead/Wingman coordination based on proximity
 	var decision = FighterPilotAI.make_decision(crew_data, ship_data, all_ships, all_crew, game_time, wings)
@@ -307,6 +318,14 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 
 	# Set next decision time based on maneuver type
 	var next_delay = _get_fighter_decision_delay(decision.get("subtype", "idle"))
+
+	# Elite pilots immediately re-evaluate when their target dies — they pivot
+	# to the next kill without the normal cadence pause.
+	if target_just_died:
+		var skill: float = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
+		if skill >= WingConstants.ELITE_REASSESS_AFTER_KILL_SKILL:
+			next_delay = WingConstants.ELITE_REASSESS_AFTER_KILL_DELAY
+
 	updated.next_decision_time = game_time + next_delay
 
 	return {"crew_data": updated, "decision": decision}
@@ -531,7 +550,7 @@ static func create_movement_decision(crew_data: Dictionary, order: Dictionary, g
 		"subtype": order.get("subtype", "pursue"),
 		"crew_id": crew_data.crew_id,
 		"entity_id": crew_data.assigned_to,
-		"target_id": order.get("target_id"),
+		"target_id": order.get("target_id", ""),
 		"skill_factor": calculate_effective_skill(crew_data),
 		"delay": crew_data.stats.reaction_time,
 		"timestamp": game_time

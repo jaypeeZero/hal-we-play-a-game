@@ -219,6 +219,27 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 	if _is_far_outside_area(ship_data):
 		return _make_return_to_area_decision(crew_data, ship_data, game_time)
 
+	# PRE-COMMIT EVASION (elite pilots only): begin evasive maneuvering the moment
+	# an enemy has a firing solution on us, before the shot arrives.
+	var pilot_skill: float = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
+	if pilot_skill >= WingConstants.PILOT_PRE_COMMIT_EVASION_SKILL:
+		var targeting_enemy_id := _find_enemy_targeting_me(ship_data, all_ships)
+		if targeting_enemy_id != "":
+			return _make_pre_commit_evasion_decision(crew_data, ship_data, all_ships, targeting_enemy_id, game_time)
+
+	# FRIENDLY COLLISION AVOIDANCE (skill ≥ display 15): elite pilots don't ram
+	# their own formation — rookies are too tunnel-visioned on the enemy to notice.
+	if pilot_skill >= WingConstants.PILOT_FRIENDLY_COLLISION_SKILL:
+		var my_id: String = ship_data.get("ship_id", "")
+		var my_team: int = ship_data.get("team", -1)
+		for other in all_ships:
+			if other.get("team", -1) == my_team and other.get("ship_id", "") != my_id and _is_on_collision_course(ship_data, other):
+				return {"type": "maneuver", "subtype": "fight_lateral_break",
+						"crew_id": crew_data.get("crew_id", ""), "entity_id": my_id,
+						"target_id": other.get("ship_id", ""), "skill_factor": pilot_skill,
+						"delay": 0.15, "timestamp": game_time,
+						"evasion_direction": _calculate_evasion_direction(ship_data, other)}
+
 	# SQUADRON-PLAY CONSTRAINT. If the squadron leader assigned this pilot a
 	# play role with a positional offset (e.g. "loop_wide_left",
 	# "approach_target_six"), fly toward that waypoint until the play hits its
@@ -340,6 +361,7 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", skill)
 	var combat_state: Dictionary = crew_data.get("combat_state", {})
+	var own_ship: Dictionary = _get_ship_by_id(crew_data.get("assigned_to", ""), all_ships)
 
 	var awareness = crew_data.get("awareness", {})
 	var threats = awareness.get("threats", [])
@@ -351,7 +373,8 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 	var locked_until: float = combat_state.get("target_locked_until", 0.0)
 	var current_game_time: float = Time.get_ticks_msec() / 1000.0
 	if locked_target != "" and _is_ship_valid(locked_target, all_ships) and current_game_time < locked_until:
-		return locked_target
+		if skill < WingConstants.CLOSE_TARGET_RELOCK_SKILL or not _has_closer_enemy_in_range(locked_target, own_ship, all_ships):
+			return locked_target
 	# Low skill lead: extreme target fixation (stick with current target even
 	# if "stale") — they don't reassess at all once committed.
 	if skill < WingConstants.LEAD_TARGET_FIXATION_SKILL:
@@ -1034,7 +1057,8 @@ static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String
 	var locked_until: float = combat_state.get("target_locked_until", 0.0)
 	var current_time: float = Time.get_ticks_msec() / 1000.0
 	if locked_target != "" and _is_ship_valid(locked_target, all_ships) and current_time < locked_until:
-		return locked_target
+		if skill < WingConstants.CLOSE_TARGET_RELOCK_SKILL or not _has_closer_enemy_in_range(locked_target, own_ship, all_ships):
+			return locked_target
 
 	# Rookie: extreme target fixation — stick even past lock expiry
 	if skill < 0.3 and locked_target != "" and _is_ship_valid(locked_target, all_ships):
@@ -1272,6 +1296,13 @@ static func _assess_survival_state(crew_data: Dictionary, ship_data: Dictionary,
 	var enemies: int = counts.enemies
 	if enemies < SURVIVAL_MIN_ENEMIES_TO_PANIC:
 		return ""
+
+	# TACTICAL DISENGAGE (elite tacticians only): proactive breakoff when damaged,
+	# outnumbered, and unsupported.
+	var tactics: float = crew_data.get("stats", {}).get("skills", {}).get("tactics", 0.0)
+	if tactics >= WingConstants.SURVIVAL_TACTICAL_DISENGAGE_SKILL and counts.friends == 0:
+		if armor_ratio < WingConstants.SURVIVAL_TACTICAL_HULL_RATIO:
+			return "retreat"
 
 	var support_ratio: float = float(counts.friends + 1) / float(enemies + 1)
 	var ratio_threshold: float = SURVIVAL_OUTNUMBERED_SUPPORT_RATIO * (1.0 - aggression * SURVIVAL_AGGRESSION_TOLERANCE)
@@ -1673,6 +1704,69 @@ static func _calculate_evasion_direction(my_ship: Dictionary, target_ship: Dicti
 		var my_lateral = my_velocity.dot(perpendicular_right)
 		return 1 if my_lateral >= 0 else -1
 
+
+# ============================================================================
+# ELITE SITUATIONAL AWARENESS — friendly collision and close-target relock
+# ============================================================================
+
+## True when any enemy is in close range AND significantly closer than the
+## currently locked target, indicating the pilot should break lock and re-score.
+static func _has_closer_enemy_in_range(locked_id: String, own_ship: Dictionary, all_ships: Array) -> bool:
+	var locked_ship := _get_ship_by_id(locked_id, all_ships)
+	if locked_ship.is_empty():
+		return false
+	var my_pos: Vector2 = own_ship.get("position", Vector2.ZERO)
+	var locked_dist: float = my_pos.distance_to(locked_ship.get("position", Vector2.ZERO))
+	var my_team: int = own_ship.get("team", -1)
+	for ship in all_ships:
+		if ship.get("team", -1) == my_team or ship.get("status", "") != "operational":
+			continue
+		var d: float = my_pos.distance_to(ship.get("position", Vector2.ZERO))
+		if d < CLOSE_RANGE and d < locked_dist * 0.6:
+			return true
+	return false
+
+# ============================================================================
+# PRE-COMMIT EVASION — elite pilots detect incoming firing solutions early
+# ============================================================================
+
+static func _find_enemy_targeting_me(ship_data: Dictionary, all_ships: Array) -> String:
+	var my_team: int = ship_data.get("team", -1)
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	for ship in all_ships:
+		if ship.get("team", -1) == my_team:
+			continue
+		if ship.get("status", "") != "operational":
+			continue
+		if not FleetDataManager.is_fighter_class(ship.get("type", "")):
+			continue
+		var enemy_pos: Vector2 = ship.get("position", Vector2.ZERO)
+		if my_pos.distance_to(enemy_pos) > WingConstants.PRE_COMMIT_ENGAGEMENT_RANGE:
+			continue
+		var to_me: Vector2 = (my_pos - enemy_pos).normalized()
+		var enemy_forward: Vector2 = MovementSystem.get_visual_forward(ship.get("rotation", 0.0))
+		if to_me.dot(enemy_forward) >= WingConstants.PRE_COMMIT_TARGETING_CONE_DOT:
+			return ship.get("ship_id", "")
+	return ""
+
+static func _make_pre_commit_evasion_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, threat_id: String, game_time: float) -> Dictionary:
+	var skill: float = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
+	var threat_ship: Dictionary = _get_ship_by_id(threat_id, all_ships)
+	var evasion_dir: int = 0
+	if not threat_ship.is_empty():
+		evasion_dir = _calculate_evasion_direction(ship_data, threat_ship)
+	return {
+		"type": "maneuver",
+		"subtype": "fight_dodge_and_weave",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": threat_id,
+		"skill_factor": skill,
+		"delay": 0.2,
+		"timestamp": game_time,
+		"evasion_direction": evasion_dir,
+		"pre_commit_evasion": true
+	}
 
 # ============================================================================
 # SQUADRON-PLAY WAYPOINT

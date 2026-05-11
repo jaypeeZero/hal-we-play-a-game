@@ -170,7 +170,7 @@ const TARGET_SCORE_THREAT_FACING_WEIGHT = 3.0
 const TARGET_SCORE_THREAT_FACING_ANGLE = 45.0  # degrees
 
 ## Skill thresholds for target selection quality
-const LEAD_PICK_BEST_SKILL = 0.6       # Always picks best
+const LEAD_PICK_BEST_SKILL = 0.8       # Always picks best
 const LEAD_PICK_TOP_THREE_SKILL = 0.3  # Picks from top 3
 # Below 0.3 = random selection
 
@@ -183,7 +183,7 @@ const LEAD_PICK_TOP_THREE_SKILL = 0.3  # Picks from top 3
 
 ## Turn rate modifier range (multiplied by base turn rate)
 const PILOT_TURN_RATE_MIN = 0.5       # 0-skill: 50% turn rate
-const PILOT_TURN_RATE_MAX = 1.3       # 1.0-skill: 130% turn rate
+const PILOT_TURN_RATE_MAX = 1.5       # 1.0-skill: 150% turn rate
 
 ## Acceleration modifier range
 const PILOT_ACCEL_MIN = 0.6           # 0-skill: 60% acceleration
@@ -191,7 +191,7 @@ const PILOT_ACCEL_MAX = 1.2           # 1.0-skill: 120% acceleration
 
 ## Lateral thrust capability (critical for evasion)
 const PILOT_LATERAL_MIN = 0.2         # 0-skill: 20% lateral capability
-const PILOT_LATERAL_MAX = 1.0         # 1.0-skill: 100% lateral capability
+const PILOT_LATERAL_MAX = 1.2         # 1.0-skill: 120% lateral capability
 
 ## Inertial dampening (flight assist) — skilled pilots ride the stick tighter,
 ## so the auto-counter-thrust kills perpendicular drift faster.
@@ -208,13 +208,23 @@ const PILOT_DAMPENING_MAX = 1.2       # 1.0-skill: 120% dampening (precision)
 const PILOT_APPROACH_ANGLE_SKILL = 0.4
 
 ## Skill to jink (random lateral movement) during approach
-const PILOT_JINKING_SKILL = 0.5
+const PILOT_JINKING_SKILL = 0.6
 
 ## Skill to use pursuit curves (lead/lag pursuit)
-const PILOT_PURSUIT_CURVE_SKILL = 0.6
+const PILOT_PURSUIT_CURVE_SKILL = 0.7
 
 ## Skill for complex defensive maneuvers (spiral, break)
-const PILOT_DEFENSIVE_MANEUVER_SKILL = 0.7
+const PILOT_DEFENSIVE_MANEUVER_SKILL = 0.85
+
+## Skill to begin evasive maneuvering pre-emptively when an enemy has a
+## firing solution (pre-commit evasion — elite pilots only)
+const PILOT_PRE_COMMIT_EVASION_SKILL = 0.85
+
+## Cone dot-product threshold for "enemy is pointing at me" (cos 30°)
+const PRE_COMMIT_TARGETING_CONE_DOT = 0.866
+
+## Maximum distance at which pre-commit evasion is relevant
+const PRE_COMMIT_ENGAGEMENT_RANGE = 3000.0
 
 # =============================================================================
 # PILOT SKILL - Jinking parameters
@@ -268,7 +278,7 @@ const GUNNER_LEADING_SKILL = 0.4
 const GUNNER_PREDICTIVE_SKILL = 0.6
 
 ## Skill to target specific subsystems (engines, weapons)
-const GUNNER_SUBSYSTEM_SKILL = 0.8
+const GUNNER_SUBSYSTEM_SKILL = 0.9
 
 ## Skill threshold for target fixation (low skill sticks to bad targets)
 const GUNNER_TARGET_FIXATION_SKILL = 0.3
@@ -490,3 +500,37 @@ const PLAY_JITTER_MAX_TIMING = 1.2
 
 ## Leader re-evaluates which play to run on this interval (seconds).
 const PLAY_REPLAN_INTERVAL = 6.0
+
+# =============================================================================
+# SURVIVAL TACTICAL DISENGAGE — elite tacticians only
+# =============================================================================
+
+## Minimum tactics skill required to trigger a proactive tactical disengage
+## when damaged, outnumbered, and unsupported.
+const SURVIVAL_TACTICAL_DISENGAGE_SKILL = 0.80
+
+## Hull ratio below which the tactical disengage fires (if other conditions met)
+const SURVIVAL_TACTICAL_HULL_RATIO = 0.40
+
+# =============================================================================
+# ELITE RE-EVALUATION AFTER KILL
+# =============================================================================
+
+## Piloting skill at which a pilot immediately re-evaluates on their current
+## target's death, rather than waiting for the normal decision cadence.
+const ELITE_REASSESS_AFTER_KILL_SKILL = 0.80
+
+## How soon after the kill the elite pilot re-evaluates (seconds)
+const ELITE_REASSESS_AFTER_KILL_DELAY = 0.05
+
+# =============================================================================
+# ELITE SITUATIONAL AWARENESS — friendly collision and close-target relock
+# =============================================================================
+
+## Piloting skill above which a pilot checks for and avoids collisions with
+## friendly ships (display 15/20). Below this, they fixate on the enemy.
+const PILOT_FRIENDLY_COLLISION_SKILL = 0.75
+
+## Piloting skill above which a pilot breaks their engagement lock when a
+## significantly closer threat enters close combat range.
+const CLOSE_TARGET_RELOCK_SKILL = 0.75

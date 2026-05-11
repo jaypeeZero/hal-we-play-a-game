@@ -258,5 +258,3 @@ func test_get_memory_stats_with_history():
 	assert_eq(stats.total_failures, 2)
 	assert_eq(stats.overall_success_rate, 0.6)
 	assert_eq(stats.unique_tactics_tried, 2)
-
-	assert_eq(combined[combined.size() - 1].type, "new2")

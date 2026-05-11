@@ -1122,7 +1122,8 @@ func _update_ship_debug_data(wings: Array) -> void:
 
 		# Pilot direction - direction to target
 		if GameSettings.show_pilot_direction:
-			var target_id = ship.get("orders", {}).get("target_id", "")
+			var raw_tid = ship.get("orders", {}).get("target_id")
+			var target_id: String = raw_tid if raw_tid != null else ""
 			if target_id != "":
 				var target = _find_ship_by_id(target_id)
 				if not target.is_empty():

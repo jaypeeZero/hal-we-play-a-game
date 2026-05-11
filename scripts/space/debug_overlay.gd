@@ -66,7 +66,7 @@ func _draw() -> void:
 
 func _draw_enemy_focus(ship: Dictionary, color: Color) -> void:
 	var orders: Dictionary = ship.get("orders", {})
-	var target_id: String = orders.get("target_id", "")
+	var target_id: String = orders.get("target_id") if orders.get("target_id") != null else ""
 	if target_id == "":
 		return
 	var target: Dictionary = _game._find_ship_by_id(target_id)
