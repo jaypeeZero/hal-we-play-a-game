@@ -34,3 +34,12 @@ func log_player_died(player_id: int) -> void:
 
 func log_mana_changed(player_id: int, new_amount: float) -> void:
 	service.log_mana_changed(player_id, new_amount)
+
+func log_ai_decision(crew_data: Dictionary, decision: Dictionary, trigger: String = "scheduled") -> void:
+	service.log_ai_decision(crew_data, decision, trigger)
+
+func log_order_issued(superior_id: String, subordinate_id: String, order: Dictionary) -> void:
+	service.log_order_issued(superior_id, subordinate_id, order)
+
+func log_ai_trigger(crew_id: String, trigger_type: String, source_id: String = "") -> void:
+	service.log_ai_trigger(crew_id, trigger_type, source_id)
