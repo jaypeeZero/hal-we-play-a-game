@@ -894,12 +894,11 @@ func _apply_crew_decisions(decisions: Array) -> void:
 	var pending_decisions: Array = []
 	for decision in decisions:
 		if BattleEventLoggerAutoload.service:
-			BattleEventLoggerAutoload.service.log_event("crew_decision", {
-				"crew_id": decision.get("crew_id", "unknown"),
-				"type": decision.get("type", "unknown"),
-				"subtype": decision.get("subtype", ""),
-				"entity_id": decision.get("entity_id", "")
-			})
+			var crew_snapshot = CrewIntegrationSystem.find_crew_by_id(_crew_list, decision.get("crew_id", ""))
+			if crew_snapshot.is_empty():
+				crew_snapshot = {"crew_id": decision.get("crew_id", "unknown")}
+			var trigger = "reactive" if decision.has("commit_at") and decision.commit_at > game_time else "scheduled"
+			BattleEventLoggerAutoload.service.log_ai_decision(crew_snapshot, decision, trigger)
 
 		if decision.has("commit_at") and decision.commit_at > game_time:
 			pending_decisions.append(decision)

@@ -44,6 +44,8 @@ static func distribute_orders_down_chain(crew_list: Array) -> Array:
 				var subordinate = updated_crew[subordinate_id]
 				var updated_subordinate = deliver_order(subordinate, order)
 				updated_crew[subordinate_id] = updated_subordinate
+				if BattleEventLoggerAutoload.service:
+					BattleEventLoggerAutoload.log_order_issued(crew.crew_id, subordinate_id, order)
 
 		# Clear issued orders after distribution
 		var updated_superior = crew.duplicate(true)
