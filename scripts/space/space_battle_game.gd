@@ -596,7 +596,7 @@ func _spawn_from_battle_plan() -> void:
 		var team1_fleet: Dictionary
 		if RoguelikeRun.active:
 			team0_fleet = RoguelikeRun.fleet
-			team1_fleet = RoguelikeRun.ENEMY_FLEET
+			team1_fleet = RoguelikeRun.enemy_fleet
 		else:
 			team0_fleet = FleetDataManager.load_fleet(0)
 			team1_fleet = FleetDataManager.load_fleet(1)
@@ -616,6 +616,39 @@ func _spawn_from_battle_plan() -> void:
 
 	# Plan is consumed: re-entering battle requires a fresh plan.
 	BattlePlan.clear()
+
+	if RoguelikeRun.active:
+		_apply_roguelike_damage_states()
+
+
+func _apply_roguelike_damage_states() -> void:
+	if RoguelikeRun.fleet_ships.is_empty():
+		return
+
+	var saved_by_type: Dictionary = {}
+	for saved_ship in RoguelikeRun.fleet_ships:
+		var t: String = saved_ship.get("type", "")
+		if not saved_by_type.has(t):
+			saved_by_type[t] = []
+		saved_by_type[t].append(saved_ship)
+
+	for i in range(_ships.size()):
+		var ship: Dictionary = _ships[i]
+		if ship.get("team", -1) != 0:
+			continue
+		var ship_type: String = ship.get("type", "")
+		if not saved_by_type.has(ship_type) or saved_by_type[ship_type].is_empty():
+			continue
+		var saved: Dictionary = saved_by_type[ship_type].pop_front()
+		_ships[i] = DictUtils.merge_dict(saved, {
+			"ship_id": ship["ship_id"],
+			"position": ship["position"],
+			"rotation": ship["rotation"],
+			"velocity": ship["velocity"],
+			"angular_velocity": ship["angular_velocity"],
+			"assigned_area": ship["assigned_area"],
+		})
+
 
 ## Spawn initial obstacles at game start
 func _spawn_initial_obstacles() -> void:
@@ -740,8 +773,7 @@ func _end_game(winner: int) -> void:
 
 
 func _handle_roguelike_battle_end() -> void:
-	var surviving := _count_surviving_team_ships(0)
-	RoguelikeRun.update_fleet_after_battle(surviving)
+	RoguelikeRun.update_fleet_after_battle(_get_surviving_player_ships())
 
 	var next_scene: String
 	if RoguelikeRun.is_fleet_empty():
@@ -753,21 +785,17 @@ func _handle_roguelike_battle_end() -> void:
 	get_tree().call_deferred("change_scene_to_file", next_scene)
 
 
-func _count_surviving_team_ships(team: int) -> Dictionary:
-	var counts := {}
-	for ship_type in FleetDataManager.SHIP_TYPES:
-		counts[ship_type] = 0
+func _get_surviving_player_ships() -> Array:
+	var survivors: Array = []
 	for ship in _ships:
-		if ship == null:
+		if ship == null or ship.is_empty():
 			continue
-		if ship.team != team:
+		if ship.get("team", -1) != 0:
 			continue
-		if ship.status == "destroyed":
+		if ship.get("status", "") == "destroyed":
 			continue
-		var ship_type: String = ship.type
-		if counts.has(ship_type):
-			counts[ship_type] += 1
-	return counts
+		survivors.append(ship.duplicate(true))
+	return survivors
 
 # ============================================================================
 # PUBLIC API (for testing)

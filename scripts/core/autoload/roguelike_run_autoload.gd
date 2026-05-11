@@ -1,21 +1,15 @@
 extends Node
 
 ## Holds state for an active Roguelike run: the player's persistent fleet,
-## the procedurally generated map, and the fixed enemy fleet for every battle.
+## the enemy's persistent fleet, and the procedurally generated map.
 ## When `active` is true, the battle scene and map scene swap their behavior
 ## to use this state instead of the on-disk team fleets.
-
-const ENEMY_FLEET := {
-	"fighter": 2,
-	"heavy_fighter": 0,
-	"torpedo_boat": 0,
-	"corvette": 1,
-	"capital": 0,
-}
 
 var active: bool = false
 var started_first_battle: bool = false
 var fleet: Dictionary = {}
+var fleet_ships: Array = []
+var enemy_fleet: Dictionary = {}
 var map_state: Dictionary = {}
 var pending_battle_node_id: String = ""
 var editor_return_scene: String = ""
@@ -25,6 +19,8 @@ func start_run(initial_fleet: Dictionary) -> void:
 	active = true
 	started_first_battle = false
 	fleet = initial_fleet.duplicate(true)
+	fleet_ships = []
+	enemy_fleet = FleetDataManager.load_fleet(1)
 	map_state = {}
 	pending_battle_node_id = ""
 
@@ -33,19 +29,25 @@ func end_run() -> void:
 	active = false
 	started_first_battle = false
 	fleet = {}
+	fleet_ships = []
+	enemy_fleet = {}
 	map_state = {}
 	pending_battle_node_id = ""
 
 
-func update_fleet_after_battle(surviving_counts: Dictionary) -> void:
-	fleet = surviving_counts.duplicate(true)
+func update_fleet_after_battle(surviving_ships: Array) -> void:
+	fleet_ships = surviving_ships.duplicate(true)
+	fleet = {}
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		fleet[ship_type] = 0
+	for ship in fleet_ships:
+		var t: String = ship.get("type", "")
+		if fleet.has(t):
+			fleet[t] += 1
 
 
 func is_fleet_empty() -> bool:
-	for ship_type in fleet.keys():
-		if int(fleet[ship_type]) > 0:
-			return false
-	return true
+	return fleet_ships.is_empty()
 
 
 func save_map_state(nodes: Array, connections: Array, current_row: int) -> void:

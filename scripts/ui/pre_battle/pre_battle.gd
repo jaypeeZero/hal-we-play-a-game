@@ -34,7 +34,7 @@ func _ready() -> void:
 	var team1_fleet: Dictionary
 	if RoguelikeRun.active:
 		team0_fleet = RoguelikeRun.fleet
-		team1_fleet = RoguelikeRun.ENEMY_FLEET
+		team1_fleet = RoguelikeRun.enemy_fleet
 	else:
 		team0_fleet = FleetDataManager.load_fleet(0)
 		team1_fleet = FleetDataManager.load_fleet(1)
