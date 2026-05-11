@@ -224,6 +224,10 @@ static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dicti
 	updated.crew_modifiers.lead_accuracy = lerp(WingConstants.GUNNER_LEAD_MIN,
 												WingConstants.GUNNER_LEAD_MAX, skill_factor)
 
+	# Skilled gunners hold fire until within preferred range for a sure shot.
+	# Threshold < 0.70 has no effect (all in-range targets already qualify).
+	updated.crew_modifiers.min_range_factor = updated.crew_modifiers.aim_skill * WingConstants.GUNNER_MIN_RANGE_FACTOR
+
 	return updated
 
 ## Select targeting style based on gunner skill

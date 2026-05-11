@@ -53,6 +53,9 @@ static func try_fire_weapon(ship_data: Dictionary, weapon: Dictionary, targets: 
 	if not can_fire_at_target(ship_data, weapon, best_target):
 		return create_no_fire_result(weapon)
 
+	if not is_within_preferred_range(ship_data, weapon, best_target):
+		return create_no_fire_result(weapon)
+
 	return create_fire_result(
 		set_weapon_cooldown(weapon, calculate_cooldown_time(weapon)),
 		create_fire_command(ship_data, weapon, best_target)
@@ -255,6 +258,15 @@ static func can_ship_damage_target(ship_data: Dictionary, target: Dictionary) ->
 static func can_fire_at_target(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> bool:
 	return is_in_range(ship_data.position, target.position, weapon.stats.range) and \
 	       is_in_firing_arc(ship_data, weapon, target)
+
+## Returns false when a skilled gunner prefers to hold fire until closer.
+## Velocity is intentionally excluded: including it would prevent elite gunners
+## from ever engaging fast-moving targets (velocity_factor caps at 0.5).
+static func is_within_preferred_range(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> bool:
+	var min_rf: float = ship_data.get("crew_modifiers", {}).get("min_range_factor", 0.0)
+	if min_rf <= 0.0:
+		return true
+	return calculate_range_factor(ship_data.position, target.position, weapon.stats.range) >= min_rf
 
 static func is_in_firing_arc(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> bool:
 	var relative_angle = calculate_relative_angle_to_target(ship_data, weapon, target)

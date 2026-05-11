@@ -102,3 +102,42 @@ func test_panic_widens_the_cone():
 	var calm_spread: float = WeaponSystem.calculate_aim_spread_angle(ship_calm)
 	var panic_spread: float = WeaponSystem.calculate_aim_spread_angle(ship_panic)
 	assert_gt(panic_spread, calm_spread, "Panic produces a wider spread cone than calm aim")
+
+
+func _make_ship_with_range_gate(aim_skill: float) -> Dictionary:
+	var ship: Dictionary = _make_ship_with_aim(aim_skill)
+	ship.crew_modifiers["min_range_factor"] = aim_skill * WingConstants.GUNNER_MIN_RANGE_FACTOR
+	return ship
+
+
+func _make_target_at_range_fraction(fraction: float) -> Dictionary:
+	var weapon_range: float = 4000.0
+	return {
+		"ship_id": "target",
+		"type": "fighter",
+		"team": 1,
+		"position": Vector2(0, -weapon_range * fraction),
+		"velocity": Vector2.ZERO,
+		"status": "operational",
+	}
+
+
+func test_skilled_gunner_holds_fire_at_max_range():
+	var ship: Dictionary = _make_ship_with_range_gate(1.0)
+	var target: Dictionary = _make_target_at_range_fraction(0.95)
+	var result: Dictionary = WeaponSystem.update_weapons(ship, [target], 0.1)
+	assert_true(result.fire_commands.is_empty(), "Skill-20 gunner should hold fire at 95% of max range")
+
+
+func test_skilled_gunner_fires_within_preferred_range():
+	var ship: Dictionary = _make_ship_with_range_gate(1.0)
+	var target: Dictionary = _make_target_at_range_fraction(0.25)
+	var result: Dictionary = WeaponSystem.update_weapons(ship, [target], 0.1)
+	assert_false(result.fire_commands.is_empty(), "Skill-20 gunner should fire at 25% of max range")
+
+
+func test_unskilled_gunner_fires_at_max_range():
+	var ship: Dictionary = _make_ship_with_range_gate(0.0)
+	var target: Dictionary = _make_target_at_range_fraction(0.95)
+	var result: Dictionary = WeaponSystem.update_weapons(ship, [target], 0.1)
+	assert_false(result.fire_commands.is_empty(), "Skill-0 gunner should fire at max range")
