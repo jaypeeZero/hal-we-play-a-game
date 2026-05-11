@@ -72,6 +72,8 @@ func _draw_enemy_focus(ship: Dictionary, color: Color) -> void:
 	var target: Dictionary = _game._find_ship_by_id(target_id)
 	if target.is_empty() or target.get("status", "") == "destroyed":
 		return
+	if target.get("team", -1) == ship.get("team", -2):
+		return
 	DottedDraw.draw_dotted_line(self, ship.position, target.position, color)
 
 

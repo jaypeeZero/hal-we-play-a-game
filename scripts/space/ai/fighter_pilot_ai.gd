@@ -216,7 +216,7 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 	# kick, a ship stuck dogfighting at the edge of the zone never actually
 	# returns. When a pilot is well outside their leash, they drop the fight
 	# and burn home until they're back in zone.
-	if _is_far_outside_area(ship_data):
+	if _is_far_outside_area(ship_data) and _find_best_target(crew_data, all_ships) == "":
 		return _make_return_to_area_decision(crew_data, ship_data, game_time)
 
 	# PRE-COMMIT EVASION (elite pilots only): begin evasive maneuvering the moment
@@ -234,7 +234,7 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 		var my_team: int = ship_data.get("team", -1)
 		for other in all_ships:
 			if other.get("team", -1) == my_team and other.get("ship_id", "") != my_id and _is_on_collision_course(ship_data, other):
-				return {"type": "maneuver", "subtype": "fight_lateral_break",
+				return {"type": "maneuver", "subtype": "fight_friendly_avoid",
 						"crew_id": crew_data.get("crew_id", ""), "entity_id": my_id,
 						"target_id": other.get("ship_id", ""), "skill_factor": pilot_skill,
 						"delay": 0.15, "timestamp": game_time,

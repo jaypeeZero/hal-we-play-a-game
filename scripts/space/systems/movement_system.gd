@@ -431,6 +431,8 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 			return calculate_defensive_break(ship_data, target, nearby_ships, obstacles)
 		"fight_lateral_break":
 			return calculate_lateral_break(ship_data, target, nearby_ships, obstacles)
+		"fight_friendly_avoid":
+			return calculate_friendly_avoid(ship_data, target, nearby_ships, obstacles)
 		"fight_group_run_approach":
 			return calculate_group_run_approach(ship_data, target, nearby_ships, obstacles)
 		"fight_group_run_attack":
@@ -792,6 +794,30 @@ static func calculate_lateral_break(ship_data: Dictionary, target: Dictionary, n
 		"lateral_thrust": lateral_thrust,  # slide perpendicular while facing target
 		"engagement_range": 400.0,
 		"current_distance": distance
+	}
+
+## Friendly collision avoidance — slide sideways without facing the friendly.
+## Maintains current velocity heading so the ship doesn't look like it's targeting a teammate.
+static func calculate_friendly_avoid(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+	var to_target = target.position - ship_data.position
+	var evasion_dir = ship_data.get("orders", {}).get("evasion_direction", 0)
+	if evasion_dir == 0:
+		var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
+		var lateral_vel = ship_data.get("velocity", Vector2.ZERO).dot(perpendicular)
+		evasion_dir = 1 if lateral_vel >= 0 else -1
+
+	var current_vel = ship_data.get("velocity", Vector2.ZERO)
+	var desired_heading = direction_to_heading(current_vel) if current_vel.length() > 10.0 else direction_to_heading(-to_target)
+
+	var throttle = calculate_intuitive_throttle(ship_data, to_target.length(), "evasion")
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": false,
+		"lateral_thrust": evasion_dir,
+		"current_distance": to_target.length()
 	}
 
 ## Group run approach - approach with other fighters
