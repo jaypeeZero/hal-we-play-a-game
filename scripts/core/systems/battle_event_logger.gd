@@ -14,6 +14,9 @@ class_name BattleEventLogger
 
 # Single source of truth for where battle logs live on disk.
 const LOG_DIR := "~/.logs/space-game"
+# Keep at most this many `battle_*.jsonl` files; older ones get deleted so it's
+# easy to tell at a glance which run was most recent.
+const LOG_RETENTION := 5
 
 signal event_occurred(event: Dictionary)
 
@@ -190,6 +193,27 @@ func _open_log_file() -> void:
 		push_warning("BattleEventLogger: could not open %s for writing" % _log_path)
 		return
 	print("BattleEventLogger: writing to %s" % _log_path)
+	_prune_old_logs(dir_path)
+
+## Keep only the LOG_RETENTION newest battle_*.jsonl files in `dir_path`.
+## Filenames sort lexicographically by timestamp, so a sorted list is also
+## chronological — drop everything before the last LOG_RETENTION entries.
+func _prune_old_logs(dir_path: String) -> void:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return
+	var logs: Array[String] = []
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while name != "":
+		if not dir.current_is_dir() and name.begins_with("battle_") and name.ends_with(".jsonl"):
+			logs.append(name)
+		name = dir.get_next()
+	dir.list_dir_end()
+	logs.sort()
+	while logs.size() > LOG_RETENTION:
+		var victim: String = logs.pop_front()
+		DirAccess.remove_absolute("%s/%s" % [dir_path, victim])
 
 func _close_log_file() -> void:
 	if _log_file != null:
