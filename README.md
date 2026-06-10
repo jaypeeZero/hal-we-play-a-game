@@ -161,7 +161,7 @@ don't wait for the next scheduled wake.
 - `ShipDebugVisualizer` — Debug overlay (armor sections, weapon arcs, velocity)
 
 #### Rendering Layer (IVisualRenderer)
-- `MatrixRenderer` — Matrix-themed green aesthetic renderer
+- `Renderer78` — line-based hull outlines drawn from `data/hull_shapes/` JSON
 
 ### Data Structure Example
 
@@ -281,11 +281,11 @@ All core systems have comprehensive test coverage:
 
 ### Adding New Ship Types
 
-1. Add template to `ShipData._create_XXX_template()`
+1. Add a template JSON to `data/ship_templates/`
 2. Define armor sections (with arcs)
 3. Define internal components (with effects)
 4. Define weapons (with stats)
-5. Add visual shape to `MatrixRenderer`
+5. Add a hull shape JSON to `data/hull_shapes/`
 
 Example:
 ```gdscript

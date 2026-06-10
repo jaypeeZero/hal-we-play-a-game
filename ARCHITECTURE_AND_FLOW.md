@@ -114,9 +114,8 @@ now query a uniform grid keyed by cell coordinate.
 ### Rendering
 
 - `VisualBridge` (autoload) — registers/unregisters renderable entities.
-- `IVisualRenderer` — interface; implementations include
-  `MatrixRenderer` (green-on-black aesthetic), emoji renderer, and a
-  null renderer for tests.
+- `IVisualRenderer` — interface; sole implementation is `Renderer78`,
+  which draws line-based hull outlines from `data/hull_shapes/` JSON.
 
 ## The crew tick in detail
 

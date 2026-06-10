@@ -3,9 +3,6 @@ class_name VisualBridge extends Node
 ## Active renderer (can be swapped at runtime)
 var active_renderer: IVisualRenderer = null
 
-## Active theme (loaded from JSON)
-var active_theme: IVisualTheme = null
-
 ## Registry of all entities (entity_id -> IRenderable)
 var _entity_registry: Dictionary = {}
 
@@ -20,11 +17,11 @@ func _exit_tree() -> void:
 	# Clean up renderer when VisualBridge is destroyed
 	_detach_old_renderer()
 
-## Set active renderer and theme
+## Set active renderer
 ## Detaches old renderer, attaches new renderer to all entities
-func set_renderer(renderer: IVisualRenderer, theme: IVisualTheme) -> void:
+func set_renderer(renderer: IVisualRenderer) -> void:
 	_detach_old_renderer()
-	_attach_new_renderer(renderer, theme)
+	_attach_new_renderer(renderer)
 
 func _detach_old_renderer() -> void:
 	if not active_renderer:
@@ -47,17 +44,15 @@ func _detach_old_renderer() -> void:
 	active_renderer.queue_free()
 	active_renderer = null
 
-func _attach_new_renderer(renderer: IVisualRenderer, theme: IVisualTheme) -> void:
+func _attach_new_renderer(renderer: IVisualRenderer) -> void:
 	active_renderer = renderer
-	active_theme = theme
 
 	print("Attaching renderer: %s" % renderer.get_class())
 
 	# Add renderer to scene tree
 	add_child(active_renderer)
 
-	# Initialize renderer with theme
-	active_renderer.initialize(theme)
+	active_renderer.initialize()
 
 	# Attach to all registered entities
 	for entity_id in _entity_registry:
@@ -145,14 +140,10 @@ func get_registered_entity_ids() -> Array[String]:
 	ids.assign(_entity_registry.keys())
 	return ids
 
-## Get current active theme
-func get_current_theme() -> IVisualTheme:
-	return active_theme
-
 ## Hot-reload active renderer (refresh all visuals)
 func refresh_visuals() -> void:
-	if not active_renderer or not active_theme:
-		push_warning("Cannot refresh: no active renderer or theme")
+	if not active_renderer:
+		push_warning("Cannot refresh: no active renderer")
 		return
 
 	print("Refreshing all visuals...")

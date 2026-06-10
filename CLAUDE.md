@@ -77,7 +77,7 @@ When working on this codebase:
 **Rendering system:**
 - `IRenderable` base class for all visual entities
 - `VisualBridge` manages rendering of entities
-- Supports multiple renderers (Matrix, Emoji, Null for testing)
+- Sole renderer is `Renderer78` (hull outlines from `data/hull_shapes/` JSON)
 
 ## Testing Standards
 
