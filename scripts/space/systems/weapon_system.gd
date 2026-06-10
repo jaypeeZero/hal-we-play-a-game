@@ -12,6 +12,34 @@ extends RefCounted
 const MIN_REACTION_TIME = 0.1
 const MAX_REACTION_TIME = 0.3
 
+# Target selection: closer targets score higher (base minus distance), plus
+# a per-class bonus - small fast hulls threaten everyone, capitals can wait.
+const DISTANCE_PRIORITY_BASE: float = 1000.0
+const TYPE_PRIORITIES = {
+	"fighter": 100.0,
+	"heavy_fighter": 90.0,
+	"torpedo_boat": 95.0,  # Dangerous anti-ship platform
+	"corvette": 50.0,
+	"capital": 25.0,
+}
+
+# A target below this armor fraction counts as a good pick for any weapon
+# (internals are exposed).
+const DAMAGED_TARGET_ARMOR_FRACTION: float = 0.5
+
+# Lead targeting: LEADING blends toward the perfect lead by skill * this
+# factor; PREDICTIVE lands within (1 - skill) * this error of perfect.
+const LEADING_LEAD_BLEND: float = 0.7
+const PREDICTIVE_MAX_ERROR: float = 0.2
+
+# Subsystem picking: floor on the damage term so undamaged but valuable
+# components (engines, weapons) are still picked early in the fight.
+const SUBSYSTEM_UNDAMAGED_SCORE_FLOOR: float = 0.25
+
+# Bounds on the captain coordination multiplier applied to gunner aim.
+const COORDINATION_CLAMP_MIN: float = 0.5
+const COORDINATION_CLAMP_MAX: float = 1.5
+
 # ============================================================================
 # MAIN API - Returns new ship_data with updated weapons
 # ============================================================================
@@ -165,17 +193,10 @@ static func calculate_priority(target: Dictionary, ship_pos: Vector2) -> float:
 	       calculate_type_priority(target.type)
 
 static func calculate_distance_priority(from: Vector2, to: Vector2) -> float:
-	return 1000.0 - calculate_distance(from, to)
+	return DISTANCE_PRIORITY_BASE - calculate_distance(from, to)
 
 static func calculate_type_priority(ship_type: String) -> float:
-	var priorities = {
-		"fighter": 100.0,
-		"heavy_fighter": 90.0,  # High priority but slightly less than fighter
-		"torpedo_boat": 95.0,   # High priority - dangerous anti-ship platform
-		"corvette": 50.0,
-		"capital": 25.0
-	}
-	return priorities.get(ship_type, 0.0)
+	return TYPE_PRIORITIES.get(ship_type, 0.0)
 
 static func select_higher_priority(best: Dictionary, current: Dictionary) -> Dictionary:
 	if best.is_empty():
@@ -199,7 +220,7 @@ static func can_weapon_damage_target(weapon: Dictionary, target: Dictionary) -> 
 
 	# Target is good if heavily damaged (>50% armor gone = can hit internals easily)
 	var armor_percentage = calculate_armor_percentage(target)
-	if armor_percentage < 0.5:
+	if armor_percentage < DAMAGED_TARGET_ARMOR_FRACTION:
 		return true
 
 	# Target is good if we have at least one armor section in effective range
@@ -358,12 +379,12 @@ static func calculate_lead_position(ship_data: Dictionary, weapon: Dictionary, t
 	# LEADING targeting: Basic velocity prediction with skill-based accuracy
 	if targeting_style == CrewIntegrationSystem.TargetingStyle.LEADING:
 		# Blend between current position and perfect lead based on skill
-		return target.position.lerp(perfect_lead, lead_accuracy * 0.7)
+		return target.position.lerp(perfect_lead, lead_accuracy * LEADING_LEAD_BLEND)
 
 	# PREDICTIVE targeting: full prediction that anticipates maneuvers
 	if targeting_style == CrewIntegrationSystem.TargetingStyle.PREDICTIVE:
 		# Use full lead calculation with small error margin
-		var error_margin = (1.0 - lead_accuracy) * 0.2
+		var error_margin = (1.0 - lead_accuracy) * PREDICTIVE_MAX_ERROR
 		return target.position.lerp(perfect_lead, 1.0 - error_margin)
 
 	# SUBSYSTEM targeting: aim a perfect lead at the chosen subsystem's
@@ -397,9 +418,7 @@ static func pick_target_subsystem(target: Dictionary) -> Dictionary:
 		var current_health: float = float(component.get("current_health", max_health))
 		var damage_pct: float = clamp(1.0 - current_health / max_health, 0.0, 1.0)
 		var tactical_value: float = float(component.get("tactical_value", 1.0))
-		# Slight floor on damage_pct so undamaged but valuable subsystems
-		# (engines, weapons) are still picked early in the fight.
-		var score: float = tactical_value * (0.25 + damage_pct)
+		var score: float = tactical_value * (SUBSYSTEM_UNDAMAGED_SCORE_FLOOR + damage_pct)
 		if score > best_score:
 			best_score = score
 			best = component
@@ -440,7 +459,7 @@ static func calculate_aim_spread_angle(ship_data: Dictionary) -> float:
 		return WingConstants.GUNNER_AIM_PANIC_SPREAD_RAD
 
 	var aim_skill: float = clamp(float(modifiers.get("aim_skill", 0.0)), 0.0, 1.0)
-	var captain_factor: float = clamp(float(modifiers.get("captain_coordination", 1.0)), 0.5, 1.5)
+	var captain_factor: float = clamp(float(modifiers.get("captain_coordination", 1.0)), COORDINATION_CLAMP_MIN, COORDINATION_CLAMP_MAX)
 	var effective: float = clamp(aim_skill * captain_factor, 0.0, 1.0)
 	return WingConstants.GUNNER_AIM_WORST_SPREAD_RAD * (1.0 - effective)
 

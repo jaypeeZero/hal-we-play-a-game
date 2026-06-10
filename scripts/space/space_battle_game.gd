@@ -906,7 +906,8 @@ func _check_spatial_awareness_triggers(ship_grid: Dictionary) -> void:
 			continue
 
 		var ship_pos = ship.position
-		var sensor_range = 800.0  # TODO: Get from ship stats
+		# Same per-crew sensor range InformationSystem uses for awareness.
+		var sensor_range: float = float(crew.get("stats", {}).get("awareness_range", 800.0))
 
 		# Previous frame's spatial sightings as {ship_id: true}.
 		var previous_contacts: Dictionary = crew.awareness.get("_spatial_seen", {})

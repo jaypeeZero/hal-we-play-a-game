@@ -11,6 +11,44 @@ extends RefCounted
 # (capital ship base_size = 150).
 const MAX_HIT_QUERY_RADIUS: float = 200.0
 
+# Default torpedo blast when the projectile doesn't carry its own values.
+const DEFAULT_EXPLOSION_RADIUS: float = 80.0
+const DEFAULT_EXPLOSION_DAMAGE: float = 60.0
+
+# Coefficient of restitution (0 = perfectly inelastic, 1 = perfectly elastic).
+# Ship-ship collisions are less elastic than ship-rock (hulls crumple).
+const OBSTACLE_RESTITUTION: float = 0.4
+const SHIP_RESTITUTION: float = 0.3
+
+# Push colliding objects apart slightly beyond touching so they don't
+# re-collide on the next frame.
+const SEPARATION_OVERSHOOT: float = 1.01
+
+# Below this distance two objects count as exactly overlapping and get
+# separated along a random direction instead of a degenerate normal.
+const OVERLAP_EPSILON: float = 0.1
+
+# Collision damage: no damage below the impact-speed threshold, then
+# kinetic scaling of (speed / reference)^2 * base. Ships take damage from
+# slower hits against other ships than against rocks.
+const OBSTACLE_IMPACT_DAMAGE_THRESHOLD: float = 20.0
+const OBSTACLE_IMPACT_REFERENCE_SPEED: float = 50.0
+const OBSTACLE_IMPACT_BASE_DAMAGE: float = 10.0
+const SHIP_IMPACT_DAMAGE_THRESHOLD: float = 15.0
+const SHIP_IMPACT_REFERENCE_SPEED: float = 40.0
+const SHIP_IMPACT_BASE_DAMAGE: float = 8.0
+
+# Obstacle size vs ship size scales damage up; floor keeps pebbles from
+# being entirely harmless.
+const OBSTACLE_SIZE_DAMAGE_SCALE: float = 1.5
+const OBSTACLE_SIZE_DAMAGE_FLOOR: float = 0.5
+
+# Obstacles show "damaged" status below this health fraction.
+const OBSTACLE_DAMAGED_HEALTH_FRACTION: float = 0.5
+
+# Lifetime of the small projectile-impact spark on obstacles.
+const PROJECTILE_IMPACT_EFFECT_DURATION: float = 0.3
+
 # ============================================================================
 # MAIN API - Detect collisions and apply damage
 # ============================================================================
@@ -49,8 +87,8 @@ static func process_collisions(
 			if projectile.get("projectile_type", "standard") == "explosive":
 				torpedo_explosions.append({
 					position = hit.hit_position,
-					radius = projectile.get("explosion_radius", 80.0),
-					damage = projectile.get("explosion_damage", 60.0),
+					radius = projectile.get("explosion_radius", DEFAULT_EXPLOSION_RADIUS),
+					damage = projectile.get("explosion_damage", DEFAULT_EXPLOSION_DAMAGE),
 					source_id = projectile.source_id,
 					team = projectile.team
 				})
@@ -67,20 +105,20 @@ static func process_collisions(
 			if projectile.get("projectile_type", "standard") == "explosive":
 				torpedo_explosions.append({
 					position = obstacle_hit.hit_position,
-					radius = projectile.get("explosion_radius", 80.0),
-					damage = projectile.get("explosion_damage", 60.0),
+					radius = projectile.get("explosion_radius", DEFAULT_EXPLOSION_RADIUS),
+					damage = projectile.get("explosion_damage", DEFAULT_EXPLOSION_DAMAGE),
 					source_id = projectile.source_id,
 					team = projectile.team
 				})
 				# Create torpedo explosion effect
 				var explosion_effect = VisualEffectSystem.create_torpedo_explosion(
 					obstacle_hit.hit_position,
-					projectile.get("explosion_radius", 80.0)
+					projectile.get("explosion_radius", DEFAULT_EXPLOSION_RADIUS)
 				)
 				visual_effects.append(explosion_effect)
 			else:
 				# Create visual effect for projectile hitting obstacle
-				var effect = VisualEffectSystem.create_effect("effect_projectile_impact", obstacle_hit.hit_position, 0.3)
+				var effect = VisualEffectSystem.create_effect("effect_projectile_impact", obstacle_hit.hit_position, PROJECTILE_IMPACT_EFFECT_DURATION)
 				visual_effects.append(effect)
 
 	# Apply damage to ships and generate visual effects
@@ -296,7 +334,7 @@ static func apply_projectile_hits_to_obstacles(obstacles: Array, projectiles: Ar
 		# Update status based on health
 		if updated_obstacle.current_health <= 0:
 			updated_obstacle.status = "destroyed"
-		elif took_damage and updated_obstacle.current_health <= updated_obstacle.max_health * 0.5:
+		elif took_damage and updated_obstacle.current_health <= updated_obstacle.max_health * OBSTACLE_DAMAGED_HEALTH_FRACTION:
 			updated_obstacle.status = "damaged"
 
 		updated_obstacles.append(updated_obstacle)
@@ -368,7 +406,7 @@ static func check_and_resolve_ship_obstacle_collision(ship: Dictionary, obstacle
 
 	# Calculate collision normal (from obstacle to ship)
 	var collision_normal = (ship.position - obstacle.position)
-	if collision_normal.length() < 0.1:
+	if collision_normal.length() < OVERLAP_EPSILON:
 		# Objects are exactly on top of each other - use random direction
 		collision_normal = Vector2(randf() * 2 - 1, randf() * 2 - 1)
 	collision_normal = collision_normal.normalized()
@@ -388,7 +426,7 @@ static func check_and_resolve_ship_obstacle_collision(ship: Dictionary, obstacle
 	# Apply elastic collision physics
 	var ship_mass = ship.stats.mass
 	var obstacle_mass = obstacle.mass
-	var restitution = 0.4  # Coefficient of restitution (0 = perfectly inelastic, 1 = perfectly elastic)
+	var restitution = OBSTACLE_RESTITUTION
 
 	# Calculate impulse scalar: j = -(1 + e) * v_rel • n / (1/m1 + 1/m2)
 	var impulse_scalar = -(1.0 + restitution) * velocity_along_normal / (1.0 / ship_mass + 1.0 / obstacle_mass)
@@ -406,7 +444,7 @@ static func check_and_resolve_ship_obstacle_collision(ship: Dictionary, obstacle
 		updated_obstacle.velocity = new_obstacle_velocity
 
 	# Separate the objects to prevent overlap
-	var separation = (collision_radius - distance) * 1.01
+	var separation = (collision_radius - distance) * SEPARATION_OVERSHOOT
 	var separation_ratio = ship_mass / (ship_mass + obstacle_mass)
 	updated_ship.position += collision_normal * separation * (1.0 - separation_ratio)
 
@@ -454,7 +492,7 @@ static func check_and_resolve_ship_ship_collision(ship1: Dictionary, ship2: Dict
 
 	# Calculate collision normal (from ship2 to ship1)
 	var collision_normal = (ship1.position - ship2.position)
-	if collision_normal.length() < 0.1:
+	if collision_normal.length() < OVERLAP_EPSILON:
 		# Ships are exactly on top of each other - use random direction
 		collision_normal = Vector2(randf() * 2 - 1, randf() * 2 - 1)
 	collision_normal = collision_normal.normalized()
@@ -473,7 +511,7 @@ static func check_and_resolve_ship_ship_collision(ship1: Dictionary, ship2: Dict
 	# Apply elastic collision physics
 	var mass1 = ship1.stats.mass
 	var mass2 = ship2.stats.mass
-	var restitution = 0.3  # Ship-ship collisions are less elastic (more crumpling)
+	var restitution = SHIP_RESTITUTION
 
 	# Calculate impulse scalar
 	var impulse_scalar = -(1.0 + restitution) * velocity_along_normal / (1.0 / mass1 + 1.0 / mass2)
@@ -487,7 +525,7 @@ static func check_and_resolve_ship_ship_collision(ship1: Dictionary, ship2: Dict
 	updated_ship2.velocity -= impulse / mass2
 
 	# Separate the ships to prevent overlap
-	var separation = (collision_radius - distance) * 1.01
+	var separation = (collision_radius - distance) * SEPARATION_OVERSHOOT
 	var separation_ratio = mass1 / (mass1 + mass2)
 	updated_ship1.position += collision_normal * separation * (1.0 - separation_ratio)
 	updated_ship2.position -= collision_normal * separation * separation_ratio
@@ -536,11 +574,11 @@ static func check_and_resolve_ship_ship_collision(ship1: Dictionary, ship2: Dict
 ## Calculate damage from ship-obstacle collision based on impact speed and size discrepancy
 static func calculate_collision_damage(ship: Dictionary, obstacle: Dictionary, impact_speed: float) -> float:
 	# No damage from very slow collisions
-	if impact_speed < 20.0:
+	if impact_speed < OBSTACLE_IMPACT_DAMAGE_THRESHOLD:
 		return 0.0
 
 	# Base damage scales with impact speed squared (kinetic energy)
-	var base_damage = pow(impact_speed / 50.0, 2.0) * 10.0
+	var base_damage = pow(impact_speed / OBSTACLE_IMPACT_REFERENCE_SPEED, 2.0) * OBSTACLE_IMPACT_BASE_DAMAGE
 
 	# Size discrepancy multiplier - bigger obstacles hurt more
 	var ship_size = ship.stats.size
@@ -548,8 +586,8 @@ static func calculate_collision_damage(ship: Dictionary, obstacle: Dictionary, i
 	var size_ratio = obstacle_size / ship_size
 
 	# Larger obstacles deal significantly more damage
-	var size_multiplier = 1.0 + (size_ratio - 1.0) * 1.5
-	size_multiplier = max(0.5, size_multiplier)  # Minimum 0.5x for small obstacles
+	var size_multiplier = 1.0 + (size_ratio - 1.0) * OBSTACLE_SIZE_DAMAGE_SCALE
+	size_multiplier = max(OBSTACLE_SIZE_DAMAGE_FLOOR, size_multiplier)
 
 	# Mass matters too - heavier obstacles deal more damage
 	var mass_ratio = obstacle.mass / ship.stats.mass
@@ -562,11 +600,11 @@ static func calculate_collision_damage(ship: Dictionary, obstacle: Dictionary, i
 ## Calculate damage from ship-ship collision
 static func calculate_ship_collision_damage(receiving_ship: Dictionary, impacting_ship: Dictionary, impact_speed: float) -> float:
 	# No damage from very slow collisions
-	if impact_speed < 15.0:
+	if impact_speed < SHIP_IMPACT_DAMAGE_THRESHOLD:
 		return 0.0
 
 	# Base damage scales with impact speed
-	var base_damage = pow(impact_speed / 40.0, 2.0) * 8.0
+	var base_damage = pow(impact_speed / SHIP_IMPACT_REFERENCE_SPEED, 2.0) * SHIP_IMPACT_BASE_DAMAGE
 
 	# Larger ships hitting you deal more damage
 	var size_ratio = impacting_ship.stats.size / receiving_ship.stats.size

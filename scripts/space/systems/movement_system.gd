@@ -29,6 +29,30 @@ extends RefCounted
 const LATERAL_THRUST_RANGE = 1500.0  # Use lateral thrust when closer than this to target
 
 # ============================================================================
+# COMBAT MOVEMENT TUNING
+# ============================================================================
+# All distances are 4-5x scaled for combat spacing.
+
+## Pilots watch for collisions within this range.
+const COLLISION_AWARENESS_RANGE = 800.0
+
+## Oscillation periods (ms) for time-driven strafing and direction flips.
+const DOGFIGHT_WEAVE_PERIOD_MS = 800.0
+const RETREAT_WEAVE_PERIOD_MS = 600.0
+const FLEE_TURN_FLIP_PERIOD_MS = 500.0
+const DEFENSIVE_BREAK_FLIP_PERIOD_MS = 200.0
+const ORBIT_OSCILLATION_PERIOD_MS = 1500.0
+
+## Combat positioning distances.
+const DOGFIGHT_COMBAT_RANGE = 2400.0       # Strafe-fight standoff distance
+const FORMATION_COMBAT_RANGE = 2000.0      # Standoff while holding formation
+const CAUTIOUS_APPROACH_RANGE = 2000.0     # Careful approach standoff
+const ATTACK_RUN_SLOWDOWN_RANGE = 1600.0   # Throttle down inside this on attack runs
+const ANGLED_APPROACH_OFFSET = 1600.0      # Lateral offset for angled approaches
+const RETREAT_TARGET_DISTANCE = 2000.0     # How far ahead retreat waypoints are set
+const RETREAT_WEAVE_WIDTH = 600.0          # Side-to-side dodge width while retreating
+
+# ============================================================================
 # FRONT BRAKE THRUSTER HEAT SYSTEM
 # ============================================================================
 # Front brake thrusters are as powerful as main engines but generate heavy heat.
@@ -259,7 +283,7 @@ static func get_distance(ship: Dictionary) -> float:
 
 ## Get nearby friendly ships for collision avoidance
 static func get_nearby_friendly_ships(ship_data: Dictionary, all_ships: Array) -> Array:
-	var collision_awareness_range = 800.0  # Pilots watch for collisions within this range (4x scaled)
+	var collision_awareness_range = COLLISION_AWARENESS_RANGE
 	return all_ships \
 		.filter(func(s): return s != null) \
 		.filter(func(s): return s.ship_id != ship_data.ship_id) \
@@ -478,11 +502,11 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
 	# Weave using lateral thrust - strafe left/right while facing target
-	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)
+	var weave_phase = fmod(Time.get_ticks_msec() / DOGFIGHT_WEAVE_PERIOD_MS, 2.0)
 	var lateral_thrust = sin(weave_phase * PI)  # -1 to 1, oscillating strafe
 
 	# Desired combat range
-	var desired_combat_range = 2400.0
+	var desired_combat_range = DOGFIGHT_COMBAT_RANGE
 	var distance_error = distance - desired_combat_range
 
 	# Main thrust is ONLY for distance control along line of sight
@@ -527,7 +551,7 @@ static func calculate_evasive_turn(ship_data: Dictionary, target: Dictionary, ne
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
 	# Always turn the same direction (predictable) - use sign of time for consistency
-	var turn_direction = 1 if fmod(Time.get_ticks_msec() / 500.0, 2.0) < 1.0 else -1
+	var turn_direction = 1 if fmod(Time.get_ticks_msec() / FLEE_TURN_FLIP_PERIOD_MS, 2.0) < 1.0 else -1
 	var evasion_direction = (away_from_target + perpendicular * turn_direction * 0.5).normalized()
 
 	var desired_heading = direction_to_heading(evasion_direction)
@@ -553,7 +577,7 @@ static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary,
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
 	# Switch directions frequently (every 200ms) - hard to predict
-	var break_phase = fmod(Time.get_ticks_msec() / 200.0, 2.0)
+	var break_phase = fmod(Time.get_ticks_msec() / DEFENSIVE_BREAK_FLIP_PERIOD_MS, 2.0)
 	var break_direction = 1 if break_phase < 1.0 else -1
 
 	# Move away while turning
@@ -672,7 +696,7 @@ static func calculate_group_run_approach(ship_data: Dictionary, target: Dictiona
 		var lateral_thrust = clamp(lateral_offset / 200.0, -1.0, 1.0)
 
 		# Main thrust for distance control
-		var desired_combat_range = 2000.0
+		var desired_combat_range = FORMATION_COMBAT_RANGE
 		var distance_error = distance - desired_combat_range
 		var throttle = 0.0
 		var should_brake = false
@@ -707,7 +731,7 @@ static func calculate_group_run_attack(ship_data: Dictionary, target: Dictionary
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
 
 	# Reduce throttle when very close to avoid collision (4x scaled)
-	if distance < 1600.0:
+	if distance < ATTACK_RUN_SLOWDOWN_RANGE:
 		throttle = throttle * 0.5
 
 	return {
@@ -844,10 +868,10 @@ static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary,
 
 	# Add weave to dodge - quick darts side to side (4x scaled)
 	var perpendicular = Vector2(-away_from_target.y, away_from_target.x)
-	var weave_phase = fmod(Time.get_ticks_msec() / 600.0, 2.0)  # Faster weaving
-	var weave_offset = perpendicular * sin(weave_phase * PI) * 600.0  # Wider weave for safety
+	var weave_phase = fmod(Time.get_ticks_msec() / RETREAT_WEAVE_PERIOD_MS, 2.0)
+	var weave_offset = perpendicular * sin(weave_phase * PI) * RETREAT_WEAVE_WIDTH
 
-	var desired_pos = ship_data.position + away_from_target * 2000.0 + weave_offset
+	var desired_pos = ship_data.position + away_from_target * RETREAT_TARGET_DISTANCE + weave_offset
 	var to_desired = desired_pos - ship_data.position
 	desired_heading = direction_to_heading(to_desired)
 
@@ -880,7 +904,7 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 
 	# Approach at an angle, not directly - stay further out (4x scaled)
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var approach_offset = perpendicular * 1600.0
+	var approach_offset = perpendicular * ANGLED_APPROACH_OFFSET
 
 	if distance > LATERAL_THRUST_RANGE:
 		# FAR: Use main thrust to approach at an angle
@@ -914,7 +938,7 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 		var lateral_thrust = clamp(lateral_offset / 400.0, -1.0, 1.0)
 
 		# Main thrust controls distance - slow cautious approach
-		var desired_approach_distance = 2000.0
+		var desired_approach_distance = CAUTIOUS_APPROACH_RANGE
 		var distance_error = distance - desired_approach_distance
 		var throttle = 0.0
 		var should_brake = false
@@ -967,7 +991,7 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		lateral_thrust = float(evasion_dir)
 	else:
 		# Fallback to time-based oscillation
-		var orbit_phase = fmod(Time.get_ticks_msec() / 1500.0, 2.0 * PI)
+		var orbit_phase = fmod(Time.get_ticks_msec() / ORBIT_OSCILLATION_PERIOD_MS, 2.0 * PI)
 		lateral_thrust = sin(orbit_phase)
 
 	# Desired combat range - close enough to hit but far enough to evade
