@@ -164,9 +164,6 @@
 			"arc": {
 				"min": -150.0,
 				"max": 30.0
-			},
-			"stats": {
-				"projectile_speed": 650.0
 			}
 		},
 		{
@@ -180,9 +177,6 @@
 			"arc": {
 				"min": -30.0,
 				"max": 150.0
-			},
-			"stats": {
-				"projectile_speed": 650.0
 			}
 		},
 		{
@@ -196,9 +190,6 @@
 			"arc": {
 				"min": -120.0,
 				"max": 120.0
-			},
-			"stats": {
-				"projectile_speed": 650.0
 			}
 		},
 		{
@@ -212,9 +203,6 @@
 			"arc": {
 				"min": -120.0,
 				"max": 120.0
-			},
-			"stats": {
-				"projectile_speed": 650.0
 			}
 		}
 	]

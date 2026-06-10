@@ -8,8 +8,13 @@ extends RefCounted
 # Bound on ship/obstacle collision radius. Used as the grid query radius
 # when narrowing the projectile-vs-ship and projectile-vs-obstacle checks
 # from O(n) to O(cells). Set above the largest hull/obstacle radius
-# (capital ship base_size = 150).
-const MAX_HIT_QUERY_RADIUS: float = 200.0
+# (capital ship base_size = 150) plus the longest per-frame projectile
+# travel (2000 u/s at a 30 Hz tick ≈ 67), since hit tests sweep the full
+# frame segment.
+const MAX_HIT_QUERY_RADIUS: float = 260.0
+
+# Effective projectile radius added to the target's collision radius.
+const PROJECTILE_RADIUS: float = 3.0
 
 # Default torpedo blast when the projectile doesn't carry its own values.
 const DEFAULT_EXPLOSION_RADIUS: float = 80.0
@@ -176,9 +181,18 @@ static func can_projectile_hit_ship(projectile: Dictionary, ship: Dictionary) ->
 	return true
 
 static func is_projectile_colliding_with_ship(projectile: Dictionary, ship: Dictionary) -> bool:
-	var distance = projectile.position.distance_to(ship.position)
-	var collision_radius = ship.collision_radius + 3.0  # ship collision radius + projectile size
-	return distance <= collision_radius
+	return _swept_projectile_hits_circle(projectile, ship.position, ship.collision_radius + PROJECTILE_RADIUS)
+
+## SWEPT HIT TEST — fast rounds cross more than a hull diameter per frame
+## (2000 u/s at 60 Hz ≈ 33 u vs a ~16 u fighter hit circle), so a
+## position-only check tunnels straight through targets and makes hit rate
+## frame-rate dependent. Test the whole segment traveled this frame instead.
+## Projectiles spawned this frame have no prev_position yet and degrade to a
+## point test.
+static func _swept_projectile_hits_circle(projectile: Dictionary, center: Vector2, radius: float) -> bool:
+	var segment_start: Vector2 = projectile.get("prev_position", projectile.position)
+	var closest := Geometry2D.get_closest_point_to_segment(center, segment_start, projectile.position)
+	return closest.distance_to(center) <= radius
 
 static func create_hit(projectile: Dictionary, ship: Dictionary) -> Dictionary:
 	return {
@@ -210,9 +224,7 @@ static func is_projectile_colliding_with_obstacle(projectile: Dictionary, obstac
 	if not obstacle.get("blocks_projectiles", true):
 		return false
 
-	var distance = projectile.position.distance_to(obstacle.position)
-	var collision_radius = obstacle.radius + 3.0  # obstacle radius + projectile size
-	return distance <= collision_radius
+	return _swept_projectile_hits_circle(projectile, obstacle.position, obstacle.radius + PROJECTILE_RADIUS)
 
 static func create_obstacle_hit(projectile: Dictionary, obstacle: Dictionary) -> Dictionary:
 	return {

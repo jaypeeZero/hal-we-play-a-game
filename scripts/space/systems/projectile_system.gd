@@ -22,9 +22,13 @@ extends RefCounted
 
 ## Advance one projectile by `dt` seconds, mutating its position and lifetime.
 ## Returns true if the projectile has now exceeded its max_lifetime.
+## prev_position is kept so the collision system can sweep the full segment
+## traveled this frame (fast rounds cross more than a hull per frame).
 ##
-## MUTATES: projectile_data.position, projectile_data.lifetime
+## MUTATES: projectile_data.position, projectile_data.prev_position,
+## projectile_data.lifetime
 static func advance_projectile_in_place(projectile_data: Dictionary, dt: float) -> bool:
+	projectile_data.prev_position = projectile_data.position
 	projectile_data.position += projectile_data.velocity * dt
 	projectile_data.lifetime += dt
 	return projectile_data.lifetime >= projectile_data.max_lifetime
