@@ -39,7 +39,7 @@ func test_elite_breaks_for_friendly_on_collision_course():
 	crew.awareness.threats = ["enemy"]
 
 	var decision = FighterPilotAI.make_decision(crew, me, [me, friend, enemy], [crew], 0.0)
-	assert_eq(decision.subtype, "fight_lateral_break",
+	assert_eq(decision.subtype, "fight_friendly_avoid",
 		"Elite pilot must break when on collision course with a friendly")
 
 func test_rookie_does_not_avoid_friendly_collision():
@@ -53,7 +53,7 @@ func test_rookie_does_not_avoid_friendly_collision():
 	crew.awareness.threats = ["enemy"]
 
 	var decision = FighterPilotAI.make_decision(crew, me, [me, friend, enemy], [crew], 0.0)
-	assert_ne(decision.subtype, "fight_lateral_break",
+	assert_ne(decision.subtype, "fight_friendly_avoid",
 		"Rookie must not trigger friendly collision avoidance")
 
 func test_no_break_when_not_closing_on_friendly():
@@ -67,7 +67,7 @@ func test_no_break_when_not_closing_on_friendly():
 	crew.awareness.threats = ["enemy"]
 
 	var decision = FighterPilotAI.make_decision(crew, me, [me, friend, enemy], [crew], 0.0)
-	assert_ne(decision.subtype, "fight_lateral_break",
+	assert_ne(decision.subtype, "fight_friendly_avoid",
 		"No break needed when friendly is flying parallel, not closing")
 
 # ============================================================================
