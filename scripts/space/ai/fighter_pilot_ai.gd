@@ -198,37 +198,97 @@ const FORMATION_ANGLE_OFFSET = 45.0  # Degrees - wingman stays at 45° behind an
 
 ## Main decision function - called by CrewAISystem
 ## Now uses dynamic wing formation system
+## A cascade of bail-out checks: each `_check_*` returns a decision Dictionary
+## or {} for "no override"; the first non-empty decision wins. Priority order
+## matters — survival outranks everything, squadron play outranks wing duty.
 static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float, wings: Array = []) -> Dictionary:
-	# SELF-PRESERVATION OVERLAY (highest background priority).
-	# Every pilot's mental thread is "stay alive" — they'll throw their life
-	# away only when there's no better option. Modulated by aggression so
-	# personalities show: heroic pilots hold the line through bad odds, timid
-	# ones break off the moment the local picture turns sour. Squadron orders,
-	# wing duties, and individual targeting all defer to this.
+	var decision := _check_survival(crew_data, ship_data, all_ships, game_time)
+	if not decision.is_empty():
+		return decision
+
+	decision = _check_area_leash(crew_data, ship_data, all_ships, game_time)
+	if not decision.is_empty():
+		return decision
+
+	decision = _check_pre_commit_evasion(crew_data, ship_data, all_ships, game_time)
+	if not decision.is_empty():
+		return decision
+
+	decision = _check_friendly_collision(crew_data, ship_data, all_ships, game_time)
+	if not decision.is_empty():
+		return decision
+
+	# SQUADRON-PLAY CONSTRAINT. If the squadron leader assigned this pilot a
+	# play role with a positional offset (e.g. "loop_wide_left",
+	# "approach_target_six"), fly toward that waypoint until the play hits its
+	# merge phase. Self-preservation has already taken precedence; merge_attack
+	# falls through to the normal engagement flow.
+	decision = _make_play_waypoint_decision(crew_data, ship_data, all_ships, game_time)
+	if not decision.is_empty():
+		return decision
+
+	decision = _check_wing_role(crew_data, ship_data, all_ships, all_crew, game_time, wings)
+	if not decision.is_empty():
+		return decision
+
+	# NOT IN A WING: Fall back to solo/squadron behavior
+	decision = _check_broken_formation(crew_data, ship_data, all_ships, all_crew, game_time)
+	if not decision.is_empty():
+		return decision
+
+	# SQUADRON STRUCTURE: Check if we have a squadron leader to follow
+	var target_id = _select_squadron_target(crew_data, all_ships, all_crew)
+	if target_id == "":
+		return _make_idle_decision(crew_data, game_time)
+
+	var target_ship = _get_ship_by_id(target_id, all_ships)
+	if target_ship == null:
+		return _make_idle_decision(crew_data, game_time)
+
+	return _make_target_type_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
+
+# ============================================================================
+# MAKE_DECISION BAIL-OUT CHECKS — each returns a decision or {} (no override)
+# ============================================================================
+
+## SELF-PRESERVATION OVERLAY (highest background priority).
+## Every pilot's mental thread is "stay alive" — they'll throw their life
+## away only when there's no better option. Modulated by aggression so
+## personalities show: heroic pilots hold the line through bad odds, timid
+## ones break off the moment the local picture turns sour. Squadron orders,
+## wing duties, and individual targeting all defer to this.
+static func _check_survival(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
 	var survival_mode = _assess_survival_state(crew_data, ship_data, all_ships)
 	if survival_mode != "":
 		return _make_survival_decision(crew_data, ship_data, all_ships, survival_mode, game_time)
+	return {}
 
-	# AREA LEASH (hard override). The physics layer applies a gentle heading
-	# pull when a ship drifts outside its assigned area. That's enough for
-	# pilots in maneuvers that already thrust (approach, repositioning), but
-	# combat-orbit maneuvers run at ~zero throttle, so without an AI-level
-	# kick, a ship stuck dogfighting at the edge of the zone never actually
-	# returns. When a pilot is well outside their leash, they drop the fight
-	# and burn home until they're back in zone.
+## AREA LEASH (hard override). The physics layer applies a gentle heading
+## pull when a ship drifts outside its assigned area. That's enough for
+## pilots in maneuvers that already thrust (approach, repositioning), but
+## combat-orbit maneuvers run at ~zero throttle, so without an AI-level
+## kick, a ship stuck dogfighting at the edge of the zone never actually
+## returns. When a pilot is well outside their leash, they drop the fight
+## and burn home until they're back in zone.
+static func _check_area_leash(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
 	if _is_far_outside_area(ship_data) and _find_best_target(crew_data, all_ships) == "":
 		return _make_return_to_area_decision(crew_data, ship_data, game_time)
+	return {}
 
-	# PRE-COMMIT EVASION (elite pilots only): begin evasive maneuvering the moment
-	# an enemy has a firing solution on us, before the shot arrives.
+## PRE-COMMIT EVASION (elite pilots only): begin evasive maneuvering the moment
+## an enemy has a firing solution on us, before the shot arrives.
+static func _check_pre_commit_evasion(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
 	var pilot_skill: float = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	if pilot_skill >= WingConstants.PILOT_PRE_COMMIT_EVASION_SKILL:
 		var targeting_enemy_id := _find_enemy_targeting_me(ship_data, all_ships)
 		if targeting_enemy_id != "":
 			return _make_pre_commit_evasion_decision(crew_data, ship_data, all_ships, targeting_enemy_id, game_time)
+	return {}
 
-	# FRIENDLY COLLISION AVOIDANCE (skill ≥ display 15): elite pilots don't ram
-	# their own formation — rookies are too tunnel-visioned on the enemy to notice.
+## FRIENDLY COLLISION AVOIDANCE (skill ≥ display 15): elite pilots don't ram
+## their own formation — rookies are too tunnel-visioned on the enemy to notice.
+static func _check_friendly_collision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
+	var pilot_skill: float = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	if pilot_skill >= WingConstants.PILOT_FRIENDLY_COLLISION_SKILL:
 		var my_id: String = ship_data.get("ship_id", "")
 		var my_team: int = ship_data.get("team", -1)
@@ -239,17 +299,10 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 						"target_id": other.get("ship_id", ""), "skill_factor": pilot_skill,
 						"delay": 0.15, "timestamp": game_time,
 						"evasion_direction": _calculate_evasion_direction(ship_data, other)}
+	return {}
 
-	# SQUADRON-PLAY CONSTRAINT. If the squadron leader assigned this pilot a
-	# play role with a positional offset (e.g. "loop_wide_left",
-	# "approach_target_six"), fly toward that waypoint until the play hits its
-	# merge phase. Self-preservation has already taken precedence; merge_attack
-	# falls through to the normal engagement flow.
-	var play_decision := _make_play_waypoint_decision(crew_data, ship_data, all_ships, game_time)
-	if not play_decision.is_empty():
-		return play_decision
-
-	# DYNAMIC WING SYSTEM: Check if we're in a wing and what role
+## DYNAMIC WING SYSTEM: Check if we're in a wing and what role
+static func _check_wing_role(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float, wings: Array) -> Dictionary:
 	var wing_info = WingFormationSystem.get_wing_info(crew_data.get("crew_id", ""), wings)
 
 	if not wing_info.is_empty():
@@ -261,10 +314,11 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 		elif role == "lead":
 			# LEAD: Make all tactical decisions for the wing
 			return _make_lead_decision(crew_data, ship_data, wing_info, all_ships, all_crew, game_time)
+	return {}
 
-	# NOT IN A WING: Fall back to solo/squadron behavior
-	# WINGMATE FORMATION (legacy): Check formation status FIRST - TOP PRIORITY
-	# If we're a wingman and formation is broken, rejoin before engaging targets
+## WINGMATE FORMATION (legacy): Check formation status FIRST - TOP PRIORITY
+## If we're a wingman and formation is broken, rejoin before engaging targets
+static func _check_broken_formation(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
 	var is_wingman = _is_wingman_role(crew_data, all_crew)
 	if is_wingman:
 		var partner = _find_wingman_partner(crew_data, all_crew, all_ships)
@@ -273,41 +327,35 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 			if _is_formation_broken(ship_data, partner_ship):
 				# Formation broken! Priority #1 is to rejoin
 				return _make_rejoin_wingman_decision(crew_data, ship_data, partner_ship, game_time)
+	return {}
 
-	# SQUADRON STRUCTURE: Check if we have a squadron leader to follow
+## Squadron Leader picks target for the whole squadron; non-leaders follow
+## the leader's target, falling back to their own pick if the leader has none.
+static func _select_squadron_target(crew_data: Dictionary, all_ships: Array, all_crew: Array) -> String:
 	var target_id = ""
 	var is_leader = crew_data.get("is_squadron_leader", false)
 
 	if is_leader:
-		# Squadron Leader picks target for the whole squadron
 		target_id = _find_best_target(crew_data, all_ships)
 	else:
-		# Non-leaders follow squadron leader's target
 		target_id = _get_squadron_leader_target(crew_data, all_crew)
 
 		# Fallback to own target if leader has no target
 		if target_id == "":
 			target_id = _find_best_target(crew_data, all_ships)
 
-	if target_id == "":
-		return _make_idle_decision(crew_data, game_time)
+	return target_id
 
-	var target_ship = _get_ship_by_id(target_id, all_ships)
-	if target_ship == null:
-		return _make_idle_decision(crew_data, game_time)
-
-	# Determine combat behavior based on target type
+## Determine combat behavior based on target type
+static func _make_target_type_decision(crew_data: Dictionary, ship_data: Dictionary, target_ship: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
 	var target_type = target_ship.get("type", "fighter")
-	var decision = {}
 
 	if FleetDataManager.is_fighter_class(target_type):
-		decision = _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
+		return _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 	elif FleetDataManager.is_large_ship(target_type):
-		decision = _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
+		return _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 	else:
-		decision = _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
-
-	return decision
+		return _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
 
 # ============================================================================
 # DYNAMIC WING SYSTEM - LEAD DECISIONS
@@ -330,16 +378,7 @@ static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wi
 	if target_ship.is_empty():
 		return _make_idle_decision(crew_data, game_time)
 
-	# Determine combat behavior based on target type
-	var target_type = target_ship.get("type", "fighter")
-	var decision = {}
-
-	if FleetDataManager.is_fighter_class(target_type):
-		decision = _make_fighter_vs_fighter_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
-	elif FleetDataManager.is_large_ship(target_type):
-		decision = _make_fighter_vs_capital_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
-	else:
-		decision = _make_pursuit_decision(crew_data, ship_data, target_ship, game_time)
+	var decision = _make_target_type_decision(crew_data, ship_data, target_ship, all_ships, all_crew, game_time)
 
 	# Mark this as a lead decision so wingmen know to follow
 	decision["is_wing_lead"] = true
