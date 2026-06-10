@@ -196,7 +196,7 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 
 	# Query knowledge for best evasion tactic
 	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
-	var knowledge = TacticalKnowledgeSystem.query_pilot_knowledge(situation, 1)
+	var knowledge = TacticalKnowledgeSystem.query_pilot_knowledge(situation, 1, crew_data.get("known_patterns", []))
 
 	# Default evasion subtype
 	var evasion_subtype = "evade"

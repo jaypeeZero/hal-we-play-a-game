@@ -8,79 +8,15 @@ extends GutTest
 var game_time: float = 0.0
 
 # ============================================================================
-# HELPER FUNCTIONS - Create test data
-# ============================================================================
-
-func create_fighter_ship(id: String, position: Vector2, team: int = 0) -> Dictionary:
-	return {
-		"ship_id": id,
-		"type": "fighter",
-		"team": team,
-		"position": position,
-		"rotation": 0.0,
-		"velocity": Vector2.ZERO,
-		"status": "operational",
-		"collision_radius": 15.0,
-		"stats": {
-			"max_speed": 300.0,
-			"acceleration": 100.0,
-			"turn_rate": 3.0,
-			"mass": 50.0,
-			"size": 15.0
-		},
-		"orders": {
-			"current_order": "",
-			"target_id": ""
-		}
-	}
-
-func create_corvette_ship(id: String, position: Vector2, team: int = 0) -> Dictionary:
-	var ship = create_fighter_ship(id, position, team)
-	ship.type = "corvette"
-	ship.stats.max_speed = 200.0
-	ship.stats.size = 30.0
-	ship.collision_radius = 30.0
-	return ship
-
-func create_capital_ship(id: String, position: Vector2, team: int = 0) -> Dictionary:
-	var ship = create_fighter_ship(id, position, team)
-	ship.type = "capital"
-	ship.stats.max_speed = 100.0
-	ship.stats.size = 60.0
-	ship.collision_radius = 60.0
-	return ship
-
-func create_pilot_crew(id: String, ship_id: String) -> Dictionary:
-	return {
-		"crew_id": id,
-		"role": CrewData.Role.PILOT,
-		"assigned_to": ship_id,
-		"stats": {
-			"reaction_time": 0.1,
-			"stress": 0.0,
-			"fatigue": 0.0,
-			"skills": {
-				"aim": 0.8, "piloting": 0.8, "awareness": 0.8,
-				"tactics": 0.8, "composure": 0.8, "aggression": 0.5
-			}
-		},
-		"awareness": {
-			"threats": [],
-			"opportunities": [],
-			"known_entities": []
-		}
-	}
-
-# ============================================================================
 # BEHAVIOR TESTS - Distance-based speed control
 # ============================================================================
 
 func test_full_speed_pursuit_when_far_away():
 	# BEHAVIOR: When target is far away (beyond FAR_RANGE), fighter pursues at full speed
 	var far_distance = FighterPilotAI.FAR_RANGE * 1.5  # Well beyond far range
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var target = create_fighter_ship("enemy1", Vector2(far_distance, 0), 1)
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var target = TestFactories.make_fighter("enemy1", Vector2(far_distance, 0), 1)
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
@@ -91,9 +27,9 @@ func test_full_speed_pursuit_when_far_away():
 func test_slows_approach_at_mid_range():
 	# BEHAVIOR: When target is at mid range, use tactical approach maneuvers (not close-range combat)
 	var mid_distance = (FighterPilotAI.MID_RANGE + FighterPilotAI.FAR_RANGE) / 2.0  # Middle of mid range
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var target = create_fighter_ship("enemy1", Vector2(mid_distance, 0), 1)
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var target = TestFactories.make_fighter("enemy1", Vector2(mid_distance, 0), 1)
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
@@ -106,9 +42,9 @@ func test_slows_approach_at_mid_range():
 func test_tight_maneuvering_at_close_range():
 	# BEHAVIOR: At very close range (inside MIN_COMBAT_RANGE), fighter uses tight maneuvers
 	var close_distance = FighterPilotAI.MIN_COMBAT_RANGE * 0.8  # Inside minimum combat range
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var target = create_fighter_ship("enemy1", Vector2(close_distance, 0), 1)
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var target = TestFactories.make_fighter("enemy1", Vector2(close_distance, 0), 1)
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
@@ -124,10 +60,10 @@ func test_tight_maneuvering_at_close_range():
 func test_tries_to_get_behind_enemy_fighter():
 	# BEHAVIOR: When fighting fighters at close range, try to get behind enemy
 	var close_distance = FighterPilotAI.CLOSE_RANGE * 0.5  # Well inside close range
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var enemy = create_fighter_ship("enemy1", Vector2(close_distance, 0), 1)
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(close_distance, 0), 1)
 	enemy.rotation = 0.0  # Facing right
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, enemy], [crew], game_time)
@@ -141,11 +77,11 @@ func test_formation_flying_with_wingmates():
 	# BEHAVIOR: When fighting with wingmates, maintain formation
 	var formation_spacing = FighterPilotAI.FORMATION_SPACING
 	var combat_distance = FighterPilotAI.CLOSE_RANGE * 0.8
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var wingmate = create_fighter_ship("fighter2", Vector2(formation_spacing, formation_spacing), 0)  # Nearby friendly
-	var enemy = create_fighter_ship("enemy1", Vector2(combat_distance, 0), 1)
-	var crew1 = create_pilot_crew("pilot1", "fighter1")
-	var crew2 = create_pilot_crew("pilot2", "fighter2")
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var wingmate = TestFactories.make_fighter("fighter2", Vector2(formation_spacing, formation_spacing), 0)  # Nearby friendly
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(combat_distance, 0), 1)
+	var crew1 = TestFactories.make_pilot("pilot1", "fighter1")
+	var crew2 = TestFactories.make_pilot("pilot2", "fighter2")
 	crew1.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew1, my_ship, [my_ship, wingmate, enemy], [crew1, crew2], game_time)
@@ -160,9 +96,9 @@ func test_formation_flying_with_wingmates():
 func test_stays_at_distance_vs_capital_ships():
 	# BEHAVIOR: When fighting capitals/corvettes too close, use defensive maneuvers
 	var too_close_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.5  # Too close to capital
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var capital = create_capital_ship("capital1", Vector2(too_close_distance, 0), 1)
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var capital = TestFactories.make_capital("capital1", Vector2(too_close_distance, 0), 1)
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["capital1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, capital], [crew], game_time)
@@ -174,9 +110,9 @@ func test_stays_at_distance_vs_capital_ships():
 func test_dodge_and_weave_vs_corvettes():
 	# BEHAVIOR: When fighting corvettes solo at safe distance, dodge and weave
 	var safe_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL  # At safe harass distance
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var corvette = create_corvette_ship("corvette1", Vector2(safe_distance, 0), 1)
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var corvette = TestFactories.make_corvette("corvette1", Vector2(safe_distance, 0), 1)
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["corvette1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, corvette], [crew], game_time)
@@ -189,17 +125,17 @@ func test_group_runs_with_multiple_fighters():
 	# BEHAVIOR: With many fighters, coordinate group runs vs capitals
 	var formation_spacing = FighterPilotAI.FORMATION_SPACING
 	var attack_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.8  # Close enough for attack run
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var fighters = [my_ship]
-	var crew_list = [create_pilot_crew("pilot1", "fighter1")]
+	var crew_list = [TestFactories.make_pilot("pilot1", "fighter1")]
 
 	# Add enough friendly fighters nearby to meet GROUP_RUN_THRESHOLD
 	for i in range(2, FighterPilotAI.GROUP_RUN_THRESHOLD + 2):
-		var fighter = create_fighter_ship("fighter" + str(i), Vector2(i * formation_spacing, 0), 0)
+		var fighter = TestFactories.make_fighter("fighter" + str(i), Vector2(i * formation_spacing, 0), 0)
 		fighters.append(fighter)
-		crew_list.append(create_pilot_crew("pilot" + str(i), "fighter" + str(i)))
+		crew_list.append(TestFactories.make_pilot("pilot" + str(i), "fighter" + str(i)))
 
-	var capital = create_capital_ship("capital1", Vector2(attack_distance, 0), 1)
+	var capital = TestFactories.make_capital("capital1", Vector2(attack_distance, 0), 1)
 	fighters.append(capital)
 	var crew = crew_list[0]
 	crew.awareness.threats = ["capital1"]
@@ -218,8 +154,8 @@ func test_group_runs_with_multiple_fighters():
 
 func test_handles_no_targets_gracefully():
 	# BEHAVIOR: When no targets available, idle
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = []
 	crew.awareness.opportunities = []
 
@@ -230,9 +166,9 @@ func test_handles_no_targets_gracefully():
 
 func test_decision_includes_required_fields():
 	# BEHAVIOR: All decisions include required fields for integration
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var enemy = create_fighter_ship("enemy1", Vector2(500, 0), 1)
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(500, 0), 1)
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, enemy], [crew], game_time)
@@ -248,8 +184,8 @@ func test_decision_includes_required_fields():
 
 func test_movement_system_handles_fighter_engage():
 	# BEHAVIOR: MovementSystem can process FighterPilotAI maneuvers
-	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
-	var target = create_fighter_ship("enemy1", Vector2(300, 0), 1)
+	var ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
+	var target = TestFactories.make_fighter("enemy1", Vector2(300, 0), 1)
 
 	# Set up fighter_engage order with various subtypes
 	var subtypes = ["fight_pursue_full_speed", "fight_dogfight_maneuver", "fight_dodge_and_weave", "fight_group_run_attack"]
@@ -271,11 +207,11 @@ func test_movement_system_handles_fighter_engage():
 
 func test_full_integration_fighter_vs_fighter():
 	# BEHAVIOR: Full integration from AI decision to movement
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(100, 0)  # Moving right
-	var enemy = create_fighter_ship("enemy1", Vector2(300, 0), 1)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(300, 0), 1)
 	enemy.velocity = Vector2(-50, 0)  # Moving left (toward us)
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
 
 	# 1. AI makes decision
@@ -305,13 +241,13 @@ func test_full_integration_group_run():
 	# Create enough fighters to meet GROUP_RUN_THRESHOLD
 	var num_fighters = FighterPilotAI.GROUP_RUN_THRESHOLD + 1
 	for i in range(num_fighters):
-		var fighter = create_fighter_ship("fighter" + str(i), Vector2(i * formation_spacing, 0), 0)
+		var fighter = TestFactories.make_fighter("fighter" + str(i), Vector2(i * formation_spacing, 0), 0)
 		fighters.append(fighter)
-		var crew = create_pilot_crew("pilot" + str(i), "fighter" + str(i))
+		var crew = TestFactories.make_pilot("pilot" + str(i), "fighter" + str(i))
 		crew.awareness.threats = ["capital1"]
 		crew_list.append(crew)
 
-	var capital = create_capital_ship("capital1", Vector2(attack_distance, 0), 1)
+	var capital = TestFactories.make_capital("capital1", Vector2(attack_distance, 0), 1)
 	fighters.append(capital)
 
 	# All fighters make decisions
@@ -335,11 +271,11 @@ func test_full_integration_group_run():
 func test_collision_detection_head_on_approach():
 	# BEHAVIOR: Two ships flying toward each other should detect collision course
 	var collision_range = FighterPilotAI.COLLISION_DETECTION_RANGE * 0.8  # Within detection range
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(200, 0)  # Flying right
 	my_ship.rotation = 0.0
 
-	var enemy = create_fighter_ship("enemy1", Vector2(collision_range, 0), 1)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(collision_range, 0), 1)
 	enemy.velocity = Vector2(-200, 0)  # Flying left (toward us)
 	enemy.rotation = PI
 
@@ -351,10 +287,10 @@ func test_collision_detection_head_on_approach():
 func test_collision_detection_not_triggered_when_diverging():
 	# BEHAVIOR: Ships moving apart should NOT trigger collision detection
 	var collision_range = FighterPilotAI.COLLISION_DETECTION_RANGE * 0.8
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(-200, 0)  # Flying left (away from enemy)
 
-	var enemy = create_fighter_ship("enemy1", Vector2(collision_range, 0), 1)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(collision_range, 0), 1)
 	enemy.velocity = Vector2(200, 0)  # Flying right (away from us)
 
 	var is_collision = FighterPilotAI._is_on_collision_course(my_ship, enemy)
@@ -364,15 +300,15 @@ func test_collision_detection_not_triggered_when_diverging():
 func test_skilled_pilot_chooses_lateral_break_on_collision():
 	# BEHAVIOR: Skilled pilot facing head-on collision should choose lateral_break
 	var collision_range = FighterPilotAI.COLLISION_DETECTION_RANGE * 0.8
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(200, 0)
 	my_ship.rotation = 0.0
 
-	var enemy = create_fighter_ship("enemy1", Vector2(collision_range, 0), 1)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(collision_range, 0), 1)
 	enemy.velocity = Vector2(-200, 0)
 	enemy.rotation = PI
 
-	var crew = create_pilot_crew("pilot1", "fighter1")
+	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.stats.skills.piloting = 0.8  # Skilled pilot
 	crew.awareness.threats = ["enemy1"]
 
@@ -382,11 +318,11 @@ func test_skilled_pilot_chooses_lateral_break_on_collision():
 
 func test_lateral_break_returns_lateral_thrust():
 	# BEHAVIOR: lateral_break maneuver should return lateral_thrust in pilot_control
-	var my_ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(200, 0)
 	my_ship.orders = {"evasion_direction": 1}  # Evade right
 
-	var enemy = create_fighter_ship("enemy1", Vector2(1000, 0), 1)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(1000, 0), 1)
 
 	var pilot_control = MovementSystem.calculate_lateral_break(my_ship, enemy, [], [])
 
@@ -395,7 +331,7 @@ func test_lateral_break_returns_lateral_thrust():
 
 func test_lateral_thrust_physics_applies_perpendicular_acceleration():
 	# BEHAVIOR: lateral_thrust should apply acceleration perpendicular to facing
-	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	ship.velocity = Vector2(0, -100)  # Moving up (same as facing)
 	ship.rotation = 0.0  # Facing up: get_visual_forward(0) = Vector2(0, -1)
 	ship.stats.acceleration = 100.0
@@ -412,7 +348,7 @@ func test_lateral_thrust_physics_applies_perpendicular_acceleration():
 	# Ship faces (0, -1) "up", perpendicular right is (1, 0)
 	# Lateral thrust right should add positive X velocity
 	# Expected: lateral_accel = 100 * 0.3 = 30, so velocity.x should increase by ~30
-	assert_gt(result.velocity.x, 0, "Lateral thrust right should add positive X velocity")
+	assert_gt(result.velocity.x, 0.0, "Lateral thrust right should add positive X velocity")
 	assert_almost_eq(result.velocity.x, 30.0, 1.0, "Lateral thrust should apply correct acceleration")
 
 # ============================================================================
@@ -422,7 +358,7 @@ func test_lateral_thrust_physics_applies_perpendicular_acceleration():
 func test_inertial_dampening_kills_perpendicular_drift():
 	# BEHAVIOR: A ship facing forward but drifting sideways should have its
 	# sideways drift reduced by the flight computer (inertial dampening).
-	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	ship.rotation = 0.0  # Facing up: get_visual_forward(0) = Vector2(0, -1)
 	ship.velocity = Vector2(100, 0)  # Drifting purely sideways
 	ship.stats.inertial_dampening = 4.0
@@ -443,7 +379,7 @@ func test_inertial_dampening_kills_perpendicular_drift():
 func test_inertial_dampening_preserves_forward_velocity():
 	# BEHAVIOR: Forward-aligned velocity should NOT be affected by dampening
 	# (only perpendicular drift gets killed).
-	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	ship.rotation = 0.0  # Facing up
 	ship.velocity = Vector2(0, -200)  # Moving forward (aligned with facing)
 	ship.stats.inertial_dampening = 4.0
@@ -464,7 +400,7 @@ func test_inertial_dampening_disabled_during_lateral_thrust():
 	# BEHAVIOR: When pilot is actively strafing, dampening must NOT cancel the
 	# strafe — the manual lateral thruster takes priority. This preserves the
 	# lateral_break / weave maneuvers.
-	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	ship.rotation = 0.0  # Facing up
 	ship.velocity = Vector2(50, 0)  # Existing perpendicular drift
 	ship.stats.acceleration = 100.0
@@ -489,7 +425,7 @@ func test_inertial_dampening_disabled_during_lateral_thrust():
 func test_inertial_dampening_zero_means_pure_newtonian():
 	# BEHAVIOR: Setting inertial_dampening = 0 (or absent) gives pure Newtonian
 	# drift — the old "boats on ice" behavior, used by capital ships.
-	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	ship.rotation = 0.0
 	ship.velocity = Vector2(100, 0)
 	ship.stats.inertial_dampening = 0.0
@@ -508,7 +444,7 @@ func test_inertial_dampening_zero_means_pure_newtonian():
 func test_inertial_dampening_disabled_when_braking():
 	# BEHAVIOR: The brake system handles its own deceleration; dampening must
 	# step aside when brake_thrust is engaged so we don't double-decelerate.
-	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	ship.rotation = 0.0
 	ship.velocity = Vector2(100, 0)  # Sideways drift
 	ship.stats.inertial_dampening = 4.0
@@ -529,7 +465,7 @@ func test_inertial_dampening_disabled_when_braking():
 func test_inertial_dampening_does_not_reverse_velocity():
 	# BEHAVIOR: Dampening must never overshoot and reverse the perpendicular
 	# component — this would feel jittery and unphysical.
-	var ship = create_fighter_ship("fighter1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	ship.rotation = 0.0
 	ship.velocity = Vector2(10, 0)  # Tiny sideways drift
 	ship.stats.inertial_dampening = 100.0  # Absurdly high rate
@@ -552,14 +488,14 @@ func test_inertial_dampening_does_not_reverse_velocity():
 func test_turn_rate_falloff_slows_rotation_at_high_speed():
 	# BEHAVIOR: A fighter at top speed must turn slower than the same fighter
 	# at low speed. This creates turn radius and prevents instant aim snapping.
-	var fast_ship = create_fighter_ship("ship_fast", Vector2(0, 0), 0)
+	var fast_ship = TestFactories.make_fighter("ship_fast", Vector2(0, 0), 0)
 	fast_ship.rotation = 0.0  # facing up
 	fast_ship.stats.turn_rate = 4.0
 	fast_ship.stats.turn_rate_falloff = 0.75
 	fast_ship.stats.max_speed = 300.0
 	fast_ship.velocity = Vector2(300, 0)  # at top speed
 
-	var slow_ship = create_fighter_ship("ship_slow", Vector2(0, 0), 0)
+	var slow_ship = TestFactories.make_fighter("ship_slow", Vector2(0, 0), 0)
 	slow_ship.rotation = 0.0
 	slow_ship.stats.turn_rate = 4.0
 	slow_ship.stats.turn_rate_falloff = 0.75
@@ -583,7 +519,7 @@ func test_turn_rate_falloff_slows_rotation_at_high_speed():
 func test_turn_rate_falloff_zero_means_constant_turn_rate():
 	# BEHAVIOR: Ships without turn_rate_falloff (capital, default) keep
 	# constant turn rate at all speeds. Backward compatibility.
-	var ship = create_fighter_ship("ship", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship", Vector2(0, 0), 0)
 	ship.rotation = 0.0
 	ship.stats.turn_rate = 2.0
 	ship.stats.max_speed = 100.0
@@ -602,12 +538,12 @@ func test_turn_rate_falloff_zero_means_constant_turn_rate():
 func test_pass_by_offset_deflects_head_on_approach():
 	# BEHAVIOR: A fighter closing fast head-on must aim slightly off-center,
 	# not at the target's nose. Otherwise both AIs converge into a collision.
-	var ship = create_fighter_ship("ship1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship1", Vector2(0, 0), 0)
 	ship.rotation = 0.0  # facing up (Y-)
 	ship.velocity = Vector2(0, -300)  # closing fast on target above? wait, target below
 	ship.stats.max_speed = 300.0
 
-	var target = create_fighter_ship("ship2", Vector2(0, -800), 1)
+	var target = TestFactories.make_fighter("ship2", Vector2(0, -800), 1)
 	target.velocity = Vector2(0, 300)  # target rushing at us
 
 	# Direct heading would point straight at target
@@ -619,11 +555,11 @@ func test_pass_by_offset_deflects_head_on_approach():
 func test_pass_by_offset_no_deflection_when_far_away():
 	# BEHAVIOR: At long range, no deflection — ship aims for target normally.
 	# Only kicks in within PASS_BY_RANGE.
-	var ship = create_fighter_ship("ship1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship1", Vector2(0, 0), 0)
 	ship.velocity = Vector2(0, -300)
 	ship.stats.max_speed = 300.0
 
-	var target = create_fighter_ship("ship2", Vector2(0, -5000), 1)
+	var target = TestFactories.make_fighter("ship2", Vector2(0, -5000), 1)
 	target.velocity = Vector2(0, 300)
 
 	var direct_heading = MovementSystem.direction_to_heading(target.position - ship.position)
@@ -634,11 +570,11 @@ func test_pass_by_offset_no_deflection_when_far_away():
 func test_pass_by_offset_no_deflection_when_not_closing():
 	# BEHAVIOR: If the ship isn't closing fast (e.g. orbiting at combat range),
 	# don't deflect — only the high-speed merge case needs it.
-	var ship = create_fighter_ship("ship1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship1", Vector2(0, 0), 0)
 	ship.velocity = Vector2(50, 0)  # moving sideways, not closing
 	ship.stats.max_speed = 300.0
 
-	var target = create_fighter_ship("ship2", Vector2(0, -800), 1)
+	var target = TestFactories.make_fighter("ship2", Vector2(0, -800), 1)
 	target.velocity = Vector2(0, 0)
 
 	var direct_heading = MovementSystem.direction_to_heading(target.position - ship.position)
@@ -650,11 +586,11 @@ func test_pass_by_offset_pair_picks_consistent_side():
 	# BEHAVIOR: Both ships in a merge must pick the SAME world-space side so
 	# they pass each other instead of converging. Symmetric hash key over the
 	# ship-id pair guarantees agreement.
-	var ship_a = create_fighter_ship("alpha", Vector2(0, 0), 0)
+	var ship_a = TestFactories.make_fighter("alpha", Vector2(0, 0), 0)
 	ship_a.velocity = Vector2(0, -300)
 	ship_a.stats.max_speed = 300.0
 
-	var ship_b = create_fighter_ship("beta", Vector2(0, -800), 1)
+	var ship_b = TestFactories.make_fighter("beta", Vector2(0, -800), 1)
 	ship_b.velocity = Vector2(0, 300)
 	ship_b.stats.max_speed = 300.0
 
@@ -679,11 +615,6 @@ func test_pass_by_offset_pair_picks_consistent_side():
 # TARGET DECONFLICTION — pairs split onto distinct enemies (no swarm)
 # ============================================================================
 
-func _make_lead_crew(crew_id: String, ship_id: String, skill: float = 0.7) -> Dictionary:
-	var crew = create_pilot_crew(crew_id, ship_id)
-	crew.stats.skills.piloting = skill
-	return crew
-
 func _set_engaging(crew: Dictionary, target_id: String) -> Dictionary:
 	crew["orders"] = {"current": {"target_id": target_id}}
 	return crew
@@ -691,9 +622,9 @@ func _set_engaging(crew: Dictionary, target_id: String) -> Dictionary:
 func test_count_friendlies_engaging_excludes_self():
 	# BEHAVIOR: When a lead re-evaluates targets, they shouldn't count
 	# themselves as a friendly engager — that would bias every score.
-	var me = _make_lead_crew("me", "ship_me")
+	var me = TestFactories.make_pilot("me", "ship_me", 0.7)
 	me = _set_engaging(me, "enemy1")
-	var other = _make_lead_crew("other", "ship_other")
+	var other = TestFactories.make_pilot("other", "ship_other", 0.7)
 	other = _set_engaging(other, "enemy1")
 
 	# Without self-exclude: counts 2. With self-exclude: counts 1 (just `other`).
@@ -704,18 +635,18 @@ func test_target_deconfliction_splits_wings_onto_distinct_fighters():
 	# BEHAVIOR: Two wing leads scoring the same set of enemies must NOT both
 	# pick the same target when one is already engaged. The deconfliction
 	# penalty should steer the second lead onto a different enemy.
-	var enemy_a = create_fighter_ship("enemy_a", Vector2(900, 0), 1)  # closer
-	var enemy_b = create_fighter_ship("enemy_b", Vector2(1100, 0), 1)  # further
+	var enemy_a = TestFactories.make_fighter("enemy_a", Vector2(900, 0), 1)  # closer
+	var enemy_b = TestFactories.make_fighter("enemy_b", Vector2(1100, 0), 1)  # further
 
 	# Lead 1: already locked onto enemy_a (pretend they decided first)
-	var lead1 = _make_lead_crew("lead1", "ship1", 0.7)
+	var lead1 = TestFactories.make_pilot("lead1", "ship1", 0.7)
 	lead1.assigned_to = "ship1"
 	lead1 = _set_engaging(lead1, "enemy_a")
 
 	# Lead 2: scoring NOW. Without deconfliction, distance favors enemy_a.
-	var lead2 = _make_lead_crew("lead2", "ship2", 0.7)
+	var lead2 = TestFactories.make_pilot("lead2", "ship2", 0.7)
 	lead2.assigned_to = "ship2"
-	var ship2 = create_fighter_ship("ship2", Vector2(0, 0), 0)
+	var ship2 = TestFactories.make_fighter("ship2", Vector2(0, 0), 0)
 
 	var score_a = FighterPilotAI._calculate_target_score(lead2, enemy_a, [ship2, enemy_a, enemy_b], [lead1, lead2])
 	var score_b = FighterPilotAI._calculate_target_score(lead2, enemy_b, [ship2, enemy_a, enemy_b], [lead1, lead2])
@@ -727,16 +658,16 @@ func test_target_deconfliction_splits_wings_onto_distinct_fighters():
 func test_concentrate_fire_still_applies_to_capital_targets():
 	# BEHAVIOR: Deconfliction is only for fighter-vs-fighter. Vs. a capital
 	# ship, mass attack is correct doctrine — bonus per friendly engager.
-	var capital = create_capital_ship("cap1", Vector2(1000, 0), 1)
-	var other_capital = create_capital_ship("cap2", Vector2(1500, 0), 1)
+	var capital = TestFactories.make_capital("cap1", Vector2(1000, 0), 1)
+	var other_capital = TestFactories.make_capital("cap2", Vector2(1500, 0), 1)
 
 	# Lead with skill above the coordinate-fire threshold
-	var lead1 = _make_lead_crew("lead1", "ship1", 0.7)
+	var lead1 = TestFactories.make_pilot("lead1", "ship1", 0.7)
 	lead1 = _set_engaging(lead1, "cap1")
 
-	var lead2 = _make_lead_crew("lead2", "ship2", 0.7)
+	var lead2 = TestFactories.make_pilot("lead2", "ship2", 0.7)
 	lead2.assigned_to = "ship2"
-	var ship2 = create_fighter_ship("ship2", Vector2(0, 0), 0)
+	var ship2 = TestFactories.make_fighter("ship2", Vector2(0, 0), 0)
 
 	var score_cap1 = FighterPilotAI._calculate_target_score(lead2, capital, [ship2, capital, other_capital], [lead1, lead2])
 	var score_cap2 = FighterPilotAI._calculate_target_score(lead2, other_capital, [ship2, capital, other_capital], [lead1, lead2])
@@ -749,16 +680,16 @@ func test_rookie_leads_still_fixate_no_deconfliction():
 	# BEHAVIOR: Below LEAD_DECONFLICT_SKILL, leads don't think tactically —
 	# they pick the closest enemy regardless of who else is on it. This
 	# preserves "rookies fixate" personality.
-	var enemy_a = create_fighter_ship("enemy_a", Vector2(900, 0), 1)
-	var enemy_b = create_fighter_ship("enemy_b", Vector2(1100, 0), 1)
+	var enemy_a = TestFactories.make_fighter("enemy_a", Vector2(900, 0), 1)
+	var enemy_b = TestFactories.make_fighter("enemy_b", Vector2(1100, 0), 1)
 
-	var lead1 = _make_lead_crew("lead1", "ship1", 0.7)
+	var lead1 = TestFactories.make_pilot("lead1", "ship1", 0.7)
 	lead1 = _set_engaging(lead1, "enemy_a")
 
 	# Rookie lead — skill below deconflict threshold
-	var rookie = _make_lead_crew("rookie", "ship2", 0.2)
+	var rookie = TestFactories.make_pilot("rookie", "ship2", 0.2)
 	rookie.assigned_to = "ship2"
-	var ship2 = create_fighter_ship("ship2", Vector2(0, 0), 0)
+	var ship2 = TestFactories.make_fighter("ship2", Vector2(0, 0), 0)
 
 	var score_a = FighterPilotAI._calculate_target_score(rookie, enemy_a, [ship2, enemy_a, enemy_b], [lead1, rookie])
 	var score_b = FighterPilotAI._calculate_target_score(rookie, enemy_b, [ship2, enemy_a, enemy_b], [lead1, rookie])
@@ -770,22 +701,16 @@ func test_rookie_leads_still_fixate_no_deconfliction():
 # WING SIZE — wings can now hold a full squadron (1 lead + 5 wingmen)
 # ============================================================================
 
-func _make_wing_crew_with_skill(crew_id: String, ship_id: String, skill: float) -> Dictionary:
-	var crew = create_pilot_crew(crew_id, ship_id)
-	crew.stats.skills.piloting = skill
-	crew.assigned_to = ship_id
-	return crew
-
 func test_wing_can_grow_to_six_ships():
 	# BEHAVIOR: A six-pack squadron spawned together must be able to form
 	# under a single lead, not get split into pair + pair + pair.
 	var ships = []
 	var crew = []
 	for i in range(6):
-		var s = create_fighter_ship("ship_%d" % i, Vector2(i * 50.0, 0), 0)
+		var s = TestFactories.make_fighter("ship_%d" % i, Vector2(i * 50.0, 0), 0)
 		ships.append(s)
 		# Vary skill so the highest becomes lead
-		crew.append(_make_wing_crew_with_skill("c_%d" % i, "ship_%d" % i, 0.9 - i * 0.1))
+		crew.append(TestFactories.make_pilot("c_%d" % i, "ship_%d" % i, 0.9 - i * 0.1))
 
 	var wings = WingFormationSystem.form_wings(ships, crew, [])
 	assert_eq(wings.size(), 1, "Six fighters in proximity should form one wing, not multiple")
@@ -798,8 +723,8 @@ func test_wingmen_get_distinct_slot_ranks():
 	var ships = []
 	var crew = []
 	for i in range(6):
-		ships.append(create_fighter_ship("s_%d" % i, Vector2(i * 50.0, 0), 0))
-		crew.append(_make_wing_crew_with_skill("c_%d" % i, "s_%d" % i, 0.9 - i * 0.1))
+		ships.append(TestFactories.make_fighter("s_%d" % i, Vector2(i * 50.0, 0), 0))
+		crew.append(TestFactories.make_pilot("c_%d" % i, "s_%d" % i, 0.9 - i * 0.1))
 
 	var wings = WingFormationSystem.form_wings(ships, crew, [])
 	var wingmen = wings[0].wingmen
@@ -840,12 +765,12 @@ func _set_aggression(crew: Dictionary, value: float) -> Dictionary:
 func test_critical_hull_triggers_retreat():
 	# BEHAVIOR: A heavily damaged fighter should bug out instead of engaging,
 	# regardless of who else is around.
-	var ship = create_fighter_ship("me", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("me", Vector2(0, 0), 0)
 	ship = _set_armor(ship, 0.10)  # 10% armor — clearly critical
-	var crew = create_pilot_crew("pilot_me", "me")
+	var crew = TestFactories.make_pilot("pilot_me", "me")
 	crew = _set_aggression(crew, 0.3)  # cautious
 
-	var enemy = create_fighter_ship("enemy", Vector2(800, 0), 1)
+	var enemy = TestFactories.make_fighter("enemy", Vector2(800, 0), 1)
 
 	var mode = FighterPilotAI._assess_survival_state(crew, ship, [ship, enemy])
 	assert_eq(mode, "retreat", "Critically damaged fighter should retreat")
@@ -853,13 +778,13 @@ func test_critical_hull_triggers_retreat():
 func test_aggressive_pilot_tolerates_more_damage_than_timid():
 	# BEHAVIOR: Aggression dial — heroic pilots fight on through hits that
 	# make a timid pilot break off.
-	var ship = create_fighter_ship("me", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("me", Vector2(0, 0), 0)
 	ship = _set_armor(ship, 0.20)  # mid-band: depends on aggression
-	var enemy = create_fighter_ship("enemy", Vector2(800, 0), 1)
+	var enemy = TestFactories.make_fighter("enemy", Vector2(800, 0), 1)
 
-	var aggressive = create_pilot_crew("hero", "me")
+	var aggressive = TestFactories.make_pilot("hero", "me")
 	aggressive = _set_aggression(aggressive, 1.0)
-	var timid = create_pilot_crew("rabbit", "me")
+	var timid = TestFactories.make_pilot("rabbit", "me")
 	timid = _set_aggression(timid, 0.0)
 
 	var hero_mode = FighterPilotAI._assess_survival_state(aggressive, ship, [ship, enemy])
@@ -870,13 +795,13 @@ func test_aggressive_pilot_tolerates_more_damage_than_timid():
 
 func test_outnumbered_isolated_pilot_evades():
 	# BEHAVIOR: Three enemies in range and zero friendly support → evade.
-	var me = create_fighter_ship("me", Vector2(0, 0), 0)
-	var crew = create_pilot_crew("p", "me")
+	var me = TestFactories.make_fighter("me", Vector2(0, 0), 0)
+	var crew = TestFactories.make_pilot("p", "me")
 	crew = _set_aggression(crew, 0.4)
 	var enemies = [
-		create_fighter_ship("e1", Vector2(800, 0), 1),
-		create_fighter_ship("e2", Vector2(0, 800), 1),
-		create_fighter_ship("e3", Vector2(-800, 0), 1)
+		TestFactories.make_fighter("e1", Vector2(800, 0), 1),
+		TestFactories.make_fighter("e2", Vector2(0, 800), 1),
+		TestFactories.make_fighter("e3", Vector2(-800, 0), 1)
 	]
 
 	var ships = [me] + enemies
@@ -885,15 +810,15 @@ func test_outnumbered_isolated_pilot_evades():
 
 func test_engaged_with_support_does_not_evade():
 	# BEHAVIOR: 2 friends + 2 enemies in mutual range — solid odds, hold the line.
-	var me = create_fighter_ship("me", Vector2(0, 0), 0)
-	var crew = create_pilot_crew("p", "me")
+	var me = TestFactories.make_fighter("me", Vector2(0, 0), 0)
+	var crew = TestFactories.make_pilot("p", "me")
 	crew = _set_aggression(crew, 0.5)
 	var ships = [
 		me,
-		create_fighter_ship("f1", Vector2(500, 0), 0),  # friendly
-		create_fighter_ship("f2", Vector2(0, 500), 0),  # friendly
-		create_fighter_ship("e1", Vector2(800, 0), 1),
-		create_fighter_ship("e2", Vector2(0, 800), 1)
+		TestFactories.make_fighter("f1", Vector2(500, 0), 0),  # friendly
+		TestFactories.make_fighter("f2", Vector2(0, 500), 0),  # friendly
+		TestFactories.make_fighter("e1", Vector2(800, 0), 1),
+		TestFactories.make_fighter("e2", Vector2(0, 800), 1)
 	]
 
 	var mode = FighterPilotAI._assess_survival_state(crew, me, ships)
@@ -931,19 +856,19 @@ func test_squadron_focus_target_gets_score_bonus():
 	# target should score higher than an equivalent alternative — but the
 	# bonus should NOT override deconfliction (a target with several engagers
 	# already on it still gets dropped).
-	var enemy_focus = create_fighter_ship("focus", Vector2(1000, 0), 1)
-	var enemy_other = create_fighter_ship("other", Vector2(1000, 100), 1)
+	var enemy_focus = TestFactories.make_fighter("focus", Vector2(1000, 0), 1)
+	var enemy_other = TestFactories.make_fighter("other", Vector2(1000, 100), 1)
 
 	# Squadron leader (commander), targeting "focus"
-	var commander = _make_wing_crew_with_skill("cmdr", "ship_cmdr", 0.8)
+	var commander = TestFactories.make_pilot("cmdr", "ship_cmdr", 0.8)
 	commander["command_chain"] = {"superior": ""}  # no superior — top of chain
 	commander = _set_engaging(commander, "focus")
 
 	# A wing lead in the same squadron, scoring targets
-	var wing_lead = _make_wing_crew_with_skill("wlead", "ship_wlead", 0.7)
+	var wing_lead = TestFactories.make_pilot("wlead", "ship_wlead", 0.7)
 	wing_lead["command_chain"] = {"superior": "cmdr"}
 
-	var ship_wlead = create_fighter_ship("ship_wlead", Vector2(0, 0), 0)
+	var ship_wlead = TestFactories.make_fighter("ship_wlead", Vector2(0, 0), 0)
 
 	var ships = [ship_wlead, enemy_focus, enemy_other]
 	var crews = [commander, wing_lead]
@@ -962,7 +887,7 @@ func test_squadron_focus_target_gets_score_bonus():
 # ============================================================================
 
 func _ship_with_area(id: String, pos: Vector2, area_center: Vector2, radius: float) -> Dictionary:
-	var ship = create_fighter_ship(id, pos, 0)
+	var ship = TestFactories.make_fighter(id, pos, 0)
 	ship["assigned_area"] = {"center": area_center, "radius": radius}
 	# Sit at low speed so turn rate is sharp and the leash effect is visible per-frame
 	ship.velocity = Vector2.ZERO
@@ -991,7 +916,7 @@ func test_outside_zone_at_full_pull_overrides_heading_to_home():
 func test_no_assigned_area_means_no_leash():
 	# BEHAVIOR: Ships without an assigned area behave exactly as before
 	# (backwards compatibility for anything not yet assigned).
-	var ship = create_fighter_ship("me", Vector2(2000, 0), 0)
+	var ship = TestFactories.make_fighter("me", Vector2(2000, 0), 0)
 	var east_heading: float = MovementSystem.direction_to_heading(Vector2(1, 0))
 	var leashed = MovementSystem.apply_area_leash(ship, east_heading)
 	assert_eq(leashed, east_heading, "With no assigned_area, leash must have no effect")
@@ -1000,20 +925,20 @@ func test_far_outside_area_triggers_hard_return_override():
 	# BEHAVIOR: At >1.5x leash radius, the AI override fires — pilot drops
 	# the current target and chooses fight_return_to_area instead.
 	var center = Vector2(960, 540)
-	var ship = create_fighter_ship("me", Vector2(960 + 600, 540), 0)
+	var ship = TestFactories.make_fighter("me", Vector2(960 + 600, 540), 0)
 	ship["assigned_area"] = {"center": center, "radius": 335.0}
 	assert_true(FighterPilotAI._is_far_outside_area(ship),
 		"600u from center > 1.5*335 = 502u; should trigger return")
 
 func test_inside_area_does_not_trigger_hard_return():
 	var center = Vector2(960, 540)
-	var ship = create_fighter_ship("me", Vector2(960 + 200, 540), 0)
+	var ship = TestFactories.make_fighter("me", Vector2(960 + 200, 540), 0)
 	ship["assigned_area"] = {"center": center, "radius": 335.0}
 	assert_false(FighterPilotAI._is_far_outside_area(ship),
 		"200u from center is well inside the leash; no override")
 
 func test_no_assigned_area_never_triggers_return():
-	var ship = create_fighter_ship("me", Vector2(99999, 99999), 0)
+	var ship = TestFactories.make_fighter("me", Vector2(99999, 99999), 0)
 	# No assigned_area set
 	assert_false(FighterPilotAI._is_far_outside_area(ship),
 		"With no assigned area there is no leash to violate")
@@ -1022,7 +947,7 @@ func test_return_to_area_aims_inside_zone_not_at_center():
 	# BEHAVIOR: A ship returning to its zone should aim for a point INSIDE
 	# the zone, not the dead center. Otherwise N ships all converge on the
 	# same point and pile up there.
-	var ship = create_fighter_ship("me", Vector2(2000, 0), 0)
+	var ship = TestFactories.make_fighter("me", Vector2(2000, 0), 0)
 	ship["assigned_area"] = {"center": Vector2(0, 0), "radius": 500.0}
 	var control = MovementSystem.calculate_return_to_area(ship)
 	# desired_heading should point toward a target between origin and ship,
@@ -1039,9 +964,9 @@ func test_return_to_area_spreads_ships_to_distinct_entry_points():
 	# ship_ids should pick different entry points (per-ship tangential
 	# spread). Without this, N ships pile up on one entry point.
 	var area = {"center": Vector2(0, 0), "radius": 500.0}
-	var ship_a = create_fighter_ship("alpha_lots_of_text_to_change_hash", Vector2(1500, 0), 0)
+	var ship_a = TestFactories.make_fighter("alpha_lots_of_text_to_change_hash", Vector2(1500, 0), 0)
 	ship_a["assigned_area"] = area
-	var ship_b = create_fighter_ship("beta", Vector2(1500, 0), 0)
+	var ship_b = TestFactories.make_fighter("beta", Vector2(1500, 0), 0)
 	ship_b["assigned_area"] = area
 
 	var ctrl_a = MovementSystem.calculate_return_to_area(ship_a)

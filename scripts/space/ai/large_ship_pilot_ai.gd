@@ -64,11 +64,14 @@ const COMPOSURE_STRESS_DECAY = 0.5
 ## MAIN ENTRY
 ## ---------------------------------------------------------------------------
 static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
-	var target := _find_best_target(crew_data, ship_data, all_ships)
-
-	if _is_far_outside_area(ship_data) and target.is_empty():
+	# AREA LEASH (hard override) — same shape as FighterPilotAI: a capital
+	# holding broadside at the edge of its zone runs at low throttle, so the
+	# physics-layer leash isn't enough to bring it home. Beyond
+	# AREA_HARD_RETURN_MULTIPLIER x radius, drop the fight and burn back.
+	if _is_far_outside_area(ship_data):
 		return _make_return_to_area_decision(crew_data, ship_data, game_time)
 
+	var target := _find_best_target(crew_data, ship_data, all_ships)
 	if target.is_empty():
 		return _make_idle_decision(crew_data, game_time)
 

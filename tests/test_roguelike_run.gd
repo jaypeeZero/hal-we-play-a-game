@@ -126,9 +126,9 @@ func test_fleet_ships_are_deep_copied():
 	RoguelikeRun.update_fleet_after_battle([ship])
 
 	# Modify the original after storing
-	ship["armor_sections"][0]["current_armor"] = 999
+	ship["armor_sections"][0]["current_armor"] = 999.0
 
-	assert_ne(RoguelikeRun.fleet_ships[0]["armor_sections"][0]["current_armor"], 999,
+	assert_ne(RoguelikeRun.fleet_ships[0]["armor_sections"][0]["current_armor"], 999.0,
 		"fleet_ships should be a deep copy, not a reference")
 
 

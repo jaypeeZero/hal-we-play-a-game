@@ -8,7 +8,6 @@ var _component_visuals: Dictionary = {}  # entity_id -> Dictionary[component_id 
 
 func initialize() -> void:
 	name = "Renderer78"
-	print("Renderer78 initialized - using HullShapes data")
 
 func attach_to_entity(entity: IRenderable) -> void:
 	var entity_id: String = entity.get_entity_id()

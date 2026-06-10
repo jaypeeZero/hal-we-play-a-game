@@ -13,12 +13,12 @@ parallel system.
 
 ## Increments (each independently shippable)
 
-1. **Per-crew knowledge sets.** Add `known_patterns: Array[String]` to
-   the crew dict; `query_knowledge()` filters to patterns the crew
-   member knows (empty = knows the role baseline, preserving current
-   behavior). A rookie who doesn't know `fighter_flank_mid` simply
-   never flanks. This single change makes knowledge a per-character
-   progression axis.
+1. **Per-crew knowledge sets.** ✅ SHIPPED. Crew dicts carry
+   `known_patterns` (empty = role baseline); `query_knowledge()`
+   filters to it and the query cache keys on it. All six role-AI query
+   sites pass the crew's set. Tests in `tests/test_crew_knowledge.gd`,
+   including the done-criterion (identical pilots, different doctrine,
+   different maneuvers).
 2. **Player standing instructions.** A player-authored pattern (same
    schema) injected into a crew member's set with a priority flag —
    "prefer torpedo runs on capitals", "never close below 800". UI can
@@ -42,8 +42,7 @@ show bad pattern selection; the simple replacement is exact tag/
 condition matching against the situation summary instead of word
 overlap. Decide from battle-log evidence, not speculation.
 
-## Done when (increment 1, the next concrete step)
+## Done when (increment 2, the next concrete step)
 
-- Two otherwise-identical pilots with different `known_patterns` make
-  visibly different maneuver choices in the same scenario, and a test
-  asserts it.
+- A saved roguelike crew member carries a player-authored pattern that
+  measurably changes their behavior in battle, and a test asserts it.

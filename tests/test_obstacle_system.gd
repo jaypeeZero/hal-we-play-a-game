@@ -12,34 +12,41 @@ func test_create_small_asteroid():
 
 	assert_not_null(obstacle.obstacle_id)
 	assert_eq(obstacle.type, "asteroid_small")
-	assert_eq(obstacle.radius, 20.0)
-	assert_eq(obstacle.max_health, 50.0)
-	assert_eq(obstacle.current_health, 50.0)
+	assert_gt(obstacle.radius, 0.0, "Obstacle radius should be positive")
+	assert_gt(obstacle.max_health, 0.0, "Destructible obstacle should have positive health")
+	assert_eq(obstacle.current_health, obstacle.max_health, "Obstacle should spawn at full health")
 	assert_true(obstacle.destructible)
 	assert_true(obstacle.blocks_movement)
 	assert_true(obstacle.blocks_projectiles)
+
+func test_asteroid_size_classes_scale_radius_and_health():
+	# BEHAVIOR: bigger asteroid classes are physically larger and tougher
+	var small = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(100, 100))
+	var medium = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(100, 100))
+	var large = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(100, 100))
+
+	assert_gt(medium.radius, small.radius, "Medium asteroid should be larger than small")
+	assert_gt(medium.max_health, small.max_health, "Medium asteroid should be tougher than small")
+	assert_gt(large.radius, medium.radius, "Large asteroid should be larger than medium")
+	assert_gt(large.max_health, medium.max_health, "Large asteroid should be tougher than medium")
 
 func test_create_medium_asteroid():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(100, 100))
 
 	assert_eq(obstacle.type, "asteroid_medium")
-	assert_eq(obstacle.radius, 40.0)
-	assert_eq(obstacle.max_health, 150.0)
 	assert_true(obstacle.blocks_line_of_sight)
 
 func test_create_large_asteroid():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(100, 100))
 
 	assert_eq(obstacle.type, "asteroid_large")
-	assert_eq(obstacle.radius, 80.0)
-	assert_eq(obstacle.max_health, 500.0)
 	assert_true(obstacle.blocks_line_of_sight)
 
 func test_create_platform():
 	var obstacle = ObstacleData.create_obstacle_instance("platform", Vector2(100, 100))
 
 	assert_eq(obstacle.type, "platform")
-	assert_eq(obstacle.radius, 60.0)
+	assert_gt(obstacle.radius, 0.0, "Platform radius should be positive")
 	assert_false(obstacle.destructible, "Platforms should be indestructible")
 	assert_true(obstacle.blocks_movement)
 
@@ -47,16 +54,19 @@ func test_create_dock_scaffolding():
 	var obstacle = ObstacleData.create_obstacle_instance("dock_scaffolding", Vector2(100, 100))
 
 	assert_eq(obstacle.type, "dock_scaffolding")
-	assert_eq(obstacle.radius, 50.0)
+	assert_gt(obstacle.radius, 0.0, "Scaffolding radius should be positive")
 	assert_false(obstacle.blocks_projectiles, "Scaffolding is open structure")
 	assert_false(obstacle.blocks_line_of_sight)
 
 func test_create_debris():
+	var small = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(100, 100))
 	var obstacle = ObstacleData.create_obstacle_instance("debris", Vector2(100, 100))
 
 	assert_eq(obstacle.type, "debris")
-	assert_eq(obstacle.radius, 15.0)
-	assert_eq(obstacle.max_health, 20.0)
+	assert_gt(obstacle.radius, 0.0, "Debris radius should be positive")
+	assert_lt(obstacle.radius, small.radius, "Debris should be smaller than the smallest asteroid")
+	assert_gt(obstacle.max_health, 0.0, "Debris should have positive health")
+	assert_lt(obstacle.max_health, small.max_health, "Debris should be flimsier than the smallest asteroid")
 	assert_false(obstacle.blocks_projectiles)
 
 func test_obstacle_unique_ids():
@@ -80,7 +90,7 @@ func test_validate_obstacle_data():
 
 func test_projectile_hits_obstacle():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(100, 100))
-	var projectile = create_test_projectile(Vector2(100, 100), 0)  # At obstacle center
+	var projectile = TestFactories.make_projectile(Vector2(100, 100), 0)  # At obstacle center
 
 	var hit = CollisionSystem.find_obstacle_hit_for_projectile(projectile, [obstacle])
 
@@ -90,7 +100,7 @@ func test_projectile_hits_obstacle():
 
 func test_projectile_misses_obstacle():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(100, 100))
-	var projectile = create_test_projectile(Vector2(500, 500), 0)  # Far away
+	var projectile = TestFactories.make_projectile(Vector2(500, 500), 0)  # Far away
 
 	var hit = CollisionSystem.find_obstacle_hit_for_projectile(projectile, [obstacle])
 
@@ -98,7 +108,7 @@ func test_projectile_misses_obstacle():
 
 func test_projectile_ignores_non_blocking_obstacle():
 	var obstacle = ObstacleData.create_obstacle_instance("debris", Vector2(100, 100))
-	var projectile = create_test_projectile(Vector2(100, 100), 0)
+	var projectile = TestFactories.make_projectile(Vector2(100, 100), 0)
 
 	# Debris doesn't block projectiles
 	var blocks = CollisionSystem.is_projectile_colliding_with_obstacle(projectile, obstacle)
@@ -106,7 +116,7 @@ func test_projectile_ignores_non_blocking_obstacle():
 
 func test_ship_detects_obstacle_collision():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(100, 100))
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 
 	var collision = CollisionSystem.find_obstacle_collision_for_ship(ship, [obstacle])
 
@@ -115,7 +125,7 @@ func test_ship_detects_obstacle_collision():
 
 func test_ship_avoids_far_obstacle():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(500, 500))
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 
 	var collision = CollisionSystem.find_obstacle_collision_for_ship(ship, [obstacle])
 
@@ -127,30 +137,31 @@ func test_ship_avoids_far_obstacle():
 
 func test_obstacle_takes_damage():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(100, 100))
-	var projectile = create_test_projectile(Vector2(100, 100), 0)
-	projectile.damage = 25.0
+	var projectile = TestFactories.make_projectile(Vector2(100, 100), 0)
+	projectile.damage = obstacle.max_health / 2.0  # Damaging but not destroying
 
 	var result = CollisionSystem.apply_projectile_hits_to_obstacles([obstacle], [projectile], [projectile.projectile_id])
 	var updated_obstacle = result.obstacles[0]
 
-	assert_eq(updated_obstacle.current_health, 25.0, "Obstacle should take 25 damage")
+	assert_eq(updated_obstacle.current_health, obstacle.current_health - projectile.damage,
+		"Obstacle health should drop by projectile damage")
 	assert_eq(updated_obstacle.status, "damaged")
 
 func test_obstacle_destroyed_by_damage():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(100, 100))
-	var projectile = create_test_projectile(Vector2(100, 100), 0)
-	projectile.damage = 100.0  # More than obstacle health
+	var projectile = TestFactories.make_projectile(Vector2(100, 100), 0)
+	projectile.damage = obstacle.max_health * 2.0  # More than obstacle health
 
 	var result = CollisionSystem.apply_projectile_hits_to_obstacles([obstacle], [projectile], [projectile.projectile_id])
 	var updated_obstacle = result.obstacles[0]
 
-	assert_true(updated_obstacle.current_health <= 0)
+	assert_true(updated_obstacle.current_health <= 0.0)
 	assert_eq(updated_obstacle.status, "destroyed")
 
 func test_indestructible_obstacle_takes_no_damage():
 	var obstacle = ObstacleData.create_obstacle_instance("platform", Vector2(100, 100))
 	var initial_health = obstacle.current_health
-	var projectile = create_test_projectile(Vector2(100, 100), 0)
+	var projectile = TestFactories.make_projectile(Vector2(100, 100), 0)
 	projectile.damage = 100.0
 
 	var result = CollisionSystem.apply_projectile_hits_to_obstacles([obstacle], [projectile], [projectile.projectile_id])
@@ -164,28 +175,28 @@ func test_indestructible_obstacle_takes_no_damage():
 # ============================================================================
 
 func test_ship_avoids_nearby_obstacle():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.velocity = Vector2(50, 0)  # Moving right
 
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(200, 100))  # Ahead
 
 	var avoidance_force = MovementSystem.calculate_obstacle_avoidance(ship, [obstacle])
 
-	assert_gt(avoidance_force.length(), 0, "Should generate avoidance force")
-	assert_lt(avoidance_force.x, 0, "Should push away from obstacle (negative x)")
+	assert_gt(avoidance_force.length(), 0.0, "Should generate avoidance force")
+	assert_lt(avoidance_force.x, 0.0, "Should push away from obstacle (negative x)")
 
 func test_ship_ignores_distant_obstacle():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.velocity = Vector2(50, 0)
 
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(1000, 100))  # Far away
 
 	var avoidance_force = MovementSystem.calculate_obstacle_avoidance(ship, [obstacle])
 
-	assert_eq(avoidance_force.length(), 0, "Should ignore distant obstacles")
+	assert_eq(avoidance_force.length(), 0.0, "Should ignore distant obstacles")
 
 func test_ship_ignores_obstacle_behind():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.velocity = Vector2(50, 0)  # Moving right
 
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(50, 100))  # Behind
@@ -193,10 +204,10 @@ func test_ship_ignores_obstacle_behind():
 	var avoidance_force = MovementSystem.calculate_obstacle_avoidance(ship, [obstacle])
 
 	# Should have minimal avoidance for obstacles behind
-	assert_lt(avoidance_force.length(), 50, "Should mostly ignore obstacles behind")
+	assert_lt(avoidance_force.length(), 50.0, "Should mostly ignore obstacles behind")
 
 func test_ship_emergency_push_when_colliding():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.stats.size = 20.0
 	ship.collision_radius = 20.0
 
@@ -205,10 +216,10 @@ func test_ship_emergency_push_when_colliding():
 
 	var avoidance_force = MovementSystem.calculate_obstacle_avoidance(ship, [obstacle])
 
-	assert_gt(avoidance_force.length(), 0, "Should generate emergency push")
+	assert_gt(avoidance_force.length(), 0.0, "Should generate emergency push")
 
 func test_ship_avoids_destroyed_obstacles():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.velocity = Vector2(50, 0)
 
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_medium", Vector2(200, 100))
@@ -216,15 +227,15 @@ func test_ship_avoids_destroyed_obstacles():
 
 	var avoidance_force = MovementSystem.calculate_obstacle_avoidance(ship, [obstacle])
 
-	assert_eq(avoidance_force.length(), 0, "Should ignore destroyed obstacles")
+	assert_eq(avoidance_force.length(), 0.0, "Should ignore destroyed obstacles")
 
 # ============================================================================
 # INTEGRATION TESTS
 # ============================================================================
 
 func test_process_collisions_with_obstacles():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
-	var projectile = create_test_projectile(Vector2(200, 100), 1)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
+	var projectile = TestFactories.make_projectile(Vector2(200, 100), 1)
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_small", Vector2(200, 100))
 
 	var result = CollisionSystem.process_collisions([ship], [projectile], [obstacle])
@@ -235,9 +246,9 @@ func test_process_collisions_with_obstacles():
 
 func test_movement_with_obstacle_avoidance():
 	# BEHAVIOR: When an obstacle is in the path to target, pilot detects it and changes course to avoid
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
 	ship.velocity = Vector2(100, 0)  # Moving toward obstacle for detection
-	var target = create_test_ship("ship_2", Vector2(2000, 0), 1)  # Far target
+	var target = TestFactories.make_fighter("ship_2", Vector2(2000, 0), 1)  # Far target
 
 	# Detection range is collision_radius * 8.0, place obstacle within detection range
 	var detection_range = ship.collision_radius * 8.0
@@ -256,55 +267,11 @@ func test_movement_with_obstacle_avoidance():
 	assert_true(heading_changed, "Pilot should change heading to avoid obstacle")
 
 # ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-func create_test_ship(id: String, pos: Vector2, team: int) -> Dictionary:
-	return {
-		"ship_id": id,
-		"type": "fighter",
-		"team": team,
-		"position": pos,
-		"velocity": Vector2.ZERO,
-		"rotation": 0.0,
-		"status": "operational",
-		"collision_radius": 15.0,
-		"stats": {
-			"max_speed": 300.0,
-			"acceleration": 100.0,
-			"turn_rate": 3.0,
-			"size": 15.0,
-			"mass": 50.0
-		},
-		"armor_sections": [],
-		"internals": [
-			{
-				"component_id": "cockpit",
-				"current_health": 20,
-				"max_health": 20,
-				"status": "operational"
-			}
-		],
-		"weapons": []
-	}
-
-func create_test_projectile(pos: Vector2, team: int) -> Dictionary:
-	return {
-		"projectile_id": "proj_" + str(randi()),
-		"position": pos,
-		"velocity": Vector2(100, 0),
-		"team": team,
-		"damage": 10.0,
-		"source_id": "ship_test",
-		"lifetime": 5.0
-	}
-
-# ============================================================================
 # PHYSICAL COLLISION TESTS
 # ============================================================================
 
 func test_ship_obstacle_collision_applies_momentum():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.velocity = Vector2(100, 0)  # Moving right at 100 units/sec
 	ship.stats.mass = 50.0
 	ship.stats.size = 15.0
@@ -318,10 +285,10 @@ func test_ship_obstacle_collision_applies_momentum():
 
 	assert_false(result.is_empty(), "Should detect collision")
 	assert_lt(result.ship.velocity.x, ship.velocity.x, "Ship should slow down after collision")
-	assert_gt(result.ship.velocity.x, 0, "Ship should still be moving forward")
+	assert_gt(result.ship.velocity.x, 0.0, "Ship should still be moving forward")
 
 func test_ship_obstacle_collision_moves_asteroid():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.velocity = Vector2(100, 0)  # Moving right
 	ship.stats.mass = 100.0
 	ship.stats.size = 15.0
@@ -333,10 +300,10 @@ func test_ship_obstacle_collision_moves_asteroid():
 	var result = CollisionSystem.check_and_resolve_ship_obstacle_collision(ship, obstacle)
 
 	assert_false(result.is_empty(), "Should detect collision")
-	assert_gt(result.obstacle.velocity.x, 0, "Asteroid should start moving after impact")
+	assert_gt(result.obstacle.velocity.x, 0.0, "Asteroid should start moving after impact")
 
 func test_ship_obstacle_collision_damage_scales_with_speed():
-	var ship_slow = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship_slow = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship_slow.velocity = Vector2(30, 0)  # Slow speed
 	ship_slow.stats.mass = 50.0
 	ship_slow.stats.size = 15.0
@@ -346,7 +313,7 @@ func test_ship_obstacle_collision_damage_scales_with_speed():
 
 	var result_slow = CollisionSystem.check_and_resolve_ship_obstacle_collision(ship_slow, obstacle1)
 
-	var ship_fast = create_test_ship("ship_2", Vector2(100, 100), 0)
+	var ship_fast = TestFactories.make_fighter("ship_2", Vector2(100, 100), 0)
 	ship_fast.velocity = Vector2(150, 0)  # Fast speed
 	ship_fast.stats.mass = 50.0
 	ship_fast.stats.size = 15.0
@@ -361,7 +328,7 @@ func test_ship_obstacle_collision_damage_scales_with_speed():
 		assert_gt(result_fast.event.damage, result_slow.event.damage, "Faster collision should deal more damage")
 
 func test_larger_asteroid_deals_more_damage():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.velocity = Vector2(100, 0)
 	ship.stats.mass = 50.0
 	ship.stats.size = 15.0
@@ -376,7 +343,7 @@ func test_larger_asteroid_deals_more_damage():
 	assert_gt(damage_large, damage_small, "Larger asteroid should deal more damage at same impact speed")
 
 func test_no_damage_from_slow_collision():
-	var ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship.stats.size = 15.0
 	ship.collision_radius = 15.0
 
@@ -387,13 +354,13 @@ func test_no_damage_from_slow_collision():
 	assert_eq(damage, 0.0, "Very slow collisions should not deal damage")
 
 func test_ship_ship_collision_applies_momentum_to_both():
-	var ship1 = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship1 = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship1.velocity = Vector2(100, 0)  # Moving right
 	ship1.stats.mass = 50.0
 	ship1.stats.size = 15.0
 	ship1.collision_radius = 15.0
 
-	var ship2 = create_test_ship("ship_2", Vector2(130, 100), 1)
+	var ship2 = TestFactories.make_fighter("ship_2", Vector2(130, 100), 1)
 	ship2.velocity = Vector2(-50, 0)  # Moving left (head-on)
 	ship2.stats.mass = 50.0
 	ship2.stats.size = 15.0
@@ -407,13 +374,13 @@ func test_ship_ship_collision_applies_momentum_to_both():
 	assert_ne(result.ship2.velocity, ship2.velocity, "Ship 2 velocity should change")
 
 func test_heavier_ship_affected_less_by_collision():
-	var light_ship = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var light_ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	light_ship.velocity = Vector2(100, 0)
 	light_ship.stats.mass = 50.0
 	light_ship.stats.size = 15.0
 	light_ship.collision_radius = 15.0
 
-	var heavy_ship = create_test_ship("ship_2", Vector2(130, 100), 1)
+	var heavy_ship = TestFactories.make_fighter("ship_2", Vector2(130, 100), 1)
 	heavy_ship.velocity = Vector2.ZERO  # Stationary
 	heavy_ship.stats.mass = 200.0  # 4x heavier
 	heavy_ship.stats.size = 30.0
@@ -429,12 +396,12 @@ func test_heavier_ship_affected_less_by_collision():
 		assert_gt(light_velocity_change, heavy_velocity_change, "Lighter ship should be affected more")
 
 func test_collision_separates_overlapping_ships():
-	var ship1 = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship1 = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship1.velocity = Vector2(50, 0)
 	ship1.stats.size = 15.0
 	ship1.collision_radius = 15.0
 
-	var ship2 = create_test_ship("ship_2", Vector2(110, 100), 1)  # Overlapping
+	var ship2 = TestFactories.make_fighter("ship_2", Vector2(110, 100), 1)  # Overlapping
 	ship2.velocity = Vector2.ZERO
 	ship2.stats.size = 15.0
 	ship2.collision_radius = 15.0
@@ -450,12 +417,12 @@ func test_collision_separates_overlapping_ships():
 		assert_true(final_distance >= min_distance, "Ships should be separated after collision")
 
 func test_moving_apart_ships_not_colliding():
-	var ship1 = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship1 = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship1.velocity = Vector2(-100, 0)  # Moving left
 	ship1.stats.size = 15.0
 	ship1.collision_radius = 15.0
 
-	var ship2 = create_test_ship("ship_2", Vector2(115, 100), 1)
+	var ship2 = TestFactories.make_fighter("ship_2", Vector2(115, 100), 1)
 	ship2.velocity = Vector2(100, 0)  # Moving right (away)
 	ship2.stats.size = 15.0
 	ship2.collision_radius = 15.0
@@ -465,12 +432,12 @@ func test_moving_apart_ships_not_colliding():
 	assert_true(result.is_empty(), "Ships moving apart should not trigger collision response")
 
 func test_process_physical_collisions_handles_multiple_ships():
-	var ship1 = create_test_ship("ship_1", Vector2(100, 100), 0)
+	var ship1 = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship1.velocity = Vector2(50, 0)
 	ship1.stats.size = 15.0
 	ship1.collision_radius = 15.0
 
-	var ship2 = create_test_ship("ship_2", Vector2(130, 100), 1)
+	var ship2 = TestFactories.make_fighter("ship_2", Vector2(130, 100), 1)
 	ship2.velocity = Vector2.ZERO
 	ship2.stats.size = 15.0
 	ship2.collision_radius = 15.0

@@ -10,56 +10,13 @@ extends GutTest
 ## Phase 1 of the optimize-npc-commands branch.
 
 # ============================================================================
-# HELPERS
-# ============================================================================
-
-func make_pilot(skill: float = 0.7, ship_id: String = "ship_1") -> Dictionary:
-	var pilot = CrewData.create_crew_member(CrewData.Role.PILOT, skill)
-	pilot.assigned_to = ship_id
-	# Treat as multi-crew so pilot decisions use evade/pursue subtypes
-	pilot.command_chain.superior = "captain_x"
-	return pilot
-
-func make_gunner(skill: float = 0.7, ship_id: String = "ship_1") -> Dictionary:
-	var gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, skill)
-	gunner.assigned_to = ship_id
-	gunner.command_chain.superior = "captain_x"
-	return gunner
-
-func make_captain(skill: float = 0.7, ship_id: String = "ship_1") -> Dictionary:
-	var captain = CrewData.create_crew_member(CrewData.Role.CAPTAIN, skill)
-	captain.assigned_to = ship_id
-	captain.command_chain.subordinates = ["pilot_x", "gunner_x"]
-	return captain
-
-func make_threat(id: String, priority: float) -> Dictionary:
-	return {"id": id, "type": "ship", "_threat_priority": priority}
-
-func make_test_ship(id: String, team: int, pos: Vector2) -> Dictionary:
-	return {
-		"ship_id": id,
-		"team": team,
-		"position": pos,
-		"velocity": Vector2.ZERO,
-		"rotation": 0.0,
-		"status": "operational",
-		"type": "fighter",
-		"collision_radius": 15.0,
-		"stats": {"max_speed": 300.0, "acceleration": 100.0, "turn_rate": 3.0},
-		"weapons": []
-	}
-
-func make_opportunity(id: String, score: float) -> Dictionary:
-	return {"id": id, "type": "ship", "_opportunity_score": score}
-
-# ============================================================================
 # BEHAVIOR 1: Sleeping crew do not decide
 # ============================================================================
 
 func test_sleeping_crew_produces_no_decision():
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 5.0
-	pilot.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
+	pilot.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
 
 	var result = CrewSchedulerSystem.tick_with_awareness([pilot], 1.0, {})
 
@@ -71,9 +28,9 @@ func test_sleeping_crew_produces_no_decision():
 # ============================================================================
 
 func test_awakened_crew_produces_a_decision():
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 0.5
-	pilot.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
+	pilot.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
 
 	var result = CrewSchedulerSystem.tick_with_awareness([pilot], 1.0, {})
 
@@ -86,16 +43,16 @@ func test_awakened_crew_produces_a_decision():
 
 func test_all_active_crew_eventually_decide():
 	var crew_list = [
-		make_pilot(0.7, "ship_a"),
-		make_gunner(0.7, "ship_b"),
-		make_pilot(0.7, "ship_c"),
+		TestFactories.make_crew_pilot(0.7, "ship_a"),
+		TestFactories.make_crew_gunner(0.7, "ship_b"),
+		TestFactories.make_crew_pilot(0.7, "ship_c"),
 	]
 	# Give each something to do
 	for c in crew_list:
 		if c.role == CrewData.Role.PILOT:
-			c.awareness.opportunities = [make_opportunity("enemy", 100.0)]
+			c.awareness.opportunities = [TestFactories.make_opportunity("enemy", 100.0)]
 		elif c.role == CrewData.Role.GUNNER:
-			c.awareness.opportunities = [make_opportunity("enemy", 100.0)]
+			c.awareness.opportunities = [TestFactories.make_opportunity("enemy", 100.0)]
 
 	var who_acted = {}
 	var time = 0.0
@@ -115,9 +72,9 @@ func test_all_active_crew_eventually_decide():
 # ============================================================================
 
 func test_pilots_decide_more_often_than_gunners():
-	var pilot = make_pilot(0.7, "ship_a")
-	pilot.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
-	var gunner = make_gunner(0.7, "ship_b")
+	var pilot = TestFactories.make_crew_pilot(0.7, "ship_a")
+	pilot.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
+	var gunner = TestFactories.make_crew_gunner(0.7, "ship_b")
 	# Gunner with no targets idles longer
 	# Use captain as proxy for the slower-still cadence
 
@@ -131,7 +88,7 @@ func test_pilots_decide_more_often_than_gunners():
 		pilot_decisions += p_result.decisions.size()
 
 		# refresh gunner's opportunity each tick (so it has something to fire at)
-		gunner.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
+		gunner.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
 		var g_result = CrewSchedulerSystem.tick_with_awareness([gunner], time, {})
 		gunner = g_result.crew_list[0]
 		gunner_decisions += g_result.decisions.size()
@@ -142,10 +99,10 @@ func test_pilots_decide_more_often_than_gunners():
 		"Pilots should decide at least as often as gunners over the same window.")
 
 func test_captains_decide_less_often_than_pilots():
-	var captain = make_captain(0.7, "ship_a")
-	captain.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
-	var pilot = make_pilot(0.7, "ship_b")
-	pilot.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
+	var captain = TestFactories.make_crew_captain(0.7, "ship_a")
+	captain.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
+	var pilot = TestFactories.make_crew_pilot(0.7, "ship_b")
+	pilot.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
 
 	var captain_decisions = 0
 	var pilot_decisions = 0
@@ -171,8 +128,8 @@ func test_heartbeat_fallback_pilot_decides_within_window():
 	# A pilot with no events and nothing happening should still produce a
 	# decision within their heartbeat window (proposed: 0.2s for pilots, with
 	# decision frequencies that schedule them well under 5s).
-	var pilot = make_pilot(0.7)
-	pilot.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
+	var pilot = TestFactories.make_crew_pilot(0.7)
+	pilot.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
 
 	var time = 0.0
 	var first_decision_at = -1.0
@@ -192,7 +149,7 @@ func test_heartbeat_fallback_pilot_decides_within_window():
 # ============================================================================
 
 func test_sleeping_crew_does_not_mutate_crew_data():
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 100.0
 	var original_piloting = pilot.stats.skills.piloting
 
@@ -215,9 +172,9 @@ func test_mailbox_event_wakes_sleeping_crew():
 		pending("CrewMailboxSystem / CrewSchedulerSystem not implemented yet.")
 		return
 
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 5.0
-	pilot.awareness.opportunities = [make_opportunity("enemy_1", 100.0)]
+	pilot.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
 
 	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
 		"type": "threat_appeared",
@@ -240,10 +197,10 @@ func test_pilot_reacts_to_threat_appearing_mid_sleep():
 		pending("CrewMailboxSystem / CrewSchedulerSystem not implemented yet.")
 		return
 
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 10.0  # asleep for a long time
 	# A new threat appears in pilot's awareness
-	pilot.awareness.threats = [make_threat("enemy_1", 250.0)]
+	pilot.awareness.threats = [TestFactories.make_threat("enemy_1", 250.0)]
 
 	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
 		"type": "threat_appeared",
@@ -338,12 +295,12 @@ func test_sleeping_crew_awareness_is_not_refreshed():
 		pending("CrewSchedulerSystem.tick_with_awareness not implemented yet.")
 		return
 
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 5.0  # asleep
 	pilot.awareness.last_update = 0.0
 
-	var ship = make_test_ship("ship_1", 0, Vector2.ZERO)
-	var enemy = make_test_ship("enemy_1", 1, Vector2(100, 0))
+	var ship = TestFactories.make_fighter("ship_1", Vector2.ZERO, 0)
+	var enemy = TestFactories.make_fighter("enemy_1", Vector2(100, 0), 1)
 
 	var result = Scheduler.tick_with_awareness([pilot], 1.0, {}, [ship, enemy], [], [])
 
@@ -357,12 +314,12 @@ func test_waking_crew_awareness_is_refreshed():
 		pending("CrewSchedulerSystem.tick_with_awareness not implemented yet.")
 		return
 
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 0.5  # due to wake
 	pilot.awareness.last_update = 0.0
 
-	var ship = make_test_ship("ship_1", 0, Vector2.ZERO)
-	var enemy = make_test_ship("enemy_1", 1, Vector2(200, 0))
+	var ship = TestFactories.make_fighter("ship_1", Vector2.ZERO, 0)
+	var enemy = TestFactories.make_fighter("enemy_1", Vector2(200, 0), 1)
 
 	var result = Scheduler.tick_with_awareness([pilot], 1.0, {}, [ship, enemy], [], [])
 
@@ -376,12 +333,12 @@ func test_event_woken_crew_sees_current_world_state():
 		pending("CrewSchedulerSystem.tick_with_awareness / CrewMailboxSystem not implemented yet.")
 		return
 
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 100.0  # would otherwise sleep forever
 	pilot.awareness.last_update = 0.0
 
-	var ship = make_test_ship("ship_1", 0, Vector2.ZERO)
-	var enemy = make_test_ship("enemy_1", 1, Vector2(150, 0))
+	var ship = TestFactories.make_fighter("ship_1", Vector2.ZERO, 0)
+	var enemy = TestFactories.make_fighter("enemy_1", Vector2(150, 0), 1)
 
 	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
 		"type": "threat_appeared",
@@ -419,8 +376,8 @@ func test_mid_game_squadron_pilot_makes_decision_on_first_tick():
 	pilot.command_chain.superior = "crew_alpha_x"
 	# next_decision_time defaults to 0; awareness is empty arrays.
 
-	var own_ship = make_test_ship("ship_new", 0, Vector2.ZERO)
-	var enemy = make_test_ship("enemy_1", 1, Vector2(300, 0))  # within sensor range
+	var own_ship = TestFactories.make_fighter("ship_new", Vector2.ZERO, 0)
+	var enemy = TestFactories.make_fighter("enemy_1", Vector2(300, 0), 1)  # within sensor range
 
 	var result = Scheduler.tick_with_awareness(
 		[pilot], 50.0, {}, [own_ship, enemy], [], [])
@@ -442,8 +399,8 @@ func test_mid_game_pilot_continues_to_act_across_multiple_ticks():
 	pilot.assigned_to = "ship_new"
 	pilot.command_chain.superior = "crew_alpha_x"
 
-	var own_ship = make_test_ship("ship_new", 0, Vector2.ZERO)
-	var enemy = make_test_ship("enemy_1", 1, Vector2(300, 0))
+	var own_ship = TestFactories.make_fighter("ship_new", Vector2.ZERO, 0)
+	var enemy = TestFactories.make_fighter("enemy_1", Vector2(300, 0), 1)
 	var crew_list = [pilot]
 
 	var decisions_total = 0
@@ -472,7 +429,7 @@ func test_mid_game_pilot_with_no_visible_enemies_eventually_sees_arrivals():
 	pilot.assigned_to = "ship_new"
 	pilot.command_chain.superior = "crew_alpha_x"
 
-	var own_ship = make_test_ship("ship_new", 0, Vector2.ZERO)
+	var own_ship = TestFactories.make_fighter("ship_new", Vector2.ZERO, 0)
 	var crew_list = [pilot]
 
 	# Tick once with no enemies — pilot decides (idle), schedules far-future wake
@@ -484,7 +441,7 @@ func test_mid_game_pilot_with_no_visible_enemies_eventually_sees_arrivals():
 		"type": "threat_appeared",
 		"data": {"enemy_id": "enemy_late"}
 	})
-	var enemy = make_test_ship("enemy_late", 1, Vector2(200, 0))
+	var enemy = TestFactories.make_fighter("enemy_late", Vector2(200, 0), 1)
 
 	var r2 = Scheduler.tick_with_awareness(
 		crew_list, 51.0, mailboxes, [own_ship, enemy], [], [])
@@ -529,10 +486,10 @@ func test_threat_appeared_event_records_threat_in_tactical_memory():
 		pending("CrewSchedulerSystem.tick_with_awareness / CrewMailboxSystem not implemented yet.")
 		return
 
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.next_decision_time = 0.0  # due
-	var own_ship = make_test_ship("ship_1", 0, Vector2.ZERO)
-	var enemy = make_test_ship("enemy_1", 1, Vector2(200, 0))
+	var own_ship = TestFactories.make_fighter("ship_1", Vector2.ZERO, 0)
+	var enemy = TestFactories.make_fighter("enemy_1", Vector2(200, 0), 1)
 
 	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
 		"type": "threat_appeared",
@@ -558,10 +515,10 @@ func test_ship_damaged_event_records_in_tactical_memory():
 		pending("CrewSchedulerSystem.tick_with_awareness / CrewMailboxSystem not implemented yet.")
 		return
 
-	var pilot = make_pilot()
-	pilot.awareness.threats = [make_threat("enemy_1", 200.0)]
+	var pilot = TestFactories.make_crew_pilot()
+	pilot.awareness.threats = [TestFactories.make_threat("enemy_1", 200.0)]
 	pilot.next_decision_time = 0.0
-	var own_ship = make_test_ship("ship_1", 0, Vector2.ZERO)
+	var own_ship = TestFactories.make_fighter("ship_1", Vector2.ZERO, 0)
 
 	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
 		"type": "ship_damaged",
@@ -587,10 +544,10 @@ func test_target_lost_event_clears_current_target():
 		pending("CrewSchedulerSystem.tick_with_awareness / CrewMailboxSystem not implemented yet.")
 		return
 
-	var pilot = make_pilot()
+	var pilot = TestFactories.make_crew_pilot()
 	pilot.awareness["current_target"] = "enemy_old"
 	pilot.next_decision_time = 0.0
-	var own_ship = make_test_ship("ship_1", 0, Vector2.ZERO)
+	var own_ship = TestFactories.make_fighter("ship_1", Vector2.ZERO, 0)
 
 	var mailboxes = Mailbox.post_event({}, pilot.crew_id, {
 		"type": "target_lost",

@@ -119,8 +119,20 @@ static func tick_with_awareness(
 static func apply_event_side_effects(crew: Dictionary, events: Array, game_time: float) -> Dictionary:
 	var updated = crew
 	for event in events:
+		_log_urgent_trigger(crew, event)
 		updated = _apply_one_event(updated, event, game_time)
 	return updated
+
+## Record urgent wake-ups in the battle log so a reactive decision is always
+## preceded by the event that caused it.
+static func _log_urgent_trigger(crew: Dictionary, event: Dictionary) -> void:
+	var event_type: String = event.get("type", "")
+	if event_type not in URGENT_EVENT_TYPES:
+		return
+	var data: Dictionary = event.get("data", {})
+	var source_id: String = str(data.get("enemy_id", data.get("attacker", "")))
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.log_ai_trigger(crew.get("crew_id", ""), event_type, source_id)
 
 static func _apply_one_event(crew: Dictionary, event: Dictionary, game_time: float) -> Dictionary:
 	match event.get("type", ""):

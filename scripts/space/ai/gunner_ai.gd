@@ -73,7 +73,7 @@ static func _select_target(crew_data: Dictionary, game_time: float) -> Dictionar
 
 	# Query knowledge for firing guidance
 	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
-	var knowledge = TacticalKnowledgeSystem.query_gunner_knowledge(situation, 3)
+	var knowledge = TacticalKnowledgeSystem.query_gunner_knowledge(situation, 3, crew_data.get("known_patterns", []))
 
 	# Select fire action from knowledge
 	var fire_action = _select_action_from_knowledge(knowledge, crew_data)

@@ -15,7 +15,6 @@ static func load_hull_shapes() -> void:
 		var hull = _load_hull_json(path)
 		if hull:
 			_hull_data[ship_type] = hull
-			print("Loaded hull shape: " + ship_type)
 		else:
 			push_error("Failed to load hull shape: " + ship_type)
 

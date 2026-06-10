@@ -29,6 +29,30 @@ extends RefCounted
 const LATERAL_THRUST_RANGE = 1500.0  # Use lateral thrust when closer than this to target
 
 # ============================================================================
+# COMBAT MOVEMENT TUNING
+# ============================================================================
+# All distances are 4-5x scaled for combat spacing.
+
+## Pilots watch for collisions within this range.
+const COLLISION_AWARENESS_RANGE = 800.0
+
+## Oscillation periods (ms) for time-driven strafing and direction flips.
+const DOGFIGHT_WEAVE_PERIOD_MS = 800.0
+const RETREAT_WEAVE_PERIOD_MS = 600.0
+const FLEE_TURN_FLIP_PERIOD_MS = 500.0
+const DEFENSIVE_BREAK_FLIP_PERIOD_MS = 200.0
+const ORBIT_OSCILLATION_PERIOD_MS = 1500.0
+
+## Combat positioning distances.
+const DOGFIGHT_COMBAT_RANGE = 2400.0       # Strafe-fight standoff distance
+const FORMATION_COMBAT_RANGE = 2000.0      # Standoff while holding formation
+const CAUTIOUS_APPROACH_RANGE = 2000.0     # Careful approach standoff
+const ATTACK_RUN_SLOWDOWN_RANGE = 1600.0   # Throttle down inside this on attack runs
+const ANGLED_APPROACH_OFFSET = 1600.0      # Lateral offset for angled approaches
+const RETREAT_TARGET_DISTANCE = 2000.0     # How far ahead retreat waypoints are set
+const RETREAT_WEAVE_WIDTH = 600.0          # Side-to-side dodge width while retreating
+
+# ============================================================================
 # FRONT BRAKE THRUSTER HEAT SYSTEM
 # ============================================================================
 # Front brake thrusters are as powerful as main engines but generate heavy heat.
@@ -259,7 +283,7 @@ static func get_distance(ship: Dictionary) -> float:
 
 ## Get nearby friendly ships for collision avoidance
 static func get_nearby_friendly_ships(ship_data: Dictionary, all_ships: Array) -> Array:
-	var collision_awareness_range = 800.0  # Pilots watch for collisions within this range (4x scaled)
+	var collision_awareness_range = COLLISION_AWARENESS_RANGE
 	return all_ships \
 		.filter(func(s): return s != null) \
 		.filter(func(s): return s.ship_id != ship_data.ship_id) \
@@ -478,11 +502,11 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
 	# Weave using lateral thrust - strafe left/right while facing target
-	var weave_phase = fmod(Time.get_ticks_msec() / 800.0, 2.0)
+	var weave_phase = fmod(Time.get_ticks_msec() / DOGFIGHT_WEAVE_PERIOD_MS, 2.0)
 	var lateral_thrust = sin(weave_phase * PI)  # -1 to 1, oscillating strafe
 
 	# Desired combat range
-	var desired_combat_range = 2400.0
+	var desired_combat_range = DOGFIGHT_COMBAT_RANGE
 	var distance_error = distance - desired_combat_range
 
 	# Main thrust is ONLY for distance control along line of sight
@@ -527,7 +551,7 @@ static func calculate_evasive_turn(ship_data: Dictionary, target: Dictionary, ne
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
 	# Always turn the same direction (predictable) - use sign of time for consistency
-	var turn_direction = 1 if fmod(Time.get_ticks_msec() / 500.0, 2.0) < 1.0 else -1
+	var turn_direction = 1 if fmod(Time.get_ticks_msec() / FLEE_TURN_FLIP_PERIOD_MS, 2.0) < 1.0 else -1
 	var evasion_direction = (away_from_target + perpendicular * turn_direction * 0.5).normalized()
 
 	var desired_heading = direction_to_heading(evasion_direction)
@@ -553,7 +577,7 @@ static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary,
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
 	# Switch directions frequently (every 200ms) - hard to predict
-	var break_phase = fmod(Time.get_ticks_msec() / 200.0, 2.0)
+	var break_phase = fmod(Time.get_ticks_msec() / DEFENSIVE_BREAK_FLIP_PERIOD_MS, 2.0)
 	var break_direction = 1 if break_phase < 1.0 else -1
 
 	# Move away while turning
@@ -672,7 +696,7 @@ static func calculate_group_run_approach(ship_data: Dictionary, target: Dictiona
 		var lateral_thrust = clamp(lateral_offset / 200.0, -1.0, 1.0)
 
 		# Main thrust for distance control
-		var desired_combat_range = 2000.0
+		var desired_combat_range = FORMATION_COMBAT_RANGE
 		var distance_error = distance - desired_combat_range
 		var throttle = 0.0
 		var should_brake = false
@@ -707,7 +731,7 @@ static func calculate_group_run_attack(ship_data: Dictionary, target: Dictionary
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
 
 	# Reduce throttle when very close to avoid collision (4x scaled)
-	if distance < 1600.0:
+	if distance < ATTACK_RUN_SLOWDOWN_RANGE:
 		throttle = throttle * 0.5
 
 	return {
@@ -844,10 +868,10 @@ static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary,
 
 	# Add weave to dodge - quick darts side to side (4x scaled)
 	var perpendicular = Vector2(-away_from_target.y, away_from_target.x)
-	var weave_phase = fmod(Time.get_ticks_msec() / 600.0, 2.0)  # Faster weaving
-	var weave_offset = perpendicular * sin(weave_phase * PI) * 600.0  # Wider weave for safety
+	var weave_phase = fmod(Time.get_ticks_msec() / RETREAT_WEAVE_PERIOD_MS, 2.0)
+	var weave_offset = perpendicular * sin(weave_phase * PI) * RETREAT_WEAVE_WIDTH
 
-	var desired_pos = ship_data.position + away_from_target * 2000.0 + weave_offset
+	var desired_pos = ship_data.position + away_from_target * RETREAT_TARGET_DISTANCE + weave_offset
 	var to_desired = desired_pos - ship_data.position
 	desired_heading = direction_to_heading(to_desired)
 
@@ -880,7 +904,7 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 
 	# Approach at an angle, not directly - stay further out (4x scaled)
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var approach_offset = perpendicular * 1600.0
+	var approach_offset = perpendicular * ANGLED_APPROACH_OFFSET
 
 	if distance > LATERAL_THRUST_RANGE:
 		# FAR: Use main thrust to approach at an angle
@@ -914,7 +938,7 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 		var lateral_thrust = clamp(lateral_offset / 400.0, -1.0, 1.0)
 
 		# Main thrust controls distance - slow cautious approach
-		var desired_approach_distance = 2000.0
+		var desired_approach_distance = CAUTIOUS_APPROACH_RANGE
 		var distance_error = distance - desired_approach_distance
 		var throttle = 0.0
 		var should_brake = false
@@ -967,7 +991,7 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		lateral_thrust = float(evasion_dir)
 	else:
 		# Fallback to time-based oscillation
-		var orbit_phase = fmod(Time.get_ticks_msec() / 1500.0, 2.0 * PI)
+		var orbit_phase = fmod(Time.get_ticks_msec() / ORBIT_OSCILLATION_PERIOD_MS, 2.0 * PI)
 		lateral_thrust = sin(orbit_phase)
 
 	# Desired combat range - close enough to hit but far enough to evade
@@ -1354,88 +1378,95 @@ static func calculate_wing_rejoin(ship_data: Dictionary, target: Dictionary, nea
 	var to_formation = formation_pos - my_pos
 	var distance = to_formation.length()
 
-	# Get lead's velocity to match when close
-	var lead_velocity = target.get("velocity", Vector2.ZERO)
-	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
-
 	# High skill wingman approaches faster but brakes earlier
 	var far_threshold = lerp(WingConstants.REJOIN_FAR_THRESHOLD_LOW_SKILL, WingConstants.REJOIN_FAR_THRESHOLD_HIGH_SKILL, skill_factor)
 	var close_threshold = lerp(WingConstants.REJOIN_CLOSE_THRESHOLD_LOW_SKILL, WingConstants.REJOIN_CLOSE_THRESHOLD_HIGH_SKILL, skill_factor)
 
 	if distance > close_threshold:
-		# FAR/MID: Use main thrust to approach formation position
-		var desired_heading = direction_to_heading(to_formation)
-
-		# Skill affects how aggressively they course correct
-		var brake_threshold = lerp(WingConstants.REJOIN_BRAKE_ANGLE_LOW_SKILL, WingConstants.REJOIN_BRAKE_ANGLE_HIGH_SKILL, skill_factor)
-
-		# DART AND DASH: Brake if we need to change direction significantly
-		if current_velocity.length() > 30.0:
-			var current_heading = direction_to_heading(current_velocity)
-			var heading_diff = abs(angle_difference(current_heading, desired_heading))
-			if heading_diff > brake_threshold and distance > 50.0:
-				return create_braking_control(ship_data, desired_heading, distance)
-
-		var throttle: float
-		var should_brake = false
-		if distance > far_threshold:
-			throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-		else:
-			var closing_speed = current_velocity.dot(to_formation.normalized())
-			var safe_throttle = calculate_safe_approach_throttle(ship_data, distance, closing_speed, close_threshold * 0.8)
-			throttle = min(calculate_intuitive_throttle(ship_data, distance, "formation"), safe_throttle)
-			should_brake = closing_speed > ship_data.stats.max_speed * 0.4
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle if not should_brake else 0.0,
-			"thrust_active": throttle > 0.1 and not should_brake,
-			"is_braking": should_brake,
-			"engagement_range": WingConstants.REJOIN_MATCH_HEADING_DISTANCE,
-			"current_distance": distance
-		}
+		return _calculate_wing_rejoin_far(ship_data, to_formation, distance, far_threshold, close_threshold, skill_factor)
 	else:
-		# CLOSE: Face lead's direction, use lateral thrust to slide into formation
-		var desired_heading: float
-		if lead_velocity.length() > 10.0:
-			desired_heading = direction_to_heading(lead_velocity)
-		else:
-			var to_lead = target.get("position", Vector2.ZERO) - my_pos
-			desired_heading = direction_to_heading(to_lead)
+		return _calculate_wing_rejoin_close(ship_data, target, to_formation, distance, skill_factor)
 
-		# Calculate lateral thrust to slide into formation position
-		var forward_dir = get_visual_forward(desired_heading)
-		var perpendicular = Vector2(-forward_dir.y, forward_dir.x)
-		var lateral_offset = to_formation.dot(perpendicular)
-		# Skill affects responsiveness
-		var lateral_divisor = lerp(200.0, 100.0, skill_factor)
-		var lateral_thrust = clamp(lateral_offset / lateral_divisor, -1.0, 1.0)
+## Wing rejoin FAR/MID arm: Use main thrust to approach formation position
+static func _calculate_wing_rejoin_far(ship_data: Dictionary, to_formation: Vector2, distance: float, far_threshold: float, close_threshold: float, skill_factor: float) -> Dictionary:
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+	var desired_heading = direction_to_heading(to_formation)
 
-		# Main thrust controls forward/back in formation
-		var forward_offset = to_formation.dot(forward_dir)
-		var throttle = 0.0
-		var should_brake = false
+	# Skill affects how aggressively they course correct
+	var brake_threshold = lerp(WingConstants.REJOIN_BRAKE_ANGLE_LOW_SKILL, WingConstants.REJOIN_BRAKE_ANGLE_HIGH_SKILL, skill_factor)
 
-		if forward_offset > 30.0:
-			throttle = 0.2
-		elif forward_offset < -30.0:
-			should_brake = true
+	# DART AND DASH: Brake if we need to change direction significantly
+	if current_velocity.length() > 30.0:
+		var current_heading = direction_to_heading(current_velocity)
+		var heading_diff = abs(angle_difference(current_heading, desired_heading))
+		if heading_diff > brake_threshold and distance > 50.0:
+			return create_braking_control(ship_data, desired_heading, distance)
 
-		# Match lead's speed
-		var speed_diff = current_velocity.length() - lead_velocity.length()
-		if speed_diff > 15.0:
-			should_brake = true
-			throttle = 0.0
+	var throttle: float
+	var should_brake = false
+	if distance > far_threshold:
+		throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
+	else:
+		var closing_speed = current_velocity.dot(to_formation.normalized())
+		var safe_throttle = calculate_safe_approach_throttle(ship_data, distance, closing_speed, close_threshold * 0.8)
+		throttle = min(calculate_intuitive_throttle(ship_data, distance, "formation"), safe_throttle)
+		should_brake = closing_speed > ship_data.stats.max_speed * 0.4
 
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle if not should_brake else 0.0,
-			"thrust_active": throttle > 0.1 and not should_brake,
-			"is_braking": should_brake,
-			"lateral_thrust": lateral_thrust,
-			"engagement_range": WingConstants.REJOIN_MATCH_HEADING_DISTANCE,
-			"current_distance": distance
-		}
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle if not should_brake else 0.0,
+		"thrust_active": throttle > 0.1 and not should_brake,
+		"is_braking": should_brake,
+		"engagement_range": WingConstants.REJOIN_MATCH_HEADING_DISTANCE,
+		"current_distance": distance
+	}
+
+## Wing rejoin CLOSE arm: Face lead's direction, use lateral thrust to slide into formation
+static func _calculate_wing_rejoin_close(ship_data: Dictionary, target: Dictionary, to_formation: Vector2, distance: float, skill_factor: float) -> Dictionary:
+	var my_pos = ship_data.get("position", Vector2.ZERO)
+	var lead_velocity = target.get("velocity", Vector2.ZERO)
+	var current_velocity = ship_data.get("velocity", Vector2.ZERO)
+
+	var desired_heading: float
+	if lead_velocity.length() > 10.0:
+		desired_heading = direction_to_heading(lead_velocity)
+	else:
+		var to_lead = target.get("position", Vector2.ZERO) - my_pos
+		desired_heading = direction_to_heading(to_lead)
+
+	# Calculate lateral thrust to slide into formation position
+	var forward_dir = get_visual_forward(desired_heading)
+	var perpendicular = Vector2(-forward_dir.y, forward_dir.x)
+	var lateral_offset = to_formation.dot(perpendicular)
+	# Skill affects responsiveness
+	var lateral_divisor = lerp(200.0, 100.0, skill_factor)
+	var lateral_thrust = clamp(lateral_offset / lateral_divisor, -1.0, 1.0)
+
+	# Main thrust controls forward/back in formation
+	var forward_offset = to_formation.dot(forward_dir)
+	var throttle = 0.0
+	var should_brake = false
+
+	if forward_offset > 30.0:
+		throttle = 0.2
+	elif forward_offset < -30.0:
+		should_brake = true
+
+	# Match lead's speed
+	var speed_diff = current_velocity.length() - lead_velocity.length()
+	if speed_diff > 15.0:
+		should_brake = true
+		throttle = 0.0
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle if not should_brake else 0.0,
+		"thrust_active": throttle > 0.1 and not should_brake,
+		"is_braking": should_brake,
+		"lateral_thrust": lateral_thrust,
+		"engagement_range": WingConstants.REJOIN_MATCH_HEADING_DISTANCE,
+		"current_distance": distance
+	}
 
 ## Wing follow - Wingman maintains formation while Lead is idle/cruising
 ## Distance-aware: Far uses main thrust, close uses lateral to maintain formation
@@ -2183,7 +2214,48 @@ static func calculate_safe_approach_throttle(
 
 ## Apply realistic space physics - ships drift, thrust provides acceleration
 ## Now supports continuous throttle (0.0-1.0) for precise speed control
+## Each physics step is a named helper so the pipeline reads as an ordered
+## sequence: rotate, accumulate thrust, integrate velocity, integrate position.
 static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary, delta: float) -> Dictionary:
+	var new_rotation = _compute_new_rotation(ship_data, pilot_control, delta)
+
+	# Ship visual facing direction (where the nose points)
+	var ship_facing = get_visual_forward(new_rotation)
+
+	# Accumulate thrust from main engines, maneuvering jets, reverse thrusters
+	# and front brakes
+	var thrust_vector = _compute_main_thrust(ship_data, pilot_control, ship_facing, delta)
+	var lateral = _compute_lateral_thrust(ship_data, pilot_control, ship_facing, delta)
+	thrust_vector += lateral.thrust
+	thrust_vector += _compute_reverse_thrust(ship_data, pilot_control, ship_facing, delta)
+	var brake = _compute_front_brake_and_heat(ship_data, pilot_control, delta)
+	thrust_vector += brake.thrust
+
+	# Update velocity with thrust (no drag in space!)
+	var new_velocity = ship_data.velocity + thrust_vector
+	new_velocity = _apply_inertial_dampening(ship_data, pilot_control, new_velocity, ship_facing, delta)
+
+	# Clamp to max speed (engine limitation)
+	if new_velocity.length() > ship_data.stats.max_speed:
+		new_velocity = new_velocity.normalized() * ship_data.stats.max_speed
+
+	# Update position based on velocity
+	var new_position = ship_data.position + new_velocity * delta
+
+	return DictUtils.merge_dict(ship_data, {
+		velocity = new_velocity,
+		position = new_position,
+		rotation = new_rotation,
+		brake_current_heat = brake.heat,
+		brake_overheated = brake.overheated,
+		_pilot_state = pilot_control,  # Store for debugging/visualization
+		_maneuvering_thrust_direction = lateral.direction,  # For thruster visualization
+		_front_brake_direction = brake.direction  # For brake thruster visualization
+	})
+
+## Rotation step — turn toward the pilot's desired heading (biased by the
+## area leash) at the ship's speed-dependent turn rate.
+static func _compute_new_rotation(ship_data: Dictionary, pilot_control: Dictionary, delta: float) -> float:
 	# SPEED-DEPENDENT TURN RATE (WW2 dogfight model): a fighter pivots
 	# sharply at low speed but only sluggishly at top speed — its turn
 	# radius widens with airspeed. This is the core dogfight tradeoff:
@@ -2210,84 +2282,94 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	)
 
 	# Rotate ship toward desired heading (already biased by area leash above)
-	var new_rotation = rotate_toward_heading(
+	return rotate_toward_heading(
 		ship_data.rotation,
 		effective_desired_heading,
 		effective_turn_rate,
 		delta
 	)
 
-	# Ship visual facing direction (where the nose points)
-	var ship_facing = get_visual_forward(new_rotation)
-
-	# Apply thrust based on throttle setting
-	# CRITICAL: Main thrust is ALWAYS applied in the direction the ship VISUALLY FACES
-	# Engines are at the BACK of the ship, so they push the ship FORWARD
-	var thrust_vector = Vector2.ZERO
-	var maneuvering_direction = Vector2.ZERO
-
+## Main thrust step — apply thrust based on throttle setting.
+## CRITICAL: Main thrust is ALWAYS applied in the direction the ship VISUALLY FACES
+## Engines are at the BACK of the ship, so they push the ship FORWARD
+static func _compute_main_thrust(ship_data: Dictionary, pilot_control: Dictionary, ship_facing: Vector2, delta: float) -> Vector2:
 	# Get throttle value (0.0-1.0) - backwards compatible with binary thrust_active
 	var throttle: float = pilot_control.get("throttle", 0.0)
 	if throttle == 0.0 and pilot_control.get("thrust_active", false):
 		# Legacy compatibility: if no throttle set but thrust_active is true, use full throttle
 		throttle = 1.0
 
-	if throttle > 0.0:
-		# Calculate angle between ship facing and desired visual direction
-		var desired_thrust_direction = get_visual_forward(pilot_control.desired_heading)
-		var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
+	if throttle <= 0.0:
+		return Vector2.ZERO
 
-		# Calculate effective throttle based on alignment
-		# Ships must turn to face their target before they can effectively thrust
-		var alignment_factor: float = 0.0
-		if pilot_control.get("is_braking", false):
-			# BRAKING: Full thrust opposite to velocity to slow down
-			# Ship should be facing opposite to velocity direction
-			alignment_factor = 1.0
-		elif thrust_angle_diff < PI / 4:  # Within 45° of desired heading
-			# Well aligned - full throttle effectiveness
-			alignment_factor = 1.0
-		elif thrust_angle_diff < PI / 2:  # Within 90° - partial effectiveness
-			# Reduced effectiveness when not fully aligned
-			alignment_factor = 0.3
-		# Beyond 90° - no thrust, ship needs to turn first
+	# Calculate angle between ship facing and desired visual direction
+	var desired_thrust_direction = get_visual_forward(pilot_control.desired_heading)
+	var thrust_angle_diff = abs(ship_facing.angle_to(desired_thrust_direction))
 
-		# Apply throttle and alignment to acceleration
-		var effective_acceleration = _read_modified_acceleration(ship_data) * throttle * alignment_factor
+	# Calculate effective throttle based on alignment
+	# Ships must turn to face their target before they can effectively thrust
+	var alignment_factor: float = 0.0
+	if pilot_control.get("is_braking", false):
+		# BRAKING: Full thrust opposite to velocity to slow down
+		# Ship should be facing opposite to velocity direction
+		alignment_factor = 1.0
+	elif thrust_angle_diff < PI / 4:  # Within 45° of desired heading
+		# Well aligned - full throttle effectiveness
+		alignment_factor = 1.0
+	elif thrust_angle_diff < PI / 2:  # Within 90° - partial effectiveness
+		# Reduced effectiveness when not fully aligned
+		alignment_factor = 0.3
+	# Beyond 90° - no thrust, ship needs to turn first
 
-		# Thrust is ALWAYS in ship_facing direction (engines push from behind)
-		thrust_vector = ship_facing * effective_acceleration * delta
+	# Apply throttle and alignment to acceleration
+	var effective_acceleration = _read_modified_acceleration(ship_data) * throttle * alignment_factor
 
-	# LATERAL THRUST: Maneuvering thrusters allow sliding perpendicular to facing
-	# This is the key to skilled evasion - change LOS without rotating
+	# Thrust is ALWAYS in ship_facing direction (engines push from behind)
+	return ship_facing * effective_acceleration * delta
+
+## LATERAL THRUST step — maneuvering thrusters allow sliding perpendicular to
+## facing. This is the key to skilled evasion - change LOS without rotating.
+## Returns {thrust, direction}; direction feeds thruster visualization.
+static func _compute_lateral_thrust(ship_data: Dictionary, pilot_control: Dictionary, ship_facing: Vector2, delta: float) -> Dictionary:
 	var lateral_thrust_dir = pilot_control.get("lateral_thrust", 0)  # -1 left, +1 right
-	if lateral_thrust_dir != 0:
-		# Perpendicular to ship facing (90° rotation)
-		var perpendicular = Vector2(-ship_facing.y, ship_facing.x)
-		# Lateral acceleration is weaker than main engines; pilot skill gates
-		# how much of that base lateral capacity actually delivers.
-		var lateral_accel = _read_modified_acceleration(ship_data) \
-			* ship_data.stats.get("lateral_acceleration", 0.3) \
-			* _read_modified_lateral_factor(ship_data)
-		thrust_vector += perpendicular * lateral_accel * lateral_thrust_dir * delta
-		maneuvering_direction = perpendicular * lateral_thrust_dir
+	if lateral_thrust_dir == 0:
+		return {thrust = Vector2.ZERO, direction = Vector2.ZERO}
 
-	# REVERSE THRUST: Brake thrusters allow backing off without turning around
-	# This lets ships maintain aim while adjusting distance
+	# Perpendicular to ship facing (90° rotation)
+	var perpendicular = Vector2(-ship_facing.y, ship_facing.x)
+	# Lateral acceleration is weaker than main engines; pilot skill gates
+	# how much of that base lateral capacity actually delivers.
+	var lateral_accel = _read_modified_acceleration(ship_data) \
+		* ship_data.stats.get("lateral_acceleration", 0.3) \
+		* _read_modified_lateral_factor(ship_data)
+	return {
+		thrust = perpendicular * lateral_accel * lateral_thrust_dir * delta,
+		direction = perpendicular * lateral_thrust_dir
+	}
+
+## REVERSE THRUST step — brake thrusters allow backing off without turning
+## around. This lets ships maintain aim while adjusting distance.
+static func _compute_reverse_thrust(ship_data: Dictionary, pilot_control: Dictionary, ship_facing: Vector2, delta: float) -> Vector2:
 	var reverse_thrust_amount = pilot_control.get("reverse_thrust", 0.0)  # 0.0 to 1.0
-	if reverse_thrust_amount > 0.0:
-		# Thrust opposite to ship facing direction
-		var reverse_accel = _read_modified_acceleration(ship_data) * ship_data.stats.get("reverse_acceleration", 0.4)
-		thrust_vector -= ship_facing * reverse_accel * reverse_thrust_amount * delta
+	if reverse_thrust_amount <= 0.0:
+		return Vector2.ZERO
 
-	# FRONT BRAKE THRUST: Emergency braking - powerful but heat-limited
-	# Applies thrust opposite to current velocity (regardless of ship facing)
-	# Generates heavy heat - can only be used in short bursts
+	# Thrust opposite to ship facing direction
+	var reverse_accel = _read_modified_acceleration(ship_data) * ship_data.stats.get("reverse_acceleration", 0.4)
+	return -ship_facing * reverse_accel * reverse_thrust_amount * delta
+
+## FRONT BRAKE THRUST step — emergency braking, powerful but heat-limited.
+## Applies thrust opposite to current velocity (regardless of ship facing)
+## Generates heavy heat - can only be used in short bursts
+## Heat dissipation runs every frame, so this step also owns the brake heat
+## bookkeeping. Returns {thrust, heat, overheated, direction}.
+static func _compute_front_brake_and_heat(ship_data: Dictionary, pilot_control: Dictionary, delta: float) -> Dictionary:
 	var brake_thrust_amount = pilot_control.get("brake_thrust", 0.0)  # 0.0 to 1.0
 	var current_brake_heat = ship_data.get("brake_current_heat", 0.0)
 	var brake_overheated = ship_data.get("brake_overheated", false)
 	var brake_heat_generated = 0.0
 	var front_brake_direction = Vector2.ZERO
+	var brake_thrust = Vector2.ZERO
 
 	# Check if brakes have recovered from overheat
 	if brake_overheated and can_use_brakes(ship_data):
@@ -2307,7 +2389,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 			if brake_force.length() > max_brake_magnitude:
 				brake_force = brake_direction * max_brake_magnitude
 
-			thrust_vector += brake_force
+			brake_thrust = brake_force
 			front_brake_direction = brake_direction
 
 			# Generate heat based on brake usage
@@ -2324,45 +2406,34 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		brake_overheated = true
 		new_brake_heat = heat_capacity  # Cap at max
 
-	# Update velocity with thrust (no drag in space!)
-	var new_velocity = ship_data.velocity + thrust_vector
+	return {
+		thrust = brake_thrust,
+		heat = new_brake_heat,
+		overheated = brake_overheated,
+		direction = front_brake_direction
+	}
 
-	# INERTIAL DAMPENING (a.k.a. flight assist): the ship's flight computer
-	# auto-fires lateral thrusters to kill velocity perpendicular to the
-	# nose. The ship is still Newtonian (mass, momentum, no global drag),
-	# but velocity rapidly aligns with facing — fighters curve through
-	# space instead of sliding like boats on ice. Disabled when the pilot
-	# is actively strafing (manual override) or braking (brakes handle
-	# their own deceleration). Tunable per ship via the
-	# `inertial_dampening` stat (1/sec): higher = tighter, 0 = pure
-	# Newtonian.
+## INERTIAL DAMPENING step (a.k.a. flight assist): the ship's flight computer
+## auto-fires lateral thrusters to kill velocity perpendicular to the
+## nose. The ship is still Newtonian (mass, momentum, no global drag),
+## but velocity rapidly aligns with facing — fighters curve through
+## space instead of sliding like boats on ice. Disabled when the pilot
+## is actively strafing (manual override) or braking (brakes handle
+## their own deceleration). Tunable per ship via the
+## `inertial_dampening` stat (1/sec): higher = tighter, 0 = pure
+## Newtonian.
+static func _apply_inertial_dampening(ship_data: Dictionary, pilot_control: Dictionary, velocity: Vector2, ship_facing: Vector2, delta: float) -> Vector2:
 	var inertial_dampening: float = _read_modified_dampening(ship_data)
+	var lateral_thrust_dir = pilot_control.get("lateral_thrust", 0)
 	if inertial_dampening > 0.0 and lateral_thrust_dir == 0 and not pilot_control.get("is_braking", false):
-		var v_along_facing: float = new_velocity.dot(ship_facing)
-		var v_perpendicular: Vector2 = new_velocity - ship_facing * v_along_facing
+		var v_along_facing: float = velocity.dot(ship_facing)
+		var v_perpendicular: Vector2 = velocity - ship_facing * v_along_facing
 		var perp_speed: float = v_perpendicular.length()
 		if perp_speed > 0.1:
 			# Exponential decay capped to not reverse the perpendicular component.
 			var decay: float = min(perp_speed * inertial_dampening * delta, perp_speed)
-			new_velocity -= v_perpendicular / perp_speed * decay
-
-	# Clamp to max speed (engine limitation)
-	if new_velocity.length() > ship_data.stats.max_speed:
-		new_velocity = new_velocity.normalized() * ship_data.stats.max_speed
-
-	# Update position based on velocity
-	var new_position = ship_data.position + new_velocity * delta
-
-	return DictUtils.merge_dict(ship_data, {
-		velocity = new_velocity,
-		position = new_position,
-		rotation = new_rotation,
-		brake_current_heat = new_brake_heat,
-		brake_overheated = brake_overheated,
-		_pilot_state = pilot_control,  # Store for debugging/visualization
-		_maneuvering_thrust_direction = maneuvering_direction,  # For thruster visualization
-		_front_brake_direction = front_brake_direction  # For brake thruster visualization
-	})
+			velocity -= v_perpendicular / perp_speed * decay
+	return velocity
 
 ## Ships in space maintain velocity (Newton's first law)
 static func apply_space_drift(ship_data: Dictionary, delta: float) -> Dictionary:

@@ -8,34 +8,34 @@ extends GutTest
 # ============================================================================
 
 func test_weapon_fires_when_ready():
-	var ship = create_test_ship_with_weapon(0.0)  # No cooldown
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)  # No cooldown
 	# Ship at rotation 0 visually faces UP (negative Y), so target must be above
-	var target = create_test_target(Vector2(0, -300))
+	var target = TestFactories.make_fighter("", Vector2(0, -300), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
 	assert_gt(result.fire_commands.size(), 0, "Ready weapon should fire at valid target")
 
 func test_weapon_does_not_fire_during_cooldown():
-	var ship = create_test_ship_with_weapon(1.0)  # In cooldown
-	var target = create_test_target(Vector2(300, 0))
+	var ship = TestFactories.make_armed_ship("light_cannon", 1.0)  # In cooldown
+	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
 	assert_eq(result.fire_commands.size(), 0, "Weapon in cooldown should not fire")
 
 func test_cooldown_decreases_over_time():
-	var ship = create_test_ship_with_weapon(1.0)
-	var target = create_test_target(Vector2(300, 0))
+	var ship = TestFactories.make_armed_ship("light_cannon", 1.0)
+	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.5)
 
 	assert_lt(result.ship_data.weapons[0].cooldown_remaining, 1.0, "Cooldown should decrease")
 
 func test_cooldown_set_after_firing():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	# Ship at rotation 0 visually faces UP (negative Y)
-	var target = create_test_target(Vector2(0, -300))
+	var target = TestFactories.make_fighter("", Vector2(0, -300), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
@@ -43,7 +43,7 @@ func test_cooldown_set_after_firing():
 	assert_gt(result.ship_data.weapons[0].cooldown_remaining, 0.0, "Cooldown should be set after firing")
 
 func test_cooldown_cannot_go_negative():
-	var ship = create_test_ship_with_weapon(0.5)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.5)
 
 	var result = WeaponSystem.update_weapons(ship, [], 2.0)  # Delta larger than cooldown
 
@@ -54,10 +54,10 @@ func test_cooldown_cannot_go_negative():
 # ============================================================================
 
 func test_weapon_selects_closest_target():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	# Ship at rotation 0 visually faces UP (negative Y)
-	var close_target = create_test_target(Vector2(0, -200))
-	var far_target = create_test_target(Vector2(0, -600))
+	var close_target = TestFactories.make_fighter("", Vector2(0, -200), 1)
+	var far_target = TestFactories.make_fighter("", Vector2(0, -600), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [far_target, close_target], 0.1)
 
@@ -65,17 +65,17 @@ func test_weapon_selects_closest_target():
 	assert_eq(result.fire_commands[0].target_id, close_target.ship_id, "Should target closest enemy")
 
 func test_weapon_ignores_out_of_range_targets():
-	var ship = create_test_ship_with_weapon(0.0)
-	var out_of_range = create_test_target(Vector2(2000, 0))  # Beyond weapon range
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
+	var out_of_range = TestFactories.make_fighter("", Vector2(2000, 0), 1)  # Beyond weapon range
 
 	var result = WeaponSystem.update_weapons(ship, [out_of_range], 0.1)
 
 	assert_eq(result.fire_commands.size(), 0, "Should not fire at targets out of range")
 
 func test_weapon_ignores_allies():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	ship.team = 0
-	var ally = create_test_target(Vector2(300, 0))
+	var ally = TestFactories.make_fighter("", Vector2(300, 0), 1)
 	ally.team = 0  # Same team
 
 	var result = WeaponSystem.update_weapons(ship, [ally], 0.1)
@@ -83,8 +83,8 @@ func test_weapon_ignores_allies():
 	assert_eq(result.fire_commands.size(), 0, "Should not fire at allies")
 
 func test_weapon_ignores_destroyed_targets():
-	var ship = create_test_ship_with_weapon(0.0)
-	var destroyed_target = create_test_target(Vector2(300, 0))
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
+	var destroyed_target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 	destroyed_target.status = "destroyed"
 
 	var result = WeaponSystem.update_weapons(ship, [destroyed_target], 0.1)
@@ -92,7 +92,7 @@ func test_weapon_ignores_destroyed_targets():
 	assert_eq(result.fire_commands.size(), 0, "Should not fire at destroyed targets")
 
 func test_weapon_does_not_fire_without_targets():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 
 	var result = WeaponSystem.update_weapons(ship, [], 0.1)
 
@@ -103,8 +103,9 @@ func test_weapon_does_not_fire_without_targets():
 # ============================================================================
 
 func test_weapon_fires_at_target_in_arc():
-	var ship = create_test_ship_with_limited_arc()
-	var target_in_arc = create_test_target(Vector2(300, 50))  # Slightly off-center but in arc
+	var ship = TestFactories.make_armed_ship()
+	ship.weapons[0].arc = {"min": -20, "max": 20}  # Narrow forward arc
+	var target_in_arc = TestFactories.make_fighter("", Vector2(300, 50), 1)  # Slightly off-center but in arc
 
 	var result = WeaponSystem.update_weapons(ship, [target_in_arc], 0.1)
 
@@ -112,8 +113,9 @@ func test_weapon_fires_at_target_in_arc():
 	assert_true(true, "Weapon system handles arc calculation without errors")
 
 func test_weapon_does_not_fire_outside_arc():
-	var ship = create_test_ship_with_limited_arc()
-	var target_behind = create_test_target(Vector2(-300, 0))  # Behind ship
+	var ship = TestFactories.make_armed_ship()
+	ship.weapons[0].arc = {"min": -20, "max": 20}  # Narrow forward arc
+	var target_behind = TestFactories.make_fighter("", Vector2(-300, 0), 1)  # Behind ship
 
 	var result = WeaponSystem.update_weapons(ship, [target_behind], 0.1)
 
@@ -124,18 +126,18 @@ func test_weapon_does_not_fire_outside_arc():
 # ============================================================================
 
 func test_disabled_ship_does_not_fire():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	ship.status = "disabled"
-	var target = create_test_target(Vector2(300, 0))
+	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
 	assert_eq(result.fire_commands.size(), 0, "Disabled ship should not fire")
 
 func test_destroyed_ship_does_not_fire():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	ship.status = "destroyed"
-	var target = create_test_target(Vector2(300, 0))
+	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
@@ -146,9 +148,9 @@ func test_destroyed_ship_does_not_fire():
 # ============================================================================
 
 func test_fire_command_includes_required_fields():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	# Ship at rotation 0 visually faces UP (negative Y)
-	var target = create_test_target(Vector2(0, -300))
+	var target = TestFactories.make_fighter("", Vector2(0, -300), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
@@ -164,9 +166,9 @@ func test_fire_command_includes_required_fields():
 	assert_has(command, "target_id")
 
 func test_fire_command_direction_is_normalized():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	# Ship at rotation 0 visually faces UP (negative Y)
-	var target = create_test_target(Vector2(0, -300))
+	var target = TestFactories.make_fighter("", Vector2(0, -300), 1)
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
@@ -176,9 +178,9 @@ func test_fire_command_direction_is_normalized():
 	assert_almost_eq(length, 1.0, 0.1, "Fire direction should be normalized")
 
 func test_fire_command_targets_correct_enemy():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	# Ship at rotation 0 visually faces UP (negative Y)
-	var target = create_test_target(Vector2(0, -300))
+	var target = TestFactories.make_fighter("", Vector2(0, -300), 1)
 	target.ship_id = "enemy_123"
 
 	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
@@ -191,17 +193,17 @@ func test_fire_command_targets_correct_enemy():
 # ============================================================================
 
 func test_weapon_update_does_not_mutate_input():
-	var ship = create_test_ship_with_weapon(0.5)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.5)
 	var original_cooldown = ship.weapons[0].cooldown_remaining
-	var target = create_test_target(Vector2(300, 0))
+	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 
 	var _result = WeaponSystem.update_weapons(ship, [target], 0.1)
 
 	assert_eq(ship.weapons[0].cooldown_remaining, original_cooldown, "Original ship data should not be mutated")
 
 func test_target_array_not_mutated():
-	var ship = create_test_ship_with_weapon(0.0)
-	var target = create_test_target(Vector2(300, 0))
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
+	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 	var targets = [target]
 	var original_target = target.duplicate(true)
 
@@ -214,88 +216,22 @@ func test_target_array_not_mutated():
 # ============================================================================
 
 func test_get_fireable_weapons_returns_ready_weapons_only():
-	var ship = create_test_ship_with_multiple_weapons()
+	var ship = TestFactories.make_armed_ship()
+	ship.weapons.append(TestFactories.make_weapon("light_cannon", "weapon_2"))
 	ship.weapons[0].cooldown_remaining = 0.0  # Ready
 	ship.weapons[1].cooldown_remaining = 1.0  # Not ready
 
-	var target = create_test_target(Vector2(300, 0))
+	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 	var fireable = WeaponSystem.get_fireable_weapons(ship, target)
 
 	assert_lte(fireable.size(), ship.weapons.size(), "Should return subset of weapons")
 
 func test_calculate_hit_probability_returns_valid_range():
-	var ship = create_test_ship_with_weapon(0.0)
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
 	var weapon = ship.weapons[0]
-	var target = create_test_target(Vector2(300, 0))
+	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)
 
 	var probability = WeaponSystem.calculate_hit_probability(ship, weapon, target)
 
 	assert_gte(probability, 0.0, "Hit probability should be >= 0")
 	assert_lte(probability, 1.0, "Hit probability should be <= 1")
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-func create_test_ship_with_weapon(cooldown: float) -> Dictionary:
-	return {
-		"ship_id": "test_ship",
-		"type": "fighter",
-		"team": 0,
-		"position": Vector2(0, 0),
-		"rotation": 0.0,
-		"status": "operational",
-		"stats": {"max_speed": 300.0},
-		"weapons": [
-			{
-				"weapon_id": "weapon_1",
-				"type": "light_cannon",
-				"position_offset": Vector2(0, 0),
-				"facing": 0.0,
-				"arc": {"min": -45, "max": 45},
-				"stats": {
-					"damage": 10,
-					"rate_of_fire": 2.0,
-					"projectile_speed": 600,
-					"range": 1000,
-					"accuracy": 0.85
-				},
-				"cooldown_remaining": cooldown
-			}
-		],
-		"internals": []
-	}
-
-func create_test_ship_with_limited_arc() -> Dictionary:
-	var ship = create_test_ship_with_weapon(0.0)
-	ship.weapons[0].arc = {"min": -20, "max": 20}  # Narrow forward arc
-	return ship
-
-func create_test_ship_with_multiple_weapons() -> Dictionary:
-	var ship = create_test_ship_with_weapon(0.0)
-	ship.weapons.append({
-		"weapon_id": "weapon_2",
-		"type": "light_cannon",
-		"position_offset": Vector2(0, 0),
-		"facing": 0.0,
-		"arc": {"min": -45, "max": 45},
-		"stats": {
-			"damage": 10,
-			"rate_of_fire": 2.0,
-			"projectile_speed": 600,
-			"range": 1000,
-			"accuracy": 0.85
-		},
-		"cooldown_remaining": 0.0
-	})
-	return ship
-
-func create_test_target(pos: Vector2) -> Dictionary:
-	return {
-		"ship_id": "target_" + str(randi()),
-		"type": "fighter",
-		"team": 1,
-		"position": pos,
-		"velocity": Vector2.ZERO,
-		"status": "operational"
-	}

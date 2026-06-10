@@ -13,7 +13,7 @@ func test_create_pilot():
 	assert_not_null(pilot.crew_id)
 	assert_eq(pilot.role, CrewData.Role.PILOT)
 	assert_eq(pilot.stats.skills.piloting, 0.7)
-	assert_gt(pilot.stats.awareness_range, 0)
+	assert_gt(pilot.stats.awareness_range, 0.0)
 	assert_has(pilot, "awareness")
 	assert_has(pilot, "orders")
 	assert_has(pilot, "command_chain")
@@ -64,7 +64,7 @@ func test_crew_awareness_empty():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.5)
 	crew.assigned_to = "ship_1"
 
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
 	var updated = InformationSystem.update_crew_awareness(crew, [ship], [], 0.0)
 
 	assert_eq(updated.awareness.known_entities.size(), 0, "No other entities visible")
@@ -74,8 +74,8 @@ func test_crew_awareness_detects_enemy():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.5)
 	crew.assigned_to = "ship_1"
 
-	var own_ship = create_test_ship("ship_1", Vector2(0, 0), 0)
-	var enemy_ship = create_test_ship("ship_2", Vector2(200, 0), 1)  # Different team
+	var own_ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
+	var enemy_ship = TestFactories.make_fighter("ship_2", Vector2(200, 0), 1)  # Different team
 
 	var updated = InformationSystem.update_crew_awareness(crew, [own_ship, enemy_ship], [], 0.0)
 
@@ -87,9 +87,9 @@ func test_crew_awareness_range_limits():
 	crew.assigned_to = "ship_1"
 	crew.stats.awareness_range = 500.0
 
-	var own_ship = create_test_ship("ship_1", Vector2(0, 0), 0)
-	var near_enemy = create_test_ship("ship_2", Vector2(300, 0), 1)
-	var far_enemy = create_test_ship("ship_3", Vector2(1000, 0), 1)
+	var own_ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
+	var near_enemy = TestFactories.make_fighter("ship_2", Vector2(300, 0), 1)
+	var far_enemy = TestFactories.make_fighter("ship_3", Vector2(1000, 0), 1)
 
 	var updated = InformationSystem.update_crew_awareness(crew, [own_ship, near_enemy, far_enemy], [], 0.0)
 
@@ -99,9 +99,9 @@ func test_threat_prioritization():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.5)
 	crew.assigned_to = "ship_1"
 
-	var own_ship = create_test_ship("ship_1", Vector2(0, 0), 0)
-	var close_enemy = create_test_ship("ship_2", Vector2(100, 0), 1)
-	var far_enemy = create_test_ship("ship_3", Vector2(700, 0), 1)
+	var own_ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
+	var close_enemy = TestFactories.make_fighter("ship_2", Vector2(100, 0), 1)
+	var far_enemy = TestFactories.make_fighter("ship_3", Vector2(700, 0), 1)
 
 	var updated = InformationSystem.update_crew_awareness(crew, [own_ship, close_enemy, far_enemy], [], 0.0)
 
@@ -121,8 +121,8 @@ func test_pilot_makes_evasive_decision():
 
 	# Add multiple threats (outnumbered should evade)
 	crew.awareness.threats = [
-		{"id": "enemy_1", "type": "ship", "_threat_priority": 150.0},
-		{"id": "enemy_2", "type": "ship", "_threat_priority": 140.0}
+		TestFactories.make_threat("enemy_1", 150.0),
+		TestFactories.make_threat("enemy_2", 140.0)
 	]
 
 	var result = CrewAISystem.update_crew_member(crew, 0.1, 1.0)
@@ -139,9 +139,7 @@ func test_pilot_makes_pursuit_decision():
 	crew.command_chain.superior = "captain_1"
 
 	# Add an opportunity, no threats
-	crew.awareness.opportunities = [
-		{"id": "enemy_1", "type": "ship", "_opportunity_score": 100.0}
-	]
+	crew.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
 
 	var result = CrewAISystem.update_crew_member(crew, 0.1, 1.0)
 
@@ -153,9 +151,7 @@ func test_gunner_selects_target():
 	var crew = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.8)
 	crew.assigned_to = "ship_1"
 
-	crew.awareness.opportunities = [
-		{"id": "enemy_1", "type": "ship", "_opportunity_score": 120.0}
-	]
+	crew.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 120.0)]
 
 	var result = CrewAISystem.update_crew_member(crew, 0.1, 1.0)
 
@@ -168,9 +164,7 @@ func test_captain_issues_orders():
 	captain.assigned_to = "ship_1"
 	captain.command_chain.subordinates = ["pilot_1", "gunner_1"]
 
-	captain.awareness.opportunities = [
-		{"id": "enemy_1", "type": "ship", "_opportunity_score": 100.0}
-	]
+	captain.awareness.opportunities = [TestFactories.make_opportunity("enemy_1", 100.0)]
 
 	var result = CrewAISystem.update_crew_member(captain, 0.1, 1.0)
 
@@ -206,9 +200,7 @@ func test_stress_affects_performance():
 func test_stress_rises_when_threats_present():
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
 	crew.stats.stress = 0.0
-	crew.awareness.threats = [
-		{"id": "enemy_1", "type": "ship", "_threat_priority": 100.0}
-	]
+	crew.awareness.threats = [TestFactories.make_threat("enemy_1", 100.0)]
 
 	var updated = CrewAISystem.update_crew_state(crew, 1.0)
 
@@ -233,7 +225,7 @@ func test_stress_decays_when_no_threats():
 # ============================================================================
 
 func test_stress_accumulation_is_equivalent_lazy_or_eager():
-	var threat = [{"id": "enemy_1", "type": "ship", "_threat_priority": 100.0}]
+	var threat = [TestFactories.make_threat("enemy_1", 100.0)]
 
 	# Eager: 100 steps of dt=0.01
 	var eager = CrewData.create_crew_member(CrewData.Role.PILOT, 0.7)
@@ -302,9 +294,7 @@ func test_information_sharing_up_chain():
 	pilot.command_chain.superior = captain.crew_id
 
 	# Pilot has awareness
-	pilot.awareness.threats = [
-		{"id": "enemy_1", "type": "ship", "_threat_priority": 100.0}
-	]
+	pilot.awareness.threats = [TestFactories.make_threat("enemy_1", 100.0)]
 
 	var crew_list = [captain, pilot]
 	var updated = CommandChainSystem.process_command_chain(crew_list)
@@ -336,7 +326,7 @@ func test_find_top_commander():
 # ============================================================================
 
 func test_apply_pilot_decision_to_ship():
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
 	var pilot = CrewData.create_crew_member(CrewData.Role.PILOT, 0.8)
 	pilot.assigned_to = "ship_1"
 
@@ -354,7 +344,7 @@ func test_apply_pilot_decision_to_ship():
 	assert_has(updated_ship, "crew_modifiers")
 
 func test_apply_gunner_decision_to_ship():
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
 	var gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.7)
 	gunner.assigned_to = "ship_1"
 
@@ -485,7 +475,7 @@ func test_squadron_coordination_style_varies_with_skill():
 		"Elite leader uses ORCHESTRATED coordination")
 
 func test_captain_modifiers_have_dramatic_range():
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
+	var ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
 
 	# Low skill captain
 	var low_captain = CrewData.create_crew_member(CrewData.Role.CAPTAIN, 0.1)
@@ -510,8 +500,8 @@ func test_captain_modifiers_have_dramatic_range():
 	assert_gt(low_delay, high_delay * 2, "Low skill captain decides >2x slower")
 
 func test_gunner_panic_affects_performance():
-	var ship = create_test_ship("ship_1", Vector2(0, 0), 0)
-	ship.weapons = [create_test_weapon()]
+	var ship = TestFactories.make_fighter("ship_1", Vector2(0, 0), 0)
+	ship.weapons = [TestFactories.make_weapon("light_cannon", "test_weapon")]
 
 	# Calm gunner
 	var calm_gunner = CrewData.create_crew_member(CrewData.Role.GUNNER, 0.7)
@@ -541,45 +531,3 @@ func test_crew_decision_delay_varies_by_role_and_skill():
 	# Captain delay should range from ~0.3s (high) to ~1.5s (low)
 	assert_gt(low_delay, 1.0, "Low skill captain has >1s decision delay")
 	assert_lt(high_delay, 0.5, "High skill captain has <0.5s decision delay")
-
-func create_test_weapon() -> Dictionary:
-	return {
-		"weapon_id": "test_weapon",
-		"stats": {
-			"damage": 10,
-			"range": 500,
-			"accuracy": 0.8,
-			"rate_of_fire": 2.0,
-			"projectile_speed": 400
-		},
-		"arc": {"min": -45, "max": 45},
-		"facing": 0.0,
-		"position_offset": Vector2.ZERO,
-		"cooldown_remaining": 0.0
-	}
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-func create_test_ship(id: String, pos: Vector2, team: int) -> Dictionary:
-	return {
-		"ship_id": id,
-		"type": "fighter",
-		"team": team,
-		"position": pos,
-		"velocity": Vector2.ZERO,
-		"rotation": 0.0,
-		"status": "operational",
-		"collision_radius": 15.0,
-		"stats": {
-			"max_speed": 300.0,
-			"acceleration": 100.0,
-			"turn_rate": 3.0
-		},
-		"weapons": [],
-		"orders": {
-			"current_order": "engage",
-			"target_id": null
-		}
-	}

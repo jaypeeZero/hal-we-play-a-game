@@ -12,7 +12,7 @@ func test_armor_blocks_damage_when_sufficient():
 	var result = DamageResolver.resolve_hit(ship, ship.position + Vector2(0, -10), 50, 0.0)
 
 	assert_false(result.hit_result.penetrated, "Armor should block damage when sufficient")
-	assert_eq(result.hit_result.type, "armor_hit")
+	assert_eq(result.hit_result.type, "armor_hit", "Blocked hit should be reported as an armor hit")
 	assert_lt(result.ship_data.armor_sections[0].current_armor, ship.armor_sections[0].current_armor, "Armor should be reduced")
 
 func test_armor_penetration_when_damage_exceeds_armor():
@@ -200,60 +200,29 @@ func test_multiple_hits_accumulate_correctly():
 # HELPER FUNCTIONS
 # ============================================================================
 
-## Base template for creating test ships with common fields
-func _base_test_ship(ship_type: String = "fighter", extra_fields: Dictionary = {}) -> Dictionary:
-	var base = {
-		"ship_id": "test_ship",
-		"type": ship_type,
-		"team": 0,
-		"position": Vector2(0, 0),
-		"velocity": Vector2.ZERO,
-		"angular_velocity": 0.0,
-		"rotation": 0.0,
-		"status": "operational",
-		"stats": {"max_speed": 300.0, "acceleration": 100.0, "turn_rate": 3.0},
-		"weapons": [],
-		"armor_sections": [],
-		"internals": []
-	}
-
-	# Merge in extra fields
-	for key in extra_fields:
-		base[key] = extra_fields[key]
-
-	return base
+## Armor/component layouts for damage scenarios, composed from TestFactories.
 
 func create_test_ship_with_armor(armor_value: int) -> Dictionary:
-	return _base_test_ship("fighter", {
-		"armor_sections": [
-			{
-				"section_id": "front",
-				"arc": {"start": -90, "end": 90},
-				"max_armor": armor_value,
-				"current_armor": armor_value
-			}
-		],
+	return TestFactories.make_ship("test_ship", "fighter", 0, Vector2.ZERO, {
+		"armor_sections": [TestFactories.make_armor_section("front", armor_value)],
 		"internals": []
 	})
 
 func create_test_ship_with_multiple_sections() -> Dictionary:
-	return _base_test_ship("corvette", {
-		"stats": {"max_speed": 200.0, "acceleration": 100.0, "turn_rate": 3.0},
+	return TestFactories.make_ship("test_ship", "corvette", 0, Vector2.ZERO, {
 		"armor_sections": [
-			{"section_id": "front", "arc": {"start": -45, "end": 45}, "max_armor": 50, "current_armor": 50},
-			{"section_id": "left", "arc": {"start": 45, "end": 135}, "max_armor": 40, "current_armor": 40},
-			{"section_id": "right", "arc": {"start": 225, "end": 315}, "max_armor": 40, "current_armor": 40}
+			TestFactories.make_armor_section("front", 50, -45.0, 45.0),
+			TestFactories.make_armor_section("left", 40, 45.0, 135.0),
+			TestFactories.make_armor_section("right", 40, 225.0, 315.0)
 		],
 		"internals": []
 	})
 
 func create_test_ship_with_components() -> Dictionary:
-	return _base_test_ship("fighter", {
-		"armor_sections": [
-			{"section_id": "front", "arc": {"start": 0, "end": 360}, "max_armor": 20, "current_armor": 20}
-		],
+	return TestFactories.make_ship("test_ship", "fighter", 0, Vector2.ZERO, {
+		"armor_sections": [TestFactories.make_armor_section("front", 20, 0.0, 360.0)],
 		"internals": [
-			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 5), "max_health": 25, "current_health": 25, "status": "operational", "effect_on_ship": {"on_damaged": {"max_speed": 0.7}, "on_destroyed": {"max_speed": 0.2}}}
+			TestFactories.make_component("engine", "engine", Vector2(0, 5), 25, TestFactories.ENGINE_DAMAGE_EFFECTS)
 		]
 	})
 
@@ -261,14 +230,12 @@ func create_test_ship_with_engine() -> Dictionary:
 	return create_test_ship_with_components()
 
 func create_test_ship_with_multiple_components() -> Dictionary:
-	return _base_test_ship("fighter", {
-		"armor_sections": [
-			{"section_id": "front", "arc": {"start": 0, "end": 360}, "max_armor": 50, "current_armor": 50}
-		],
+	return TestFactories.make_ship("test_ship", "fighter", 0, Vector2.ZERO, {
+		"armor_sections": [TestFactories.make_armor_section("front", 50, 0.0, 360.0)],
 		"internals": [
-			{"component_id": "engine", "type": "engine", "position_offset": Vector2(0, 10), "max_health": 30, "current_health": 30, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}},
-			{"component_id": "reactor", "type": "reactor", "position_offset": Vector2(0, 0), "max_health": 40, "current_health": 40, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}},
-			{"component_id": "sensors", "type": "sensors", "position_offset": Vector2(0, -10), "max_health": 20, "current_health": 20, "status": "operational", "effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}}
+			TestFactories.make_component("engine", "engine", Vector2(0, 10), 30),
+			TestFactories.make_component("reactor", "reactor", Vector2(0, 0), 40),
+			TestFactories.make_component("sensors", "sensors", Vector2(0, -10), 20)
 		]
 	})
 

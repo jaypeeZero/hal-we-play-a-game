@@ -84,8 +84,13 @@ static func _load_pattern_file(path: String) -> void:
 # ============================================================================
 
 ## Query knowledge base for relevant patterns
-## Returns array of matches sorted by relevance
-static func query_knowledge(situation: String, role: int, top_k: int = 3) -> Array:
+## Returns array of matches sorted by relevance.
+##
+## `known_patterns` restricts retrieval to the pattern ids a specific crew
+## member knows; an empty array means the full role baseline. This is the
+## per-crew knowledge axis: a rookie who doesn't know "fighter_flank_mid"
+## never flanks, and training adds ids to a crew member's set.
+static func query_knowledge(situation: String, role: int, top_k: int = 3, known_patterns: Array = []) -> Array:
 	# PERFORMANCE: Skip if disabled
 	if not enable_knowledge_queries:
 		return []
@@ -96,7 +101,7 @@ static func query_knowledge(situation: String, role: int, top_k: int = 3) -> Arr
 	_ensure_loaded()
 
 	# Check cache first
-	var cache_key = str(situation) + "_" + str(role) + "_" + str(top_k)
+	var cache_key = str(situation) + "_" + str(role) + "_" + str(top_k) + "_" + str(known_patterns.hash())
 	if _query_cache.has(cache_key):
 		return _query_cache[cache_key]
 
@@ -108,6 +113,10 @@ static func query_knowledge(situation: String, role: int, top_k: int = 3) -> Arr
 
 		# Filter by role (or include general patterns)
 		if pattern.role != role:
+			continue
+
+		# Filter to this crew member's known patterns (empty = role baseline)
+		if not known_patterns.is_empty() and pattern_id not in known_patterns:
 			continue
 
 		var score = calculate_relevance_score(situation, pattern)
@@ -167,24 +176,24 @@ static func tokenize(text: String) -> Array:
 # ============================================================================
 
 ## Query knowledge for pilot situations
-static func query_pilot_knowledge(situation: String, top_k: int = 2) -> Array:
-	return query_knowledge(situation, CrewData.Role.PILOT, top_k)
+static func query_pilot_knowledge(situation: String, top_k: int = 2, known_patterns: Array = []) -> Array:
+	return query_knowledge(situation, CrewData.Role.PILOT, top_k, known_patterns)
 
 ## Query knowledge for gunner situations
-static func query_gunner_knowledge(situation: String, top_k: int = 2) -> Array:
-	return query_knowledge(situation, CrewData.Role.GUNNER, top_k)
+static func query_gunner_knowledge(situation: String, top_k: int = 2, known_patterns: Array = []) -> Array:
+	return query_knowledge(situation, CrewData.Role.GUNNER, top_k, known_patterns)
 
 ## Query knowledge for captain situations
-static func query_captain_knowledge(situation: String, top_k: int = 2) -> Array:
-	return query_knowledge(situation, CrewData.Role.CAPTAIN, top_k)
+static func query_captain_knowledge(situation: String, top_k: int = 2, known_patterns: Array = []) -> Array:
+	return query_knowledge(situation, CrewData.Role.CAPTAIN, top_k, known_patterns)
 
 ## Query knowledge for squadron leader situations
-static func query_squadron_knowledge(situation: String, top_k: int = 2) -> Array:
-	return query_knowledge(situation, CrewData.Role.SQUADRON_LEADER, top_k)
+static func query_squadron_knowledge(situation: String, top_k: int = 2, known_patterns: Array = []) -> Array:
+	return query_knowledge(situation, CrewData.Role.SQUADRON_LEADER, top_k, known_patterns)
 
 ## Query knowledge for fleet commander situations
-static func query_commander_knowledge(situation: String, top_k: int = 2) -> Array:
-	return query_knowledge(situation, CrewData.Role.FLEET_COMMANDER, top_k)
+static func query_commander_knowledge(situation: String, top_k: int = 2, known_patterns: Array = []) -> Array:
+	return query_knowledge(situation, CrewData.Role.FLEET_COMMANDER, top_k, known_patterns)
 
 # ============================================================================
 # KNOWLEDGE BASE EXTENSION
