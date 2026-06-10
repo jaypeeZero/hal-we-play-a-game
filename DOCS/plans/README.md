@@ -1,47 +1,19 @@
 # Plans
 
-Multi-phase design plans for the game, grouped by sub-project. Each
-sub-project has its own folder, README, and ordered phase files.
+Current problem-driven plans, in priority order. Each is small enough to
+ship as one or two PRs. Coding standards live in `CLAUDE.md` and apply to
+every plan; the bar for "done" is: tests green, zero warnings, behavior
+visible in a playtest or in the battle log.
 
-| Sub-project | Status | Description |
+| # | File | Problem it solves |
 |---|---|---|
-| [`crew_ai_rework/`](crew_ai_rework/) | Phase 0 done; 1–4 partial | Bring every crew role (large-ship pilot, gunner, captain, squadron leader, fleet commander) up to the PR #51 quality bar set by the fighter pilot rework — FSMs, personality axes, self-preservation, hard-override interrupts. |
-| [`crew_quality/`](crew_quality/) | Not started | Make crew stats **mechanically dramatic**. Wire up the disconnected modifiers, consolidate stats to a six-stat schema (`aim`, `piloting`, `awareness`, `tactics`, `composure`, `aggression`), add reaction-latency / detection-latency / squadron plays, plus an always-on debug overlay. |
+| 1 | [01_observability.md](01_observability.md) | Logging is fragmented across three systems; battle events aren't all persisted; many `print()` calls bypass loggers |
+| 2 | [02_ai_regressions.md](02_ai_regressions.md) | Two failing tests: elite friendly-collision break, capital leash return |
+| 3 | [03_test_consolidation.md](03_test_consolidation.md) | 26 of 39 test files re-implement the same ship/crew factories (~500 duplicated lines) |
+| 4 | [04_simplification.md](04_simplification.md) | Magic numbers in collision/movement/weapon math; god functions over 100 lines |
+| 5 | [05_crew_role_fsms.md](05_crew_role_fsms.md) | Gunner/captain/squadron/commander AIs lack the FSM quality bar the fighter pilot has |
+| 6 | [06_crew_knowledge_and_training.md](06_crew_knowledge_and_training.md) | Long-term: Football-Manager-style crew management built on `data/knowledge/` |
 
-`crew_quality/` runs after (or alongside) `crew_ai_rework/`. Where they
-overlap (gunner, captain, squadron-leader behavior), `crew_quality/`
-extends what `crew_ai_rework/` lays down — it does not duplicate or
-replace that work.
-
-## Coding standards (every plan must satisfy)
-
-Lifted from `CLAUDE.md` and PR #51 itself:
-
-- **Pure functional**: every AI module is `extends RefCounted` + `class_name`
-  with `static` methods only. No instance/global state.
-- **Data-driven**: state lives on the crew dict, mutated only via
-  `crew_data.duplicate(true)` returns from decision functions.
-- **Named constants only**: no magic numbers. Every literal at the top
-  of the file with a one-line comment explaining what it represents.
-- **No fallback / legacy code**: do not leave old behavior next to new.
-  Delete what's replaced. No aliases, no back-compat shims.
-- **Zero compile warnings**: warnings are unresolved errors.
-- **Behavior-only tests**: assert capabilities, not specific data values
-  (per CLAUDE.md "Testing Standards").
-- **Personality**: every role gets at least one axis beyond raw skill,
-  matching how PR #51 used `aggression` to give wings personality.
-- **Self-preservation analogue**: every role has a "don't fight to the
-  death pointlessly" trigger appropriate to its scale.
-- **Tactical-break interrupts**: explicit, named, bypassing the FSM.
-- **Section-comment headers**: `# === SECTION ===` blocks like
-  `fighter_pilot_ai.gd`, with a paragraph of *why* the section exists.
-
-## Per-phase definition of done
-
-Each phase ships only when:
-
-1. The relevant `tests/test_<role>_ai.gd` passes.
-2. `./test.sh` is green.
-3. A playtest of the relevant scenario shows the change is visible to
-   a player without telemetry.
-4. The acceptance checklist in that phase's plan is fully ticked.
+Plans 1–4 are cleanup/correctness and can run in any order. Plan 5 is
+feature work. Plan 6 is the long-term direction and should inform design
+decisions in all the others.

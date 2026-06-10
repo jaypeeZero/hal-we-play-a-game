@@ -76,11 +76,7 @@ func _ready() -> void:
 	_setup_input_actions()
 
 	if ENABLE_CREW_AI:
-		_initialize_knowledge_base()
 		_enable_event_tracking()
-
-	# Obstacle spawning disabled for better user interaction
-	# _spawn_initial_obstacles()
 
 	_spawn_from_battle_plan()
 
@@ -650,30 +646,6 @@ func _apply_roguelike_damage_states() -> void:
 		})
 
 
-## Spawn initial obstacles at game start
-func _spawn_initial_obstacles() -> void:
-	var obstacle_types = [
-		{"type": "asteroid_small", "count": 8},
-		{"type": "asteroid_medium", "count": 5},
-		{"type": "asteroid_large", "count": 3},
-		{"type": "platform", "count": 2},
-		{"type": "dock_scaffolding", "count": 2},
-		{"type": "debris", "count": 10}
-	]
-
-	# Add margin to keep obstacles away from edges
-	var margin = 150.0
-	var spawn_area_min = Vector2(margin, margin)
-	var spawn_area_max = _battlefield_size - Vector2(margin, margin)
-
-	for obstacle_config in obstacle_types:
-		for i in range(obstacle_config.count):
-			var random_pos = Vector2(
-				randf_range(spawn_area_min.x, spawn_area_max.x),
-				randf_range(spawn_area_min.y, spawn_area_max.y)
-			)
-			spawn_obstacle(obstacle_config.type, random_pos)
-
 ## Spawn an obstacle at the given position
 func spawn_obstacle(obstacle_type: String, position: Vector2) -> Dictionary:
 	# Create obstacle data
@@ -815,10 +787,6 @@ func clear_ships() -> void:
 # ============================================================================
 # CREW AI INTEGRATION
 # ============================================================================
-
-## Initialize knowledge base from JSON files
-func _initialize_knowledge_base() -> void:
-	KnowledgeLoader.initialize_knowledge_base()
 
 ## Enable event history tracking
 func _enable_event_tracking() -> void:

@@ -396,9 +396,6 @@ static func is_angle_in_section_arc(angle_deg: float, section: Dictionary) -> bo
 	else:
 		return is_in_normal_arc(angle_deg, arc_start, arc_end)
 
-static func is_wrapping_arc(arc_end: float) -> bool:
-	return arc_end > 360
-
 static func is_in_wrapping_arc(angle: float, arc_start: float, arc_end: float) -> bool:
 	# For wrapping arc (e.g., 270 to 90), angle is in arc if >= start OR <= end
 	const EPSILON = 0.01

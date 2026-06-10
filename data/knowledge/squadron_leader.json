@@ -1,0 +1,92 @@
+{
+	"patterns": {
+		"squadron_leader_attack_run": {
+			"content": {
+				"action": "coordinate_attack_run",
+				"execution": [
+					"simultaneous_approach",
+					"overwhelming_force"
+				],
+				"target_type": "capital_ship"
+			},
+			"tags": [
+				"squadron",
+				"attack",
+				"run",
+				"coordinated",
+				"strike"
+			],
+			"text": "coordinated attack run strike capital target synchronized"
+		},
+		"squadron_leader_formation": {
+			"content": {
+				"action": "reform_formation",
+				"benefit": "coordinated_firepower",
+				"formations": [
+					"line_abreast",
+					"wedge",
+					"wall"
+				]
+			},
+			"tags": [
+				"squadron",
+				"formation",
+				"tactics",
+				"regroup",
+				"scattered"
+			],
+			"text": "formation scattered regroup coordinate position reform"
+		},
+		"squadron_leader_mutual_support": {
+			"content": {
+				"action": "call_mutual_support",
+				"principle": "no_ship_left_behind",
+				"tactics": [
+					"cover_damaged_ships",
+					"screen_withdrawal"
+				]
+			},
+			"tags": [
+				"squadron",
+				"support",
+				"coordination",
+				"protect",
+				"damaged"
+			],
+			"text": "ship damaged support cover protect squadron help"
+		},
+		"squadron_leader_screen_withdrawal": {
+			"content": {
+				"action": "screen_withdrawal",
+				"goal": "orderly_retreat",
+				"tactics": [
+					"rearguard",
+					"suppressive_fire"
+				]
+			},
+			"tags": [
+				"squadron",
+				"screen",
+				"withdrawal",
+				"retreat",
+				"cover"
+			],
+			"text": "screen withdrawal retreat cover escape protect"
+		},
+		"squadron_leader_target_assignment": {
+			"content": {
+				"action": "assign_targets",
+				"benefit": "prevent_overkill",
+				"strategy": "one_ship_per_target"
+			},
+			"tags": [
+				"squadron",
+				"coordination",
+				"targeting",
+				"distribute"
+			],
+			"text": "multiple targets squadron assign distribute coordinate"
+		}
+	},
+	"role": "squadron_leader"
+}

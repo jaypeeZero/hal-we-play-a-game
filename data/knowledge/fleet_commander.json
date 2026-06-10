@@ -1,0 +1,89 @@
+{
+	"patterns": {
+		"commander_commit_reserves": {
+			"content": {
+				"action": "commit_reserves",
+				"goal": "overwhelming_force",
+				"timing": "decisive_moment"
+			},
+			"tags": [
+				"strategy",
+				"reserves",
+				"commit",
+				"reinforce",
+				"decisive"
+			],
+			"text": "reserves commit reinforce decisive moment breakthrough"
+		},
+		"commander_concentration_force": {
+			"content": {
+				"action": "concentrate_force",
+				"doctrine": "never_divide_fleet",
+				"execution": [
+					"mass_at_decisive_point",
+					"defeat_in_detail"
+				]
+			},
+			"tags": [
+				"strategy",
+				"fleet",
+				"concentration",
+				"mass",
+				"decisive"
+			],
+			"text": "fleet concentration superior numbers focus mass decisive"
+		},
+		"commander_hold_line": {
+			"content": {
+				"action": "hold_line",
+				"conditions": [
+					"defensive_battle",
+					"awaiting_reinforcements"
+				],
+				"stance": "no_retreat"
+			},
+			"tags": [
+				"strategy",
+				"hold",
+				"line",
+				"defensive",
+				"position"
+			],
+			"text": "hold line defensive position maintain fleet stand"
+		},
+		"commander_shift_focus": {
+			"content": {
+				"action": "shift_focus",
+				"execution": "redirect_squadrons",
+				"reasoning": "exploit_weakness"
+			},
+			"tags": [
+				"strategy",
+				"focus",
+				"shift",
+				"priority",
+				"redirect"
+			],
+			"text": "shift focus priority redirect fleet new target"
+		},
+		"commander_strategic_withdrawal": {
+			"content": {
+				"action": "strategic_withdrawal",
+				"conditions": [
+					"unsustainable_losses",
+					"objective_failed"
+				],
+				"priority": "preserve_combat_power"
+			},
+			"tags": [
+				"strategy",
+				"fleet",
+				"retreat",
+				"preserve",
+				"losses"
+			],
+			"text": "losses heavy fleet preserve strategic withdraw retreat"
+		}
+	},
+	"role": "fleet_commander"
+}

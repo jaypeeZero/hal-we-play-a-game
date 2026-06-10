@@ -77,12 +77,10 @@ const FOLLOW_HEAD_TOWARD_DISTANCE = 120.0
 ## Distance at which to face formation position when lead is slow
 const FOLLOW_FACE_FORMATION_DISTANCE = 40.0
 
-## Distance thresholds for speed control
-const FOLLOW_TOO_FAR_DISTANCE = 160.0
+## Distance threshold for speed control
 const FOLLOW_TOO_CLOSE_DISTANCE = 60.0
 
-## Speed difference thresholds for thrust/brake
-const FOLLOW_SPEED_DIFF_THRUST = -15.0
+## Speed difference threshold for braking
 const FOLLOW_SPEED_DIFF_BRAKE = 30.0
 
 # =============================================================================
@@ -111,18 +109,6 @@ const ENGAGE_SPEED_MATCH_FORMATION_DISTANCE = 200.0
 ## Brake angle thresholds
 const ENGAGE_BRAKE_ANGLE_LOW_SKILL = PI / 3.5
 const ENGAGE_BRAKE_ANGLE_HIGH_SKILL = PI / 5.0
-
-# =============================================================================
-# DECISION TIMING - How often wingmen re-evaluate
-# =============================================================================
-
-## Decision delay ranges (seconds)
-const DECISION_DELAY_REJOIN_MIN = 0.2
-const DECISION_DELAY_REJOIN_MAX = 0.4
-const DECISION_DELAY_FOLLOW_MIN = 0.4
-const DECISION_DELAY_FOLLOW_MAX = 0.7
-const DECISION_DELAY_ENGAGE_MIN = 0.2
-const DECISION_DELAY_ENGAGE_MAX = 0.4
 
 # =============================================================================
 # LEAD TARGET SELECTION - How leads pick targets
@@ -253,14 +239,6 @@ const PILOT_APPROACH_ANGLE_MAX = 0.7          # ~40 degrees offset
 # A 0-skill gunner sprays wildly and can't track moving targets
 # A 1.0-skill gunner lands precise shots on specific subsystems
 
-## Rate of fire modifier range
-const GUNNER_ROF_MIN = 0.7                   # 0-skill: 70% fire rate (hesitant)
-const GUNNER_ROF_MAX = 1.2                   # 1.0-skill: 120% fire rate
-
-## Tracking speed modifier (how fast turrets follow targets)
-const GUNNER_TRACKING_MIN = 0.3              # 0-skill: 30% tracking speed
-const GUNNER_TRACKING_MAX = 1.1              # 1.0-skill: 110% tracking speed
-
 ## Lead calculation accuracy (projectile prediction)
 const GUNNER_LEAD_MIN = 0.0                  # 0-skill: no lead (aims at current position)
 const GUNNER_LEAD_MAX = 1.0                  # 1.0-skill: perfect lead calculation
@@ -280,13 +258,6 @@ const GUNNER_PREDICTIVE_SKILL = 0.6
 ## Skill to target specific subsystems (engines, weapons)
 const GUNNER_SUBSYSTEM_SKILL = 0.9
 
-## Skill threshold for target fixation (low skill sticks to bad targets)
-const GUNNER_TARGET_FIXATION_SKILL = 0.3
-
-## Target switch penalty for low skill gunners (seconds of reduced accuracy)
-const GUNNER_TARGET_SWITCH_PENALTY_MAX = 1.5  # 0-skill: 1.5s penalty
-const GUNNER_TARGET_SWITCH_PENALTY_MIN = 0.2  # 1.0-skill: 0.2s penalty
-
 # =============================================================================
 # GUNNER SKILL - Stress response
 # =============================================================================
@@ -296,9 +267,6 @@ const GUNNER_PANIC_COMPOSURE = 0.3
 
 ## Panic fire spread cone (overrides the skill curve when panicking)
 const GUNNER_AIM_PANIC_SPREAD_RAD = PI / 12.0  # 15°
-
-## Panic fire rate bonus (spray and pray)
-const GUNNER_PANIC_ROF_BONUS = 1.3           # 130% fire rate when panicking
 
 # =============================================================================
 # GUNNER SKILL - Spread cone (aim-driven)
@@ -345,9 +313,6 @@ const CAPTAIN_DECISION_DELAY_MAX = 1.5       # 0-skill: slow, hesitant
 # Low skill captains react slowly with poor priorities
 # Higher skill enables foresight and adaptation
 
-## Skill for reactive command (only responds to immediate threats)
-const CAPTAIN_REACTIVE_SKILL = 0.3
-
 ## Skill for standard command (follows doctrine)
 const CAPTAIN_STANDARD_SKILL = 0.5
 
@@ -389,38 +354,6 @@ const SQUADRON_ORCHESTRATED_SKILL = 0.8
 ## Target assignment quality (optimal ship-to-target matching)
 const SQUADRON_ASSIGNMENT_QUALITY_MIN = 0.3  # 0-skill: poor matching
 const SQUADRON_ASSIGNMENT_QUALITY_MAX = 1.0  # 1.0-skill: optimal matching
-
-## Formation coherence under pressure
-const SQUADRON_FORMATION_COHERENCE_MIN = 0.2 # 0-skill: formation falls apart
-const SQUADRON_FORMATION_COHERENCE_MAX = 1.0 # 1.0-skill: formation holds
-
-## Reinforcement timing accuracy
-const SQUADRON_TIMING_MIN = 0.4              # 0-skill: poor timing
-const SQUADRON_TIMING_MAX = 1.0              # 1.0-skill: perfect timing
-
-# =============================================================================
-# FLEET COMMANDER SKILL - Strategic coordination
-# =============================================================================
-# These affect large-scale battle flow
-# A 0-skill fleet commander commits everything immediately
-# A 1.0-skill fleet commander controls tempo, holds reserves
-
-## Skill for basic maneuvering (some initiative)
-const FLEET_MANEUVERING_SKILL = 0.4
-
-## Skill for tactical control (engagement timing, distance)
-const FLEET_TACTICAL_SKILL = 0.6
-
-## Skill for strategic planning (reserves, deception)
-const FLEET_STRATEGIC_SKILL = 0.8
-
-## Reserve management (how much force held back)
-const FLEET_RESERVE_MIN = 0.0                # 0-skill: commits everything
-const FLEET_RESERVE_MAX = 0.3                # 1.0-skill: holds 30% in reserve
-
-## Engagement timing accuracy
-const FLEET_TIMING_MIN = 0.5                 # 0-skill: poor timing
-const FLEET_TIMING_MAX = 1.0                 # 1.0-skill: optimal timing
 
 # =============================================================================
 # SUBSYSTEM TARGETING - elite gunner damage routing

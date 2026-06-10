@@ -2,11 +2,12 @@
 
 ## System Overview
 
-The tactical knowledge system provides AI crew members with retrievable tactical guidance during combat. The system consists of three components:
+The tactical knowledge system provides AI crew members with retrievable tactical guidance during combat. The system consists of two components:
 
-1. **TacticalKnowledgeSystem** - BM25-based knowledge retrieval (`scripts/space/systems/tactical_knowledge_system.gd`)
+1. **TacticalKnowledgeSystem** - BM25-based knowledge retrieval (`scripts/space/systems/tactical_knowledge_system.gd`); lazily loads patterns from `data/knowledge/*.json` (one file per crew role) on first query
 2. **TacticalMemorySystem** - Situation summarization and experience tracking (`scripts/space/systems/tactical_memory_system.gd`)
-3. **KnowledgeLoader** - JSON file loading (`scripts/space/systems/knowledge_loader.gd`)
+
+The JSON files are the single source of tactical knowledge: editing a pattern's `content` (maneuvers, skill requirements, priorities) directly changes what the AI does. This is the foundation for future per-crew knowledge, player-issued standing instructions, and training.
 
 ## Data Flow
 
@@ -79,43 +80,32 @@ Returns array of dictionaries:
 
 **Cache**: Results cached by `"{situation}_{role}_{top_k}"` key. Cache cleared when size exceeds 50 entries.
 
-### KnowledgeLoader
-
-**Location**: `scripts/space/systems/knowledge_loader.gd`
-
-**Function**: `initialize_knowledge_base() -> void`
-
-Called at game startup. Loads JSON files from `res://data/knowledgebase/annotated/`. Falls back to `res://data/knowledgebase/complete/` if annotated directory fails.
-
-**Role Assignment**: Determined by keyword scoring in entry text:
-
-| Keywords | Role |
-|----------|------|
-| thrust, maneuver, velocity, trajectory | PILOT |
-| weapon, firing, target | GUNNER |
-| tactical, combat, awareness | CAPTAIN |
-| multi-ship, coordination | SQUADRON_LEADER |
-| strategic, fleet | FLEET_COMMANDER |
-
 ## Knowledge Entry Format
 
-**Location**: `data/knowledgebase/annotated/*.json`
+**Location**: `data/knowledge/{role}.json` — one file per role (`pilot.json`, `gunner.json`, `captain.json`, `squadron_leader.json`, `fleet_commander.json`)
 
 ```json
 {
-    "id": "pilot_perpendicular_evasion",
-    "title": "Perpendicular Evasion Burn",
-    "category": "piloting",
-    "summary": "Brief description",
-    "details": "Full tactical guidance text",
-    "annotations": ["Developer note 1", "Developer note 2"]
+    "role": "pilot",
+    "patterns": {
+        "fighter_flank_mid": {
+            "tags": ["fighter", "flank", "mid", "tactical", "positioning"],
+            "text": "fighter mid range flank behind position tactical maneuver angle",
+            "content": {
+                "maneuvers": ["fight_flank_behind", "fight_pursue_tactical"],
+                "skill_requirements": {"fight_flank_behind": 0.6, "fight_pursue_tactical": 0.3},
+                "priority": "tactical",
+                "context": "Get behind enemy at mid range"
+            }
+        }
+    }
 }
 ```
 
-**Fields used by system**:
-- `id` - Pattern identifier
-- `title`, `summary`, `details`, `annotations` - Concatenated for BM25 text indexing
-- `category` - Used for tag generation
+**Fields**:
+- `tags` - Boost relevance score when present in the situation string
+- `text` - Keyword soup matched against the situation string (BM25)
+- `content` - The actionable payload. For pilots: `maneuvers` (ordered best-first) and `skill_requirements`/`composure_requirements` gates. Other roles carry role-specific keys (e.g., captain patterns carry `actions`/`conditions`). This is what the AI actually executes — change it and behavior changes.
 
 ## Crew Experience Data Structure
 

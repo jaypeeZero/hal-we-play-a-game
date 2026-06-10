@@ -1,10 +1,10 @@
 ## Interface: Any visual rendering system
-## Implementations: EmojiRenderer, IsometricRenderer, NullRenderer
+## Implementations: Renderer78
 class_name IVisualRenderer extends Node
 
-## Initialize renderer with theme data
+## Initialize renderer
 ## Called once when renderer becomes active
-func initialize(theme: IVisualTheme) -> void:
+func initialize() -> void:
 	assert(false, "IVisualRenderer.initialize() must be implemented")
 
 ## Attach renderer to newly spawned entity

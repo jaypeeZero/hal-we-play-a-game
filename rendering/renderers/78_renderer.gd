@@ -3,12 +3,10 @@ class_name Renderer78 extends IVisualRenderer
 ## 78 Renderer - Uses HullShapes data for ship visualization
 ## Same visual style as the Ship Editor - line-based outlines with semi-transparent fills
 
-var _theme: IVisualTheme = null
 var _entity_visuals: Dictionary = {}  # entity_id -> Dictionary of visual nodes
 var _component_visuals: Dictionary = {}  # entity_id -> Dictionary[component_id -> Node]
 
-func initialize(theme: IVisualTheme) -> void:
-	_theme = theme
+func initialize() -> void:
 	name = "Renderer78"
 	print("Renderer78 initialized - using HullShapes data")
 
