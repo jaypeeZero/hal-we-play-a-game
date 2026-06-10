@@ -1,0 +1,574 @@
+{
+	"patterns": {
+		"fighter_approach_far": {
+			"content": {
+				"context": "Close distance quickly at far range vs fighter",
+				"maneuvers": [
+					"fight_pursue_full_speed"
+				],
+				"priority": "normal",
+				"skill_requirements": {
+					"fight_pursue_full_speed": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"approach",
+				"far",
+				"pursuit"
+			],
+			"text": "fighter fighter far range approach closing pursuit intercept distance solo neutral"
+		},
+		"fighter_capital_cautious_approach": {
+			"content": {
+				"context": "Careful approach to capital ship",
+				"maneuvers": [
+					"fight_cautious_approach"
+				],
+				"priority": "tactical",
+				"skill_requirements": {
+					"fight_cautious_approach": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"capital",
+				"corvette",
+				"approach",
+				"cautious",
+				"far"
+			],
+			"text": "fighter capital corvette far approach cautious careful bigship"
+		},
+		"fighter_capital_group_approach": {
+			"content": {
+				"context": "Coordinate group attack run on capital",
+				"context_requirements": {
+					"nearby_fighters": 4
+				},
+				"maneuvers": [
+					"fight_group_run_approach"
+				],
+				"priority": "tactical",
+				"skill_requirements": {
+					"fight_group_run_approach": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"capital",
+				"group",
+				"coordinated",
+				"approach",
+				"run"
+			],
+			"text": "fighter capital group coordinated approach attack run formation"
+		},
+		"fighter_capital_group_attack": {
+			"content": {
+				"context": "Execute attack run on capital",
+				"context_requirements": {
+					"nearby_fighters": 4
+				},
+				"maneuvers": [
+					"fight_group_run_attack"
+				],
+				"priority": "aggressive",
+				"skill_requirements": {
+					"fight_group_run_attack": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"capital",
+				"group",
+				"attack",
+				"run",
+				"strike"
+			],
+			"text": "fighter capital group attack run strike execute fire"
+		},
+		"fighter_capital_group_reposition": {
+			"content": {
+				"context": "Reposition for another attack run",
+				"context_requirements": {
+					"nearby_fighters": 4
+				},
+				"maneuvers": [
+					"fight_group_run_swing_around"
+				],
+				"priority": "tactical",
+				"skill_requirements": {
+					"fight_group_run_swing_around": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"capital",
+				"group",
+				"reposition",
+				"swing",
+				"around"
+			],
+			"text": "fighter capital group swing around reposition another run"
+		},
+		"fighter_capital_harass": {
+			"content": {
+				"context": "Harass capital ship from safe distance",
+				"maneuvers": [
+					"fight_dodge_and_weave"
+				],
+				"priority": "tactical",
+				"skill_requirements": {
+					"fight_dodge_and_weave": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"capital",
+				"corvette",
+				"harass",
+				"dodge",
+				"weave"
+			],
+			"text": "fighter capital corvette harass dodge weave range potshot"
+		},
+		"fighter_capital_retreat": {
+			"content": {
+				"context": "Get away from capital ship",
+				"maneuvers": [
+					"fight_evasive_retreat"
+				],
+				"priority": "immediate",
+				"skill_requirements": {
+					"fight_evasive_retreat": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"capital",
+				"corvette",
+				"retreat",
+				"evade",
+				"close",
+				"danger"
+			],
+			"text": "fighter capital corvette too close retreat evade danger escape"
+		},
+		"fighter_collision_avoidance": {
+			"content": {
+				"context": "Avoid head-on collision",
+				"maneuvers": [
+					"fight_lateral_break",
+					"fight_evasive_turn"
+				],
+				"priority": "immediate",
+				"skill_requirements": {
+					"fight_evasive_turn": 0.0,
+					"fight_lateral_break": 0.6
+				}
+			},
+			"tags": [
+				"fighter",
+				"collision",
+				"head_on",
+				"break",
+				"avoidance"
+			],
+			"text": "fighter collision head on break lateral avoid crash closing fast"
+		},
+		"fighter_dogfight_close_behind": {
+			"content": {
+				"context": "Maintain firing position when behind at close range",
+				"maneuvers": [
+					"fight_tight_pursuit",
+					"fight_dogfight_maneuver"
+				],
+				"priority": "aggressive",
+				"skill_requirements": {
+					"fight_dogfight_maneuver": 0.0,
+					"fight_tight_pursuit": 0.3
+				}
+			},
+			"tags": [
+				"fighter",
+				"dogfight",
+				"close",
+				"behind",
+				"advantage",
+				"engage"
+			],
+			"text": "fighter close range behind advantage dogfight tight pursuit engage kill"
+		},
+		"fighter_dogfight_close_neutral": {
+			"content": {
+				"context": "Outmaneuver enemy to gain advantage",
+				"maneuvers": [
+					"fight_dogfight_maneuver",
+					"fight_flank_behind"
+				],
+				"priority": "tactical",
+				"skill_requirements": {
+					"fight_dogfight_maneuver": 0.0,
+					"fight_flank_behind": 0.6
+				}
+			},
+			"tags": [
+				"fighter",
+				"dogfight",
+				"close",
+				"neutral",
+				"maneuver"
+			],
+			"text": "fighter close range dogfight maneuver turning fight neutral"
+		},
+		"fighter_evasive_disadvantaged": {
+			"content": {
+				"composure_requirements": {
+					"fight_defensive_break": 0.6,
+					"fight_evasive_turn": 0.3,
+					"fight_pursue_full_speed": 0.0
+				},
+				"context": "Shake enemy from your tail",
+				"maneuvers": [
+					"fight_defensive_break",
+					"fight_evasive_turn",
+					"fight_pursue_full_speed"
+				],
+				"priority": "immediate",
+				"skill_requirements": {
+					"fight_defensive_break": 0.6,
+					"fight_evasive_turn": 0.3,
+					"fight_pursue_full_speed": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"evasion",
+				"disadvantaged",
+				"defensive",
+				"threat",
+				"behind"
+			],
+			"text": "fighter enemy behind disadvantaged evade defensive break threat danger"
+		},
+		"fighter_flank_mid": {
+			"content": {
+				"context": "Get behind enemy at mid range",
+				"maneuvers": [
+					"fight_flank_behind",
+					"fight_pursue_tactical",
+					"fight_pursue_full_speed"
+				],
+				"priority": "tactical",
+				"skill_requirements": {
+					"fight_flank_behind": 0.6,
+					"fight_pursue_full_speed": 0.0,
+					"fight_pursue_tactical": 0.3
+				}
+			},
+			"tags": [
+				"fighter",
+				"flank",
+				"mid",
+				"tactical",
+				"positioning"
+			],
+			"text": "fighter mid range flank behind position tactical maneuver angle"
+		},
+		"fighter_idle_patrol": {
+			"content": {
+				"context": "No targets, patrol and scan",
+				"maneuvers": [
+					"idle"
+				],
+				"priority": "low",
+				"skill_requirements": {
+					"idle": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"idle",
+				"patrol",
+				"scan",
+				"no_target"
+			],
+			"text": "fighter idle patrol scan no target waiting"
+		},
+		"fighter_rejoin_wingman": {
+			"content": {
+				"context": "Rejoin wingman pair",
+				"maneuvers": [
+					"fight_rejoin_wingman"
+				],
+				"priority": "high",
+				"skill_requirements": {
+					"fight_rejoin_wingman": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"wingman",
+				"rejoin",
+				"formation",
+				"pair"
+			],
+			"text": "fighter wingman rejoin formation pair broken separated"
+		},
+		"fighter_tactical_pursuit_mid": {
+			"content": {
+				"context": "Press advantage when behind at mid range",
+				"maneuvers": [
+					"fight_pursue_tactical",
+					"fight_pursue_full_speed"
+				],
+				"priority": "aggressive",
+				"skill_requirements": {
+					"fight_pursue_full_speed": 0.0,
+					"fight_pursue_tactical": 0.3
+				}
+			},
+			"tags": [
+				"fighter",
+				"pursuit",
+				"mid",
+				"behind",
+				"advantage"
+			],
+			"text": "fighter mid range behind advantage pursuit tactical closing"
+		},
+		"fighter_wing_engage": {
+			"content": {
+				"context": "Engage target while maintaining wing formation",
+				"maneuvers": [
+					"fight_wing_engage"
+				],
+				"priority": "aggressive",
+				"skill_requirements": {
+					"fight_wing_engage": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"wing",
+				"formation",
+				"engage",
+				"target",
+				"coordinated"
+			],
+			"text": "fighter wing formation engage target lead coordinated attack"
+		},
+		"fighter_wing_follow": {
+			"content": {
+				"context": "Maintain formation with wing lead",
+				"maneuvers": [
+					"fight_wing_follow"
+				],
+				"priority": "normal",
+				"skill_requirements": {
+					"fight_wing_follow": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"wing",
+				"formation",
+				"follow",
+				"maintain"
+			],
+			"text": "fighter wing formation follow lead maintain position"
+		},
+		"fighter_wing_rejoin": {
+			"content": {
+				"context": "Rejoin wing lead when separated",
+				"maneuvers": [
+					"fight_wing_rejoin"
+				],
+				"priority": "high",
+				"skill_requirements": {
+					"fight_wing_rejoin": 0.0
+				}
+			},
+			"tags": [
+				"fighter",
+				"wing",
+				"formation",
+				"rejoin",
+				"lead"
+			],
+			"text": "fighter wing formation rejoin lead broken separated"
+		},
+		"large_ship_vs_capital_close": {
+			"content": {
+				"context": "Maintain broadside firing position",
+				"maneuvers": [
+					"large_ship_hold_broadside",
+					"large_ship_reposition_arc"
+				],
+				"priority": "aggressive",
+				"skill_requirements": {
+					"large_ship_hold_broadside": 0.0,
+					"large_ship_reposition_arc": 0.5
+				}
+			},
+			"tags": [
+				"corvette",
+				"capital",
+				"close",
+				"broadside",
+				"firing"
+			],
+			"text": "corvette capital close range broadside firing solution"
+		},
+		"large_ship_vs_capital_far": {
+			"content": {
+				"context": "Close to engagement range",
+				"maneuvers": [
+					"large_ship_close_to_broadside"
+				],
+				"priority": "normal",
+				"skill_requirements": {
+					"large_ship_close_to_broadside": 0.0
+				}
+			},
+			"tags": [
+				"corvette",
+				"capital",
+				"far",
+				"approach"
+			],
+			"text": "corvette capital far approach closing"
+		},
+		"large_ship_vs_fighters_close": {
+			"content": {
+				"context": "Back away from fighters, maintain turret range",
+				"maneuvers": [
+					"large_ship_kite",
+					"large_ship_hold_broadside"
+				],
+				"priority": "defensive",
+				"skill_requirements": {
+					"large_ship_hold_broadside": 0.0,
+					"large_ship_kite": 0.3
+				}
+			},
+			"tags": [
+				"corvette",
+				"capital",
+				"fighters",
+				"close",
+				"kite"
+			],
+			"text": "corvette capital fighters close kite back away maintain distance"
+		},
+		"large_ship_vs_fighters_far": {
+			"content": {
+				"context": "Close distance to engagement range",
+				"maneuvers": [
+					"large_ship_close_to_broadside"
+				],
+				"priority": "normal",
+				"skill_requirements": {
+					"large_ship_close_to_broadside": 0.0
+				}
+			},
+			"tags": [
+				"corvette",
+				"capital",
+				"fighters",
+				"far",
+				"approach"
+			],
+			"text": "corvette capital fighters far approach close distance"
+		},
+		"large_ship_vs_fighters_mid": {
+			"content": {
+				"context": "Present broadside for maximum turret coverage",
+				"maneuvers": [
+					"large_ship_hold_broadside",
+					"large_ship_kite"
+				],
+				"priority": "tactical",
+				"skill_requirements": {
+					"large_ship_hold_broadside": 0.0,
+					"large_ship_kite": 0.3
+				}
+			},
+			"tags": [
+				"corvette",
+				"capital",
+				"fighters",
+				"mid",
+				"broadside"
+			],
+			"text": "corvette capital fighters mid range broadside turrets"
+		},
+		"pilot_evasive_close_threat": {
+			"content": {
+				"action": "evasive_maneuver",
+				"maneuver_types": [
+					"zigzag",
+					"perpendicular_burn",
+					"random_jink"
+				],
+				"priority": "immediate"
+			},
+			"tags": [
+				"piloting",
+				"evasion",
+				"combat"
+			],
+			"text": "close enemy threat incoming fire evade dodge maneuver threat"
+		},
+		"pilot_maintain_formation": {
+			"content": {
+				"action": "maintain_formation",
+				"adjustments": [
+					"match_speed",
+					"align_heading"
+				],
+				"benefits": [
+					"mutual_support",
+					"coordinated_attack"
+				]
+			},
+			"tags": [
+				"piloting",
+				"formation",
+				"coordination"
+			],
+			"text": "formation position squadron maintain spacing coordinate"
+		},
+		"pilot_obstacle_avoidance": {
+			"content": {
+				"action": "avoid_obstacle",
+				"detection": "sensor_sweep",
+				"maneuvers": [
+					"lateral_shift",
+					"course_correction"
+				]
+			},
+			"tags": [
+				"piloting",
+				"navigation",
+				"safety"
+			],
+			"text": "obstacle debris asteroid collision avoid navigate"
+		},
+		"pilot_pursuit_damaged": {
+			"content": {
+				"action": "pursue_target",
+				"approach": "direct_intercept",
+				"caution": "watch_for_escorts"
+			},
+			"tags": [
+				"piloting",
+				"pursuit",
+				"opportunity"
+			],
+			"text": "damaged enemy disabled pursuit chase intercept opportunity"
+		}
+	},
+	"role": "pilot"
+}

@@ -1,0 +1,92 @@
+{
+	"patterns": {
+		"gunner_conserve_ammo": {
+			"content": {
+				"action": "hold_fire",
+				"guidance": "wait_for_clear_shot",
+				"triggers": [
+					"low_ammo",
+					"uncertain_hit"
+				]
+			},
+			"tags": [
+				"gunnery",
+				"resources",
+				"discipline",
+				"ammo",
+				"low"
+			],
+			"text": "ammo low conserve fire discipline range wait"
+		},
+		"gunner_lead_target": {
+			"content": {
+				"action": "fire",
+				"factors": [
+					"target_velocity",
+					"projectile_speed",
+					"distance"
+				],
+				"subtype": "precision_shot",
+				"technique": "predictive_fire"
+			},
+			"tags": [
+				"gunnery",
+				"targeting",
+				"accuracy",
+				"moving"
+			],
+			"text": "lead target moving velocity predict intercept aim"
+		},
+		"gunner_precision_shot": {
+			"content": {
+				"action": "fire",
+				"subtype": "precision_shot",
+				"target": "weak_points",
+				"technique": "aimed_fire"
+			},
+			"tags": [
+				"gunnery",
+				"precision",
+				"aim",
+				"careful",
+				"weak_point"
+			],
+			"text": "precision aim careful shot weak point critical"
+		},
+		"gunner_priority_targets": {
+			"content": {
+				"action": "fire",
+				"priority_order": [
+					"damaged_enemies",
+					"close_threats",
+					"high_value"
+				],
+				"reasoning": "finish_weak_first",
+				"subtype": "precision_shot"
+			},
+			"tags": [
+				"gunnery",
+				"targeting",
+				"priority"
+			],
+			"text": "target priority damaged disabled threat select"
+		},
+		"gunner_suppressive_fire": {
+			"content": {
+				"action": "fire",
+				"rate": "high",
+				"reasoning": "area_denial",
+				"subtype": "suppressive_fire"
+			},
+			"tags": [
+				"gunnery",
+				"suppression",
+				"area",
+				"multiple",
+				"threats"
+			],
+			"text": "multiple targets suppressive fire area deny cover"
+		}
+	},
+	"role": "gunner"
+}

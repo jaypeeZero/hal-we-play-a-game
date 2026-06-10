@@ -1,0 +1,151 @@
+{
+	"patterns": {
+		"captain_aggressive_pursuit": {
+			"content": {
+				"action": "aggressive_pursuit",
+				"execution": [
+					"full_speed",
+					"continuous_fire"
+				],
+				"warning": "watch_for_ambush"
+			},
+			"tags": [
+				"tactics",
+				"offense",
+				"pursuit",
+				"fleeing",
+				"press"
+			],
+			"text": "fleeing enemy damaged pursuit press attack chase"
+		},
+		"captain_concentrate_fire": {
+			"content": {
+				"action": "concentrate_fire",
+				"orders": [
+					"all_weapons_one_target"
+				],
+				"reasoning": "eliminate_one_threat_completely"
+			},
+			"tags": [
+				"tactics",
+				"coordination",
+				"combat",
+				"focus",
+				"damage"
+			],
+			"text": "damaged enemy focus fire concentrate destroy finish"
+		},
+		"captain_defensive_posture": {
+			"content": {
+				"action": "defensive_posture",
+				"goal": "survive_until_reinforcements",
+				"tactics": [
+					"angle_armor",
+					"limit_exposure"
+				]
+			},
+			"tags": [
+				"tactics",
+				"defense",
+				"positioning",
+				"outnumbered"
+			],
+			"text": "outnumbered superior enemy defensive protect armor angle"
+		},
+		"captain_engage_target": {
+			"content": {
+				"action": "engage",
+				"execution": [
+					"close_range",
+					"weapons_free"
+				],
+				"priority": "destroy_target"
+			},
+			"tags": [
+				"tactics",
+				"engage",
+				"attack",
+				"target",
+				"combat"
+			],
+			"text": "engage attack target enemy combat pursue"
+		},
+		"captain_flank_maneuver": {
+			"content": {
+				"action": "flank",
+				"execution": [
+					"lateral_movement",
+					"maintain_fire"
+				],
+				"goal": "attack_weak_arc"
+			},
+			"tags": [
+				"tactics",
+				"flank",
+				"maneuver",
+				"positioning",
+				"angle"
+			],
+			"text": "flank maneuver position angle weak side attack"
+		},
+		"captain_hold_position": {
+			"content": {
+				"action": "hold",
+				"conditions": [
+					"awaiting_orders",
+					"defensive_position"
+				],
+				"stance": "ready_to_engage"
+			},
+			"tags": [
+				"tactics",
+				"hold",
+				"position",
+				"defensive",
+				"wait"
+			],
+			"text": "hold position defensive wait maintain standby"
+		},
+		"captain_support_ally": {
+			"content": {
+				"action": "support_ally",
+				"priority": "protect_damaged_friendlies",
+				"tactics": [
+					"interpose",
+					"draw_fire",
+					"escort"
+				]
+			},
+			"tags": [
+				"tactics",
+				"support",
+				"ally",
+				"cover",
+				"protect"
+			],
+			"text": "ally damaged support cover protect friendly help"
+		},
+		"captain_withdraw_damaged": {
+			"content": {
+				"action": "withdraw",
+				"conditions": [
+					"critical_damage",
+					"outnumbered"
+				],
+				"execution": [
+					"evasive_course",
+					"request_cover"
+				]
+			},
+			"tags": [
+				"tactics",
+				"survival",
+				"retreat",
+				"damage",
+				"critical"
+			],
+			"text": "heavy damage disabled critical withdraw retreat escape"
+		}
+	},
+	"role": "captain"
+}
