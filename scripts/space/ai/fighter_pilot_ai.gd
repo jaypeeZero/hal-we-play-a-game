@@ -174,7 +174,7 @@ static func _select_maneuver_from_knowledge(knowledge: Dictionary, crew_data: Di
 
 ## Query knowledge system for fighter situation and return best maneuver
 static func _query_fighter_knowledge(situation: String, crew_data: Dictionary) -> String:
-	var knowledge_results = TacticalKnowledgeSystem.query_pilot_knowledge(situation, 3)
+	var knowledge_results = TacticalKnowledgeSystem.query_pilot_knowledge(situation, 3, crew_data.get("known_patterns", []))
 
 	if knowledge_results.is_empty():
 		return ""

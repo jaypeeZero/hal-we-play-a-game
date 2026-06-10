@@ -17,7 +17,7 @@ static func make_decision(crew_data: Dictionary, game_time: float) -> Dictionary
 
 	# Query knowledge for strategic guidance
 	var situation = TacticalMemorySystem.generate_situation_summary(crew_data)
-	var knowledge = TacticalKnowledgeSystem.query_commander_knowledge(situation, 3)
+	var knowledge = TacticalKnowledgeSystem.query_commander_knowledge(situation, 3, crew_data.get("known_patterns", []))
 
 	# Analyze strategic situation
 	var has_threats = not crew_data.awareness.threats.is_empty()

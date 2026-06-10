@@ -25,6 +25,10 @@ static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictiona
 		"role": role,
 		"assigned_to": null,  # entity_id they're assigned to
 		"stats": _generate_stats_for_role(role, skill_level),
+		# Tactical pattern ids this crew member knows (data/knowledge/*.json).
+		# Empty = the full role baseline. Training and player instructions
+		# grow this set; knowledge queries are filtered to it.
+		"known_patterns": [],
 		"awareness": {
 			"known_entities": [],  # entities they're aware of
 			"last_update": 0.0,
