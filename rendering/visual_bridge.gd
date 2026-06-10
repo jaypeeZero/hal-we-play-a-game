@@ -11,7 +11,6 @@ signal renderer_changed(new_renderer: IVisualRenderer)
 
 func _ready() -> void:
 	name = "VisualBridge"
-	print("VisualBridge initialized")
 
 func _exit_tree() -> void:
 	# Clean up renderer when VisualBridge is destroyed
@@ -26,8 +25,6 @@ func set_renderer(renderer: IVisualRenderer) -> void:
 func _detach_old_renderer() -> void:
 	if not active_renderer:
 		return
-
-	print("Detaching renderer: %s" % active_renderer.get_class())
 
 	# Detach from all registered entities
 	for entity_id in _entity_registry:
@@ -46,8 +43,6 @@ func _detach_old_renderer() -> void:
 
 func _attach_new_renderer(renderer: IVisualRenderer) -> void:
 	active_renderer = renderer
-
-	print("Attaching renderer: %s" % renderer.get_class())
 
 	# Add renderer to scene tree
 	add_child(active_renderer)
@@ -146,13 +141,9 @@ func refresh_visuals() -> void:
 		push_warning("Cannot refresh: no active renderer")
 		return
 
-	print("Refreshing all visuals...")
-
 	# Detach and reattach all entities
 	for entity_id in _entity_registry:
 		var entity: IRenderable = _entity_registry[entity_id]
 		if is_instance_valid(entity):
 			active_renderer.detach_from_entity(entity)
 			active_renderer.attach_to_entity(entity)
-
-	print("Visual refresh complete")

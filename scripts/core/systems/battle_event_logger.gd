@@ -17,6 +17,8 @@ const LOG_DIR := "~/.logs/space-game"
 # Keep at most this many `battle_*.jsonl` files; older ones get deleted so it's
 # easy to tell at a glance which run was most recent.
 const LOG_RETENTION := 5
+# Flush to disk every N events so a crash loses at most this much log tail.
+const FLUSH_EVERY_EVENTS := 25
 
 signal event_occurred(event: Dictionary)
 
@@ -26,6 +28,7 @@ var battle_start_time: float = 0.0
 
 var _log_file: FileAccess = null
 var _log_path: String = ""
+var _events_since_flush: int = 0
 
 func _ready() -> void:
 	battle_start_time = Time.get_ticks_msec() / 1000.0
@@ -106,29 +109,6 @@ func log_ai_trigger(crew_id: String, trigger_type: String, source_id: String = "
 # CONVENIENCE METHODS (battle events)
 # ============================================================================
 
-func log_creature_spawned(creature_id: String, creature_type: String, owner_id: int, position: Vector2) -> void:
-	log_event("creature_spawned", {
-		"creature_id": creature_id,
-		"creature_type": creature_type,
-		"owner_id": owner_id,
-		"position": position,
-	})
-
-func log_spell_cast(caster_id: String, caster_type: String, spell_id: String, target_pos: Vector2) -> void:
-	log_event("spell_cast", {
-		"caster_id": caster_id,
-		"caster_type": caster_type,
-		"spell_id": spell_id,
-		"target_pos": target_pos,
-	})
-
-func log_projectile_fired(projectile_id: String, source_id: String, target_pos: Vector2) -> void:
-	log_event("projectile_fired", {
-		"projectile_id": projectile_id,
-		"source_id": source_id,
-		"target_pos": target_pos,
-	})
-
 func log_damage_dealt(victim_id: String, attacker_id: String, amount: float, damage_type: String = "physical") -> void:
 	log_event("damage_dealt", {
 		"victim_id": victim_id,
@@ -136,19 +116,6 @@ func log_damage_dealt(victim_id: String, attacker_id: String, amount: float, dam
 		"amount": amount,
 		"damage_type": damage_type,
 	})
-
-func log_creature_died(creature_id: String, creature_type: String, killer_id: String = "") -> void:
-	log_event("creature_died", {
-		"creature_id": creature_id,
-		"creature_type": creature_type,
-		"killer_id": killer_id,
-	})
-
-func log_player_died(player_id: int) -> void:
-	log_event("player_died", {"player_id": player_id})
-
-func log_mana_changed(player_id: int, new_amount: float) -> void:
-	log_event("mana_changed", {"player_id": player_id, "new_amount": new_amount})
 
 # ============================================================================
 # QUERY HELPERS (in-memory history)
@@ -225,6 +192,10 @@ func _write_event_to_file(event: Dictionary) -> void:
 	if _log_file == null:
 		return
 	_log_file.store_line(JSON.stringify(_to_json_safe(event)))
+	_events_since_flush += 1
+	if _events_since_flush >= FLUSH_EVERY_EVENTS:
+		_log_file.flush()
+		_events_since_flush = 0
 
 ## Expand the leading `~` in LOG_DIR to the user's home directory.
 ## Falls back to user:// if HOME is unavailable (sandboxed/web).

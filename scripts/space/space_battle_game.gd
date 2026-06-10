@@ -431,7 +431,7 @@ func _request_spawn(ship_type: String, count: int, team: int) -> void:
 		"team": team,
 		"is_squadron": false
 	}
-	print("Click to spawn %d %s(s) for team %d" % [count, ship_type, team])
+	BattleEventLoggerAutoload.log_event("spawn_armed", {"ship_type": ship_type, "count": count, "team": team})
 
 func _request_squadron_spawn(ship_type: String, team: int) -> void:
 	_pending_spawn = {
@@ -439,7 +439,7 @@ func _request_squadron_spawn(ship_type: String, team: int) -> void:
 		"team": team,
 		"is_squadron": true
 	}
-	print("Click to spawn fighter squadron (6 fighters) for team %d" % team)
+	BattleEventLoggerAutoload.log_event("spawn_armed", {"ship_type": ship_type, "squadron": true, "team": team})
 
 func _execute_spawn(spawn_position: Vector2) -> void:
 	if _pending_spawn.is_empty():
@@ -527,7 +527,7 @@ func _execute_squadron_spawn(spawn_position: Vector2) -> void:
 				_crew_index[squadron_crew[i].crew_id] = squadron_crew[i]
 
 		var leader_callsign = squadron_crew[0].get("callsign", "Alpha")
-		print("Spawned fighter squadron: %s leads with %d fighters for team %d" % [leader_callsign, 6, team])
+		BattleEventLoggerAutoload.log_event("squadron_spawned", {"leader": leader_callsign, "size": ship_ids.size(), "team": team})
 
 	_pending_spawn = {}
 
@@ -580,7 +580,7 @@ func _request_obstacle_spawn(obstacle_type: String) -> void:
 		"spawn_type": "obstacle",
 		"type": obstacle_type
 	}
-	print("Click to spawn %s obstacle" % obstacle_type)
+	BattleEventLoggerAutoload.log_event("spawn_armed", {"obstacle_type": obstacle_type})
 
 ## Spawn all ships for the upcoming battle from BattlePlan. The pre-battle
 ## scene populates the plan; if a developer launches space_battle.tscn
@@ -738,8 +738,6 @@ func _end_game(winner: int) -> void:
 	if BattleEventLoggerAutoload.service:
 		BattleEventLoggerAutoload.service.log_event("game_ended", {"winner": winner})
 
-	print("Game Over! Team %d wins!" % winner)
-
 	if RoguelikeRun.active:
 		_handle_roguelike_battle_end()
 
@@ -792,7 +790,6 @@ func clear_ships() -> void:
 func _enable_event_tracking() -> void:
 	if BattleEventLoggerAutoload.service:
 		BattleEventLoggerAutoload.service.track_history = true
-		print("Event history tracking enabled")
 
 ## Update crew AI systems each frame.  Information sharing up the command
 ## chain runs always; the per-crew decision/awareness path runs only for
@@ -1022,7 +1019,7 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> voi
 		_crew_list.append(crew_member)
 		_crew_index[crew_member.crew_id] = crew_member
 
-	print("Created %d crew for %s (type: %s)" % [new_crew.size(), ship_id, ship_type])
+	BattleEventLoggerAutoload.log_event("crew_created", {"ship_id": ship_id, "ship_type": ship_type, "count": new_crew.size()})
 
 ## Remove crew assigned to a ship
 func _remove_crew_for_ship(ship_id: String) -> void:
@@ -1036,7 +1033,7 @@ func _remove_crew_for_ship(ship_id: String) -> void:
 		_crew_index.erase(crew.crew_id)  # Clean up index
 
 	if crew_to_remove.size() > 0:
-		print("Removed %d crew members from destroyed ship %s" % [crew_to_remove.size(), ship_id])
+		BattleEventLoggerAutoload.log_event("crew_removed", {"ship_id": ship_id, "count": crew_to_remove.size()})
 
 ## Update ship data with wing colors for visualization
 func _update_ship_wing_colors(wings: Array) -> void:
@@ -1175,8 +1172,7 @@ func _check_squadron_leadership_succession() -> void:
 						_crew_index[updated_crew.crew_id] = updated_crew
 						break
 
-			# Print promotion message
 			for crew in updated_squadron:
 				if crew.get("is_squadron_leader", false) and crew.crew_id != leader_id:
-					var callsign = crew.get("callsign", "Unknown")
-					print("Squadron leadership succession: %s promoted to squadron leader" % callsign)
+					BattleEventLoggerAutoload.log_event("squadron_leader_promoted", {
+						"crew_id": crew.crew_id, "callsign": crew.get("callsign", "Unknown")})
