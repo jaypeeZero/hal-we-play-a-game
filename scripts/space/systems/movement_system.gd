@@ -2250,6 +2250,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	var new_velocity = ship_data.velocity + thrust_vector
 	new_velocity = _apply_inertial_dampening(ship_data, pilot_control, new_velocity, ship_facing, delta)
 
+	new_velocity = _apply_turn_speed_bleed(ship_data, new_velocity, ship_data.rotation, new_rotation)
 	new_velocity = _apply_overspeed_decay(ship_data, new_velocity, delta)
 
 	# Update position based on velocity
@@ -2281,6 +2282,25 @@ static func _apply_overspeed_decay(ship_data: Dictionary, velocity: Vector2, del
 		return velocity
 	var decayed_excess: float = (speed - max_speed) * exp(-OVERSPEED_DECAY_RATE * delta)
 	return velocity / speed * (max_speed + decayed_excess)
+
+## TURN BLEED (energy-fight model, DOCS/plans/07) — swinging the nose costs
+## speed, proportional to how many radians were turned this frame. Per
+## radian, a fraction `1 - exp(-turn_speed_bleed)` of speed is lost, so a
+## 180° max-rate reversal at `turn_speed_bleed` 0.15 costs ~37% of current
+## speed while a low-speed pivot costs almost nothing in absolute terms.
+## Speed becomes an energy budget: yank the stick constantly and you end up
+## slow and predictable; fly straight and you bank energy. Sustained
+## max-rate turning settles at the "corner speed" where thrust regeneration
+## balances bleed (~acceleration / (bleed × turn_rate)). Configured per
+## ship via the `turn_speed_bleed` stat (0.0 = no bleed).
+static func _apply_turn_speed_bleed(ship_data: Dictionary, velocity: Vector2, old_rotation: float, new_rotation: float) -> Vector2:
+	var bleed_per_radian: float = ship_data.stats.get("turn_speed_bleed", 0.0)
+	if bleed_per_radian <= 0.0:
+		return velocity
+	var radians_turned: float = abs(angle_difference(old_rotation, new_rotation))
+	if radians_turned <= 0.0:
+		return velocity
+	return velocity * exp(-bleed_per_radian * radians_turned)
 
 ## Rotation step — turn toward the pilot's desired heading (biased by the
 ## area leash) at the ship's speed-dependent turn rate.

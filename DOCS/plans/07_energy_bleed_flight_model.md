@@ -1,15 +1,23 @@
-# 07 — Energy-bleed flight model (contingency)
+# 07 — Energy-bleed flight model
 
-**Status: contingency; increment 1 (duel harness) SHIPPED** as
-`tools/duel_sim.gd`. Its first runs found why earlier skill-gap tuning
+**Status: increments 1-2 SHIPPED.**
+
+Increment 1 (`tools/duel_sim.gd`) found why earlier skill-gap tuning
 felt minuscule: dead `ship_damaged` events, projectile tunneling, and
 projectile speeds so low that hit probability was ~zero at doctrine
-range for any skill. With those fixed, 30-duel baselines show
-elite-vs-rookie at 30/30 wins (60% vs 3% hit rate, 16s TTK), a
-monotone ladder down to a symmetric 50/50 mirror, and piloting-only
-(equal gunnery) at 10-3 decided. Increments 2-3 below remain on the
-shelf — execute only if playtests still feel flat despite these
-numbers.
+range for any skill. With those fixed, the pre-bleed baseline (tagged
+`skill-gap-baseline`) showed elite-vs-rookie at 30/30 wins (60% vs 3%
+hit rate, 16s TTK) and piloting-only (equal gunnery) at 10-3 decided.
+
+Increment 2 (turn bleed, `_apply_turn_speed_bleed` +
+`turn_speed_bleed` stat) on the same seeds: 0.70v0.30 becomes a clean
+30/30 sweep with TTK down 36s → 31s, and piloting-only improves to
+10-1 (91% of decided) — sloppy pilots now pay for yanking the stick.
+The mirror control stays a coin flip.
+
+Increment 3 (AI corner-speed awareness) stays on the shelf: the
+trigger condition — pursuit AI bleeding itself into draws / TTK
+inflation — did not appear in the harness numbers.
 
 ## Problem
 
