@@ -1,9 +1,15 @@
 # 07 — Energy-bleed flight model (contingency)
 
-**Status: contingency.** Only execute if the committed-evasion + soft-cap
-changes (shipped on `claude/nifty-brown-hgqzi3`) don't open a visible
-skill gap in playtests. Increment 1 (the duel harness) is worth shipping
-regardless — it's how we decide.
+**Status: contingency; increment 1 (duel harness) SHIPPED** as
+`tools/duel_sim.gd`. Its first runs found why earlier skill-gap tuning
+felt minuscule: dead `ship_damaged` events, projectile tunneling, and
+projectile speeds so low that hit probability was ~zero at doctrine
+range for any skill. With those fixed, 30-duel baselines show
+elite-vs-rookie at 30/30 wins (60% vs 3% hit rate, 16s TTK), a
+monotone ladder down to a symmetric 50/50 mirror, and piloting-only
+(equal gunnery) at 10-3 decided. Increments 2-3 below remain on the
+shelf — execute only if playtests still feel flat despite these
+numbers.
 
 ## Problem
 
