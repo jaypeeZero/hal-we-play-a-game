@@ -11,6 +11,7 @@ Completed plans are deleted, not archived — git history has them.
 |---|---|---|
 | 5 | [05_crew_role_fsms.md](05_crew_role_fsms.md) | Gunner/captain/squadron/commander AIs lack the FSM quality bar the fighter pilot has |
 | 6 | [06_crew_knowledge_and_training.md](06_crew_knowledge_and_training.md) | Long-term: Football-Manager-style crew management built on `data/knowledge/` (increment 1 shipped) |
+| 7 | [07_energy_bleed_flight_model.md](07_energy_bleed_flight_model.md) | Contingency: turning bleeds speed so flight skill becomes energy management (only if committed-evasion changes aren't enough; its duel harness ships regardless) |
 
 Plan 5 is feature work, sized as one PR per role. Plan 6 is the
 long-term direction and should inform design decisions everywhere.
