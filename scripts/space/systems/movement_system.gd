@@ -36,12 +36,21 @@ const LATERAL_THRUST_RANGE = 1500.0  # Use lateral thrust when closer than this 
 ## Pilots watch for collisions within this range.
 const COLLISION_AWARENESS_RANGE = 800.0
 
-## Oscillation periods (ms) for time-driven strafing and direction flips.
-const DOGFIGHT_WEAVE_PERIOD_MS = 800.0
-const RETREAT_WEAVE_PERIOD_MS = 600.0
+## COMMITTED EVASION HOLDS (ms). Under momentum physics, displacement from an
+## oscillating strafe of acceleration `a` at angular frequency `ω` is a/ω² —
+## a fast sine weave moves a fighter less than its own hit radius and evades
+## nothing. Effective evasion COMMITS to one direction long enough for
+## displacement (a·t²/2) to clear the hit circle, then flips on a hash-random
+## schedule so gunners can't metronome the rhythm
+## (see committed_strafe_direction).
+const DOGFIGHT_STRAFE_HOLD_MS = 900.0
+const RETREAT_WEAVE_HOLD_MS = 1000.0
+const DODGE_STRAFE_HOLD_MS = 1200.0
+const DEFENSIVE_BREAK_HOLD_MS = 800.0
+
+## Period (ms) of the deliberately PREDICTABLE panic-turn flip — evasive_turn
+## is the unskilled escape, metronomic by design.
 const FLEE_TURN_FLIP_PERIOD_MS = 500.0
-const DEFENSIVE_BREAK_FLIP_PERIOD_MS = 200.0
-const ORBIT_OSCILLATION_PERIOD_MS = 1500.0
 
 ## Combat positioning distances.
 const DOGFIGHT_COMBAT_RANGE = 2400.0       # Strafe-fight standoff distance
@@ -113,6 +122,17 @@ static func direction_to_heading(direction: Vector2) -> float:
 ## Get the visual forward direction of a ship from its rotation
 static func get_visual_forward(rotation: float) -> Vector2:
 	return Vector2(sin(rotation), -cos(rotation))
+
+## Committed randomized strafe direction: -1.0 or +1.0, held for `hold_ms`
+## and re-rolled from a per-ship hash at each window boundary. Stateless and
+## deterministic in (ship_id, time) — no per-frame mutation. The per-ship
+## phase offset desynchronizes the fleet so squadrons don't all flip on the
+## same frame.
+static func committed_strafe_direction(ship_data: Dictionary, hold_ms: float) -> float:
+	var ship_id: String = ship_data.get("ship_id", "")
+	var phase_offset: int = hash(ship_id) % int(hold_ms)
+	var window: int = int((Time.get_ticks_msec() + phase_offset) / hold_ms)
+	return 1.0 if hash("%s|%d" % [ship_id, window]) % 2 == 0 else -1.0
 
 # Leash-vs-aggression dial. The pilot's aggression scales how hard the
 # leash pulls when the ship has an enemy target:
@@ -498,12 +518,8 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 	# ALWAYS face the target for aiming
 	var desired_heading = direction_to_heading(to_target)
 
-	# Perpendicular to line of sight - for lateral movement
-	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-
-	# Weave using lateral thrust - strafe left/right while facing target
-	var weave_phase = fmod(Time.get_ticks_msec() / DOGFIGHT_WEAVE_PERIOD_MS, 2.0)
-	var lateral_thrust = sin(weave_phase * PI)  # -1 to 1, oscillating strafe
+	# Committed strafe — full lateral burn one way, hash-random flip each hold
+	var lateral_thrust = committed_strafe_direction(ship_data, DOGFIGHT_STRAFE_HOLD_MS)
 
 	# Desired combat range
 	var desired_combat_range = DOGFIGHT_COMBAT_RANGE
@@ -576,9 +592,9 @@ static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary,
 	# Alternating sharp turns in opposite directions - unpredictable
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
-	# Switch directions frequently (every 200ms) - hard to predict
-	var break_phase = fmod(Time.get_ticks_msec() / DEFENSIVE_BREAK_FLIP_PERIOD_MS, 2.0)
-	var break_direction = 1 if break_phase < 1.0 else -1
+	# Committed randomized breaks — held long enough to actually displace,
+	# flipped on a hash-random schedule so the rhythm can't be tracked
+	var break_direction = committed_strafe_direction(ship_data, DEFENSIVE_BREAK_HOLD_MS)
 
 	# Move away while turning
 	var away_from_target = -to_target.normalized()
@@ -866,10 +882,10 @@ static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary,
 	var away_from_target = (ship_data.position - target.position).normalized()
 	var desired_heading = direction_to_heading(away_from_target)
 
-	# Add weave to dodge - quick darts side to side (4x scaled)
+	# Add weave to dodge — committed darts side to side (4x scaled)
 	var perpendicular = Vector2(-away_from_target.y, away_from_target.x)
-	var weave_phase = fmod(Time.get_ticks_msec() / RETREAT_WEAVE_PERIOD_MS, 2.0)
-	var weave_offset = perpendicular * sin(weave_phase * PI) * RETREAT_WEAVE_WIDTH
+	var weave_dir = committed_strafe_direction(ship_data, RETREAT_WEAVE_HOLD_MS)
+	var weave_offset = perpendicular * weave_dir * RETREAT_WEAVE_WIDTH
 
 	var desired_pos = ship_data.position + away_from_target * RETREAT_TARGET_DISTANCE + weave_offset
 	var to_desired = desired_pos - ship_data.position
@@ -990,9 +1006,8 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		# Deliberate evasion - skilled pilot picks a side and commits
 		lateral_thrust = float(evasion_dir)
 	else:
-		# Fallback to time-based oscillation
-		var orbit_phase = fmod(Time.get_ticks_msec() / ORBIT_OSCILLATION_PERIOD_MS, 2.0 * PI)
-		lateral_thrust = sin(orbit_phase)
+		# Fallback: committed strafe with hash-random flips
+		lateral_thrust = committed_strafe_direction(ship_data, DODGE_STRAFE_HOLD_MS)
 
 	# Desired combat range - close enough to hit but far enough to evade
 	# Fighter weapons have ~1000 range, corvette weapons have ~1500 range
@@ -1783,11 +1798,11 @@ static func calculate_pursuit_curve(ship_data: Dictionary, target: Dictionary, s
 	if needs_brake:
 		return create_braking_control(ship_data, desired_heading, distance)
 
-	# Jinking during approach - makes pilot hard to hit
+	# Jinking during approach — committed strafe bursts; amplitude and hold
+	# duration come from the pilot's skill-scaled jink params
 	var jink_amplitude = orders.get("jink_amplitude", 0.0)
-	var jink_period = orders.get("jink_period", 500.0)
-	var jink_phase = fmod(Time.get_ticks_msec() / jink_period, 2.0)
-	var lateral_thrust = sin(jink_phase * PI) * jink_amplitude
+	var jink_hold_ms = orders.get("jink_hold_ms", WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS)
+	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms) * jink_amplitude
 
 	# Tactical throttle with distance awareness
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
@@ -1824,9 +1839,8 @@ static func calculate_defensive_spiral(ship_data: Dictionary, target: Dictionary
 
 	# Jinking while breaking - even harder to hit
 	var jink_amplitude = orders.get("jink_amplitude", 0.0) * 1.2  # Extra jinking when defensive
-	var jink_period = orders.get("jink_period", 400.0) * 0.8  # Faster jinking
-	var jink_phase = fmod(Time.get_ticks_msec() / jink_period, 2.0)
-	var lateral_thrust = sin(jink_phase * PI) * jink_amplitude
+	var jink_hold_ms = orders.get("jink_hold_ms", WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS)
+	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms) * jink_amplitude
 
 	# Full evasion throttle - get out fast
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "evasion")
@@ -1869,9 +1883,8 @@ static func calculate_attack_run(ship_data: Dictionary, target: Dictionary, skil
 
 	# Jinking while attacking - stay hard to hit even with advantage
 	var jink_amplitude = orders.get("jink_amplitude", 0.0) * 0.8  # Slightly less when attacking
-	var jink_period = orders.get("jink_period", 500.0)
-	var jink_phase = fmod(Time.get_ticks_msec() / jink_period, 2.0)
-	var lateral_thrust = sin(jink_phase * PI) * jink_amplitude
+	var jink_hold_ms = orders.get("jink_hold_ms", WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS)
+	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms) * jink_amplitude
 
 	# Tactical throttle - controlled approach to maintain advantage
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
@@ -2235,9 +2248,7 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 	var new_velocity = ship_data.velocity + thrust_vector
 	new_velocity = _apply_inertial_dampening(ship_data, pilot_control, new_velocity, ship_facing, delta)
 
-	# Clamp to max speed (engine limitation)
-	if new_velocity.length() > ship_data.stats.max_speed:
-		new_velocity = new_velocity.normalized() * ship_data.stats.max_speed
+	new_velocity = _apply_overspeed_decay(ship_data, new_velocity, delta)
 
 	# Update position based on velocity
 	var new_position = ship_data.position + new_velocity * delta
@@ -2252,6 +2263,22 @@ static func apply_space_physics(ship_data: Dictionary, pilot_control: Dictionary
 		_maneuvering_thrust_direction = lateral.direction,  # For thruster visualization
 		_front_brake_direction = brake.direction  # For brake thruster visualization
 	})
+
+## SOFT SPEED CAP — thrust still works past rated max_speed, but the excess
+## decays exponentially at this rate (1/sec). Equilibrium overspeed under a
+## sustained burn is acceleration / OVERSPEED_DECAY_RATE, so a higher-thrust
+## ship sustains a genuinely higher top speed. A hard clamp erased speed as a
+## differentiator: once two ships hit the cap, neither thrust nor momentum
+## mattered and every chase became pure geometry.
+const OVERSPEED_DECAY_RATE = 1.2
+
+static func _apply_overspeed_decay(ship_data: Dictionary, velocity: Vector2, delta: float) -> Vector2:
+	var max_speed: float = ship_data.stats.max_speed
+	var speed: float = velocity.length()
+	if speed <= max_speed:
+		return velocity
+	var decayed_excess: float = (speed - max_speed) * exp(-OVERSPEED_DECAY_RATE * delta)
+	return velocity / speed * (max_speed + decayed_excess)
 
 ## Rotation step — turn toward the pilot's desired heading (biased by the
 ## area leash) at the ship's speed-dependent turn rate.

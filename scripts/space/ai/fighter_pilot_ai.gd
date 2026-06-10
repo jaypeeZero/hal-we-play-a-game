@@ -810,7 +810,7 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 		"approach_style": approach_style,
 		"position_advantage": position_advantage,
 		"jink_amplitude": jink_params.amplitude,
-		"jink_period": jink_params.period,
+		"jink_hold_ms": jink_params.hold_ms,
 		"approach_angle": approach_angle,
 	}
 
@@ -1659,20 +1659,20 @@ static func _select_approach_style(skill: float, position_advantage: String, agg
 		return ApproachStyle.PURSUIT_CURVE
 
 ## Calculate jink parameters based on skill
-## Returns: { amplitude: float, period: float }
+## Returns: { amplitude: float, hold_ms: float }
 static func _calculate_jink_params(skill: float) -> Dictionary:
 	if skill < WingConstants.PILOT_JINKING_SKILL:
 		# Below jinking threshold - no jinking
-		return { "amplitude": 0.0, "period": 1000.0 }
+		return { "amplitude": 0.0, "hold_ms": WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS }
 
 	# Scale jinking with skill above threshold
 	var jink_skill = (skill - WingConstants.PILOT_JINKING_SKILL) / (1.0 - WingConstants.PILOT_JINKING_SKILL)
 	var amplitude = lerp(WingConstants.PILOT_JINK_AMPLITUDE_MIN,
 						 WingConstants.PILOT_JINK_AMPLITUDE_MAX, jink_skill)
-	var period = lerp(WingConstants.PILOT_JINK_PERIOD_LOW_SKILL,
-					  WingConstants.PILOT_JINK_PERIOD_HIGH_SKILL, jink_skill)
+	var hold_ms = lerp(WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS,
+					   WingConstants.PILOT_JINK_HOLD_HIGH_SKILL_MS, jink_skill)
 
-	return { "amplitude": amplitude, "period": period }
+	return { "amplitude": amplitude, "hold_ms": hold_ms }
 
 ## Calculate approach angle offset based on skill
 ## Returns angle in radians (0 for direct, up to ~0.7 for skilled)

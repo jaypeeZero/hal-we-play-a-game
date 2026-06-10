@@ -71,12 +71,12 @@
 		"brake_heat_dissipation": 15.0,
 		"brake_heat_per_second": 50.0,
 		"inertial_dampening": 4.0,
-		"lateral_acceleration": 0.55,
+		"lateral_acceleration": 0.7,
 		"mass": 50.0,
 		"max_speed": 300.0,
 		"size": 15.0,
 		"turn_rate": 4.0,
-		"turn_rate_falloff": 0.75
+		"turn_rate_falloff": 0.5
 	},
 	"status": "operational",
 	"team": 0,
