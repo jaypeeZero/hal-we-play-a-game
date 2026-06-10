@@ -501,13 +501,3 @@ static func _build_decision(
 		decision[key] = extra[key]
 
 	return {"crew_data": updated, "decision": decision}
-
-
-## ---------------------------------------------------------------------------
-## SHIP LOOKUP
-## ---------------------------------------------------------------------------
-static func _get_ship_by_id(ship_id: String, all_ships: Array) -> Dictionary:
-	for ship in all_ships:
-		if str(ship.get("ship_id", "")) == ship_id:
-			return ship
-	return {}
