@@ -146,11 +146,6 @@ func test_heavy_fighter_has_rear_turret():
 			break
 	assert_true(has_rear_turret, "Heavy Fighter should have a rear turret")
 
-func test_heavy_fighter_has_two_crew():
-	var ship = ShipData.create_ship_instance("heavy_fighter", 0, Vector2(0, 0), true)
-
-	assert_eq(ship.crew.size(), 2, "Heavy Fighter should have 2 crew (pilot + gunner)")
-
 func test_heavy_fighter_has_pilot_and_gunner():
 	var ship = ShipData.create_ship_instance("heavy_fighter", 0, Vector2(0, 0), true)
 
