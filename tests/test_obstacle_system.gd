@@ -256,7 +256,7 @@ func test_movement_with_obstacle_avoidance():
 	var obstacle = ObstacleData.create_obstacle_instance("asteroid_large", Vector2(obstacle_distance, 0))  # In direct path
 
 	var direct_heading = atan2(target.position.y - ship.position.y, target.position.x - ship.position.x)
-	var updated_ship = MovementSystem.update_ship_movement(ship, [ship, target], 0.1, [obstacle])
+	var updated_ship = MovementSystem.update_ship_movement(ship, [ship, target], 0.1, 0.0, [obstacle])
 
 	# Pilot state should contain obstacle avoidance information
 	assert_true(updated_ship.has("_pilot_state"), "Should have pilot state")

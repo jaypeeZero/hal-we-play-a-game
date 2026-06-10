@@ -125,13 +125,13 @@ static func get_visual_forward(rotation: float) -> Vector2:
 
 ## Committed randomized strafe direction: -1.0 or +1.0, held for `hold_ms`
 ## and re-rolled from a per-ship hash at each window boundary. Stateless and
-## deterministic in (ship_id, time) — no per-frame mutation. The per-ship
-## phase offset desynchronizes the fleet so squadrons don't all flip on the
-## same frame.
-static func committed_strafe_direction(ship_data: Dictionary, hold_ms: float) -> float:
+## deterministic in (ship_id, game_time) — no per-frame mutation, no wall
+## clock. The per-ship phase offset desynchronizes the fleet so squadrons
+## don't all flip on the same frame.
+static func committed_strafe_direction(ship_data: Dictionary, hold_ms: float, game_time: float) -> float:
 	var ship_id: String = ship_data.get("ship_id", "")
 	var phase_offset: int = hash(ship_id) % int(hold_ms)
-	var window: int = int((Time.get_ticks_msec() + phase_offset) / hold_ms)
+	var window: int = int((game_time * 1000.0 + phase_offset) / hold_ms)
 	return 1.0 if hash("%s|%d" % [ship_id, window]) % 2 == 0 else -1.0
 
 # Leash-vs-aggression dial. The pilot's aggression scales how hard the
@@ -197,8 +197,10 @@ static func _leash_pull_scale(ship_data: Dictionary) -> float:
 # MAIN API - Returns new ship_data with updated position/velocity
 # ============================================================================
 
-## Update ship movement - returns new ship_data Dictionary
-static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: float, obstacles: Array = []) -> Dictionary:
+## Update ship movement - returns new ship_data Dictionary.
+## `game_time` is elapsed battle time in seconds — the caller owns the clock
+## (wall-derived in the game node, simulated in headless harnesses).
+static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: float, game_time: float, obstacles: Array = []) -> Dictionary:
 	if is_ship_disabled(ship_data):
 		return apply_disabled_drift(ship_data, delta)
 
@@ -223,7 +225,7 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 		var target = find_ship_by_id(targets, target_id) if target_id else find_nearest_enemy(ship_data, targets)
 		if target.is_empty():
 			return apply_space_drift(ship_data, delta)
-		pilot_control = calculate_fighter_pilot_control(ship_data, target, nearby_ships, obstacles)
+		pilot_control = calculate_fighter_pilot_control(ship_data, target, nearby_ships, obstacles, game_time)
 
 	elif current_order == "engage":
 		# Engage mode - pursue and attack target
@@ -252,10 +254,10 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 	return apply_space_physics(ship_data, pilot_control, delta)
 
 ## Update all ships - returns new Array of ship_data
-static func update_all_ships(ships: Array, delta: float, obstacles: Array = []) -> Array:
+static func update_all_ships(ships: Array, delta: float, game_time: float, obstacles: Array = []) -> Array:
 	return ships \
 		.filter(func(ship): return ship != null) \
-		.map(func(ship): return update_ship_movement(ship, ships, delta, obstacles))
+		.map(func(ship): return update_ship_movement(ship, ships, delta, game_time, obstacles))
 
 # ============================================================================
 # SHIP STATE PREDICATES
@@ -458,7 +460,7 @@ static func calculate_evasion_control(ship_data: Dictionary, threat: Dictionary,
 
 ## Calculate fighter pilot control - specialized FighterPilotAI maneuvers
 ## Now uses SKILL-BASED APPROACH for pursuit maneuvers
-static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array = []) -> Dictionary:
+static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array, game_time: float) -> Dictionary:
 	var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "pursue")
 
 	# Route to appropriate maneuver calculation
@@ -466,13 +468,13 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 	match maneuver_subtype:
 		"fight_pursue_full_speed", "fight_pursue_tactical", "fight_flank_behind", "fight_tight_pursuit", "fight_get_behind":
 			# Use skill-aware approach - routes based on approach_style from AI
-			return calculate_skill_aware_approach(ship_data, target, nearby_ships, obstacles)
+			return calculate_skill_aware_approach(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_dogfight_maneuver":
-			return calculate_dogfight_maneuver(ship_data, target, nearby_ships, obstacles)
+			return calculate_dogfight_maneuver(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_evasive_turn":
-			return calculate_evasive_turn(ship_data, target, nearby_ships, obstacles)
+			return calculate_evasive_turn(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_defensive_break":
-			return calculate_defensive_break(ship_data, target, nearby_ships, obstacles)
+			return calculate_defensive_break(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_lateral_break":
 			return calculate_lateral_break(ship_data, target, nearby_ships, obstacles)
 		"fight_friendly_avoid":
@@ -484,13 +486,13 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 		"fight_group_run_swing_around":
 			return calculate_group_run_swing_around(ship_data, target, nearby_ships, obstacles)
 		"fight_evasive_retreat":
-			return calculate_evasive_retreat(ship_data, target, nearby_ships, obstacles)
+			return calculate_evasive_retreat(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_return_to_area":
 			return calculate_return_to_area(ship_data)
 		"fight_cautious_approach":
 			return calculate_cautious_approach(ship_data, target, nearby_ships, obstacles)
 		"fight_dodge_and_weave":
-			return calculate_dodge_and_weave(ship_data, target, nearby_ships, obstacles)
+			return calculate_dodge_and_weave(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_rejoin_wingman":
 			return calculate_rejoin_wingman(ship_data, target, nearby_ships, obstacles)
 		"fight_wing_rejoin":
@@ -510,7 +512,7 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 ## Ship ALWAYS faces target for aiming
 ## Main thrust = distance control only (close in / back off)
 ## Lateral thrust = all positioning (strafing while aiming)
-static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array, game_time: float) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 	var direction_to_target = to_target.normalized()
@@ -519,7 +521,7 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 	var desired_heading = direction_to_heading(to_target)
 
 	# Committed strafe — full lateral burn one way, hash-random flip each hold
-	var lateral_thrust = committed_strafe_direction(ship_data, DOGFIGHT_STRAFE_HOLD_MS)
+	var lateral_thrust = committed_strafe_direction(ship_data, DOGFIGHT_STRAFE_HOLD_MS, game_time)
 
 	# Desired combat range
 	var desired_combat_range = DOGFIGHT_COMBAT_RANGE
@@ -558,7 +560,7 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 	}
 
 ## Evasive turn - hard turn in one direction (predictable panic evasion)
-static func calculate_evasive_turn(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+static func calculate_evasive_turn(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array, game_time: float) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
@@ -567,7 +569,7 @@ static func calculate_evasive_turn(ship_data: Dictionary, target: Dictionary, ne
 	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
 
 	# Always turn the same direction (predictable) - use sign of time for consistency
-	var turn_direction = 1 if fmod(Time.get_ticks_msec() / FLEE_TURN_FLIP_PERIOD_MS, 2.0) < 1.0 else -1
+	var turn_direction = 1 if fmod(game_time * 1000.0 / FLEE_TURN_FLIP_PERIOD_MS, 2.0) < 1.0 else -1
 	var evasion_direction = (away_from_target + perpendicular * turn_direction * 0.5).normalized()
 
 	var desired_heading = direction_to_heading(evasion_direction)
@@ -585,7 +587,7 @@ static func calculate_evasive_turn(ship_data: Dictionary, target: Dictionary, ne
 	}
 
 ## Defensive break - sharp alternating turns (skilled evasion)
-static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array, game_time: float) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
@@ -594,7 +596,7 @@ static func calculate_defensive_break(ship_data: Dictionary, target: Dictionary,
 
 	# Committed randomized breaks — held long enough to actually displace,
 	# flipped on a hash-random schedule so the rhythm can't be tracked
-	var break_direction = committed_strafe_direction(ship_data, DEFENSIVE_BREAK_HOLD_MS)
+	var break_direction = committed_strafe_direction(ship_data, DEFENSIVE_BREAK_HOLD_MS, game_time)
 
 	# Move away while turning
 	var away_from_target = -to_target.normalized()
@@ -877,14 +879,14 @@ static func calculate_return_to_area(ship_data: Dictionary) -> Dictionary:
 	}
 
 ## Evasive retreat - get away from big ship
-static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array, game_time: float) -> Dictionary:
 	var distance = ship_data.position.distance_to(target.position)
 	var away_from_target = (ship_data.position - target.position).normalized()
 	var desired_heading = direction_to_heading(away_from_target)
 
 	# Add weave to dodge — committed darts side to side (4x scaled)
 	var perpendicular = Vector2(-away_from_target.y, away_from_target.x)
-	var weave_dir = committed_strafe_direction(ship_data, RETREAT_WEAVE_HOLD_MS)
+	var weave_dir = committed_strafe_direction(ship_data, RETREAT_WEAVE_HOLD_MS, game_time)
 	var weave_offset = perpendicular * weave_dir * RETREAT_WEAVE_WIDTH
 
 	var desired_pos = ship_data.position + away_from_target * RETREAT_TARGET_DISTANCE + weave_offset
@@ -990,7 +992,7 @@ static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionar
 ## Ship ALWAYS faces target for aiming
 ## Main thrust = distance control only (close in / back off)
 ## Lateral thrust = all positioning (strafing while aiming)
-static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array, game_time: float) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
@@ -1007,7 +1009,7 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		lateral_thrust = float(evasion_dir)
 	else:
 		# Fallback: committed strafe with hash-random flips
-		lateral_thrust = committed_strafe_direction(ship_data, DODGE_STRAFE_HOLD_MS)
+		lateral_thrust = committed_strafe_direction(ship_data, DODGE_STRAFE_HOLD_MS, game_time)
 
 	# Desired combat range - close enough to hit but far enough to evade
 	# Fighter weapons have ~1000 range, corvette weapons have ~1500 range
@@ -1685,7 +1687,7 @@ static func _calculate_default_wing_position(lead_ship: Dictionary, position_sid
 # use angles, jinking, and complex maneuvers.
 
 ## Skill-aware approach router - selects maneuver based on approach_style
-static func calculate_skill_aware_approach(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
+static func calculate_skill_aware_approach(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array, game_time: float) -> Dictionary:
 	var orders = ship_data.get("orders", {})
 	var approach_style = orders.get("approach_style", 0)  # 0 = DIRECT
 	var skill = orders.get("skill_factor", 0.5)
@@ -1697,11 +1699,11 @@ static func calculate_skill_aware_approach(ship_data: Dictionary, target: Dictio
 		1:  # ANGLED - medium skill, approach from offset angle
 			return calculate_angled_approach(ship_data, target, skill)
 		2:  # PURSUIT_CURVE - high skill, lead pursuit with jinking
-			return calculate_pursuit_curve(ship_data, target, skill, orders)
+			return calculate_pursuit_curve(ship_data, target, skill, orders, game_time)
 		3:  # DEFENSIVE_SPIRAL - high skill, break and reposition
-			return calculate_defensive_spiral(ship_data, target, skill, orders)
+			return calculate_defensive_spiral(ship_data, target, skill, orders, game_time)
 		4:  # ATTACK_RUN - high skill, press advantage with jinking
-			return calculate_attack_run(ship_data, target, skill, orders)
+			return calculate_attack_run(ship_data, target, skill, orders, game_time)
 		_:
 			return calculate_direct_approach(ship_data, target)
 
@@ -1780,7 +1782,7 @@ static func calculate_angled_approach(ship_data: Dictionary, target: Dictionary,
 
 ## PURSUIT CURVE - High skill pilots use lead pursuit with constant jinking
 ## Predicts target movement and constantly adjusts with lateral thrust
-static func calculate_pursuit_curve(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary) -> Dictionary:
+static func calculate_pursuit_curve(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary, game_time: float) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 	var target_velocity = target.get("velocity", Vector2.ZERO)
@@ -1802,7 +1804,7 @@ static func calculate_pursuit_curve(ship_data: Dictionary, target: Dictionary, s
 	# duration come from the pilot's skill-scaled jink params
 	var jink_amplitude = orders.get("jink_amplitude", 0.0)
 	var jink_hold_ms = orders.get("jink_hold_ms", WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS)
-	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms) * jink_amplitude
+	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms, game_time) * jink_amplitude
 
 	# Tactical throttle with distance awareness
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
@@ -1819,7 +1821,7 @@ static func calculate_pursuit_curve(ship_data: Dictionary, target: Dictionary, s
 
 ## DEFENSIVE SPIRAL - High skill pilots break contact when disadvantaged
 ## Turns away sharply, builds speed, then comes back from better angle
-static func calculate_defensive_spiral(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary) -> Dictionary:
+static func calculate_defensive_spiral(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary, game_time: float) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 
@@ -1840,7 +1842,7 @@ static func calculate_defensive_spiral(ship_data: Dictionary, target: Dictionary
 	# Jinking while breaking - even harder to hit
 	var jink_amplitude = orders.get("jink_amplitude", 0.0) * 1.2  # Extra jinking when defensive
 	var jink_hold_ms = orders.get("jink_hold_ms", WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS)
-	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms) * jink_amplitude
+	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms, game_time) * jink_amplitude
 
 	# Full evasion throttle - get out fast
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "evasion")
@@ -1857,7 +1859,7 @@ static func calculate_defensive_spiral(ship_data: Dictionary, target: Dictionary
 
 ## ATTACK RUN - High skill pilots press behind advantage with evasive jinking
 ## Maintains position advantage while being hard to hit
-static func calculate_attack_run(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary) -> Dictionary:
+static func calculate_attack_run(ship_data: Dictionary, target: Dictionary, skill: float, orders: Dictionary, game_time: float) -> Dictionary:
 	var to_target = target.position - ship_data.position
 	var distance = to_target.length()
 	var target_velocity = target.get("velocity", Vector2.ZERO)
@@ -1884,7 +1886,7 @@ static func calculate_attack_run(ship_data: Dictionary, target: Dictionary, skil
 	# Jinking while attacking - stay hard to hit even with advantage
 	var jink_amplitude = orders.get("jink_amplitude", 0.0) * 0.8  # Slightly less when attacking
 	var jink_hold_ms = orders.get("jink_hold_ms", WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS)
-	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms) * jink_amplitude
+	var lateral_thrust = committed_strafe_direction(ship_data, jink_hold_ms, game_time) * jink_amplitude
 
 	# Tactical throttle - controlled approach to maintain advantage
 	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")

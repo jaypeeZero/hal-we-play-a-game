@@ -128,7 +128,8 @@ func _process(delta: float) -> void:
 		_commit_pending_intents()
 
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
-	_ships = MovementSystem.update_all_ships(_ships, delta, _obstacles)
+	var game_time = Time.get_ticks_msec() / 1000.0
+	_ships = MovementSystem.update_all_ships(_ships, delta, game_time, _obstacles)
 
 	# 1a. OBSTACLE MOVEMENT - Update asteroid/debris positions
 	_obstacles = MovementSystem.update_all_obstacles(_obstacles, delta)
@@ -973,7 +974,9 @@ func _queue_crew_event(crew_id: String, event_type: String, data: Dictionary, la
 ## sorting out what just hit them.
 func _emit_damage_events(hits: Array) -> void:
 	for hit in hits:
-		var target_id = hit.get("target_id", "")
+		# Hits come from CollisionSystem.create_hit, which keys the victim
+		# as `ship_id`.
+		var target_id = hit.get("ship_id", "")
 		if target_id.is_empty():
 			continue
 
