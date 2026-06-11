@@ -244,3 +244,67 @@ func find_component(ship: Dictionary, component_id: String) -> Dictionary:
 		if component.component_id == component_id:
 			return component
 	return {}
+
+# ============================================================================
+# WEAPON MOUNT DESTRUCTION
+# ============================================================================
+
+## A real ship instance carries a synthesized destroyable mount per weapon.
+func _fighter_instance() -> Dictionary:
+	return ShipData.create_ship_instance("fighter", 0, Vector2.ZERO)
+
+func _set_mounts(ship: Dictionary, destroyed: bool) -> void:
+	for component in ship.internals:
+		if component.get("type", "") == "weapon_mount":
+			component.status = "destroyed" if destroyed else "operational"
+			component.current_health = 0 if destroyed else component.max_health
+
+func test_destroyed_mount_marks_its_weapon_destroyed():
+	var ship = _fighter_instance()
+	_set_mounts(ship, true)
+
+	var updated = DamageResolver.recompute_stats_from_components(ship)
+
+	assert_eq(updated.weapons[0].get("status", ""), "destroyed",
+		"Destroying a weapon's mount should mark the weapon destroyed")
+
+func test_repairing_mount_restores_its_weapon():
+	var ship = _fighter_instance()
+	_set_mounts(ship, true)
+	ship = DamageResolver.recompute_stats_from_components(ship)
+	assert_eq(ship.weapons[0].get("status", ""), "destroyed", "precondition: weapon is down")
+
+	_set_mounts(ship, false)
+	ship = DamageResolver.recompute_stats_from_components(ship)
+
+	assert_ne(ship.weapons[0].get("status", ""), "destroyed",
+		"Repairing the mount should bring its weapon back online")
+
+func test_intact_mount_keeps_weapon_operational():
+	var ship = _fighter_instance()
+
+	var updated = DamageResolver.recompute_stats_from_components(ship)
+
+	assert_ne(updated.weapons[0].get("status", ""), "destroyed",
+		"A weapon with an intact mount stays operational")
+
+# ============================================================================
+# SHIP DEATH WITH WEAPON MOUNTS (decided: mounts count toward death)
+# ============================================================================
+
+func test_ship_dies_when_all_internals_including_mounts_destroyed():
+	var ship = _fighter_instance()
+	for component in ship.internals:
+		component.status = "destroyed"
+
+	assert_true(DamageResolver.is_ship_destroyed(ship),
+		"A ship is destroyed once every internal — engines and gun mounts — is gone")
+
+func test_ship_survives_engine_loss_while_mounts_intact():
+	var ship = _fighter_instance()
+	for component in ship.internals:
+		if component.get("type", "") == "engine":
+			component.status = "destroyed"
+
+	assert_false(DamageResolver.is_ship_destroyed(ship),
+		"Gun mounts count toward death: a hull with intact mounts is not yet destroyed")

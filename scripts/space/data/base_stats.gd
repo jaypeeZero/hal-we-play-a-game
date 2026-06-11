@@ -75,6 +75,18 @@ const ENGINES := {
 	}
 }
 
+# Weapon-mount base stats. A mount is a destroyable internal that carries one
+# weapon: when the mount is destroyed the weapon stops firing (handled in
+# DamageResolver.recompute_stats_from_components), and its gunner is killed
+# (CasualtySystem). Mounts exert no stat multipliers — their effect is the
+# binary loss of the weapon — so they carry no effect_on_ship.
+const WEAPON_MOUNT_TYPE := "weapon_mount"
+const WEAPON_MOUNTS := {
+	"weapon_mount": {
+		"max_health": 20.0
+	}
+}
+
 # Default weapon placement values (not stats, just defaults)
 const WEAPON_DEFAULTS := {
 	"cooldown_remaining": 0.0,
@@ -105,6 +117,17 @@ static func get_engine_stats(engine_type: String) -> Dictionary:
 	if ENGINES.has(engine_type):
 		return ENGINES[engine_type].duplicate(true)
 	push_warning("Unknown engine type: " + engine_type)
+	return {}
+
+
+## Base stats for any internal component (engine or weapon mount), keyed by the
+## component's `type`. Returns empty dict (with a warning) for unknown types.
+static func get_internal_stats(internal_type: String) -> Dictionary:
+	if ENGINES.has(internal_type):
+		return ENGINES[internal_type].duplicate(true)
+	if WEAPON_MOUNTS.has(internal_type):
+		return WEAPON_MOUNTS[internal_type].duplicate(true)
+	push_warning("Unknown internal type: " + internal_type)
 	return {}
 
 
@@ -141,7 +164,7 @@ static func apply_weapon_base_stats(weapon_data: Dictionary) -> Dictionary:
 ## Apply base stats to an internal component (engine), with JSON data as overrides
 static func apply_internal_base_stats(internal_data: Dictionary) -> Dictionary:
 	var internal_type: String = internal_data.get("type", "")
-	var base_stats := get_engine_stats(internal_type)
+	var base_stats := get_internal_stats(internal_type)
 
 	if base_stats.is_empty():
 		return internal_data

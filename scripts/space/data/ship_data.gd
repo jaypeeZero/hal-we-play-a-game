@@ -91,14 +91,41 @@ static func _apply_base_stats(data: Dictionary) -> Dictionary:
 			weapons.append(BaseStats.apply_weapon_base_stats(weapon))
 		data.weapons = weapons
 
-	# Apply base stats to internals (engines)
+	# Apply base stats to internals (engines), then synthesize one destroyable
+	# weapon mount per weapon. Mounts are derived from the weapons array (not
+	# authored in the template) so weapon placement data is never duplicated;
+	# the step is idempotent, skipping any mount already present.
 	if data.has("internals"):
 		var internals := []
 		for internal in data.internals:
 			internals.append(BaseStats.apply_internal_base_stats(internal))
+		for weapon in data.get("weapons", []):
+			var mount := _weapon_mount_for(weapon)
+			if not _has_component(internals, mount.component_id):
+				internals.append(BaseStats.apply_internal_base_stats(mount))
 		data.internals = internals
 
 	return data
+
+
+## A destroyable internal mount carrying one weapon, placed where the weapon
+## is. Destroying it stops the weapon firing and kills its gunner.
+static func _weapon_mount_for(weapon: Dictionary) -> Dictionary:
+	var weapon_id: String = weapon.get("weapon_id", "")
+	return {
+		"component_id": "mount_%s" % weapon_id,
+		"type": BaseStats.WEAPON_MOUNT_TYPE,
+		"weapon_id": weapon_id,
+		"section_id": weapon.get("section_id", ""),
+		"position_offset": weapon.get("position_offset", Vector2.ZERO),
+	}
+
+
+static func _has_component(internals: Array, component_id: String) -> bool:
+	for c in internals:
+		if c.get("component_id", "") == component_id:
+			return true
+	return false
 
 
 ## Force reload templates (useful after Ship Editor saves)

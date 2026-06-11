@@ -67,6 +67,9 @@ static func process_weapon_firing(ship_data: Dictionary, weapons: Array, targets
 	return combine_firing_results(results)
 
 static func try_fire_weapon(ship_data: Dictionary, weapon: Dictionary, targets: Array) -> Dictionary:
+	if not is_weapon_operational(weapon):
+		return create_no_fire_result(weapon)
+
 	if not is_weapon_ready(weapon):
 		return create_no_fire_result(weapon)
 
@@ -125,6 +128,11 @@ static func is_ship_disabled(ship_data: Dictionary) -> bool:
 
 static func is_weapon_ready(weapon: Dictionary) -> bool:
 	return weapon.cooldown_remaining <= 0.0
+
+## A weapon whose mount has been shot off cannot fire. Status is set by
+## DamageResolver.recompute_weapon_stats; absent (pristine ship) means intact.
+static func is_weapon_operational(weapon: Dictionary) -> bool:
+	return weapon.get("status", "operational") != "destroyed"
 
 static func calculate_cooldown_time(weapon: Dictionary) -> float:
 	return 1.0 / weapon.stats.rate_of_fire
