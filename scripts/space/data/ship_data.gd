@@ -139,41 +139,11 @@ static func create_ship_instance(ship_type: String, team: int, position: Vector2
 
 ## Create crew for ship based on type
 static func create_crew_for_ship(ship_data: Dictionary, skill_level: float = 0.5) -> Array:
-	match ship_data.type:
-		"fighter":
-			# Solo pilot for fighters
-			var crew = CrewData.create_solo_fighter_crew(skill_level)
-			for member in crew:
-				member.assigned_to = ship_data.ship_id
-			return crew
-		"heavy_fighter":
-			# Pilot + gunner for heavy fighters (rear turret defense)
-			var crew = CrewData.create_heavy_fighter_crew(skill_level)
-			for member in crew:
-				member.assigned_to = ship_data.ship_id
-			return crew
-		"torpedo_boat":
-			# Pilot + torpedo operator for torpedo boats
-			var crew = CrewData.create_torpedo_boat_crew(skill_level)
-			for member in crew:
-				member.assigned_to = ship_data.ship_id
-			return crew
-		"corvette":
-			# Captain, pilot, gunners, and engineers for corvette
-			var weapon_count = ship_data.weapons.size()
-			var crew = CrewData.create_ship_crew(weapon_count, skill_level, CrewData.roll_engineer_count(ship_data.type))
-			for member in crew:
-				member.assigned_to = ship_data.ship_id
-			return crew
-		"capital":
-			# Full crew for capital ships
-			var weapon_count = ship_data.weapons.size()
-			var crew = CrewData.create_ship_crew(weapon_count, skill_level, CrewData.roll_engineer_count(ship_data.type))
-			for member in crew:
-				member.assigned_to = ship_data.ship_id
-			return crew
-		_:
-			return []
+	var weapon_count: int = ship_data.get("weapons", []).size()
+	var crew := CrewData.create_crew_for_ship_type(ship_data.type, weapon_count, skill_level)
+	for member in crew:
+		member.assigned_to = ship_data.ship_id
+	return crew
 
 ## Validate ship data structure
 static func validate_ship_data(data: Dictionary) -> bool:

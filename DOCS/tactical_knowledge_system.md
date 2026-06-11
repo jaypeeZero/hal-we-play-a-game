@@ -84,11 +84,11 @@ Returns array of dictionaries:
 
 **Cache**: Results cached by `"{situation}_{role}_{top_k}_{known_patterns.hash()}"` key. Cache cleared when size exceeds 50 entries.
 
-### StandingInstructionsSystem
+### DoctrineSystem
 
-**Location**: `scripts/space/systems/standing_instructions_system.gd`
+**Location**: `scripts/space/systems/doctrine_system.gd`
 
-Player standing instructions (plan 06, increment 2): a player-authored pattern — same schema as a knowledge entry — saved per crew member of the roguelike run in `user://standing_instructions/{crew_id}.json`. `load_and_apply(crew)` registers each pattern in the knowledge base with the `player_priority` flag (namespaced as `{crew_id}__{pattern_id}`) and adds it to the crew member's `known_patterns`, expanding an empty set to the explicit role baseline first so instructions extend doctrine rather than replace it. The battle scene applies saved instructions to player crew when a roguelike battle spawns them.
+Player standing instructions for the roguelike run (plan 06). Players pick parameterized templates from `data/instruction_templates.json` (never authoring pattern text) and assign them at fleet, ship-class, or individual-crew scope; the doctrine lives on `RoguelikeRun.doctrine` and is edited via the `DoctrinePanel` dropdowns on the pre-battle positioning screen. At battle spawn `compile_for_crew()` resolves scopes (individual > class > fleet per template, per-crew disables honored), instantiates each template into a normal pattern, registers it with the `player_priority` flag (namespaced `doctrine__{crew_id}__{template_id}`), and adds it to the crew member's `known_patterns` — expanding an empty set to the explicit role baseline first (player-priority patterns excluded) so standing orders extend role doctrine rather than replace it. Previously compiled doctrine ids are stripped on every compile, so instructions removed between battles do not linger.
 
 ## Knowledge Entry Format
 

@@ -20,23 +20,25 @@ parallel system.
    including the done-criterion (identical pilots, different doctrine,
    different maneuvers).
 2. **Player standing instructions.** ✅ SHIPPED (execution layer).
-   `StandingInstructionsSystem` registers a player-authored pattern
-   (same schema) with a priority flag — relevant instructions outrank
-   doctrine, irrelevant ones stay silent, never visible to baseline
-   crew — and adds it to the crew member's `known_patterns`. Roguelike
-   crew persist across battles (`RoguelikeRun.fleet_crew`,
-   `CrewData.reset_for_battle`), so instructions attach to a stable
-   crew identity. Tests in `tests/test_standing_instructions.gd`,
-   including the done-criterion (saved crew member with an instruction
-   measurably changes maneuver choice vs an identical uninstructed
-   pilot). The per-crew `user://standing_instructions/{crew_id}.json`
-   files were a stopgap authoring surface; increment 2b replaces them
-   with the run doctrine document below.
-2b. **Fleet doctrine document + pre-battle authoring.** The
-   interaction model below, minus polish: run-scoped doctrine state,
-   the instruction template catalog, scope resolution compiled into
-   `known_patterns` at battle spawn, and the crew roster created at
-   run start so individuals are addressable pre-battle.
+   Player-authored patterns register with a priority flag — relevant
+   instructions outrank doctrine, irrelevant ones stay silent, never
+   visible to baseline crew — and land in the crew member's
+   `known_patterns`. Roguelike crew persist across battles
+   (`RoguelikeRun.fleet_crew`, `CrewData.reset_for_battle`), so
+   instructions attach to a stable crew identity. The stopgap per-crew
+   `user://standing_instructions/` files were replaced by increment 2b.
+2b. **Fleet doctrine document + pre-battle authoring.** ✅ SHIPPED.
+   `DoctrineSystem` + `data/instruction_templates.json` implement the
+   interaction model below: doctrine is run state
+   (`RoguelikeRun.doctrine`), the crew roster is created at run start
+   (callsigns, `RoguelikeRun._create_fleet_roster`), and
+   `compile_for_crew()` resolves scopes into `known_patterns` at
+   battle spawn. `DoctrinePanel` on the pre-battle positioning screen
+   is the dropdown-driven editor (ship dropdown = scope selector,
+   synced two-way with map clicks; crew addressed only via the crew
+   dropdown). Tests in `tests/test_doctrine_system.gd` (scopes,
+   overrides, disables, recompile lifecycle, done-criterion) and
+   `tests/test_doctrine_panel.gd` (dropdown behaviors).
 3. **Training regimes.** Between battles (roguelike fleet management
    screen), spend a resource to: add a pattern to `known_patterns`,
    raise a skill stat, or reduce a `skill_requirements` gate for one
@@ -78,12 +80,15 @@ behaviors define the feature, widget layout does not):
    This warning is the natural entry point for increment 3 training
    ("drill this").
 5. **Doctrine is edited on the pre-battle fleet positioning screen**
-   (`pre_battle.tscn`), not the fleet editor. Selecting a ship there
-   is also the entry point to its crew's orders; no selection / a
-   fleet header reaches fleet scope. Edits are committed when the
-   battle starts: scope resolution runs once at spawn and lands in
-   each crew member's `known_patterns` — the query engine stays dumb,
-   precedence is resolved at compile time.
+   (`pre_battle.tscn`), not the fleet editor, and the editor is
+   dropdown-driven: the ship dropdown is the scope selector ("Entire
+   fleet" / "All fighters" / individual hulls), clicking a ship on the
+   map syncs the dropdown and vice versa, and a hull's crew are
+   operated on only through the crew dropdown — never by clicking the
+   ship visual. Edits are committed when the battle starts: scope
+   resolution runs once at spawn and lands in each crew member's
+   `known_patterns` — the query engine stays dumb, precedence is
+   resolved at compile time.
 6. **Doctrine is run state, fresh each run.** It lives in
    `RoguelikeRun`, is wiped by `end_run()`, and nothing carries across
    runs. No profile-level presets for now.
@@ -91,21 +96,23 @@ behaviors define the feature, widget layout does not):
    per-instruction outcomes from tactical memory ("Torpedo runs:
    ordered 12×, succeeded 3×") so doctrine is tuned from results.
 
-**Code consequences:**
-- The crew roster must be created at **run start**, not at battle
-  spawn: the positioning screen currently works from fleet counts and
-  crew don't exist until `space_battle.tscn` spawns them, so
-  individuals would not be addressable pre-battle (and battle 1 would
-  have no roster at all). Battle spawn then *binds* roster groups to
-  hulls instead of creating crew. This also makes which ace flies
-  which hull a pre-battle decision (the FM team sheet).
-- `BattlePlan` entries gain the crew-group binding so individual
-  orders land on the hull at the planned position.
-- The `user://standing_instructions/` files and their load path are
-  deleted once the doctrine document compiles to `known_patterns`
-  (no legacy path retained). `apply_instructions` and the priority/
-  leak semantics in `TacticalKnowledgeSystem` are unchanged — they
-  are the compile target.
+**Code consequences (as built):**
+- The crew roster is created at **run start** (the positioning screen
+  works from fleet counts; crew otherwise wouldn't exist before
+  battle 1). Battle spawn *binds* roster groups to hulls instead of
+  creating crew.
+- Entry↔crew binding is an ordering contract, not a `BattlePlan`
+  schema change: ships spawn in plan-entry order and
+  `take_saved_crew()` pops the first remaining group of the type, so
+  the n-th entry of a type gets the n-th group.
+  `DoctrineSystem.map_entries_to_crew_groups` computes the same
+  mapping for the UI.
+- The `user://standing_instructions/` files and their system were
+  deleted (no legacy path). `DoctrineSystem._apply_patterns` is the
+  compile target; the priority/leak semantics in
+  `TacticalKnowledgeSystem` are unchanged. Baseline expansion skips
+  `player_priority` patterns so one crew member's compiled orders
+  never enter another's baseline.
 
 ## Retrieval engine: keep or replace BM25?
 
@@ -115,13 +122,11 @@ show bad pattern selection; the simple replacement is exact tag/
 condition matching against the situation summary instead of word
 overlap. Decide from battle-log evidence, not speculation.
 
-## Done when (increment 2b, the next concrete step)
+## Done when (increment 3, the next concrete step)
 
-- The crew roster exists at run start and a doctrine document on
-  `RoguelikeRun` holds template-instantiated instructions at fleet,
-  class, and individual scope.
-- Compiling doctrine at battle spawn puts the right pattern ids in
-  each crew member's `known_patterns`, with individual > class >
-  fleet precedence and per-individual disables honored — asserted by
-  tests at each scope.
-- The per-crew `user://standing_instructions/` files are gone.
+- Between battles, spending a training resource on a roster crew
+  member adds a template/pattern to their `known_patterns`, raises a
+  skill, or lowers a known pattern's `skill_requirements` gate — the
+  change persists into the next battle and a test asserts it. The
+  doctrine panel's "can't execute yet" warning is the natural entry
+  point ("drill this").

@@ -30,6 +30,7 @@ const BOX_BORDER_WIDTH: float = 2.0
 
 var _input: PreBattleInput
 var _preview_entities: Dictionary = {}
+var _doctrine_panel: DoctrinePanel = null
 
 
 func _ready() -> void:
@@ -55,6 +56,21 @@ func _ready() -> void:
 	)
 	_input = PreBattleInput.new(BattlePlan.entries, bounds)
 
+	# Doctrine (standing instructions) is roguelike run state; the panel
+	# only exists when a run is active.
+	if RoguelikeRun.active:
+		_doctrine_panel = DoctrinePanel.new()
+		$UI.add_child(_doctrine_panel)
+		_doctrine_panel.setup(BattlePlan.entries)
+		_doctrine_panel.hull_selected.connect(_on_doctrine_hull_selected)
+
+	queue_redraw()
+
+
+## Picking a hull in the doctrine dropdown selects it on the map too.
+func _on_doctrine_hull_selected(entry_index: int) -> void:
+	_input.selected_indices.clear()
+	_input.selected_indices.append(entry_index)
 	queue_redraw()
 
 
@@ -91,6 +107,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.pressed:
 			var result := _input.on_mouse_down(world_pos, event.shift_pressed, event.ctrl_pressed)
 			if result != PreBattleInput.RESULT_NONE:
+				# A plain single-ship click also syncs the doctrine dropdown.
+				if result == PreBattleInput.RESULT_SELECTED and _doctrine_panel != null:
+					_doctrine_panel.sync_to_entry(_input.selected_indices[0])
 				queue_redraw()
 				get_viewport().set_input_as_handled()
 		else:
