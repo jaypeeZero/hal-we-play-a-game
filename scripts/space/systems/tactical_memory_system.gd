@@ -115,6 +115,8 @@ static func _get_role_context(role: int) -> String:
 			return "squadron formation"
 		CrewData.Role.FLEET_COMMANDER:
 			return "strategy fleet"
+		CrewData.Role.ENGINEER:
+			return "repair machinery"
 		_:
 			return ""
 

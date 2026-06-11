@@ -67,6 +67,9 @@ func update_state(entity_id: String, state: EntityState) -> void:
 	# Update wing circle visual
 	_update_wing_circle(visual.root, state.wing_color)
 
+	# Green pulse while an engineer's repair is landing
+	_update_repair_indicator(visual.root, state.has_flag("repairing"))
+
 	# Update debug visuals
 	_update_pilot_direction_line(visual.root, state.debug_pilot_direction)
 	_update_leader_number(visual.root, state.debug_leader_number)
@@ -294,6 +297,35 @@ func _update_pilot_direction_line(parent_node: Node2D, direction: Vector2) -> vo
 	direction_line.add_point(Vector2.ZERO)
 	direction_line.add_point(local_direction * DEBUG_LINE_LENGTH)
 	direction_line.visible = true
+
+## Green "+" above ships an engineer just repaired
+func _update_repair_indicator(parent_node: Node2D, repairing: bool) -> void:
+	const REPAIR_LABEL_OFFSET: Vector2 = Vector2(0, -35)  # Above the ship
+	const REPAIR_LABEL_COLOR: Color = Color(0.3, 1.0, 0.4, 0.95)  # Green
+	const REPAIR_LABEL_FONT_SIZE: int = 18
+
+	var repair_label = parent_node.get_node_or_null("RepairIndicator")
+
+	if not repairing:
+		if repair_label:
+			repair_label.visible = false
+		return
+
+	if not repair_label:
+		repair_label = Label.new()
+		repair_label.name = "RepairIndicator"
+		repair_label.text = "+"
+		repair_label.add_theme_color_override("font_color", REPAIR_LABEL_COLOR)
+		repair_label.add_theme_font_size_override("font_size", REPAIR_LABEL_FONT_SIZE)
+		repair_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		repair_label.z_index = 10  # Draw above other elements
+		parent_node.add_child(repair_label)
+
+	# Counter-rotate to keep the indicator upright on a rotating ship
+	var ship_rotation = parent_node.get_parent().rotation if parent_node.get_parent() else 0.0
+	repair_label.rotation = -ship_rotation
+	repair_label.position = REPAIR_LABEL_OFFSET.rotated(-ship_rotation)
+	repair_label.visible = true
 
 ## Update leader number debug visual
 func _update_leader_number(parent_node: Node2D, leader_number: int) -> void:

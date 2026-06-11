@@ -41,6 +41,8 @@ var _connections: Array = []  # Array of {from_id, to_id}
 @onready var _title_label: Label = $TitleLabel
 @onready var _info_label: Label = $InfoLabel
 
+var _fleet_label: Label
+
 
 func _ready() -> void:
 	if RoguelikeRun.has_map_state():
@@ -49,6 +51,11 @@ func _ready() -> void:
 		_generate_map()
 	_build_ui()
 	_update_node_states()
+	_create_fleet_status_label()
+	_update_fleet_status()
+	# Report repairs that happened on the jump into the last battle.
+	_show_repair_summary(RoguelikeRun.last_jump_repair_summary)
+	RoguelikeRun.last_jump_repair_summary = {}
 
 
 func _restore_map_state() -> void:
@@ -74,10 +81,13 @@ func _generate_map() -> void:
 	_connections.clear()
 
 	var num_rows := randi_range(MIN_ROWS, MAX_ROWS)
+	# Each row is a star date; gaps are semi-random and drive jump repairs.
+	var star_date: int = RoguelikeRun.STAR_DATE_RUN_START
 
 	for row_idx in range(num_rows):
 		var row := []
 		var num_nodes: int
+		star_date += randi_range(RoguelikeRun.STAR_DATE_GAP_MIN, RoguelikeRun.STAR_DATE_GAP_MAX)
 
 		# First and last rows have single nodes
 		if row_idx == 0:
@@ -94,6 +104,7 @@ func _generate_map() -> void:
 				"row": row_idx,
 				"col": node_idx,
 				"type": node_type,
+				"star_date": star_date,
 				"visited": false,
 				"accessible": row_idx == 0  # Only first row accessible initially
 			}
@@ -198,6 +209,10 @@ func _build_ui() -> void:
 		row_container.add_theme_constant_override("separation", 40)
 		_map_container.add_child(row_container)
 
+		var date_label := Label.new()
+		date_label.text = "Stardate %d" % int(row[0]["star_date"])
+		row_container.add_child(date_label)
+
 		for node in row:
 			var btn := _create_node_button(node)
 			row_container.add_child(btn)
@@ -252,6 +267,11 @@ func _on_node_pressed(node_id: String) -> void:
 	if node.is_empty():
 		return
 
+	# The jump itself is downtime: engineers repair in proportion to the
+	# star-date gap, with R&R stops multiplying the effect.
+	var repair_summary: Dictionary = RoguelikeRun.apply_jump_repairs(
+		int(node["star_date"]), node["type"] == NodeType.RANDR)
+
 	if node["type"] == NodeType.BATTLE:
 		_launch_battle(node)
 		return
@@ -277,6 +297,66 @@ func _on_node_pressed(node_id: String) -> void:
 		return
 
 	_update_node_states()
+	_update_fleet_status()
+	_show_repair_summary(repair_summary)
+	RoguelikeRun.last_jump_repair_summary = {}
+
+
+func _show_repair_summary(summary: Dictionary) -> void:
+	if summary.get("ships_repaired", 0) <= 0:
+		return
+	_info_label.text += "\nEngineers repaired %d ship(s) (+%d) over %d star dates." % [
+		summary["ships_repaired"], summary["points_repaired"], summary["date_delta"]]
+
+
+const FLEET_STATUS_POSITION := Vector2(20, 80)
+const FLEET_STATUS_FONT_SIZE := 14
+
+func _create_fleet_status_label() -> void:
+	_fleet_label = Label.new()
+	_fleet_label.name = "FleetStatusLabel"
+	_fleet_label.position = FLEET_STATUS_POSITION
+	_fleet_label.add_theme_font_size_override("font_size", FLEET_STATUS_FONT_SIZE)
+	add_child(_fleet_label)
+
+
+## Ship-by-ship condition panel, so repairs (and the engineers doing them)
+## are visible between battles.
+func _update_fleet_status() -> void:
+	if RoguelikeRun.fleet_ships.is_empty():
+		_fleet_label.text = "Fleet: undamaged (no sorties yet)"
+		return
+	var lines := ["Fleet condition:"]
+	for ship in RoguelikeRun.fleet_ships:
+		lines.append(_ship_condition_line(ship))
+	_fleet_label.text = "\n".join(lines)
+
+
+func _ship_condition_line(ship: Dictionary) -> String:
+	var armor_current := 0
+	var armor_max := 0
+	for section in ship.get("armor_sections", []):
+		armor_current += section.get("current_armor", 0)
+		armor_max += section.get("max_armor", 0)
+
+	var systems_current := 0
+	var systems_max := 0
+	for component in ship.get("internals", []):
+		systems_current += component.get("current_health", 0)
+		systems_max += component.get("max_health", 0)
+
+	var engineers: int = ship.get("crew", []).filter(
+		func(c): return c.get("role", -1) == CrewData.Role.ENGINEER).size()
+
+	return "%s  armor %d%%  systems %d%%  engineers %d" % [
+		ship.get("type", "ship"), _percent(armor_current, armor_max),
+		_percent(systems_current, systems_max), engineers]
+
+
+func _percent(current: int, maximum: int) -> int:
+	if maximum <= 0:
+		return 100
+	return int(round(100.0 * current / maximum))
 
 
 func _launch_battle(node: Dictionary) -> void:

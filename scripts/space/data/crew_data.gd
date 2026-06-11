@@ -12,7 +12,8 @@ enum Role {
 	GUNNER,       # Operates weapons, picks targets within orders
 	CAPTAIN,      # Commands ship-level decisions, coordinates crew
 	SQUADRON_LEADER,  # Commands multiple ships, prioritizes squadron targets
-	FLEET_COMMANDER   # Strategic decisions for entire fleet
+	FLEET_COMMANDER,  # Strategic decisions for entire fleet
+	ENGINEER      # Repairs the ship; machinery skill sets repair size
 }
 
 ## Create a crew member with given role and skill level
@@ -72,15 +73,16 @@ static func _generate_stats_for_role(role: Role, skill_level: float) -> Dictiona
 		"decision_time": _calculate_decision_time(skill_level, role_modifiers.decision_base),
 		"stress": 0.0,  # Increases in combat, reduces performance
 		"fatigue": 0.0,  # Increases over time
-		# Six-stat schema. Every stat is mechanically wired; what changes by
+		# Seven-stat schema. Every stat is mechanically wired; what changes by
 		# role is *which* stats are read.
 		"skills": {
 			"aim": base,        # Weapon accuracy, lead quality, prediction
 			"piloting": base,   # Turn rate, accel, lateral, dampening, jink, evasion commit
 			"awareness": base,  # Sensor range, detection latency, threat prioritization
-			"tactics": base,    # Command-style, squadron coord, retreat, target prio, DC speed
+			"tactics": base,    # Command-style, squadron coord, retreat, target prio
 			"composure": base,  # Performance under stress; gates panic
-			"aggression": base  # Engagement bias / persistence — personality, not skill
+			"aggression": base, # Engagement bias / persistence — personality, not skill
+			"machinery": base   # Repair size — only exercised in the ENGINEER role
 		}
 	}
 
@@ -116,6 +118,12 @@ static func _get_role_modifiers(role: Role) -> Dictionary:
 				"reaction_base": 0.5,  # High-level decisions
 				"decision_base": 2.0,  # Very complex decisions
 				"awareness_range": 3000.0  # Strategic view
+			}
+		Role.ENGINEER:
+			return {
+				"reaction_base": 0.4,  # Repairs aren't twitch reactions
+				"decision_base": 1.5,  # Methodical triage
+				"awareness_range": 600.0  # Focused inward on own ship
 			}
 		_:
 			return {
@@ -244,8 +252,8 @@ static func promote_squadron_leader(squadron_crew: Array) -> Array:
 
 	return updated_crew
 
-## Create a ship crew (captain, pilot, gunners)
-static func create_ship_crew(weapon_count: int, skill_level: float = 0.5) -> Array:
+## Create a ship crew (captain, pilot, gunners, engineers)
+static func create_ship_crew(weapon_count: int, skill_level: float = 0.5, engineer_count: int = 0) -> Array:
 	var crew = []
 
 	# Create captain
@@ -265,7 +273,24 @@ static func create_ship_crew(weapon_count: int, skill_level: float = 0.5) -> Arr
 		captain.command_chain.subordinates.append(gunner.crew_id)
 		crew.append(gunner)
 
+	# Create engineers (report to captain)
+	for i in engineer_count:
+		var engineer = create_crew_member(Role.ENGINEER, skill_level * 0.9)
+		engineer.command_chain.superior = captain.crew_id
+		captain.command_chain.subordinates.append(engineer.crew_id)
+		crew.append(engineer)
+
 	return crew
+
+## Roll how many engineers a hull carries.
+static func roll_engineer_count(ship_type: String) -> int:
+	match ship_type:
+		"corvette":
+			return randi_range(WingConstants.CORVETTE_ENGINEERS_MIN, WingConstants.CORVETTE_ENGINEERS_MAX)
+		"capital":
+			return randi_range(WingConstants.CAPITAL_ENGINEERS_MIN, WingConstants.CAPITAL_ENGINEERS_MAX)
+		_:
+			return 0
 
 ## Create a squadron with leader and ships
 static func create_squadron(ship_count: int, weapons_per_ship: int, skill_level: float = 0.5) -> Array:
@@ -313,6 +338,7 @@ static func get_role_name(role: Role) -> String:
 		Role.CAPTAIN: return "Captain"
 		Role.SQUADRON_LEADER: return "Squadron Leader"
 		Role.FLEET_COMMANDER: return "Fleet Commander"
+		Role.ENGINEER: return "Engineer"
 		_: return "Unknown"
 
 ## Create crew member with varied discrete skills (±0.15 variance from base)
@@ -320,7 +346,7 @@ static func create_crew_member_with_varied_skills(role: Role, skill_level: float
 	var crew = create_crew_member(role, skill_level)
 
 	# Generate varied discrete skills around the base skill_level
-	var skill_names = ["aim", "piloting", "awareness", "tactics", "composure", "aggression"]
+	var skill_names = ["aim", "piloting", "awareness", "tactics", "composure", "aggression", "machinery"]
 	for skill_name in skill_names:
 		var variance = randf_range(-0.15, 0.15)
 		crew.stats.skills[skill_name] = clamp(skill_level + variance, 0.0, 1.0)

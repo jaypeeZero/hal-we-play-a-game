@@ -206,6 +206,7 @@ func _role_label(role_int: int) -> String:
 		CrewData.Role.CAPTAIN: return "captain"
 		CrewData.Role.SQUADRON_LEADER: return "sqd ldr"
 		CrewData.Role.FLEET_COMMANDER: return "fleet"
+		CrewData.Role.ENGINEER: return "engineer"
 		_: return "crew"
 
 
@@ -216,6 +217,7 @@ func _role_key(role_int: int) -> String:
 		CrewData.Role.CAPTAIN: return "captain"
 		CrewData.Role.SQUADRON_LEADER: return "squadron_leader"
 		CrewData.Role.FLEET_COMMANDER: return "fleet_commander"
+		CrewData.Role.ENGINEER: return "engineer"
 		_: return ""
 
 

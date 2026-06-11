@@ -255,6 +255,7 @@ func _role_name(role: int) -> String:
 		CrewData.Role.CAPTAIN: return "captain"
 		CrewData.Role.SQUADRON_LEADER: return "squadron_leader"
 		CrewData.Role.FLEET_COMMANDER: return "fleet_commander"
+		CrewData.Role.ENGINEER: return "engineer"
 		_: return "unknown"
 
 func _summarize_threats(threats: Array) -> Array:

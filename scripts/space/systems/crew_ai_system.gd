@@ -34,6 +34,8 @@ static func update_crew_member(crew_data: Dictionary, delta: float, game_time: f
 			return SquadronLeaderAI.make_decision(updated, game_time)
 		CrewData.Role.FLEET_COMMANDER:
 			return CommanderAI.make_decision(updated, game_time)
+		CrewData.Role.ENGINEER:
+			return EngineerAI.make_decision(updated, game_time, ships)
 		_:
 			return {"crew_data": updated}
 
@@ -76,6 +78,9 @@ static func calculate_effective_skill(crew_data: Dictionary) -> float:
 			base_skill = float(skills.get("aim", 0.5))
 		CrewData.Role.CAPTAIN, CrewData.Role.SQUADRON_LEADER, CrewData.Role.FLEET_COMMANDER:
 			base_skill = float(skills.get("tactics", 0.5))
+		CrewData.Role.ENGINEER:
+			# machinery is role-gated: it only acts through the ENGINEER role.
+			base_skill = float(skills.get("machinery", 0.5))
 		_:
 			base_skill = 0.5
 	var stress_penalty = crew_data.stats.stress * 0.3  # Up to 30% penalty

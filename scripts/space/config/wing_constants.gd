@@ -477,3 +477,36 @@ const PILOT_FRIENDLY_COLLISION_SKILL = 0.75
 ## Piloting skill above which a pilot breaks their engagement lock when a
 ## significantly closer threat enters close combat range.
 const CLOSE_TARGET_RELOCK_SKILL = 0.75
+
+# =============================================================================
+# ENGINEER REPAIR
+# =============================================================================
+
+## Engineers rolled per hull when a ship's crew is created.
+const CORVETTE_ENGINEERS_MIN = 0
+const CORVETTE_ENGINEERS_MAX = 2
+const CAPITAL_ENGINEERS_MIN = 1
+const CAPITAL_ENGINEERS_MAX = 5
+
+## Fraction of the target's maximum restored per in-battle repair action,
+## lerped on the engineer's effective machinery skill.
+const ENGINEER_REPAIR_FRACTION_MIN = 0.02
+const ENGINEER_REPAIR_FRACTION_MAX = 0.08
+
+## Seconds between an engineer's repair actions, and between idle checks
+## when nothing aboard needs fixing.
+const ENGINEER_REPAIR_CADENCE_MIN = 2.0
+const ENGINEER_REPAIR_CADENCE_MAX = 3.0
+const ENGINEER_IDLE_CADENCE_MIN = 4.0
+const ENGINEER_IDLE_CADENCE_MAX = 6.0
+
+## How long the green repair pulse stays visible on a ship after a repair
+## lands. Shorter than the repair cadence so ongoing repairs blink.
+const ENGINEER_REPAIR_FLASH_SECONDS = 1.2
+
+## Roguelike jump repair: fraction of max restored per engineer per star
+## date of travel time, scaled by their machinery skill.
+const REPAIR_FRACTION_PER_STAR_DATE = 0.01
+
+## R&R downtime multiplies the jump repair.
+const RNR_REPAIR_MULTIPLIER = 3.0

@@ -220,72 +220,79 @@ static func replace_internal_component(ship_data: Dictionary, new_component: Dic
 	return ship_data
 
 # ============================================================================
-# COMPONENT EFFECTS - Apply status effects to ship
+# COMPONENT EFFECTS - Derive effective stats from component statuses
 # ============================================================================
 
 static func apply_component_effects(ship_data: Dictionary, component: Dictionary, status_changed: bool) -> Dictionary:
 	if not status_changed:
 		return ship_data
 
-	match component.get("status"):
-		"damaged":
-			return apply_damaged_effects(ship_data, component)
-		"destroyed":
-			return apply_destroyed_effects(ship_data, component)
-		_:
-			return ship_data
+	var updated = recompute_stats_from_components(ship_data)
 
-static func apply_damaged_effects(ship_data: Dictionary, component: Dictionary) -> Dictionary:
-	var effects_dict = component.get("effect_on_ship", {})
-	if not effects_dict.has("on_damaged"):
-		return ship_data
-
-	var effects = effects_dict.get("on_damaged", {})
-	return apply_effects_to_ship(ship_data, effects)
-
-static func apply_destroyed_effects(ship_data: Dictionary, component: Dictionary) -> Dictionary:
-	var effects_dict = component.get("effect_on_ship", {})
-	if not effects_dict.has("on_destroyed"):
-		return ship_data
-
-	var effects = effects_dict.get("on_destroyed", {})
-	var ship_with_effects = apply_effects_to_ship(ship_data, effects)
-
-	# Check for special destruction effects
-	if effects.has("disabled") and effects.get("disabled"):
-		return set_ship_disabled(ship_with_effects)
-
-	if effects.has("explode") and effects.get("explode"):
-		return set_ship_exploding(ship_with_effects)
-
-	return ship_with_effects
-
-static func apply_effects_to_ship(ship_data: Dictionary, effects: Dictionary) -> Dictionary:
-	var updated = ship_data
-
-	for effect_key in effects:
-		var multiplier = effects[effect_key]
-
-		match effect_key:
-			"max_speed":
-				updated = multiply_ship_stat(updated, "max_speed", multiplier)
-				updated = clamp_velocity_to_max_speed(updated)
-			"acceleration":
-				updated = multiply_ship_stat(updated, "acceleration", multiplier)
-			"turn_rate":
-				updated = multiply_ship_stat(updated, "turn_rate", multiplier)
-			"weapon_power":
-				updated = multiply_all_weapon_damage(updated, multiplier)
-			"accuracy":
-				updated = multiply_all_weapon_accuracy(updated, multiplier)
+	# disabled/explode are one-way transition effects, not stat multipliers.
+	if component.get("status") == "destroyed":
+		var effects = component.get("effect_on_ship", {}).get("on_destroyed", {})
+		if effects.get("disabled", false):
+			updated = set_ship_disabled(updated)
+		if effects.get("explode", false):
+			updated = set_ship_exploding(updated)
 
 	return updated
 
-static func multiply_ship_stat(ship_data: Dictionary, stat_name: String, multiplier: float) -> Dictionary:
-	var stats = ship_data.get("stats", {})
-	var new_stats = stats.duplicate(true)
-	new_stats[stat_name] = stats.get(stat_name, 0) * multiplier
-	return DictUtils.merge_dict(ship_data, {"stats": new_stats})
+## Derive effective ship and weapon stats from the pristine `base_stats`
+## snapshot (taken at ship creation) and the current status of every
+## internal component. Damage and repair both route through here, so
+## effect multipliers never compound across status transitions.
+static func recompute_stats_from_components(ship_data: Dictionary) -> Dictionary:
+	var multipliers := {
+		"max_speed": 1.0,
+		"acceleration": 1.0,
+		"turn_rate": 1.0,
+		"weapon_power": 1.0,
+		"accuracy": 1.0,
+	}
+	for component in ship_data.get("internals", []):
+		var effects = get_effects_for_status(component)
+		for effect_key in effects:
+			if multipliers.has(effect_key):
+				multipliers[effect_key] = multipliers[effect_key] * effects[effect_key]
+
+	var base_stats: Dictionary = ship_data.base_stats
+	var new_stats: Dictionary = ship_data.get("stats", {}).duplicate(true)
+	for stat_name in ["max_speed", "acceleration", "turn_rate"]:
+		if base_stats.has(stat_name):
+			new_stats[stat_name] = base_stats[stat_name] * multipliers[stat_name]
+
+	var updated = DictUtils.merge_dict(ship_data, {"stats": new_stats})
+	updated = recompute_weapon_stats(updated, multipliers["weapon_power"], multipliers["accuracy"])
+	return clamp_velocity_to_max_speed(updated)
+
+## The effect set a component currently exerts on its ship.
+static func get_effects_for_status(component: Dictionary) -> Dictionary:
+	var effects_dict = component.get("effect_on_ship", {})
+	match component.get("status", ""):
+		"damaged":
+			return effects_dict.get("on_damaged", {})
+		"destroyed":
+			return effects_dict.get("on_destroyed", {})
+		_:
+			return {}
+
+static func recompute_weapon_stats(ship_data: Dictionary, damage_multiplier: float, accuracy_multiplier: float) -> Dictionary:
+	var weapons = ship_data.get("weapons", [])
+	if not (weapons is Array) or weapons.is_empty():
+		return ship_data
+	var new_weapons = weapons.map(
+		func(w): return recompute_one_weapon(w, damage_multiplier, accuracy_multiplier)
+	)
+	return DictUtils.merge_dict(ship_data, {"weapons": new_weapons})
+
+static func recompute_one_weapon(weapon: Dictionary, damage_multiplier: float, accuracy_multiplier: float) -> Dictionary:
+	var base_stats: Dictionary = weapon.base_stats
+	var new_stats: Dictionary = weapon.get("stats", {}).duplicate(true)
+	new_stats["damage"] = int(base_stats.get("damage", 0) * damage_multiplier)
+	new_stats["accuracy"] = base_stats.get("accuracy", 0.0) * accuracy_multiplier
+	return DictUtils.merge_dict(weapon, {"stats": new_stats})
 
 static func clamp_velocity_to_max_speed(ship_data: Dictionary) -> Dictionary:
 	var velocity = ship_data.get("velocity", Vector2.ZERO)
@@ -295,40 +302,6 @@ static func clamp_velocity_to_max_speed(ship_data: Dictionary) -> Dictionary:
 
 	var clamped_velocity = velocity.normalized() * max_speed
 	return DictUtils.merge_dict(ship_data, {"velocity": clamped_velocity})
-
-static func multiply_all_weapon_damage(ship_data: Dictionary, multiplier: float) -> Dictionary:
-	var weapons = ship_data.get("weapons", [])
-	if not (weapons is Array):
-		return ship_data
-	var new_weapons = weapons.map(
-		func(w): return multiply_weapon_damage(w, multiplier)
-	)
-	return DictUtils.merge_dict(ship_data, {"weapons": new_weapons})
-
-static func multiply_weapon_damage(weapon: Dictionary, multiplier: float) -> Dictionary:
-	var stats = weapon.get("stats", {})
-	if not (stats is Dictionary):
-		return weapon
-	var new_stats = stats.duplicate(true)
-	new_stats["damage"] = int(stats.get("damage", 0) * multiplier)
-	return DictUtils.merge_dict(weapon, {"stats": new_stats})
-
-static func multiply_all_weapon_accuracy(ship_data: Dictionary, multiplier: float) -> Dictionary:
-	var weapons = ship_data.get("weapons", [])
-	if not (weapons is Array):
-		return ship_data
-	var new_weapons = weapons.map(
-		func(w): return multiply_weapon_accuracy(w, multiplier)
-	)
-	return DictUtils.merge_dict(ship_data, {"weapons": new_weapons})
-
-static func multiply_weapon_accuracy(weapon: Dictionary, multiplier: float) -> Dictionary:
-	var stats = weapon.get("stats", {})
-	if not (stats is Dictionary):
-		return weapon
-	var new_stats = stats.duplicate(true)
-	new_stats["accuracy"] = stats.get("accuracy", 0.0) * multiplier
-	return DictUtils.merge_dict(weapon, {"stats": new_stats})
 
 static func set_ship_disabled(ship_data: Dictionary) -> Dictionary:
 	return DictUtils.merge_dict(ship_data, {
