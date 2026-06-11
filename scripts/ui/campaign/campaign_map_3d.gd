@@ -41,6 +41,8 @@ const STAR_RADIUS := 0.3
 const STAR_PICK_RADIUS := 0.7
 const STAR_LABEL_OFFSET := Vector3(0, 0.8, 0)
 const STAR_LABEL_FONT_SIZE := 36
+## With fixed_size, on-screen label height ~= font_size * pixel_size * viewport_height.
+const STAR_LABEL_PIXEL_SIZE := 0.0005
 const HOVERED_STAR_SCALE := 1.5
 const CURRENT_NODE_PULSE_SPEED := 5.0
 const CURRENT_NODE_PULSE_DEPTH := 0.5
@@ -314,6 +316,9 @@ func _create_star(node: Dictionary) -> Area3D:
 	label.text = "%s  +%d" % [NODE_TYPE_NAMES[node["type"]], int(node["star_date_gap"])]
 	label.position = STAR_LABEL_OFFSET
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# Constant on-screen size so labels stay readable at any orbit distance.
+	label.fixed_size = true
+	label.pixel_size = STAR_LABEL_PIXEL_SIZE
 	label.font_size = STAR_LABEL_FONT_SIZE
 	area.add_child(label)
 
