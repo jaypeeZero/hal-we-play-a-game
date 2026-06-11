@@ -20,6 +20,8 @@ signal closed
 const SCREEN_MARGIN := 40
 const SECTION_GAP := 16
 const CARD_MIN_WIDTH := 230
+## Below this fraction, an armor/systems meter is shown in the warning colour.
+const CONDITION_LOW_RATIO := 0.6
 
 var _shop_node: Dictionary = {}
 var _money_label: Label
@@ -332,14 +334,63 @@ func _hull_header(hull: Dictionary, trailing: Button) -> Control:
 	row.add_child(RogueliteUi.label(_type_label(hull.get("ship_type", "")), RogueliteUi.INK, 13))
 	row.add_child(RogueliteUi.label("· crew %d / %d" % [
 		hull.get("crew", []).size(), hull.get("complement", []).size()], RogueliteUi.DIM, 12))
+	row.add_child(RogueliteUi.label("· eng %d" % _engineer_count(hull), RogueliteUi.DIM, 12))
 	if hull.get("iced", false):
 		row.add_child(RogueliteUi.badge("On ice"))
+	elif not _has_pilot(hull):
+		row.add_child(RogueliteUi.badge("Won't sortie", RogueliteUi.BAD))
+
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
+
+	# Armor/systems condition, folded in from the standalone fleet overlay.
+	var cond := _hull_condition(hull)
+	row.add_child(RogueliteUi.mini_meter("Arm", cond.armor, RogueliteUi.ACCENT,
+		cond.armor < CONDITION_LOW_RATIO))
+	row.add_child(RogueliteUi.mini_meter("Sys", cond.systems, RogueliteUi.GOLD,
+		cond.systems < CONDITION_LOW_RATIO))
+
 	if trailing != null:
 		row.add_child(trailing)
 	return head
+
+
+func _engineer_count(hull: Dictionary) -> int:
+	var n := 0
+	for member in hull.get("crew", []):
+		if member.get("role", -1) == CrewData.Role.ENGINEER:
+			n += 1
+	return n
+
+
+func _has_pilot(hull: Dictionary) -> bool:
+	for member in hull.get("crew", []):
+		if member.get("role", -1) == CrewData.Role.PILOT:
+			return true
+	return false
+
+
+## Armor and systems condition as 0..1 ratios, from the hull's persisted damage
+## state. A pristine hull (no recorded `ship`) reads fully intact.
+func _hull_condition(hull: Dictionary) -> Dictionary:
+	var ship: Dictionary = hull.get("ship", {})
+	if ship.is_empty():
+		return {"armor": 1.0, "systems": 1.0}
+	var armor_current := 0.0
+	var armor_max := 0.0
+	for section in ship.get("armor_sections", []):
+		armor_current += float(section.get("current_armor", 0))
+		armor_max += float(section.get("max_armor", 0))
+	var systems_current := 0.0
+	var systems_max := 0.0
+	for component in ship.get("internals", []):
+		systems_current += float(component.get("current_health", 0))
+		systems_max += float(component.get("max_health", 0))
+	return {
+		"armor": armor_current / armor_max if armor_max > 0.0 else 1.0,
+		"systems": systems_current / systems_max if systems_max > 0.0 else 1.0,
+	}
 
 
 ## A horizontal row of widgets with the standard crew/vacancy-row indent and

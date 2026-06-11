@@ -193,3 +193,41 @@ static func meter_bar(key: String, ratio: float, fill: Color, low := false) -> C
 
 	row.add_child(label("%d%%" % int(round(ratio * 100.0)), BAD if low else INK, 11))
 	return row
+
+
+## Compact inline condition meter for a header row: a fixed-width track and a
+## right-aligned percent, so several fit on one line beside other widgets.
+static func mini_meter(key: String, ratio: float, fill: Color, low := false, track_width := 60) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(label(key, DIM, 10))
+
+	var track := PanelContainer.new()
+	track.custom_minimum_size = Vector2(track_width, 7)
+	var track_box := StyleBoxFlat.new()
+	track_box.bg_color = Color("0c121b")
+	track_box.set_corner_radius_all(4)
+	track_box.set_border_width_all(1)
+	track_box.border_color = LINE
+	track.add_theme_stylebox_override("panel", track_box)
+
+	var bar := ProgressBar.new()
+	bar.min_value = 0.0
+	bar.max_value = 1.0
+	bar.value = clampf(ratio, 0.0, 1.0)
+	bar.show_percentage = false
+	var under := StyleBoxFlat.new()
+	under.bg_color = Color(0, 0, 0, 0)
+	bar.add_theme_stylebox_override("background", under)
+	var fg_box := StyleBoxFlat.new()
+	fg_box.bg_color = fill
+	fg_box.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("fill", fg_box)
+	track.add_child(bar)
+	row.add_child(track)
+
+	var pct := label("%d%%" % int(round(ratio * 100.0)), BAD if low else INK, 11)
+	pct.custom_minimum_size = Vector2(34, 0)
+	pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(pct)
+	return row

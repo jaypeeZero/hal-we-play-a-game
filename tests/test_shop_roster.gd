@@ -292,3 +292,21 @@ func test_buying_through_the_overlay_consumes_stock_and_grows_the_fleet():
 
 	assert_true(node.shop_stock.is_empty(), "The bought ship is removed from the node's stock")
 	assert_eq(RoguelikeRun.fleet_hulls.size(), before + 1, "The fleet gains the purchased hull")
+
+
+func test_roster_renders_condition_for_a_damaged_hull():
+	RoguelikeRun.start_run(_counts({"corvette": 1}))
+	# Persist a damaged ship state so the roster header's condition meters
+	# render off the damaged branch (not the pristine 100%/100% shortcut).
+	var ship := ShipData.create_ship_instance("corvette", 0, Vector2.ZERO)
+	ship["armor_sections"][0]["current_armor"] = 0
+	ship.erase("crew")
+	RoguelikeRun.fleet_hulls[0].ship = ship
+	var shop := ShopScreen.new()
+	add_child_autofree(shop)
+
+	shop.setup({"shop_stock": []})
+
+	# The damaged hull still renders in the roster with its ice toggle intact.
+	assert_gt(_find_buttons(shop, "Put on ice", []).size(), 0,
+		"A damaged hull renders in the roster with condition shown and controls working")

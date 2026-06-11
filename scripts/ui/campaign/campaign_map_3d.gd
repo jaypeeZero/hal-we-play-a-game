@@ -238,8 +238,12 @@ func _open_shop(node: Dictionary, repair_summary: Dictionary) -> void:
 		node["shop_stock"] = EconomySystem.roll_shop_stock(rng)
 	var shop := ShopScreen.new()
 	add_child(shop)
+	# The shop carries per-hull condition in its roster headers, so the
+	# standalone fleet overlay is redundant (and would show through) while open.
+	_fleet_label.visible = false
 	shop.closed.connect(func():
 		shop.queue_free()
+		_fleet_label.visible = true
 		_complete_node_visit(node, repair_summary))
 	shop.setup(node)
 

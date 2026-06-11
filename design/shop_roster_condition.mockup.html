@@ -1,0 +1,143 @@
+<!doctype html>
+<!-- @dsCard group="Roguelike Screens" -->
+<!--
+  PROPOSAL: fold the standalone "Fleet Condition" overlay into the Shop's
+  roster hull headers. The separate overlay is hidden while the shop is open;
+  its data (armor %, systems %, engineers) moves into each hull's existing
+  header row, alongside the crew count and the ice/activate toggle.
+  Shows several hull states. Visual review only — port to shop_screen.gd after sign-off.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop roster · condition in header — mockup</title>
+<style>
+  :root {
+    --bg:#0a0e14; --panel:#121822; --panel-2:#161e2b; --line:#243140;
+    --ink:#dfe8f2; --dim:#8595a8; --accent:#43d1ff; --accent-dim:#1d6f8c;
+    --gold:#ffce5c; --good:#5cff9d; --bad:#ff6b6b; --chip:#1c2735;
+    --radius:10px; --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:radial-gradient(1100px 640px at 60% -10%, #15233a 0%, var(--bg) 60%);
+         color:var(--ink); font:14px/1.45 var(--mono); padding:28px; }
+  .wrap { max-width:760px; margin:0 auto; }
+  h2 { font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--accent);
+       margin:0 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+  .legend { color:var(--dim); font-size:11px; margin:-6px 0 16px; }
+
+  .hull { border:1px solid var(--line); border-radius:var(--radius); background:var(--panel);
+          margin-bottom:12px; overflow:hidden; }
+
+  /* the enriched header row */
+  .hull-head { display:flex; align-items:center; gap:12px; padding:11px 14px;
+               background:var(--panel-2); border-bottom:1px solid var(--line); }
+  .hname { font-size:13px; letter-spacing:1px; }
+  .meta  { color:var(--dim); font-size:12px; }
+  .eng   { color:var(--dim); font-size:12px; }
+  .eng b { color:var(--ink); }
+  .spacer { margin-left:auto; }
+
+  /* compact condition meters — the data moved out of the standalone overlay */
+  .cond { display:flex; align-items:center; gap:14px; }
+  .minibar { display:flex; align-items:center; gap:6px; }
+  .minibar .k { font-size:10px; letter-spacing:1px; color:var(--dim); text-transform:uppercase; }
+  .track { width:60px; height:7px; border-radius:4px; background:#0c121b; border:1px solid var(--line); overflow:hidden; }
+  .fill { height:100%; }
+  .fill.armor { background:linear-gradient(90deg,var(--accent-dim),var(--accent)); }
+  .fill.sys   { background:linear-gradient(90deg,#8a6a1f,var(--gold)); }
+  .minibar .v { font-size:11px; width:34px; text-align:right; color:var(--ink); }
+  .minibar .v.low { color:var(--bad); }
+
+  .badge { font-size:9px; letter-spacing:2px; text-transform:uppercase; border-radius:4px;
+           padding:2px 6px; border:1px solid; }
+  .badge.ice  { color:var(--accent); border-color:var(--accent-dim); }
+  .badge.bad  { color:var(--bad); border-color:#5a2a2a; }
+
+  .btn { font:600 12px/1 var(--mono); letter-spacing:1px; text-transform:uppercase;
+         background:transparent; color:var(--accent); border:1px solid var(--accent-dim);
+         border-radius:6px; padding:7px 12px; cursor:pointer; white-space:nowrap; }
+
+  .crew-row { display:flex; align-items:center; gap:12px; padding:9px 14px; border-top:1px solid #1a2330; }
+  .role { color:var(--dim); width:78px; font-size:11px; letter-spacing:1px; text-transform:uppercase; }
+  .callsign { color:var(--ink); }
+  .weapon { color:var(--accent); font-size:11px; }
+  .grow { margin-left:auto; }
+  select { font:12px var(--mono); color:var(--ink); background:var(--chip);
+           border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Fleet roster</h2>
+  <div class="legend">Armor / systems / engineers now live in each hull's header — the separate Fleet Condition overlay is hidden while the shop is open.</div>
+
+  <!-- healthy, fully crewed -->
+  <div class="hull">
+    <div class="hull-head">
+      <span class="hname">Heavy Fighter</span>
+      <span class="meta">· crew 2/2</span>
+      <span class="eng">· eng <b>0</b></span>
+      <span class="spacer"></span>
+      <span class="cond">
+        <span class="minibar"><span class="k">Arm</span><span class="track"><span class="fill armor" style="width:82%"></span></span><span class="v">82%</span></span>
+        <span class="minibar"><span class="k">Sys</span><span class="track"><span class="fill sys" style="width:100%"></span></span><span class="v">100%</span></span>
+      </span>
+      <button class="btn">Put on ice</button>
+    </div>
+    <div class="crew-row"><span class="role">Pilot</span><span class="callsign">Vega</span><span class="grow"></span><select><option>Transfer to…</option></select></div>
+    <div class="crew-row"><span class="role">Gunner</span><span class="callsign">Renn</span><span class="weapon">rear_turret</span><span class="grow"></span><select><option>Transfer to…</option></select></div>
+  </div>
+
+  <!-- damaged, condition in red -->
+  <div class="hull">
+    <div class="hull-head">
+      <span class="hname">Corvette</span>
+      <span class="meta">· crew 7/7</span>
+      <span class="eng">· eng <b>2</b></span>
+      <span class="spacer"></span>
+      <span class="cond">
+        <span class="minibar"><span class="k">Arm</span><span class="track"><span class="fill armor" style="width:34%"></span></span><span class="v low">34%</span></span>
+        <span class="minibar"><span class="k">Sys</span><span class="track"><span class="fill sys" style="width:58%"></span></span><span class="v low">58%</span></span>
+      </span>
+      <button class="btn">Put on ice</button>
+    </div>
+    <div class="crew-row"><span class="role">Captain</span><span class="callsign">Doss</span><span class="grow"></span><select><option>Transfer to…</option></select></div>
+  </div>
+
+  <!-- iced -->
+  <div class="hull">
+    <div class="hull-head">
+      <span class="hname">Fighter</span>
+      <span class="meta">· crew 1/1</span>
+      <span class="eng">· eng <b>0</b></span>
+      <span class="badge ice">On ice</span>
+      <span class="spacer"></span>
+      <span class="cond">
+        <span class="minibar"><span class="k">Arm</span><span class="track"><span class="fill armor" style="width:100%"></span></span><span class="v">100%</span></span>
+        <span class="minibar"><span class="k">Sys</span><span class="track"><span class="fill sys" style="width:100%"></span></span><span class="v">100%</span></span>
+      </span>
+      <button class="btn">Activate</button>
+    </div>
+  </div>
+
+  <!-- pristine bought hull: no crew, won't sortie, no damage yet -->
+  <div class="hull">
+    <div class="hull-head">
+      <span class="hname">Capital</span>
+      <span class="meta">· crew 0/15</span>
+      <span class="eng">· eng <b>0</b></span>
+      <span class="badge bad">Won't sortie</span>
+      <span class="spacer"></span>
+      <span class="cond">
+        <span class="minibar"><span class="k">Arm</span><span class="track"><span class="fill armor" style="width:100%"></span></span><span class="v">100%</span></span>
+        <span class="minibar"><span class="k">Sys</span><span class="track"><span class="fill sys" style="width:100%"></span></span><span class="v">100%</span></span>
+      </span>
+      <button class="btn">Put on ice</button>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
