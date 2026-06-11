@@ -341,7 +341,29 @@ static func reset_for_battle(saved: Dictionary) -> Dictionary:
 	fresh.stats.fatigue = 0.0
 	fresh.known_patterns = saved.get("known_patterns", []).duplicate()
 	fresh.command_chain = saved.get("command_chain", fresh.command_chain).duplicate(true)
+	# A gunner's weapon binding is persistent identity: it decides which weapon
+	# they man and, if its mount is shot off, whether they become a casualty.
+	if saved.has("weapon_id"):
+		fresh.weapon_id = saved.weapon_id
 	return fresh
+
+
+## Bind each gunner to a weapon by id, assigning from the END of the weapons
+## array backwards. This pairs partial complements correctly — a lone gunner
+## takes the rear/secondary weapon (e.g. a heavy fighter's rear turret) while
+## the pilot works the forward guns. Gunners with no weapon left stay unbound.
+## Mutates the crew dicts in place and returns the array.
+static func bind_gunners_to_weapons(crew: Array, weapons: Array) -> Array:
+	var next := weapons.size() - 1
+	for member in crew:
+		if member.get("role", -1) != Role.GUNNER:
+			continue
+		if next < 0:
+			member.erase("weapon_id")
+			continue
+		member["weapon_id"] = weapons[next].get("weapon_id", "")
+		next -= 1
+	return crew
 
 ## Create the crew complement for one hull of the given ship type.
 static func create_crew_for_ship_type(ship_type: String, weapon_count: int, skill_level: float) -> Array:
