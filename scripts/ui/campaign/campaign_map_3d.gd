@@ -344,7 +344,11 @@ func _update_star_visuals() -> void:
 	var current_sector: String = campaign["current_sector"]
 	for node in campaign["nodes"].values():
 		var node_id: String = node["id"]
-		var in_current_sector: bool = node["sector"] == current_sector
+		# The current node stays bright even when it sits in the previous
+		# sector (just after a promotion), so the player can see where the
+		# bridge jump starts.
+		var in_current_sector: bool = node["sector"] == current_sector \
+			or node_id == campaign["current_node_id"]
 		var color := _star_color(node, campaign)
 		color.a = 1.0 if in_current_sector else DIMMED_SECTOR_ALPHA
 		_star_materials[node_id].albedo_color = color
