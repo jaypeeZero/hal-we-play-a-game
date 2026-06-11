@@ -10,7 +10,8 @@
       "Bash(done)",
       "Bash(git log *)",
       "Bash(godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gexit)",
-      "mcp__lean-ctx__ctx_edit"
+      "mcp__lean-ctx__ctx_edit",
+      "mcp__lean-ctx__ctx_shell"
     ],
     "deny": [],
     "ask": []
