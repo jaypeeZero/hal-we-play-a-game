@@ -516,7 +516,7 @@ func test_victory_keeps_only_surviving_ships_and_crew():
 	var casualty := _ship_with_crew("corvette", "destroyed", "dead")
 
 	RoguelikeRun.record_battle_result(
-		CampaignSystem.RESULT_VICTORY, [survivor, casualty], [])
+		CampaignSystem.RESULT_VICTORY, [survivor, casualty])
 
 	assert_eq(RoguelikeRun.fleet_ships.size(), 1, "Only survivors stay in the fleet")
 	assert_eq(RoguelikeRun.fleet_ships[0]["type"], "fighter",
@@ -530,9 +530,8 @@ func test_victory_keeps_only_surviving_ships_and_crew():
 
 func test_defeat_stashes_final_fleet_state_and_empties_fleet():
 	var lost := _ship_with_crew("fighter", "destroyed", "fallen")
-	var groups := [{"ship_type": "fighter", "crew": lost["crew"].duplicate(true)}]
 
-	RoguelikeRun.record_battle_result(CampaignSystem.RESULT_DEFEAT, [lost], groups)
+	RoguelikeRun.record_battle_result(CampaignSystem.RESULT_DEFEAT, [lost])
 
 	assert_eq(RoguelikeRun.pending_battle_result, CampaignSystem.RESULT_DEFEAT,
 		"The defeat is left pending for the campaign map to resolve")
@@ -601,6 +600,8 @@ func test_apply_demotion_prunes_doctrine_of_dead_crew():
 
 	assert_false(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CREW].has("casualty"),
 		"Doctrine authored for crew lost in the rout is purged")
+	assert_true(RoguelikeRun.lost_fleet_final_crew.is_empty(),
+		"The demotion consumes the stashed lost-fleet state")
 
 
 func test_reconcile_keeps_callsigns_unique_after_adding():

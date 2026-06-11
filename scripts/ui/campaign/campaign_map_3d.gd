@@ -148,8 +148,6 @@ func _resolve_battle_defeat() -> void:
 	var survivors := DemotionFleetBuilder.pick_survivors(
 		RoguelikeRun.lost_fleet_final_ships, RoguelikeRun.lost_fleet_final_crew, rng)
 	RoguelikeRun.apply_demotion(survivors, FleetDataManager.load_fleet(0))
-	RoguelikeRun.lost_fleet_final_ships = []
-	RoguelikeRun.lost_fleet_final_crew = []
 
 	var from_sector: String = campaign["current_sector"]
 	CampaignSystem.demote(campaign)

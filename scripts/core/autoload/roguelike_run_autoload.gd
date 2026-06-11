@@ -219,8 +219,10 @@ func _ship_health_total(ship: Dictionary) -> int:
 
 ## Record a battle's outcome for the campaign map to resolve. Victory
 ## keeps the surviving ships and crews; defeat stashes the wiped fleet's
-## final state so a demotion can roll damaged survivors from it.
-func record_battle_result(result: String, final_ships: Array, final_crew_groups: Array) -> void:
+## final state so a demotion can roll damaged survivors from it. Crew
+## groups are derived from the live crew the battle scene attaches to
+## each ship dict.
+func record_battle_result(result: String, final_ships: Array) -> void:
 	pending_battle_result = result
 	if result == CampaignSystem.RESULT_VICTORY:
 		var survivors: Array = final_ships.filter(
@@ -230,12 +232,12 @@ func record_battle_result(result: String, final_ships: Array, final_crew_groups:
 		lost_fleet_final_crew = []
 	else:
 		lost_fleet_final_ships = final_ships.duplicate(true)
-		lost_fleet_final_crew = final_crew_groups.duplicate(true)
+		lost_fleet_final_crew = _crew_groups_for_ships(final_ships)
 		fleet_ships = []
 
 
-## Crew groups (fleet_crew shape) rebuilt from the live crew the battle
-## scene attaches to each ship dict.
+## Crew groups (fleet_crew shape) rebuilt from the crew attached to each
+## ship dict.
 func _crew_groups_for_ships(ships: Array) -> Array:
 	var groups: Array = []
 	for ship in ships:
@@ -268,6 +270,9 @@ func apply_demotion(survivors: Dictionary, fleet_config: Dictionary) -> void:
 		fleet_crew.append(group.duplicate(true))
 
 	_prune_doctrine_for_roster(_dead_crew_ids(survivor_crew_groups), fleet)
+	# The stash is consumed: the demotion is its only reader.
+	lost_fleet_final_ships = []
+	lost_fleet_final_crew = []
 
 
 ## Crew ids present in the lost fleet's final state but absent from the

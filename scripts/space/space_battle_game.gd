@@ -761,8 +761,7 @@ func _end_game(winner: int) -> void:
 func _handle_roguelike_battle_end(winner: int) -> void:
 	var result: String = CampaignSystem.RESULT_VICTORY if winner == 0 \
 		else CampaignSystem.RESULT_DEFEAT
-	var final_ships := _get_player_ships_final_state()
-	RoguelikeRun.record_battle_result(result, final_ships, _crew_groups_for_ships(final_ships))
+	RoguelikeRun.record_battle_result(result, _get_player_ships_final_state())
 	get_tree().call_deferred("change_scene_to_file", CAMPAIGN_MAP_SCENE)
 
 
@@ -787,17 +786,6 @@ func _with_attached_crew(ship: Dictionary) -> Dictionary:
 		.filter(func(c): return c.get("assigned_to", "") == ship.get("ship_id", "")) \
 		.map(func(c): return c.duplicate(true))
 	return copy
-
-
-## Crew grouped by the ship they crewed, in the shape
-## RoguelikeRun.fleet_crew stores (see take_saved_crew).
-func _crew_groups_for_ships(ships: Array) -> Array:
-	var groups: Array = []
-	for ship in ships:
-		var members: Array = ship.get("crew", [])
-		if not members.is_empty():
-			groups.append({"ship_type": ship.get("type", ""), "crew": members.duplicate(true)})
-	return groups
 
 # ============================================================================
 # PUBLIC API (for testing)
