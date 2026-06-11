@@ -16,6 +16,28 @@ func test_weapon_fires_when_ready():
 
 	assert_gt(result.fire_commands.size(), 0, "Ready weapon should fire at valid target")
 
+func test_weapon_with_destroyed_mount_does_not_fire():
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)  # No cooldown
+	ship.weapons[0]["status"] = "destroyed"  # mount shot off
+	var target = TestFactories.make_fighter("", Vector2(0, -300), 1)
+
+	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
+
+	assert_eq(result.fire_commands.size(), 0,
+		"A weapon whose mount is destroyed must not fire even when ready")
+
+
+func test_operational_weapon_still_fires():
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
+	ship.weapons[0]["status"] = "operational"
+	var target = TestFactories.make_fighter("", Vector2(0, -300), 1)
+
+	var result = WeaponSystem.update_weapons(ship, [target], 0.1)
+
+	assert_gt(result.fire_commands.size(), 0,
+		"An operational weapon fires normally")
+
+
 func test_weapon_does_not_fire_during_cooldown():
 	var ship = TestFactories.make_armed_ship("light_cannon", 1.0)  # In cooldown
 	var target = TestFactories.make_fighter("", Vector2(300, 0), 1)

@@ -1,0 +1,194 @@
+<!doctype html>
+<!-- @dsCard group="Roguelike Screens" -->
+<!--
+  Mockup of the in-game SHOP overlay (ShopScreen.gd) for visual review only.
+  Values mirror data/economy.json. This is NOT shipped — it's a target to
+  agree on, then port to Godot Control nodes.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop — mockup</title>
+<style>
+  :root {
+    --bg:#0a0e14; --panel:#121822; --panel-2:#161e2b; --line:#243140;
+    --ink:#dfe8f2; --dim:#8595a8; --accent:#43d1ff; --accent-dim:#1d6f8c;
+    --gold:#ffce5c; --good:#5cff9d; --bad:#ff6b6b; --chip:#1c2735;
+    --radius:10px; --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:radial-gradient(1200px 700px at 70% -10%, #15233a 0%, var(--bg) 60%);
+    color:var(--ink); font:14px/1.45 var(--mono); padding:28px;
+  }
+  .wrap { max-width:1040px; margin:0 auto; }
+
+  /* ---- top bar ---- */
+  .topbar {
+    display:flex; align-items:center; justify-content:space-between;
+    border:1px solid var(--line); border-radius:var(--radius);
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    padding:14px 18px; margin-bottom:18px;
+  }
+  .title { font-size:16px; letter-spacing:3px; text-transform:uppercase; color:var(--ink); }
+  .title small { display:block; letter-spacing:2px; color:var(--dim); font-size:11px; margin-top:2px; }
+  .credits {
+    text-align:right; border-left:1px solid var(--line); padding-left:18px;
+  }
+  .credits .num { font-size:26px; color:var(--gold); text-shadow:0 0 14px rgba(255,206,92,.35); }
+  .credits .lbl { font-size:10px; letter-spacing:3px; color:var(--dim); text-transform:uppercase; }
+
+  /* ---- section ---- */
+  .section { margin-bottom:22px; }
+  .section > h2 {
+    font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--accent);
+    margin:0 0 10px; padding-bottom:6px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:baseline;
+  }
+  .section > h2 .note { color:var(--dim); letter-spacing:1px; text-transform:none; font-size:11px; }
+
+  /* ---- ship cards ---- */
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
+  .card {
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--panel);
+    padding:13px 14px; display:flex; flex-direction:column; gap:10px;
+  }
+  .card .name { font-size:14px; letter-spacing:1px; }
+  .card .stats { display:flex; gap:14px; color:var(--dim); font-size:12px; }
+  .card .stats b { color:var(--ink); font-weight:600; }
+  .card .price { margin-left:auto; color:var(--gold); font-weight:600; }
+  .card .foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:2px; }
+  .card .tag { font-size:10px; letter-spacing:1px; color:var(--dim); text-transform:uppercase; }
+
+  /* ---- buttons ---- */
+  .btn {
+    font:600 12px/1 var(--mono); letter-spacing:1px; text-transform:uppercase;
+    color:#04222c; background:var(--accent); border:none; border-radius:6px;
+    padding:8px 14px; cursor:pointer;
+  }
+  .btn:hover { filter:brightness(1.08); }
+  .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent-dim); }
+  .btn.warn  { background:transparent; color:var(--bad); border:1px solid #5a2a2a; }
+  .btn[disabled] { background:var(--chip); color:#4a5567; cursor:not-allowed; border:1px solid var(--line); }
+
+  /* ---- hull rows (hire + roster) ---- */
+  .hull {
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--panel);
+    margin-bottom:10px; overflow:hidden;
+  }
+  .hull-head {
+    display:flex; align-items:center; gap:12px; padding:11px 14px;
+    background:var(--panel-2); border-bottom:1px solid var(--line);
+  }
+  .hull-head .hname { font-size:13px; letter-spacing:1px; }
+  .hull-head .meta  { color:var(--dim); font-size:12px; }
+  .hull-head .iced  { color:var(--accent); font-size:10px; letter-spacing:2px; border:1px solid var(--accent-dim);
+                      border-radius:4px; padding:2px 6px; text-transform:uppercase; }
+  .hull-head .spacer { margin-left:auto; }
+  .crew-row, .vac-row {
+    display:flex; align-items:center; gap:12px; padding:9px 14px; border-top:1px solid #1a2330;
+  }
+  .crew-row:first-of-type, .vac-row:first-of-type { border-top:none; }
+  .role { color:var(--dim); width:78px; font-size:11px; letter-spacing:1px; text-transform:uppercase; }
+  .callsign { color:var(--ink); }
+  .weapon { color:var(--accent); font-size:11px; }
+  .vac-row .role { color:var(--gold); }
+  .grow { margin-left:auto; }
+  select {
+    font:12px var(--mono); color:var(--ink); background:var(--chip);
+    border:1px solid var(--line); border-radius:6px; padding:6px 8px;
+  }
+  .leave { display:flex; justify-content:flex-end; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="title">Shipyard &amp; Crew Hall<small>Trade outpost · Star date 2307</small></div>
+    <div class="credits"><div class="num">1,240</div><div class="lbl">Credits</div></div>
+  </div>
+
+  <!-- ===== SHIPS FOR SALE ===== -->
+  <div class="section">
+    <h2>Ships for sale <span class="note">hulls arrive crewless — hire below</span></h2>
+    <div class="grid">
+
+      <div class="card">
+        <div class="name">Corvette</div>
+        <div class="stats"><span>upkeep <b>20</b>/battle</span><span class="price">400 cr</span></div>
+        <div class="foot"><span class="tag">crewless hull</span><button class="btn">Buy</button></div>
+      </div>
+
+      <div class="card">
+        <div class="name">Fighter</div>
+        <div class="stats"><span>upkeep <b>5</b>/battle</span><span class="price">100 cr</span></div>
+        <div class="foot"><span class="tag">crewless hull</span><button class="btn">Buy</button></div>
+      </div>
+
+      <div class="card">
+        <div class="name">Capital</div>
+        <div class="stats"><span>upkeep <b>50</b>/battle</span><span class="price">1,000 cr</span></div>
+        <div class="foot"><span class="tag">crewless hull</span><button class="btn">Buy</button></div>
+      </div>
+
+      <div class="card" style="opacity:.75">
+        <div class="name">Capital</div>
+        <div class="stats"><span>upkeep <b>50</b>/battle</span><span class="price" style="color:var(--bad)">1,000 cr</span></div>
+        <div class="foot"><span class="tag" style="color:var(--bad)">can't afford</span><button class="btn" disabled>Buy</button></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== HIRE CREW ===== -->
+  <div class="section">
+    <h2>Hire crew <span class="note">5 cr/battle salary · 30 cr insurance on death</span></h2>
+
+    <div class="hull">
+      <div class="hull-head"><span class="hname">Corvette</span><span class="meta">· crew 4 / 7</span><span class="spacer"></span></div>
+      <div class="vac-row"><span class="role">Gunner</span><span class="weapon">heavy_cannon_2</span><span class="grow"></span><button class="btn">Hire</button></div>
+      <div class="vac-row"><span class="role">Gunner</span><span class="weapon">gatling_3</span><span class="grow"></span><button class="btn">Hire</button></div>
+      <div class="vac-row"><span class="role">Engineer</span><span class="weapon">—</span><span class="grow"></span><button class="btn">Hire</button></div>
+    </div>
+
+    <div class="hull">
+      <div class="hull-head"><span class="hname">Fighter</span><span class="meta">· crew 0 / 1</span><span class="spacer"></span></div>
+      <div class="vac-row"><span class="role">Pilot</span><span class="weapon">—</span><span class="grow"></span><button class="btn">Hire</button></div>
+    </div>
+  </div>
+
+  <!-- ===== FLEET ROSTER ===== -->
+  <div class="section">
+    <h2>Fleet roster</h2>
+
+    <div class="hull">
+      <div class="hull-head">
+        <span class="hname">Heavy Fighter</span><span class="meta">· crew 2 / 2</span>
+        <span class="spacer"></span><button class="btn ghost">Put on ice</button>
+      </div>
+      <div class="crew-row"><span class="role">Pilot</span><span class="callsign">Vega</span><span class="grow"></span>
+        <select><option>Transfer to…</option><option>Corvette (vacancy)</option></select></div>
+      <div class="crew-row"><span class="role">Gunner</span><span class="callsign">Renn</span><span class="weapon">rear_turret</span><span class="grow"></span>
+        <select><option>Transfer to…</option><option>Corvette (vacancy)</option></select></div>
+    </div>
+
+    <div class="hull">
+      <div class="hull-head">
+        <span class="hname">Corvette</span><span class="meta">· crew 4 / 7</span>
+        <span class="iced">On ice</span>
+        <span class="spacer"></span><button class="btn ghost">Activate</button>
+      </div>
+      <div class="crew-row"><span class="role">Captain</span><span class="callsign">Doss</span><span class="grow"></span>
+        <select><option>Transfer to…</option></select></div>
+      <div class="crew-row"><span class="role">Pilot</span><span class="callsign">Marr</span><span class="grow"></span>
+        <select><option>Transfer to…</option></select></div>
+    </div>
+  </div>
+
+  <div class="leave"><button class="btn warn">Leave shop</button></div>
+
+</div>
+</body>
+</html>

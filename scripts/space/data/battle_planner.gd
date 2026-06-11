@@ -35,6 +35,32 @@ static func build_default_plan(team0_fleet: Dictionary, team1_fleet: Dictionary,
 	return entries
 
 
+## Bind team-0 plan entries to specific player hulls by stable hull_id. The
+## sortieable hulls and the team-0 entries are produced from the same counts,
+## so the n-th team-0 entry of a type takes the n-th sortieable hull of that
+## type. Mutates and returns `entries`. Replaces the old type+order contract:
+## the battle scene now spawns each hull's exact crew and damage by hull_id.
+static func assign_hull_ids(entries: Array, hulls: Array) -> Array:
+	var ids_by_type: Dictionary = {}
+	for hull in hulls:
+		var t: String = hull.get("ship_type", "")
+		if not ids_by_type.has(t):
+			ids_by_type[t] = []
+		ids_by_type[t].append(hull.get("hull_id", ""))
+
+	var taken: Dictionary = {}
+	for entry in entries:
+		if int(entry.get("team", -1)) != 0:
+			continue
+		var t: String = entry.get("ship_type", "")
+		var n: int = taken.get(t, 0)
+		var ids: Array = ids_by_type.get(t, [])
+		if n < ids.size():
+			entry["hull_id"] = ids[n]
+		taken[t] = n + 1
+	return entries
+
+
 static func _plan_team(fleet: Dictionary, team: int, base_x: float, quadrant_offset: int, battlefield_size: Vector2) -> Array:
 	var spawn_positions := ShipData.calculate_fleet_spawn_positions(fleet, base_x, battlefield_size.y)
 	var battlefield_center := battlefield_size * 0.5

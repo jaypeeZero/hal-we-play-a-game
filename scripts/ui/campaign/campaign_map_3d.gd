@@ -93,6 +93,9 @@ func _ready() -> void:
 	_refresh_map()
 	_show_repair_summary(RoguelikeRun.last_jump_repair_summary)
 	RoguelikeRun.last_jump_repair_summary = {}
+	# Report the economy outcome of the last battle (reward, casualties, insurance).
+	_show_battle_summary(RoguelikeRun.last_battle_summary)
+	RoguelikeRun.last_battle_summary = {}
 
 
 func _process(_delta: float) -> void:
@@ -202,15 +205,102 @@ func _on_node_clicked(node_id: String) -> void:
 		destination, node["type"] == CampaignSystem.NODE_TYPE_RANDR)
 
 	if node["type"] == CampaignSystem.NODE_TYPE_BATTLE:
-		_launch_battle(node)
+		_enter_battle_node(node)
 		return
 
-	CampaignSystem.visit_node(RoguelikeRun.campaign, node_id)
+	# Shop nodes open the shop overlay first; the visit completes when it
+	# closes (purchases/hires/transfers persist on RoguelikeRun and the node).
+	if node["type"] == CampaignSystem.NODE_TYPE_SHOP:
+		_open_shop(node, repair_summary)
+		return
+
+	_complete_node_visit(node, repair_summary)
+
+
+## Mark a non-battle node visited and refresh the map. Shared by R&R stops
+## (immediate) and shop nodes (after the overlay closes).
+func _complete_node_visit(node: Dictionary, repair_summary: Dictionary) -> void:
+	CampaignSystem.visit_node(RoguelikeRun.campaign, node["id"])
 	node_selected.emit(node)
 	RoguelikeRun.save_campaign_to_disk()
 	_refresh_map()
 	_show_repair_summary(repair_summary)
 	RoguelikeRun.last_jump_repair_summary = {}
+
+
+## Open the shop overlay for a shop node, completing the node visit once the
+## player closes it. Stock is rolled lazily on first visit and stored on the
+## node so it persists (and stays stable) through the campaign save.
+func _open_shop(node: Dictionary, repair_summary: Dictionary) -> void:
+	if not node.has("shop_stock"):
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		node["shop_stock"] = EconomySystem.roll_shop_stock(rng)
+	var shop := ShopScreen.new()
+	add_child(shop)
+	# The shop carries per-hull condition in its roster headers, so the
+	# standalone fleet overlay is redundant (and would show through) while open.
+	_fleet_label.visible = false
+	shop.closed.connect(func():
+		shop.queue_free()
+		_fleet_label.visible = true
+		_complete_node_visit(node, repair_summary))
+	shop.setup(node)
+
+
+# ============================================================================
+# BATTLE LAUNCH - per-battle upkeep gate, dismissal, bankruptcy, benched notice
+# ============================================================================
+
+## Gate a battle on per-battle upkeep. Affordable ⇒ pay and launch. Short but
+## the player can still dismiss down to an affordable minimum ⇒ dismissal
+## dialog. Short and even a minimum force is unaffordable ⇒ the run is lost.
+func _enter_battle_node(node: Dictionary) -> void:
+	var upkeep: int = EconomySystem.per_battle_upkeep(RoguelikeRun.fleet_hulls).total
+	if RoguelikeRun.money >= upkeep:
+		_confirm_then_launch(node, upkeep)
+	elif RoguelikeRun.can_field_minimum():
+		_open_dismissal_dialog(node)
+	else:
+		_lose_run_to_bankruptcy()
+
+
+func _open_dismissal_dialog(node: Dictionary) -> void:
+	var dialog := DismissalDialog.new()
+	add_child(dialog)
+	dialog.resolved.connect(func(launched: bool):
+		dialog.queue_free()
+		if launched:
+			# Upkeep shrank as the player dismissed; charge the new total.
+			_confirm_then_launch(node, EconomySystem.per_battle_upkeep(RoguelikeRun.fleet_hulls).total))
+	dialog.setup()
+
+
+## Charge upkeep and launch — but first, if any non-iced hull will sit the
+## battle out for lack of a pilot, surface them so a ship is never silently
+## left behind. Upkeep is only spent if the player proceeds.
+func _confirm_then_launch(node: Dictionary, upkeep: int) -> void:
+	var benched := RoguelikeRun.benched_hulls()
+	if benched.is_empty():
+		RoguelikeRun.money -= upkeep
+		_launch_battle(node)
+		return
+	var notice := LaunchNotice.new()
+	add_child(notice)
+	notice.resolved.connect(func(launch: bool):
+		notice.queue_free()
+		if launch:
+			RoguelikeRun.money -= upkeep
+			_launch_battle(node))
+	notice.setup(benched)
+
+
+func _lose_run_to_bankruptcy() -> void:
+	_info_label.text = "Bankrupt — the fleet is impounded. The run is over."
+	await get_tree().create_timer(END_BANNER_SECONDS).timeout
+	CampaignSaveManager.delete_save()
+	RoguelikeRun.end_run()
+	get_tree().change_scene_to_file(MAIN_MENU_SCENE)
 
 
 func _launch_battle(node: Dictionary) -> void:
@@ -436,19 +526,46 @@ func _show_repair_summary(summary: Dictionary) -> void:
 		summary["ships_repaired"], summary["points_repaired"], summary["date_delta"]]
 
 
-## Ship-by-ship condition panel, so repairs (and the engineers doing them)
-## are visible between battles.
-func _update_fleet_status() -> void:
-	if RoguelikeRun.fleet_ships.is_empty():
-		_fleet_label.text = "Fleet: undamaged (no sorties yet)"
+## Report the economy outcome of the last battle: credits earned for enemies
+## destroyed, and insurance paid out for crew lost.
+func _show_battle_summary(summary: Dictionary) -> void:
+	if summary.is_empty():
 		return
-	var lines := ["Fleet condition:"]
-	for ship in RoguelikeRun.fleet_ships:
-		lines.append(_ship_condition_line(ship))
+	var reward: int = summary.get("reward", 0)
+	if reward > 0:
+		_info_label.text += "\nBattle reward: +%d credits." % reward
+	var casualties: int = summary.get("casualties", 0)
+	if casualties > 0:
+		_info_label.text += "\nCrew lost: %d." % casualties
+	var insurance: int = summary.get("insurance", 0)
+	if insurance > 0:
+		_info_label.text += "\nInsurance paid out: -%d credits." % insurance
+
+
+## Hull-by-hull condition panel (credits, then each hull's armor/systems/crew),
+## so repairs and the run economy are visible between battles.
+func _update_fleet_status() -> void:
+	var lines := ["Credits: %d" % RoguelikeRun.money]
+	if RoguelikeRun.fleet_hulls.is_empty():
+		lines.append("Fleet: no hulls")
+	else:
+		lines.append("Fleet condition:")
+		for hull in RoguelikeRun.fleet_hulls:
+			lines.append(_hull_condition_line(hull))
 	_fleet_label.text = "\n".join(lines)
 
 
-func _ship_condition_line(ship: Dictionary) -> String:
+func _hull_condition_line(hull: Dictionary) -> String:
+	var crew: Array = hull.get("crew", [])
+	var engineers: int = crew.filter(
+		func(c): return c.get("role", -1) == CrewData.Role.ENGINEER).size()
+	var iced_tag := "  [on ice]" if hull.get("iced", false) else ""
+
+	var ship: Dictionary = hull.get("ship", {})
+	if ship.is_empty():
+		return "%s  undamaged  crew %d  engineers %d%s" % [
+			hull.get("ship_type", "ship"), crew.size(), engineers, iced_tag]
+
 	var armor_current := 0
 	var armor_max := 0
 	for section in ship.get("armor_sections", []):
@@ -461,12 +578,9 @@ func _ship_condition_line(ship: Dictionary) -> String:
 		systems_current += int(component.get("current_health", 0))
 		systems_max += int(component.get("max_health", 0))
 
-	var engineers: int = ship.get("crew", []).filter(
-		func(c): return c.get("role", -1) == CrewData.Role.ENGINEER).size()
-
-	return "%s  armor %d%%  systems %d%%  engineers %d" % [
-		ship.get("type", "ship"), _percent(armor_current, armor_max),
-		_percent(systems_current, systems_max), engineers]
+	return "%s  armor %d%%  systems %d%%  crew %d  engineers %d%s" % [
+		hull.get("ship_type", "ship"), _percent(armor_current, armor_max),
+		_percent(systems_current, systems_max), crew.size(), engineers, iced_tag]
 
 
 func _percent(current: int, maximum: int) -> int:

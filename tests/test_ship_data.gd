@@ -259,11 +259,16 @@ func test_all_templates_have_internal_components():
 		var template = ShipData.get_ship_template(ship_type)
 		assert_gt(template.internals.size(), 0, ship_type + " should have internal components")
 
-func test_all_internal_components_have_effects():
+func test_all_engine_components_have_effects():
+	# Engines drive ship stats, so they carry effect_on_ship. Weapon mounts are
+	# also internals but exert no stat multipliers (their effect is the binary
+	# loss of a weapon), so they are excluded from this invariant.
 	for ship_type in FleetDataManager.SHIP_TYPES:
 		var template = ShipData.get_ship_template(ship_type)
 		for component in template.internals:
-			assert_has(component, "effect_on_ship", "Component should have effect_on_ship")
+			if component.get("type", "") == BaseStats.WEAPON_MOUNT_TYPE:
+				continue
+			assert_has(component, "effect_on_ship", "Engine component should have effect_on_ship")
 
 func test_all_templates_have_weapons():
 	for ship_type in FleetDataManager.SHIP_TYPES:

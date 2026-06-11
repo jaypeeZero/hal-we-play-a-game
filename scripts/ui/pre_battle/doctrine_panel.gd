@@ -46,7 +46,7 @@ var _template_ids: Array = []
 
 func setup(entries: Array) -> void:
 	_entries = entries
-	_entry_to_group = DoctrineSystem.map_entries_to_crew_groups(entries, RoguelikeRun.fleet_crew)
+	_entry_to_group = DoctrineSystem.map_entries_to_hulls(entries, RoguelikeRun.fleet_hulls)
 	_build_ui()
 	_populate_ship_dropdown()
 	_on_ship_selected(0)
@@ -141,7 +141,7 @@ func _populate_ship_dropdown() -> void:
 	_ship_dropdown.add_item("Entire fleet")
 
 	var types_present: Array = []
-	for group in RoguelikeRun.fleet_crew:
+	for group in RoguelikeRun.fleet_hulls:
 		if group.ship_type not in types_present:
 			types_present.append(group.ship_type)
 	for ship_type in types_present:
@@ -151,7 +151,7 @@ func _populate_ship_dropdown() -> void:
 	var count_by_type := {}
 	for pair in _hull_group_pairs():
 		var group_index: int = pair.group_index
-		var group: Dictionary = RoguelikeRun.fleet_crew[group_index]
+		var group: Dictionary = RoguelikeRun.fleet_hulls[group_index]
 		var n: int = count_by_type.get(group.ship_type, 0) + 1
 		count_by_type[group.ship_type] = n
 		_ship_options.append({
@@ -168,7 +168,7 @@ func _populate_ship_dropdown() -> void:
 func _hull_group_pairs() -> Array:
 	var pairs: Array = []
 	if _embedded:
-		for g in range(RoguelikeRun.fleet_crew.size()):
+		for g in range(RoguelikeRun.fleet_hulls.size()):
 			pairs.append({"group_index": g, "entry_index": -1})
 	else:
 		for entry_index in _entry_to_group:
@@ -193,7 +193,7 @@ func _current_crew_member() -> Dictionary:
 	var option := _current_ship_option()
 	if option.get("kind", "") != KIND_HULL:
 		return {}
-	var crew: Array = RoguelikeRun.fleet_crew[option.group_index].crew
+	var crew: Array = RoguelikeRun.fleet_hulls[option.group_index].crew
 	var i := _crew_dropdown.selected
 	return crew[i] if i >= 0 and i < crew.size() else {}
 
@@ -223,7 +223,7 @@ func _refresh_for_ship_option(index: int) -> void:
 	_crew_dropdown.clear()
 	_crew_dropdown.visible = option.kind == KIND_HULL
 	if option.kind == KIND_HULL:
-		for member in RoguelikeRun.fleet_crew[option.group_index].crew:
+		for member in RoguelikeRun.fleet_hulls[option.group_index].crew:
 			_crew_dropdown.add_item("%s — %s" % [CrewData.get_role_name(member.role), member.get("callsign", member.crew_id)])
 		_crew_dropdown.select(0)
 	_refresh_template_dropdown()

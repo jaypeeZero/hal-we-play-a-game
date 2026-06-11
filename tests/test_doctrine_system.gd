@@ -16,9 +16,7 @@ var _saved_run_state: Dictionary
 func before_each() -> void:
 	_saved_run_state = {
 		"active": RoguelikeRun.active,
-		"fleet": RoguelikeRun.fleet.duplicate(true),
-		"fleet_ships": RoguelikeRun.fleet_ships.duplicate(true),
-		"fleet_crew": RoguelikeRun.fleet_crew.duplicate(true),
+		"fleet_hulls": RoguelikeRun.fleet_hulls.duplicate(true),
 		"doctrine": RoguelikeRun.doctrine.duplicate(true),
 		"enemy_fleet": RoguelikeRun.enemy_fleet.duplicate(true),
 	}
@@ -26,9 +24,7 @@ func before_each() -> void:
 
 func after_each() -> void:
 	RoguelikeRun.active = _saved_run_state.active
-	RoguelikeRun.fleet = _saved_run_state.fleet
-	RoguelikeRun.fleet_ships = _saved_run_state.fleet_ships
-	RoguelikeRun.fleet_crew = _saved_run_state.fleet_crew
+	RoguelikeRun.fleet_hulls = _saved_run_state.fleet_hulls
 	RoguelikeRun.doctrine = _saved_run_state.doctrine
 	RoguelikeRun.enemy_fleet = _saved_run_state.enemy_fleet
 	# Unregister doctrine patterns compiled during the test
@@ -220,25 +216,35 @@ func test_capability_gap_reflects_skill_requirements():
 		"An ace should show no gap")
 
 
-func test_entries_map_to_crew_groups_in_type_order():
+func test_entries_map_to_hulls_by_hull_id():
 	var entries = [
-		{"team": 0, "ship_type": "fighter"},
+		{"team": 0, "ship_type": "fighter", "hull_id": "h_b"},
 		{"team": 1, "ship_type": "fighter"},
-		{"team": 0, "ship_type": "corvette"},
-		{"team": 0, "ship_type": "fighter"},
+		{"team": 0, "ship_type": "corvette", "hull_id": "h_c"},
+		{"team": 0, "ship_type": "fighter", "hull_id": "h_a"},
 	]
-	var fleet_crew = [
-		{"ship_type": "fighter", "crew": []},
-		{"ship_type": "fighter", "crew": []},
-		{"ship_type": "corvette", "crew": []},
+	var fleet_hulls = [
+		{"hull_id": "h_a", "ship_type": "fighter", "crew": []},
+		{"hull_id": "h_b", "ship_type": "fighter", "crew": []},
+		{"hull_id": "h_c", "ship_type": "corvette", "crew": []},
 	]
 
-	var mapping = DoctrineSystem.map_entries_to_crew_groups(entries, fleet_crew)
+	var mapping = DoctrineSystem.map_entries_to_hulls(entries, fleet_hulls)
 
-	assert_eq(mapping[0], 0, "First fighter entry gets the first fighter group")
-	assert_eq(mapping[3], 1, "Second fighter entry gets the second fighter group")
-	assert_eq(mapping[2], 2, "Corvette entry gets the corvette group")
-	assert_false(mapping.has(1), "Enemy entries are not mapped")
+	assert_eq(mapping[0], 1, "Entry bound to h_b maps to that hull regardless of order")
+	assert_eq(mapping[3], 0, "Entry bound to h_a maps to that hull")
+	assert_eq(mapping[2], 2, "Entry bound to h_c maps to the corvette hull")
+	assert_false(mapping.has(1), "Enemy entries (no hull_id) are not mapped")
+
+
+func test_entries_without_hull_id_are_unmapped():
+	var entries = [{"team": 0, "ship_type": "fighter"}]
+	var fleet_hulls = [{"hull_id": "h_a", "ship_type": "fighter", "crew": []}]
+
+	var mapping = DoctrineSystem.map_entries_to_hulls(entries, fleet_hulls)
+
+	assert_false(mapping.has(0),
+		"A team-0 entry with no hull_id binding cannot be mapped to a hull")
 
 
 # ============================================================================
@@ -255,10 +261,20 @@ func test_doctrine_measurably_changes_saved_crew_behavior_in_battle():
 	DoctrineSystem.set_instruction_in_place(
 		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_FLEET, "", CHARGE)
 
-	RoguelikeRun.update_fleet_after_battle([], [{"ship_type": "fighter", "crew": [crew]}])
-	var saved = RoguelikeRun.take_saved_crew("fighter")
+	# Persist the pilot on a hull through the real battle-outcome path, then
+	# restore + compile exactly as the battle scene does at spawn.
+	RoguelikeRun.fleet_hulls = [{
+		"hull_id": "h1", "ship_type": "fighter", "iced": false,
+		"crew": [crew], "complement": [], "ship": {},
+	}]
+	var survivor = ShipData.create_ship_instance("fighter", 0, Vector2.ZERO)
+	survivor["hull_id"] = "h1"
+	survivor["crew"] = [crew.duplicate(true)]
+	RoguelikeRun.apply_battle_outcome([survivor])
+
+	var saved = RoguelikeRun.fleet_hulls[0].crew[0]
 	var restored = DoctrineSystem.compile_for_crew(
-		CrewData.reset_for_battle(saved[0]), "fighter", RoguelikeRun.doctrine)
+		CrewData.reset_for_battle(saved), "fighter", RoguelikeRun.doctrine)
 
 	var instructed_maneuver = FighterPilotAI._query_fighter_knowledge(FLANK_SITUATION, restored)
 	var baseline_maneuver = FighterPilotAI._query_fighter_knowledge(FLANK_SITUATION, control)
@@ -281,7 +297,7 @@ func test_doctrine_authored_before_a_fleet_edit_still_compiles_for_retained_crew
 	RoguelikeRun.reconcile_roster_to_counts({"fighter": 1, "heavy_fighter": 0,
 		"torpedo_boat": 0, "corvette": 0, "capital": 0})
 
-	var retained = RoguelikeRun.fleet_crew[0].crew[0]
+	var retained = RoguelikeRun.fleet_hulls[0].crew[0]
 	var compiled = DoctrineSystem.compile_for_crew(
 		CrewData.reset_for_battle(retained), "fighter", RoguelikeRun.doctrine)
 

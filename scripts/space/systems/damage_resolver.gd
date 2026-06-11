@@ -282,17 +282,37 @@ static func recompute_weapon_stats(ship_data: Dictionary, damage_multiplier: flo
 	var weapons = ship_data.get("weapons", [])
 	if not (weapons is Array) or weapons.is_empty():
 		return ship_data
+	# A weapon is operational iff its mount is intact. Repairing the mount
+	# (status back to operational) restores the weapon — both routes run
+	# through here, so weapon status always reflects current mount status.
+	var mount_destroyed := weapon_ids_with_destroyed_mounts(ship_data)
 	var new_weapons = weapons.map(
-		func(w): return recompute_one_weapon(w, damage_multiplier, accuracy_multiplier)
+		func(w): return recompute_one_weapon(
+			w, damage_multiplier, accuracy_multiplier,
+			w.get("weapon_id", "") in mount_destroyed)
 	)
 	return DictUtils.merge_dict(ship_data, {"weapons": new_weapons})
 
-static func recompute_one_weapon(weapon: Dictionary, damage_multiplier: float, accuracy_multiplier: float) -> Dictionary:
+
+## Weapon ids whose mount is currently destroyed.
+static func weapon_ids_with_destroyed_mounts(ship_data: Dictionary) -> Array:
+	var ids: Array = []
+	for component in ship_data.get("internals", []):
+		if component.get("type", "") != BaseStats.WEAPON_MOUNT_TYPE:
+			continue
+		if component.get("status", "") == "destroyed":
+			ids.append(component.get("weapon_id", ""))
+	return ids
+
+static func recompute_one_weapon(weapon: Dictionary, damage_multiplier: float, accuracy_multiplier: float, mount_destroyed: bool) -> Dictionary:
 	var base_stats: Dictionary = weapon.base_stats
 	var new_stats: Dictionary = weapon.get("stats", {}).duplicate(true)
 	new_stats["damage"] = int(base_stats.get("damage", 0) * damage_multiplier)
 	new_stats["accuracy"] = base_stats.get("accuracy", 0.0) * accuracy_multiplier
-	return DictUtils.merge_dict(weapon, {"stats": new_stats})
+	return DictUtils.merge_dict(weapon, {
+		"stats": new_stats,
+		"status": "destroyed" if mount_destroyed else "operational",
+	})
 
 static func clamp_velocity_to_max_speed(ship_data: Dictionary) -> Dictionary:
 	var velocity = ship_data.get("velocity", Vector2.ZERO)

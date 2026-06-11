@@ -546,7 +546,7 @@ func _execute_squadron_spawn(spawn_position: Vector2) -> void:
 	_pending_spawn = {}
 
 ## Spawn a ship at the given position
-func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: Vector2, patrol_radius: float) -> Dictionary:
+func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: Vector2, patrol_radius: float, hull_id: String = "") -> Dictionary:
 	# Create ship data
 	var ship_data = ShipData.create_ship_instance(ship_type, team, position)
 	if ship_data.is_empty():
@@ -557,6 +557,8 @@ func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: 
 		"center": patrol_center,
 		"radius": patrol_radius,
 	}
+	# Stable per-run hull identity carries through to survivor reconciliation.
+	ship_data["hull_id"] = hull_id
 
 	# Add to data array
 	_ships.append(ship_data)
@@ -569,7 +571,7 @@ func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: 
 
 	# Create crew for this ship (if AI enabled)
 	if ENABLE_CREW_AI:
-		_create_crew_for_ship(ship_data.ship_id, ship_type, team)
+		_create_crew_for_ship(ship_data.ship_id, ship_type, team, hull_id)
 
 	# Emit signal
 	ship_spawned.emit(ship_data.ship_id)
@@ -605,13 +607,15 @@ func _spawn_from_battle_plan() -> void:
 		var team0_fleet: Dictionary
 		var team1_fleet: Dictionary
 		if RoguelikeRun.active:
-			team0_fleet = RoguelikeRun.fleet
+			team0_fleet = RoguelikeRun.fleet_counts(true)
 			team1_fleet = RoguelikeRun.enemy_fleet
 		else:
 			team0_fleet = FleetDataManager.load_fleet(0)
 			team1_fleet = FleetDataManager.load_fleet(1)
 		BattlePlan.battlefield_size = _battlefield_size
 		BattlePlan.entries = BattlePlanner.build_default_plan(team0_fleet, team1_fleet, _battlefield_size)
+		if RoguelikeRun.active:
+			BattlePlan.entries = BattlePlanner.assign_hull_ids(BattlePlan.entries, RoguelikeRun.sortieable_hulls())
 	else:
 		_battlefield_size = BattlePlan.battlefield_size
 
@@ -621,7 +625,8 @@ func _spawn_from_battle_plan() -> void:
 			int(entry["team"]),
 			entry["position"],
 			entry["patrol_center"],
-			float(entry["patrol_radius"])
+			float(entry["patrol_radius"]),
+			entry.get("hull_id", "")
 		)
 
 	# Plan is consumed: re-entering battle requires a fresh plan.
@@ -631,27 +636,25 @@ func _spawn_from_battle_plan() -> void:
 		_apply_roguelike_damage_states()
 
 
+## Overlay each player hull's persisted damage (RoguelikeRun.fleet_hulls)
+## onto the freshly spawned ship sharing its hull_id, preserving the new
+## battle's runtime identity (ship_id, kinematics, patrol area). Pristine
+## hulls (empty `ship`) and purchased hulls are left untouched.
 func _apply_roguelike_damage_states() -> void:
-	if RoguelikeRun.fleet_ships.is_empty():
-		return
-
-	var saved_by_type: Dictionary = {}
-	for saved_ship in RoguelikeRun.fleet_ships:
-		var t: String = saved_ship.get("type", "")
-		if not saved_by_type.has(t):
-			saved_by_type[t] = []
-		saved_by_type[t].append(saved_ship)
-
 	for i in range(_ships.size()):
 		var ship: Dictionary = _ships[i]
 		if ship.get("team", -1) != 0:
 			continue
-		var ship_type: String = ship.get("type", "")
-		if not saved_by_type.has(ship_type) or saved_by_type[ship_type].is_empty():
+		var hull_id: String = ship.get("hull_id", "")
+		if hull_id.is_empty():
 			continue
-		var saved: Dictionary = saved_by_type[ship_type].pop_front()
+		var hull: Dictionary = RoguelikeRun.hull_by_id(hull_id)
+		var saved: Dictionary = hull.get("ship", {})
+		if saved.is_empty():
+			continue
 		_ships[i] = DictUtils.merge_dict(saved, {
 			"ship_id": ship["ship_id"],
+			"hull_id": hull_id,
 			"position": ship["position"],
 			"rotation": ship["rotation"],
 			"velocity": ship["velocity"],
@@ -756,12 +759,20 @@ func _end_game(winner: int) -> void:
 		_handle_roguelike_battle_end(winner)
 
 
-## The campaign map owns all campaign branching; the battle scene only
-## records the outcome and the fleet's final state, then returns to it.
+## The campaign map owns all campaign branching; the battle scene only records
+## the outcome and the fleet's final state, then returns to it. A victory also
+## pays the battle reward for enemies destroyed (record_battle_result folds the
+## survivors and books casualties/insurance into last_battle_summary).
 func _handle_roguelike_battle_end(winner: int) -> void:
 	var result: String = CampaignSystem.RESULT_VICTORY if winner == 0 \
 		else CampaignSystem.RESULT_DEFEAT
 	RoguelikeRun.record_battle_result(result, _get_player_ships_final_state())
+	if result == CampaignSystem.RESULT_VICTORY:
+		var destroyed_enemies := _destroyed_enemy_counts()
+		var reward := EconomySystem.battle_reward(destroyed_enemies)
+		RoguelikeRun.money += reward
+		RoguelikeRun.last_battle_summary["reward"] = reward
+		RoguelikeRun.last_battle_summary["destroyed_enemies"] = destroyed_enemies
 	get_tree().call_deferred("change_scene_to_file", CAMPAIGN_MAP_SCENE)
 
 
@@ -778,14 +789,36 @@ func _get_player_ships_final_state() -> Array:
 	return final_states
 
 
-## A deep copy of the ship with the battle's live crew attached, so
-## roguelike jump repairs see the engineers who actually served aboard.
+## A deep copy of the ship with the battle's live crew attached, so the
+## hull-model fold-in (casualties, jump repairs) sees the crew who actually
+## served aboard this ship. Each ship dict carries its hull_id, so survivors
+## reconcile by identity.
 func _with_attached_crew(ship: Dictionary) -> Dictionary:
 	var copy: Dictionary = ship.duplicate(true)
 	copy["crew"] = _crew_list \
 		.filter(func(c): return c.get("assigned_to", "") == ship.get("ship_id", "")) \
 		.map(func(c): return c.duplicate(true))
 	return copy
+
+
+## Enemy ships destroyed this battle, by ship type: the fleet the player faced
+## (RoguelikeRun.enemy_fleet) minus the team-1 ships still alive.
+func _destroyed_enemy_counts() -> Dictionary:
+	var surviving: Dictionary = {}
+	for ship in _ships:
+		if ship == null or ship.is_empty():
+			continue
+		if ship.get("team", -1) != 1 or ship.get("status", "") == "destroyed":
+			continue
+		var t: String = ship.get("type", "")
+		surviving[t] = surviving.get(t, 0) + 1
+
+	var destroyed: Dictionary = {}
+	for ship_type in RoguelikeRun.enemy_fleet:
+		var lost: int = int(RoguelikeRun.enemy_fleet[ship_type]) - int(surviving.get(ship_type, 0))
+		if lost > 0:
+			destroyed[ship_type] = lost
+	return destroyed
 
 # ============================================================================
 # PUBLIC API (for testing)
@@ -1011,7 +1044,7 @@ func _emit_damage_events(hits: Array) -> void:
 				}, latency)
 
 ## Create and assign crew to a ship
-func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> void:
+func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_id: String = "") -> void:
 	# Determine crew skill based on team (extreme values for testing)
 	# Team 0: Ace pilots (skill 1.0) - best possible
 	# Team 1: Rookie pilots (skill 0.0) - worst possible
@@ -1022,16 +1055,16 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> voi
 	var weapon_count = ship_data.weapons.size() if not ship_data.is_empty() else 1
 	var new_crew = []
 
-	# In a roguelike run, the player's crew roster persists: bind the next
-	# saved group for this hull type before creating anyone new. Binding
-	# is in entry order — DoctrineSystem.map_entries_to_crew_groups relies
-	# on this contract.
+	# In a roguelike run, each player hull carries its own crew roster: spawn
+	# exactly the crew bound to this hull_id (which may be empty for a freshly
+	# purchased hull — no free crew). Identity is by hull_id, not type+order.
 	if team == 0 and RoguelikeRun.active:
-		for saved_member in RoguelikeRun.take_saved_crew(ship_type):
+		var hull: Dictionary = RoguelikeRun.hull_by_id(hull_id)
+		for saved_member in hull.get("crew", []):
 			new_crew.append(CrewData.reset_for_battle(saved_member))
-
-	if new_crew.is_empty():
+	else:
 		new_crew = CrewData.create_crew_for_ship_type(ship_type, weapon_count, base_skill)
+		new_crew = CrewData.bind_gunners_to_weapons(new_crew, ship_data.get("weapons", []))
 
 	# Compile the run's doctrine (player standing instructions) into each
 	# crew member's knowledge set.

@@ -37,7 +37,7 @@ func _ready() -> void:
 	var team0_fleet: Dictionary
 	var team1_fleet: Dictionary
 	if RoguelikeRun.active:
-		team0_fleet = RoguelikeRun.fleet
+		team0_fleet = RoguelikeRun.fleet_counts(true)
 		team1_fleet = RoguelikeRun.enemy_fleet
 	else:
 		team0_fleet = FleetDataManager.load_fleet(0)
@@ -45,6 +45,8 @@ func _ready() -> void:
 
 	BattlePlan.battlefield_size = BATTLEFIELD_SIZE
 	BattlePlan.entries = BattlePlanner.build_default_plan(team0_fleet, team1_fleet, BATTLEFIELD_SIZE)
+	if RoguelikeRun.active:
+		BattlePlan.entries = BattlePlanner.assign_hull_ids(BattlePlan.entries, RoguelikeRun.sortieable_hulls())
 
 	for i in range(BattlePlan.entries.size()):
 		_preview_entities[i] = _spawn_preview_ship(BattlePlan.entries[i])
