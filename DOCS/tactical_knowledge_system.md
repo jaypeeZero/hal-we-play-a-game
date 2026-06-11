@@ -86,7 +86,7 @@ Returns array of dictionaries:
 
 ### DoctrineSystem
 
-**Location**: `scripts/space/systems/doctrine_system.gd`
+**Location**: `scripts/space/systems/doctrine_system.gd` — full feature documentation in [fleet_doctrine.md](fleet_doctrine.md)
 
 Player standing instructions for the roguelike run (plan 06). Players pick parameterized templates from `data/instruction_templates.json` (never authoring pattern text) and assign them at fleet, ship-class, or individual-crew scope; the doctrine lives on `RoguelikeRun.doctrine` and is edited via the `DoctrinePanel` dropdowns on the pre-battle positioning screen. At battle spawn `compile_for_crew()` resolves scopes (individual > class > fleet per template, per-crew disables honored), instantiates each template into a normal pattern, registers it with the `player_priority` flag (namespaced `doctrine__{crew_id}__{template_id}`), and adds it to the crew member's `known_patterns` — expanding an empty set to the explicit role baseline first (player-priority patterns excluded) so standing orders extend role doctrine rather than replace it. Previously compiled doctrine ids are stripped on every compile, so instructions removed between battles do not linger.
 

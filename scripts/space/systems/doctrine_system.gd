@@ -36,6 +36,7 @@ const ROLE_EXECUTION_SKILL := {
 	CrewData.Role.CAPTAIN: "tactics",
 	CrewData.Role.SQUADRON_LEADER: "tactics",
 	CrewData.Role.FLEET_COMMANDER: "tactics",
+	CrewData.Role.ENGINEER: "machinery",
 }
 
 static var _templates: Dictionary = {}

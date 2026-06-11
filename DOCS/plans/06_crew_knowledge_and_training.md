@@ -51,6 +51,7 @@ parallel system.
 
 ## Fleet doctrine: the interaction model
 
+Shipped — feature documentation lives in `DOCS/fleet_doctrine.md`.
 How the player actually touches instructions (agreed direction; these
 behaviors define the feature, widget layout does not):
 
