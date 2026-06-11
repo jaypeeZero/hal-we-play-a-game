@@ -6,13 +6,20 @@ extends RefCounted
 ## Any additional data in the JSON overrides these values
 
 # Weapon base stats by type
+#
+# PROJECTILE SPEED DESIGN RULE: hit probability dies once projectile flight
+# time at combat range exceeds ~1s — target drift and dodges displace ships
+# past their own hit circle while the round is in flight. Combat doctrine
+# holds fighters at 1000-2400u standoffs, so gun rounds need to cover that
+# in well under a second (>= ~5x fighter max_speed of 300). Torpedoes are
+# the deliberate exception: slow, dodgeable, area-damage.
 const WEAPONS := {
 	"light_cannon": {
 		"damage": 5.0,
 		"range": 4000.0,
 		"rate_of_fire": 5.0,
 		"accuracy": 0.85,
-		"projectile_speed": 600.0,
+		"projectile_speed": 1800.0,
 		"size": 1.0
 	},
 	"medium_cannon": {
@@ -20,7 +27,7 @@ const WEAPONS := {
 		"range": 6000.0,
 		"rate_of_fire": 3.0,
 		"accuracy": 0.8,
-		"projectile_speed": 550.0,
+		"projectile_speed": 1500.0,
 		"size": 2.0
 	},
 	"heavy_cannon": {
@@ -28,7 +35,7 @@ const WEAPONS := {
 		"range": 10000.0,
 		"rate_of_fire": 0.5,
 		"accuracy": 0.75,
-		"projectile_speed": 450.0,
+		"projectile_speed": 1200.0,
 		"size": 3.0
 	},
 	"gatling_gun": {
@@ -36,7 +43,7 @@ const WEAPONS := {
 		"range": 7200.0,
 		"rate_of_fire": 10.0,
 		"accuracy": 0.7,
-		"projectile_speed": 700.0,
+		"projectile_speed": 2000.0,
 		"size": 2.0
 	},
 	"torpedo_launcher": {

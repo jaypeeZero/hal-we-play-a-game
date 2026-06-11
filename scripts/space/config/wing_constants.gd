@@ -220,9 +220,14 @@ const PRE_COMMIT_ENGAGEMENT_RANGE = 3000.0
 const PILOT_JINK_AMPLITUDE_MIN = 0.0  # Low skill: no jinking
 const PILOT_JINK_AMPLITUDE_MAX = 0.7  # High skill: strong jinking
 
-## Jink frequency (ms per cycle) - skilled pilots jink faster
-const PILOT_JINK_PERIOD_LOW_SKILL = 800.0   # Slow, predictable
-const PILOT_JINK_PERIOD_HIGH_SKILL = 300.0  # Fast, hard to track
+## Jink hold duration (ms) — how long a committed strafe direction is held
+## before re-rolling. Dodge displacement under momentum physics is a·t²/2,
+## so the hold must run long enough to clear the hit circle; but holding far
+## past projectile flight time settles into constant lateral velocity, which
+## a leading gunner predicts perfectly. Skilled pilots flip on the shot
+## timescale; sloppy pilots hold too long and telegraph their vector.
+const PILOT_JINK_HOLD_LOW_SKILL_MS = 1600.0
+const PILOT_JINK_HOLD_HIGH_SKILL_MS = 800.0
 
 # =============================================================================
 # PILOT SKILL - Approach angle parameters

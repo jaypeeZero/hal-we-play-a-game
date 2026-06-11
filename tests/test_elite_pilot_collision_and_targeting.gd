@@ -71,10 +71,10 @@ func test_elite_breaks_lock_when_closer_threat_appears():
 	var crew = _make_pilot_with_piloting(WingConstants.CLOSE_TARGET_RELOCK_SKILL + 0.1)
 	crew.combat_state = {
 		"locked_target_id": "far_enemy",
-		"target_locked_until": Time.get_ticks_msec() / 1000.0 + 100.0
+		"target_locked_until": 100.0
 	}
 
-	var target = FighterPilotAI._find_best_target(crew, [me, far_enemy, close_enemy])
+	var target = FighterPilotAI._find_best_target(crew, [me, far_enemy, close_enemy], 0.0)
 	assert_ne(target, "far_enemy",
 		"Elite pilot must break lock when a significantly closer threat enters close range")
 
@@ -88,10 +88,10 @@ func test_rookie_stays_locked_despite_closer_threat():
 	var crew = _make_pilot_with_piloting(0.2)  # extreme fixation range
 	crew.combat_state = {
 		"locked_target_id": "far_enemy",
-		"target_locked_until": Time.get_ticks_msec() / 1000.0 + 100.0
+		"target_locked_until": 100.0
 	}
 
-	var target = FighterPilotAI._find_best_target(crew, [me, far_enemy, close_enemy])
+	var target = FighterPilotAI._find_best_target(crew, [me, far_enemy, close_enemy], 0.0)
 	assert_eq(target, "far_enemy",
 		"Rookie must stay locked on original target despite closer option")
 
@@ -106,9 +106,9 @@ func test_no_lock_break_when_closer_enemy_not_in_close_range():
 	var crew = _make_pilot_with_piloting(WingConstants.CLOSE_TARGET_RELOCK_SKILL + 0.1)
 	crew.combat_state = {
 		"locked_target_id": "far_enemy",
-		"target_locked_until": Time.get_ticks_msec() / 1000.0 + 100.0
+		"target_locked_until": 100.0
 	}
 
-	var target = FighterPilotAI._find_best_target(crew, [me, far_enemy, mid_enemy])
+	var target = FighterPilotAI._find_best_target(crew, [me, far_enemy, mid_enemy], 0.0)
 	assert_eq(target, "far_enemy",
 		"Lock should hold when closer enemy is outside close range — prevents long-range thrashing")

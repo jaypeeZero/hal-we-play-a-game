@@ -75,7 +75,8 @@
 		"max_speed": 250.0,
 		"size": 18.0,
 		"turn_rate": 3.2,
-		"turn_rate_falloff": 0.6
+		"turn_rate_falloff": 0.3,
+		"turn_speed_bleed": 0.2
 	},
 	"status": "operational",
 	"team": 0,

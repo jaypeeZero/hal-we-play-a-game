@@ -237,7 +237,7 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 		return decision
 
 	# SQUADRON STRUCTURE: Check if we have a squadron leader to follow
-	var target_id = _select_squadron_target(crew_data, all_ships, all_crew)
+	var target_id = _select_squadron_target(crew_data, all_ships, all_crew, game_time)
 	if target_id == "":
 		return _make_idle_decision(crew_data, game_time)
 
@@ -271,7 +271,7 @@ static func _check_survival(crew_data: Dictionary, ship_data: Dictionary, all_sh
 ## returns. When a pilot is well outside their leash, they drop the fight
 ## and burn home until they're back in zone.
 static func _check_area_leash(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float) -> Dictionary:
-	if _is_far_outside_area(ship_data) and _find_best_target(crew_data, all_ships) == "":
+	if _is_far_outside_area(ship_data) and _find_best_target(crew_data, all_ships, game_time) == "":
 		return _make_return_to_area_decision(crew_data, ship_data, game_time)
 	return {}
 
@@ -331,18 +331,18 @@ static func _check_broken_formation(crew_data: Dictionary, ship_data: Dictionary
 
 ## Squadron Leader picks target for the whole squadron; non-leaders follow
 ## the leader's target, falling back to their own pick if the leader has none.
-static func _select_squadron_target(crew_data: Dictionary, all_ships: Array, all_crew: Array) -> String:
+static func _select_squadron_target(crew_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> String:
 	var target_id = ""
 	var is_leader = crew_data.get("is_squadron_leader", false)
 
 	if is_leader:
-		target_id = _find_best_target(crew_data, all_ships)
+		target_id = _find_best_target(crew_data, all_ships, game_time)
 	else:
 		target_id = _get_squadron_leader_target(crew_data, all_crew)
 
 		# Fallback to own target if leader has no target
 		if target_id == "":
-			target_id = _find_best_target(crew_data, all_ships)
+			target_id = _find_best_target(crew_data, all_ships, game_time)
 
 	return target_id
 
@@ -369,7 +369,7 @@ static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wi
 	var skills = crew_data.get("stats", {}).get("skills", {})
 
 	# LEAD TARGET SELECTION: Skill affects quality
-	var target_id = _find_best_target_for_wing(crew_data, wing, all_ships, all_crew)
+	var target_id = _find_best_target_for_wing(crew_data, wing, all_ships, all_crew, game_time)
 
 	if target_id == "":
 		return _make_idle_decision(crew_data, game_time)
@@ -396,7 +396,7 @@ static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wi
 ##
 ## Aggression scales the lock duration so personalities show: aggressive
 ## pilots commit longer to a kill, cautious ones reassess sooner.
-static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, all_ships: Array, all_crew: Array) -> String:
+static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> String:
 	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", skill)
 	var combat_state: Dictionary = crew_data.get("combat_state", {})
@@ -410,8 +410,7 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 	# Lock expiry is implicit: cleared when the locked ship dies or escapes.
 	var locked_target: String = combat_state.get("locked_target_id", "")
 	var locked_until: float = combat_state.get("target_locked_until", 0.0)
-	var current_game_time: float = Time.get_ticks_msec() / 1000.0
-	if locked_target != "" and _is_ship_valid(locked_target, all_ships) and current_game_time < locked_until:
+	if locked_target != "" and _is_ship_valid(locked_target, all_ships) and game_time < locked_until:
 		if skill < WingConstants.CLOSE_TARGET_RELOCK_SKILL or not _has_closer_enemy_in_range(locked_target, own_ship, all_ships):
 			return locked_target
 	# Low skill lead: extreme target fixation (stick with current target even
@@ -455,7 +454,7 @@ static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, 
 	if picked != "":
 		var lock_duration: float = lerp(4.0, 8.0, aggression)
 		combat_state["locked_target_id"] = picked
-		combat_state["target_locked_until"] = current_game_time + lock_duration
+		combat_state["target_locked_until"] = game_time + lock_duration
 	return picked
 
 ## Calculate target score based on lead's skills
@@ -705,7 +704,7 @@ static func _make_wing_engage_decision(crew_data: Dictionary, ship_data: Diction
 
 ## Fallback to solo behavior when Lead is lost
 static func _make_solo_fallback_decision(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> Dictionary:
-	var target_id = _find_best_target(crew_data, all_ships)
+	var target_id = _find_best_target(crew_data, all_ships, game_time)
 
 	if target_id == "":
 		return _make_idle_decision(crew_data, game_time)
@@ -810,7 +809,7 @@ static func _make_fighter_vs_fighter_decision(crew_data: Dictionary, ship_data: 
 		"approach_style": approach_style,
 		"position_advantage": position_advantage,
 		"jink_amplitude": jink_params.amplitude,
-		"jink_period": jink_params.period,
+		"jink_hold_ms": jink_params.hold_ms,
 		"approach_angle": approach_angle,
 	}
 
@@ -1077,7 +1076,7 @@ static func _count_nearby_friendly_fighters(my_ship: Dictionary, all_ships: Arra
 	return count
 
 ## Find best target from awareness, with fallback to scanning all ships
-static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String:
+static func _find_best_target(crew_data: Dictionary, all_ships: Array, game_time: float) -> String:
 	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
 	var awareness = crew_data.get("awareness", {})
 	var threats = awareness.get("threats", [])
@@ -1094,8 +1093,7 @@ static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String
 	# FSM keeps resetting because awareness ranks keep shuffling.
 	var locked_target = combat_state.get("locked_target_id", "")
 	var locked_until: float = combat_state.get("target_locked_until", 0.0)
-	var current_time: float = Time.get_ticks_msec() / 1000.0
-	if locked_target != "" and _is_ship_valid(locked_target, all_ships) and current_time < locked_until:
+	if locked_target != "" and _is_ship_valid(locked_target, all_ships) and game_time < locked_until:
 		if skill < WingConstants.CLOSE_TARGET_RELOCK_SKILL or not _has_closer_enemy_in_range(locked_target, own_ship, all_ships):
 			return locked_target
 
@@ -1146,7 +1144,7 @@ static func _find_best_target(crew_data: Dictionary, all_ships: Array) -> String
 		var aggression: float = crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)
 		var lock_duration: float = lerp(4.0, 8.0, aggression) if skill >= 0.3 else 12.0
 		combat_state["locked_target_id"] = selected_target
-		combat_state["target_locked_until"] = current_time + lock_duration
+		combat_state["target_locked_until"] = game_time + lock_duration
 
 	return selected_target
 
@@ -1659,20 +1657,20 @@ static func _select_approach_style(skill: float, position_advantage: String, agg
 		return ApproachStyle.PURSUIT_CURVE
 
 ## Calculate jink parameters based on skill
-## Returns: { amplitude: float, period: float }
+## Returns: { amplitude: float, hold_ms: float }
 static func _calculate_jink_params(skill: float) -> Dictionary:
 	if skill < WingConstants.PILOT_JINKING_SKILL:
 		# Below jinking threshold - no jinking
-		return { "amplitude": 0.0, "period": 1000.0 }
+		return { "amplitude": 0.0, "hold_ms": WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS }
 
 	# Scale jinking with skill above threshold
 	var jink_skill = (skill - WingConstants.PILOT_JINKING_SKILL) / (1.0 - WingConstants.PILOT_JINKING_SKILL)
 	var amplitude = lerp(WingConstants.PILOT_JINK_AMPLITUDE_MIN,
 						 WingConstants.PILOT_JINK_AMPLITUDE_MAX, jink_skill)
-	var period = lerp(WingConstants.PILOT_JINK_PERIOD_LOW_SKILL,
-					  WingConstants.PILOT_JINK_PERIOD_HIGH_SKILL, jink_skill)
+	var hold_ms = lerp(WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS,
+					   WingConstants.PILOT_JINK_HOLD_HIGH_SKILL_MS, jink_skill)
 
-	return { "amplitude": amplitude, "period": period }
+	return { "amplitude": amplitude, "hold_ms": hold_ms }
 
 ## Calculate approach angle offset based on skill
 ## Returns angle in radians (0 for direct, up to ~0.7 for skilled)

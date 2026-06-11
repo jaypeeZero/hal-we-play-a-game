@@ -195,7 +195,7 @@ func test_movement_system_handles_fighter_engage():
 		ship.orders.target_id = "enemy1"
 		ship.orders.maneuver_subtype = subtype
 
-		var updated = MovementSystem.update_ship_movement(ship, [ship, target], 0.016, [])
+		var updated = MovementSystem.update_ship_movement(ship, [ship, target], 0.016, 0.0, [])
 
 		assert_not_null(updated, "MovementSystem should handle " + subtype)
 		assert_true(updated.has("position"), "Should update position for " + subtype)
@@ -225,7 +225,7 @@ func test_full_integration_fighter_vs_fighter():
 	assert_eq(updated_ship.orders.target_id, "enemy1", "Should target enemy")
 
 	# 4. MovementSystem processes the ship
-	var final_ship = MovementSystem.update_ship_movement(updated_ship, [updated_ship, enemy], 0.016, [])
+	var final_ship = MovementSystem.update_ship_movement(updated_ship, [updated_ship, enemy], 0.016, 0.0, [])
 
 	# 5. Verify ship moved
 	assert_ne(final_ship.position, my_ship.position, "Ship should move based on AI decision")

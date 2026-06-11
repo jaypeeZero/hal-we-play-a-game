@@ -361,7 +361,7 @@ func test_movement_system_executes_large_ship_maneuver():
 	# Run multiple movement updates to give ship time to turn and accelerate
 	var updated = my_corvette
 	for i in range(10):
-		updated = MovementSystem.update_ship_movement(updated, all_ships, 0.1, [])
+		updated = MovementSystem.update_ship_movement(updated, all_ships, 0.1, 0.0, [])
 
 	# Ship should have started moving toward enemy
 	# After approach maneuver, velocity should have positive x component (toward enemy)

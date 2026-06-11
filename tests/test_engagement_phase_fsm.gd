@@ -136,11 +136,11 @@ func test_locked_target_persists_across_decisions():
 	var wing = {"team": 0}
 	var crew = _make_crew("c", "me", 0.5)
 	crew.assigned_to = "me"
-	# Manually lock onto beta in the past
+	# Manually lock onto beta with the lock still live at the query time
 	crew.combat_state["locked_target_id"] = "beta"
-	crew.combat_state["target_locked_until"] = Time.get_ticks_msec() / 1000.0 + 10.0
+	crew.combat_state["target_locked_until"] = 10.0
 
-	var picked = FighterPilotAI._find_best_target_for_wing(crew, wing, ships, [crew])
+	var picked = FighterPilotAI._find_best_target_for_wing(crew, wing, ships, [crew], 0.0)
 	assert_eq(picked, "beta", "Locked target should be returned even if a closer target is available")
 
 func test_locked_target_dropped_when_destroyed():
@@ -153,7 +153,7 @@ func test_locked_target_dropped_when_destroyed():
 	var crew = _make_crew("c", "me", 0.5)
 	crew.assigned_to = "me"
 	crew.combat_state["locked_target_id"] = "dead"
-	crew.combat_state["target_locked_until"] = Time.get_ticks_msec() / 1000.0 + 10.0
+	crew.combat_state["target_locked_until"] = 10.0
 
-	var picked = FighterPilotAI._find_best_target_for_wing(crew, wing, [me, dead, alive], [crew])
+	var picked = FighterPilotAI._find_best_target_for_wing(crew, wing, [me, dead, alive], [crew], 0.0)
 	assert_eq(picked, "alive", "Dead locked target must be released")

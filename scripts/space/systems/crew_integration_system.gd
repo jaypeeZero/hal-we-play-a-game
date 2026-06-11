@@ -111,7 +111,7 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		updated.orders.approach_style = decision.get("approach_style", 0)  # 0 = DIRECT
 		updated.orders.position_advantage = decision.get("position_advantage", "neutral")
 		updated.orders.jink_amplitude = decision.get("jink_amplitude", 0.0)
-		updated.orders.jink_period = decision.get("jink_period", 1000.0)
+		updated.orders.jink_hold_ms = decision.get("jink_hold_ms", WingConstants.PILOT_JINK_HOLD_LOW_SKILL_MS)
 		updated.orders.approach_angle = decision.get("approach_angle", 0.0)
 	elif subtype.begins_with("large_ship_"):
 		# ALL large ship maneuvers (large_ship_*) - corvettes and capitals

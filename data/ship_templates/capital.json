@@ -182,7 +182,8 @@
 		"mass": 1000.0,
 		"max_speed": 80.0,
 		"size": 150.0,
-		"turn_rate": 0.5
+		"turn_rate": 0.5,
+		"turn_speed_bleed": 0.05
 	},
 	"status": "operational",
 	"team": 0,
