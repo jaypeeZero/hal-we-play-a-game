@@ -91,7 +91,7 @@ func _on_fleet_launch_pressed() -> void:
 		_status_label.modulate = Color.RED
 		return
 
-	get_tree().change_scene_to_file("res://scenes/roguelite_map.tscn")
+	get_tree().change_scene_to_file("res://scenes/campaign_map_3d.tscn")
 
 
 func _on_edit_fleet_pressed() -> void:

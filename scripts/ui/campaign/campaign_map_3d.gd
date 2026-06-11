@@ -1,0 +1,475 @@
+extends Node3D
+class_name CampaignMap3D
+
+## 3D star-chart campaign map. Each sector is a concentric shell of star
+## nodes (sector E outermost, sector A the core); winning a sector's exit
+## battle promotes the player one shell inward, losing a run demotes one
+## shell outward. This scene owns all campaign-flow branching: battle
+## results land here via RoguelikeRun.pending_battle_result.
+
+signal node_selected(node: Dictionary)
+signal sector_changed(from_sector: String, to_sector: String)
+signal campaign_ended(result: String)
+
+const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
+const PRE_BATTLE_SCENE := "res://scenes/pre_battle.tscn"
+
+const NODE_TYPE_NAMES := {
+	CampaignSystem.NODE_TYPE_BATTLE: "Battle",
+	CampaignSystem.NODE_TYPE_RANDR: "R&R",
+	CampaignSystem.NODE_TYPE_SHOP: "Shop",
+}
+const NODE_TYPE_COLORS := {
+	CampaignSystem.NODE_TYPE_BATTLE: Color(0.9, 0.3, 0.3),
+	CampaignSystem.NODE_TYPE_RANDR: Color(0.3, 0.9, 0.3),
+	CampaignSystem.NODE_TYPE_SHOP: Color(0.3, 0.3, 0.9),
+}
+const VISITED_COLOR := Color(0.5, 0.5, 0.5)
+const LOCKED_COLOR := Color(0.3, 0.3, 0.35)
+const CURRENT_POSITION_COLOR := Color(1.0, 0.9, 0.4)
+
+const BRIDGE_LINE_COLOR := Color(1.0, 0.85, 0.3, 0.9)
+const LINE_OPEN_COLOR := Color(1.0, 1.0, 1.0, 0.8)
+const LINE_VISITED_COLOR := Color(0.6, 0.6, 0.6, 0.5)
+const LINE_DIM_COLOR := Color(0.5, 0.5, 0.5, 0.25)
+
+## Non-current sectors render faded and unclickable: one rule solves both
+## shell occlusion and click-through.
+const DIMMED_SECTOR_ALPHA := 0.12
+
+const STAR_RADIUS := 0.3
+const STAR_PICK_RADIUS := 0.7
+const STAR_LABEL_OFFSET := Vector3(0, 0.8, 0)
+const STAR_LABEL_FONT_SIZE := 36
+## With fixed_size, on-screen label height ~= font_size * pixel_size * viewport_height.
+const STAR_LABEL_PIXEL_SIZE := 0.0005
+const HOVERED_STAR_SCALE := 1.5
+const CURRENT_NODE_PULSE_SPEED := 5.0
+const CURRENT_NODE_PULSE_DEPTH := 0.5
+const BASE_EMISSION_ENERGY := 1.0
+
+const ORBIT_RADIANS_PER_PIXEL := 0.008
+const CAMERA_PITCH_LIMIT := 1.4
+const ZOOM_STEP := 2.0
+const ZOOM_MIN := 5.0
+const ZOOM_MAX := 80.0
+const CAMERA_SHELL_MARGIN := 12.0
+const CAMERA_TWEEN_SECONDS := 1.2
+
+const END_BANNER_SECONDS := 3.0
+const WINNER_BANNER_TEXT := "WINNER!\nSector A is yours, Commander."
+const GAME_OVER_BANNER_TEXT := "GAME OVER\nYour fleet was lost in Sector E."
+
+@onready var _camera_rig: Node3D = $CameraRig
+@onready var _camera: Camera3D = $CameraRig/Camera3D
+@onready var _stars_root: Node3D = $Stars
+@onready var _lines: MeshInstance3D = $ConnectionLines
+@onready var _sector_label: Label = $UI/SectorLabel
+@onready var _info_label: Label = $UI/InfoLabel
+@onready var _fleet_label: Label = $UI/FleetStatusLabel
+@onready var _banner_label: Label = $UI/BannerLabel
+
+var _star_materials: Dictionary = {}  # node_id -> StandardMaterial3D
+var _star_areas: Dictionary = {}      # node_id -> Area3D
+var _star_labels: Dictionary = {}     # node_id -> Label3D
+var _dragging := false
+var _zoom_distance := ZOOM_MAX
+var _campaign_over := false
+## One-shot transition report (promotion/demotion) shown above the
+## standing "select your destination" prompt on the next refresh.
+var _status_message := ""
+
+
+func _ready() -> void:
+	if not RoguelikeRun.active or RoguelikeRun.campaign.is_empty():
+		# Direct scene launch (developer preview) starts a fresh campaign.
+		RoguelikeRun.start_run(FleetDataManager.load_fleet(0))
+	_build_stars()
+	_build_line_mesh()
+	_set_zoom(_current_shell_radius() + CAMERA_SHELL_MARGIN)
+	await _resolve_pending_battle()
+	if _campaign_over:
+		return
+	_refresh_map()
+	_show_repair_summary(RoguelikeRun.last_jump_repair_summary)
+	RoguelikeRun.last_jump_repair_summary = {}
+
+
+func _process(_delta: float) -> void:
+	_pulse_current_node()
+
+
+# ============================================================================
+# CAMPAIGN FLOW - battle results, promotion, demotion, campaign end
+# ============================================================================
+
+## The campaign-flow brain: consume the battle result stashed by the
+## battle scene and branch into plain progress, promotion, demotion,
+## game over, or campaign victory.
+func _resolve_pending_battle() -> void:
+	var node_id: String = RoguelikeRun.pending_battle_node_id
+	var result: String = RoguelikeRun.pending_battle_result
+	RoguelikeRun.pending_battle_node_id = ""
+	RoguelikeRun.pending_battle_result = ""
+	if node_id == "" or result == "":
+		return
+	if result == CampaignSystem.RESULT_VICTORY:
+		await _resolve_battle_victory(node_id)
+	else:
+		await _resolve_battle_defeat()
+
+
+func _resolve_battle_victory(node_id: String) -> void:
+	var campaign: Dictionary = RoguelikeRun.campaign
+	CampaignSystem.visit_node(campaign, node_id)
+	var node := CampaignSystem.node_by_id(campaign, node_id)
+	node_selected.emit(node)
+
+	if CampaignSystem.is_sector_complete(campaign):
+		if CampaignSystem.is_top_sector(campaign):
+			await _end_campaign(WINNER_BANNER_TEXT, CampaignSystem.RESULT_VICTORY)
+			return
+		var from_sector: String = campaign["current_sector"]
+		CampaignSystem.promote(campaign)
+		_rescale_enemy_fleet()
+		sector_changed.emit(from_sector, campaign["current_sector"])
+		_tween_camera_to_current_shell()
+		_status_message = "Sector %s secured! Promoted to Sector %s." % [
+			from_sector, campaign["current_sector"]]
+	RoguelikeRun.save_campaign_to_disk()
+
+
+func _resolve_battle_defeat() -> void:
+	var campaign: Dictionary = RoguelikeRun.campaign
+	if CampaignSystem.is_bottom_sector(campaign):
+		await _end_campaign(GAME_OVER_BANNER_TEXT, CampaignSystem.RESULT_DEFEAT)
+		return
+
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var survivors := DemotionFleetBuilder.pick_survivors(
+		RoguelikeRun.lost_fleet_final_ships, RoguelikeRun.lost_fleet_final_crew, rng)
+	RoguelikeRun.apply_demotion(survivors, FleetDataManager.load_fleet(0))
+
+	var from_sector: String = campaign["current_sector"]
+	CampaignSystem.demote(campaign)
+	_rescale_enemy_fleet()
+	sector_changed.emit(from_sector, campaign["current_sector"])
+	_tween_camera_to_current_shell()
+	_status_message = "Fleet lost in Sector %s. Demoted to Sector %s; %d battered ship(s) limped home." % [
+		from_sector, campaign["current_sector"], survivors["ships"].size()]
+	RoguelikeRun.save_campaign_to_disk()
+
+
+func _rescale_enemy_fleet() -> void:
+	RoguelikeRun.enemy_fleet = CampaignSystem.scaled_enemy_fleet(
+		FleetDataManager.load_fleet(1), RoguelikeRun.campaign["current_sector"])
+
+
+func _end_campaign(banner_text: String, result: String) -> void:
+	_campaign_over = true
+	_refresh_map()
+	_banner_label.text = banner_text
+	_banner_label.visible = true
+	campaign_ended.emit(result)
+	CampaignSaveManager.delete_save()
+	RoguelikeRun.end_run()
+	await get_tree().create_timer(END_BANNER_SECONDS).timeout
+	get_tree().change_scene_to_file(MAIN_MENU_SCENE)
+
+
+# ============================================================================
+# NODE SELECTION
+# ============================================================================
+
+func _on_star_input_event(_camera: Node, event: InputEvent, _position: Vector3,
+		_normal: Vector3, _shape_idx: int, node_id: String) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_on_node_clicked(node_id)
+
+
+func _on_node_clicked(node_id: String) -> void:
+	if _campaign_over:
+		return
+	var node := CampaignSystem.node_by_id(RoguelikeRun.campaign, node_id)
+	if node.is_empty() or not node.get("accessible", false):
+		return
+
+	# The jump itself is downtime: engineers repair in proportion to the
+	# star-date gap, with R&R stops multiplying the effect.
+	var destination: int = RoguelikeRun.current_star_date + int(node["star_date_gap"])
+	var repair_summary: Dictionary = RoguelikeRun.apply_jump_repairs(
+		destination, node["type"] == CampaignSystem.NODE_TYPE_RANDR)
+
+	if node["type"] == CampaignSystem.NODE_TYPE_BATTLE:
+		_launch_battle(node)
+		return
+
+	CampaignSystem.visit_node(RoguelikeRun.campaign, node_id)
+	node_selected.emit(node)
+	RoguelikeRun.save_campaign_to_disk()
+	_refresh_map()
+	_show_repair_summary(repair_summary)
+	RoguelikeRun.last_jump_repair_summary = {}
+
+
+func _launch_battle(node: Dictionary) -> void:
+	RoguelikeRun.started_first_battle = true
+	RoguelikeRun.pending_battle_node_id = node["id"]
+	RoguelikeRun.save_campaign_to_disk()
+	node_selected.emit(node)
+	get_tree().change_scene_to_file(PRE_BATTLE_SCENE)
+
+
+func _on_star_mouse_entered(node_id: String) -> void:
+	var node := CampaignSystem.node_by_id(RoguelikeRun.campaign, node_id)
+	if node.get("accessible", false):
+		_star_areas[node_id].scale = Vector3.ONE * HOVERED_STAR_SCALE
+
+
+func _on_star_mouse_exited(node_id: String) -> void:
+	_star_areas[node_id].scale = Vector3.ONE
+
+
+# ============================================================================
+# CAMERA - drag to orbit, wheel to zoom
+# ============================================================================
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		match event.button_index:
+			MOUSE_BUTTON_LEFT:
+				_dragging = event.pressed
+			MOUSE_BUTTON_WHEEL_UP:
+				if event.pressed:
+					_set_zoom(_zoom_distance - ZOOM_STEP)
+			MOUSE_BUTTON_WHEEL_DOWN:
+				if event.pressed:
+					_set_zoom(_zoom_distance + ZOOM_STEP)
+	elif event is InputEventMouseMotion and _dragging:
+		_camera_rig.rotation.y -= event.relative.x * ORBIT_RADIANS_PER_PIXEL
+		_camera_rig.rotation.x = clampf(
+			_camera_rig.rotation.x - event.relative.y * ORBIT_RADIANS_PER_PIXEL,
+			-CAMERA_PITCH_LIMIT, CAMERA_PITCH_LIMIT)
+
+
+func _set_zoom(distance: float) -> void:
+	_zoom_distance = clampf(distance, ZOOM_MIN, ZOOM_MAX)
+	_camera.position = Vector3(0, 0, _zoom_distance)
+
+
+func _current_shell_radius() -> float:
+	var sector_index := CampaignSystem.SECTORS.find(
+		RoguelikeRun.campaign.get("current_sector", CampaignSystem.SECTORS[0]))
+	return CampaignGenerator.SHELL_RADIUS_CORE \
+		+ (CampaignSystem.SECTORS.size() - 1 - sector_index) * CampaignGenerator.SHELL_RADIUS_STEP
+
+
+## Promotion burrows the camera inward, demotion pulls it back out.
+func _tween_camera_to_current_shell() -> void:
+	create_tween().tween_method(_set_zoom, _zoom_distance,
+		_current_shell_radius() + CAMERA_SHELL_MARGIN, CAMERA_TWEEN_SECONDS) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+
+
+# ============================================================================
+# STAR AND LINE RENDERING
+# ============================================================================
+
+func _build_stars() -> void:
+	for node in RoguelikeRun.campaign["nodes"].values():
+		var star := _create_star(node)
+		_stars_root.add_child(star)
+
+
+func _create_star(node: Dictionary) -> Area3D:
+	var node_id: String = node["id"]
+	var area := Area3D.new()
+	area.name = node_id
+	area.position = CampaignSystem.node_position(node)
+	area.input_ray_pickable = true
+	area.input_event.connect(_on_star_input_event.bind(node_id))
+	area.mouse_entered.connect(_on_star_mouse_entered.bind(node_id))
+	area.mouse_exited.connect(_on_star_mouse_exited.bind(node_id))
+
+	var collision := CollisionShape3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = STAR_PICK_RADIUS
+	collision.shape = sphere
+	area.add_child(collision)
+
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.emission_enabled = true
+	material.emission_energy_multiplier = BASE_EMISSION_ENERGY
+
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = STAR_RADIUS
+	mesh.height = STAR_RADIUS * 2.0
+	mesh_instance.mesh = mesh
+	mesh_instance.material_override = material
+	area.add_child(mesh_instance)
+
+	var label := Label3D.new()
+	label.text = "%s  +%d" % [NODE_TYPE_NAMES[node["type"]], int(node["star_date_gap"])]
+	label.position = STAR_LABEL_OFFSET
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# Constant on-screen size so labels stay readable at any orbit distance.
+	label.fixed_size = true
+	label.pixel_size = STAR_LABEL_PIXEL_SIZE
+	label.font_size = STAR_LABEL_FONT_SIZE
+	area.add_child(label)
+
+	_star_areas[node_id] = area
+	_star_materials[node_id] = material
+	_star_labels[node_id] = label
+	return area
+
+
+func _build_line_mesh() -> void:
+	_lines.mesh = ImmediateMesh.new()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_lines.material_override = material
+
+
+func _refresh_map() -> void:
+	_update_star_visuals()
+	_rebuild_connection_lines()
+	_update_ui_labels()
+	_update_fleet_status()
+
+
+func _update_star_visuals() -> void:
+	var campaign: Dictionary = RoguelikeRun.campaign
+	var current_sector: String = campaign["current_sector"]
+	for node in campaign["nodes"].values():
+		var node_id: String = node["id"]
+		# The current node stays bright even when it sits in the previous
+		# sector (just after a promotion), so the player can see where the
+		# bridge jump starts.
+		var in_current_sector: bool = node["sector"] == current_sector \
+			or node_id == campaign["current_node_id"]
+		var color := _star_color(node, campaign)
+		color.a = 1.0 if in_current_sector else DIMMED_SECTOR_ALPHA
+		_star_materials[node_id].albedo_color = color
+		_star_materials[node_id].emission = Color(color.r, color.g, color.b)
+		_star_areas[node_id].input_ray_pickable = in_current_sector
+		_star_labels[node_id].modulate = Color(1, 1, 1,
+			1.0 if in_current_sector else DIMMED_SECTOR_ALPHA)
+
+
+func _star_color(node: Dictionary, campaign: Dictionary) -> Color:
+	if node["id"] == campaign["current_node_id"]:
+		return CURRENT_POSITION_COLOR
+	if node["visited"]:
+		return VISITED_COLOR
+	if node["accessible"]:
+		return NODE_TYPE_COLORS[node["type"]]
+	return LOCKED_COLOR
+
+
+func _rebuild_connection_lines() -> void:
+	var mesh: ImmediateMesh = _lines.mesh
+	mesh.clear_surfaces()
+	var campaign: Dictionary = RoguelikeRun.campaign
+	if campaign["connections"].is_empty():
+		return
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	for connection in campaign["connections"]:
+		var from_node := CampaignSystem.node_by_id(campaign, connection["from_id"])
+		var to_node := CampaignSystem.node_by_id(campaign, connection["to_id"])
+		var color := _line_color(connection, from_node, to_node, campaign)
+		mesh.surface_set_color(color)
+		mesh.surface_add_vertex(CampaignSystem.node_position(from_node))
+		mesh.surface_set_color(color)
+		mesh.surface_add_vertex(CampaignSystem.node_position(to_node))
+	mesh.surface_end()
+
+
+func _line_color(connection: Dictionary, from_node: Dictionary, to_node: Dictionary,
+		campaign: Dictionary) -> Color:
+	var color := LINE_DIM_COLOR
+	if connection["bridge"]:
+		color = BRIDGE_LINE_COLOR
+	elif from_node["visited"] and to_node["accessible"]:
+		color = LINE_OPEN_COLOR
+	elif from_node["visited"] or to_node["visited"]:
+		color = LINE_VISITED_COLOR
+
+	var current_sector: String = campaign["current_sector"]
+	if from_node["sector"] != current_sector and to_node["sector"] != current_sector:
+		color.a = minf(color.a, DIMMED_SECTOR_ALPHA)
+	return color
+
+
+func _pulse_current_node() -> void:
+	var current_id: String = RoguelikeRun.campaign.get("current_node_id", "")
+	if current_id == "" or not _star_materials.has(current_id):
+		return
+	var pulse := 1.0 + CURRENT_NODE_PULSE_DEPTH * sin(
+		Time.get_ticks_msec() / 1000.0 * CURRENT_NODE_PULSE_SPEED)
+	_star_materials[current_id].emission_energy_multiplier = BASE_EMISSION_ENERGY * pulse
+
+
+# ============================================================================
+# UI PANEL
+# ============================================================================
+
+func _update_ui_labels() -> void:
+	_sector_label.text = "Sector %s" % RoguelikeRun.campaign["current_sector"]
+	var text := "Stardate %d - select your next destination" % RoguelikeRun.current_star_date
+	if _status_message != "":
+		text = _status_message + "\n" + text
+		_status_message = ""
+	_info_label.text = text
+
+
+func _show_repair_summary(summary: Dictionary) -> void:
+	if summary.get("ships_repaired", 0) <= 0:
+		return
+	_info_label.text += "\nEngineers repaired %d ship(s) (+%d) over %d star dates." % [
+		summary["ships_repaired"], summary["points_repaired"], summary["date_delta"]]
+
+
+## Ship-by-ship condition panel, so repairs (and the engineers doing them)
+## are visible between battles.
+func _update_fleet_status() -> void:
+	if RoguelikeRun.fleet_ships.is_empty():
+		_fleet_label.text = "Fleet: undamaged (no sorties yet)"
+		return
+	var lines := ["Fleet condition:"]
+	for ship in RoguelikeRun.fleet_ships:
+		lines.append(_ship_condition_line(ship))
+	_fleet_label.text = "\n".join(lines)
+
+
+func _ship_condition_line(ship: Dictionary) -> String:
+	var armor_current := 0
+	var armor_max := 0
+	for section in ship.get("armor_sections", []):
+		armor_current += int(section.get("current_armor", 0))
+		armor_max += int(section.get("max_armor", 0))
+
+	var systems_current := 0
+	var systems_max := 0
+	for component in ship.get("internals", []):
+		systems_current += int(component.get("current_health", 0))
+		systems_max += int(component.get("max_health", 0))
+
+	var engineers: int = ship.get("crew", []).filter(
+		func(c): return c.get("role", -1) == CrewData.Role.ENGINEER).size()
+
+	return "%s  armor %d%%  systems %d%%  engineers %d" % [
+		ship.get("type", "ship"), _percent(armor_current, armor_max),
+		_percent(systems_current, systems_max), engineers]
+
+
+func _percent(current: int, maximum: int) -> int:
+	if maximum <= 0:
+		return 100
+	return int(round(100.0 * current / maximum))
