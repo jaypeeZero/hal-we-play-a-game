@@ -19,11 +19,18 @@ parallel system.
    sites pass the crew's set. Tests in `tests/test_crew_knowledge.gd`,
    including the done-criterion (identical pilots, different doctrine,
    different maneuvers).
-2. **Player standing instructions.** A player-authored pattern (same
-   schema) injected into a crew member's set with a priority flag —
-   "prefer torpedo runs on capitals", "never close below 800". UI can
-   come later; start with a JSON file per saved crew member in the
-   roguelike run.
+2. **Player standing instructions.** ✅ SHIPPED. A player-authored
+   pattern (same schema) lives in
+   `user://standing_instructions/{crew_id}.json`;
+   `StandingInstructionsSystem` registers it with a priority flag
+   (relevant instructions outrank doctrine; irrelevant ones stay
+   silent; never visible to baseline crew) and adds it to the crew
+   member's `known_patterns`. Roguelike crew now persist across
+   battles (`RoguelikeRun.fleet_crew`, `CrewData.reset_for_battle`),
+   so instructions attach to a stable crew identity. UI comes later.
+   Tests in `tests/test_standing_instructions.gd`, including the
+   done-criterion (saved crew member with an instruction measurably
+   changes maneuver choice vs an identical uninstructed pilot).
 3. **Training regimes.** Between battles (roguelike fleet management
    screen), spend a resource to: add a pattern to `known_patterns`,
    raise a skill stat, or reduce a `skill_requirements` gate for one
@@ -42,7 +49,10 @@ show bad pattern selection; the simple replacement is exact tag/
 condition matching against the situation summary instead of word
 overlap. Decide from battle-log evidence, not speculation.
 
-## Done when (increment 2, the next concrete step)
+## Done when (increment 3, the next concrete step)
 
-- A saved roguelike crew member carries a player-authored pattern that
-  measurably changes their behavior in battle, and a test asserts it.
+- On the fleet management screen between battles, spending a training
+  resource on a saved crew member adds a pattern to their
+  `known_patterns` (or raises a skill / lowers a known pattern's
+  `skill_requirements` gate), the change persists into the next
+  battle, and a test asserts it.

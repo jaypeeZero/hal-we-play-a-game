@@ -15,6 +15,11 @@ var active: bool = false
 var started_first_battle: bool = false
 var fleet: Dictionary = {}
 var fleet_ships: Array = []
+## Surviving crew grouped by the ship they crewed:
+## [{"ship_type": String, "crew": Array of crew dicts}]. The next battle
+## reattaches each group to a hull of the same type, so crew identity
+## (crew_id, skills, known_patterns) persists across the run.
+var fleet_crew: Array = []
 var enemy_fleet: Dictionary = {}
 var map_state: Dictionary = {}
 var pending_battle_node_id: String = ""
@@ -30,6 +35,7 @@ func start_run(initial_fleet: Dictionary) -> void:
 	started_first_battle = false
 	fleet = initial_fleet.duplicate(true)
 	fleet_ships = []
+	fleet_crew = []
 	enemy_fleet = FleetDataManager.load_fleet(1)
 	map_state = {}
 	pending_battle_node_id = ""
@@ -42,6 +48,7 @@ func end_run() -> void:
 	started_first_battle = false
 	fleet = {}
 	fleet_ships = []
+	fleet_crew = []
 	enemy_fleet = {}
 	map_state = {}
 	pending_battle_node_id = ""
@@ -49,8 +56,9 @@ func end_run() -> void:
 	last_jump_repair_summary = {}
 
 
-func update_fleet_after_battle(surviving_ships: Array) -> void:
+func update_fleet_after_battle(surviving_ships: Array, surviving_crew: Array = []) -> void:
 	fleet_ships = surviving_ships.duplicate(true)
+	fleet_crew = surviving_crew.duplicate(true)
 	fleet = {}
 	for ship_type in FleetDataManager.SHIP_TYPES:
 		fleet[ship_type] = 0
@@ -58,6 +66,17 @@ func update_fleet_after_battle(surviving_ships: Array) -> void:
 		var t: String = ship.get("type", "")
 		if fleet.has(t):
 			fleet[t] += 1
+
+
+## Take the saved crew group for a hull of this type (first match wins,
+## mirroring how _apply_roguelike_damage_states matches ships by type).
+## Empty array if no saved crew remain for the type.
+func take_saved_crew(ship_type: String) -> Array:
+	for i in range(fleet_crew.size()):
+		if fleet_crew[i].get("ship_type", "") == ship_type:
+			var group: Dictionary = fleet_crew.pop_at(i)
+			return group.get("crew", [])
+	return []
 
 
 func is_fleet_empty() -> bool:

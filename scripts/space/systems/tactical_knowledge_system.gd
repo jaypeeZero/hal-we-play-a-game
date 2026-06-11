@@ -37,9 +37,17 @@ const ROLE_NAMES = {
 	"fleet_commander": CrewData.Role.FLEET_COMMANDER,
 }
 
-## pattern_id -> {role, tags, text, content}; populated on first query
+## pattern_id -> {role, tags, text, content, player_priority}; populated on first query
 static var knowledge_base: Dictionary = {}
 static var _loaded := false
+
+## Added to a pattern's relevance score when it is player-authored
+## (a standing instruction). Larger than any achievable doctrine score
+## (base match ratio tops out at 1.0 plus 0.2 per matching tag), so a
+## *relevant* instruction always outranks role doctrine. Irrelevant
+## instructions stay silent: the bonus only applies when the base
+## relevance is above zero.
+const PLAYER_INSTRUCTION_SCORE_BONUS := 10.0
 
 ## Load all pattern files once; merges into knowledge_base so patterns
 ## added at runtime via add_knowledge_pattern() are preserved.
@@ -119,6 +127,11 @@ static func query_knowledge(situation: String, role: int, top_k: int = 3, known_
 		if not known_patterns.is_empty() and pattern_id not in known_patterns:
 			continue
 
+		# Baseline retrieval covers role doctrine only: player-authored
+		# patterns are retrievable solely by crew that explicitly know them.
+		if known_patterns.is_empty() and pattern.get("player_priority", false):
+			continue
+
 		var score = calculate_relevance_score(situation, pattern)
 		if score > 0.0:
 			scored_patterns.append({
@@ -165,7 +178,13 @@ static func calculate_relevance_score(query: String, pattern: Dictionary) -> flo
 		if tag in query.to_lower():
 			tag_bonus += 0.2  # Each matching tag adds 0.2 to score
 
-	return base_score + tag_bonus
+	var score = base_score + tag_bonus
+
+	# A relevant player standing instruction outranks all role doctrine
+	if score > 0.0 and pattern.get("player_priority", false):
+		score += PLAYER_INSTRUCTION_SCORE_BONUS
+
+	return score
 
 ## Tokenize text into lowercase words
 static func tokenize(text: String) -> Array:
@@ -199,13 +218,16 @@ static func query_commander_knowledge(situation: String, top_k: int = 2, known_p
 # KNOWLEDGE BASE EXTENSION
 # ============================================================================
 
-## Add new knowledge pattern to database (runtime extension; tests use this)
-static func add_knowledge_pattern(pattern_id: String, role: int, tags: Array, text: String, content: Dictionary) -> void:
+## Add new knowledge pattern to database (runtime extension; standing
+## instructions and tests use this). `player_priority` marks the pattern
+## as player-authored so relevant matches outrank role doctrine.
+static func add_knowledge_pattern(pattern_id: String, role: int, tags: Array, text: String, content: Dictionary, player_priority: bool = false) -> void:
 	knowledge_base[pattern_id] = {
 		"role": role,
 		"tags": tags,
 		"text": text,
-		"content": content
+		"content": content,
+		"player_priority": player_priority
 	}
 	_query_cache.clear()
 

@@ -313,6 +313,20 @@ static func create_squadron(ship_count: int, weapons_per_ship: int, skill_level:
 
 	return all_crew
 
+## Rebuild a saved crew member for a new battle. Persistent identity —
+## crew_id, stats/skills, known_patterns, command chain — carries over;
+## per-battle state (awareness, combat_state, orders, decision timing)
+## starts fresh, and stress/fatigue recover between battles.
+static func reset_for_battle(saved: Dictionary) -> Dictionary:
+	var fresh = create_crew_member(saved.get("role", Role.PILOT))
+	fresh.crew_id = saved.get("crew_id", fresh.crew_id)
+	fresh.stats = saved.get("stats", fresh.stats).duplicate(true)
+	fresh.stats.stress = 0.0
+	fresh.stats.fatigue = 0.0
+	fresh.known_patterns = saved.get("known_patterns", []).duplicate()
+	fresh.command_chain = saved.get("command_chain", fresh.command_chain).duplicate(true)
+	return fresh
+
 ## Assign crew member to entity (ship, weapon, etc.)
 static func assign_crew_to_entity(crew_data: Dictionary, entity_id: String) -> Dictionary:
 	var updated = crew_data.duplicate(true)

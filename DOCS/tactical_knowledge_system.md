@@ -53,13 +53,17 @@ Increments success or failure counter for the tactic. Tactic ID format: `"{type}
 
 **Location**: `scripts/space/systems/tactical_knowledge_system.gd`
 
-**Function**: `query_knowledge(situation: String, role: int, top_k: int = 3) -> Array`
+**Function**: `query_knowledge(situation: String, role: int, top_k: int = 3, known_patterns: Array = []) -> Array`
+
+`known_patterns` restricts retrieval to the pattern ids a specific crew member knows; an empty array means the full role baseline (doctrine from the JSON files only — player-authored patterns are never part of the baseline).
 
 Performs BM25-style text matching:
 
 ```
 score = (matching_terms / total_query_terms) + (0.2 * matching_tags)
 ```
+
+Player-authored patterns (standing instructions, registered with `player_priority`) additionally receive `PLAYER_INSTRUCTION_SCORE_BONUS` when — and only when — their base score is above zero: a relevant instruction always outranks doctrine, an irrelevant one stays silent.
 
 Returns array of dictionaries:
 ```gdscript
@@ -72,13 +76,19 @@ Returns array of dictionaries:
 ```
 
 **Role-specific convenience functions**:
-- `query_pilot_knowledge(situation, top_k)`
-- `query_gunner_knowledge(situation, top_k)`
-- `query_captain_knowledge(situation, top_k)`
-- `query_squadron_knowledge(situation, top_k)`
-- `query_commander_knowledge(situation, top_k)`
+- `query_pilot_knowledge(situation, top_k, known_patterns)`
+- `query_gunner_knowledge(situation, top_k, known_patterns)`
+- `query_captain_knowledge(situation, top_k, known_patterns)`
+- `query_squadron_knowledge(situation, top_k, known_patterns)`
+- `query_commander_knowledge(situation, top_k, known_patterns)`
 
-**Cache**: Results cached by `"{situation}_{role}_{top_k}"` key. Cache cleared when size exceeds 50 entries.
+**Cache**: Results cached by `"{situation}_{role}_{top_k}_{known_patterns.hash()}"` key. Cache cleared when size exceeds 50 entries.
+
+### StandingInstructionsSystem
+
+**Location**: `scripts/space/systems/standing_instructions_system.gd`
+
+Player standing instructions (plan 06, increment 2): a player-authored pattern — same schema as a knowledge entry — saved per crew member of the roguelike run in `user://standing_instructions/{crew_id}.json`. `load_and_apply(crew)` registers each pattern in the knowledge base with the `player_priority` flag (namespaced as `{crew_id}__{pattern_id}`) and adds it to the crew member's `known_patterns`, expanding an empty set to the explicit role baseline first so instructions extend doctrine rather than replace it. The battle scene applies saved instructions to player crew when a roguelike battle spawns them.
 
 ## Knowledge Entry Format
 
