@@ -57,14 +57,30 @@ func _ready() -> void:
 	_input = PreBattleInput.new(BattlePlan.entries, bounds)
 
 	# Doctrine (standing instructions) is roguelike run state; the panel
-	# only exists when a run is active.
+	# only exists when a run is active. Outside a run, say so instead of
+	# showing nothing.
 	if RoguelikeRun.active:
 		_doctrine_panel = DoctrinePanel.new()
 		$UI.add_child(_doctrine_panel)
 		_doctrine_panel.setup(BattlePlan.entries)
 		_doctrine_panel.hull_selected.connect(_on_doctrine_hull_selected)
+	else:
+		_add_doctrine_hint()
 
 	queue_redraw()
+
+
+## Shown where the doctrine panel would be when no run is active, so the
+## feature is discoverable from the direct main-menu pre-battle path.
+func _add_doctrine_hint() -> void:
+	var hint := Label.new()
+	hint.text = "Fleet doctrine: standing instructions are issued here\nduring a roguelike run (Main Menu → Fleet Management → Launch)."
+	hint.anchor_left = 1.0
+	hint.anchor_right = 1.0
+	hint.offset_left = -(DoctrinePanel.PANEL_WIDTH + DoctrinePanel.PANEL_MARGIN)
+	hint.offset_right = -DoctrinePanel.PANEL_MARGIN
+	hint.offset_top = DoctrinePanel.PANEL_MARGIN
+	$UI.add_child(hint)
 
 
 ## Picking a hull in the doctrine dropdown selects it on the map too.
