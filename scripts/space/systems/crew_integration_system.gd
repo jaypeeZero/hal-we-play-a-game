@@ -68,6 +68,8 @@ static func apply_decision_to_ship(ship_data: Dictionary, decision: Dictionary, 
 			return apply_fire_decision(ship_data, decision, crew_data)
 		"tactical":
 			return apply_tactical_decision(ship_data, decision, crew_data)
+		"repair":
+			return apply_repair_decision(ship_data, decision, crew_data)
 		_:
 			return ship_data
 
@@ -300,6 +302,45 @@ static func apply_captain_skill_modifiers(ship_data: Dictionary, crew_data: Dict
 	updated.crew_modifiers.damage_control = lerp(WingConstants.CAPTAIN_DAMAGE_CONTROL_MIN,
 												 WingConstants.CAPTAIN_DAMAGE_CONTROL_MAX, skill_factor)
 
+	return updated
+
+# ============================================================================
+# REPAIR DECISIONS (Engineer)
+# ============================================================================
+
+## Apply an engineer's repair decision. The heal is a machinery-skill-scaled
+## fraction of the target's maximum, boosted by the captain's damage-control
+## modifier. Destroyed components are beyond in-battle field repair.
+static func apply_repair_decision(ship_data: Dictionary, decision: Dictionary, _crew_data: Dictionary) -> Dictionary:
+	var skill_factor: float = decision.get("skill_factor", 0.5)
+	var damage_control: float = ship_data.get("crew_modifiers", {}).get("damage_control", 1.0)
+	var fraction: float = lerpf(WingConstants.ENGINEER_REPAIR_FRACTION_MIN,
+								WingConstants.ENGINEER_REPAIR_FRACTION_MAX, skill_factor) * damage_control
+
+	var updated: Dictionary
+	var amount: int
+	if decision.has("component_id"):
+		var component = DamageResolver.find_internal_by_id(ship_data, decision.component_id)
+		if component.is_empty():
+			return ship_data
+		amount = RepairSystem.fraction_to_amount(component.get("max_health", 0), fraction)
+		updated = RepairSystem.repair_component(ship_data, decision.component_id, amount)
+	elif decision.has("section_id"):
+		var section = RepairSystem.find_armor_section_by_id(ship_data, decision.section_id)
+		if section.is_empty():
+			return ship_data
+		amount = RepairSystem.fraction_to_amount(section.get("max_armor", 0), fraction)
+		updated = RepairSystem.repair_armor_section(ship_data, decision.section_id, amount)
+	else:
+		return ship_data
+
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("repair_applied", {
+			"ship_id": ship_data.get("ship_id", ""),
+			"crew_id": decision.get("crew_id", ""),
+			"subtype": decision.get("subtype", ""),
+			"amount": amount,
+		})
 	return updated
 
 ## Select command style based on captain skill

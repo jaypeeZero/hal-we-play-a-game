@@ -8,6 +8,7 @@ var _saved_fleet_ships: Array
 var _saved_enemy_fleet: Dictionary
 var _saved_active: bool
 var _saved_started_first_battle: bool
+var _saved_star_date: int
 
 
 func before_each() -> void:
@@ -16,6 +17,7 @@ func before_each() -> void:
 	_saved_enemy_fleet = RoguelikeRun.enemy_fleet.duplicate(true)
 	_saved_active = RoguelikeRun.active
 	_saved_started_first_battle = RoguelikeRun.started_first_battle
+	_saved_star_date = RoguelikeRun.current_star_date
 
 
 func after_each() -> void:
@@ -24,6 +26,7 @@ func after_each() -> void:
 	RoguelikeRun.enemy_fleet = _saved_enemy_fleet
 	RoguelikeRun.active = _saved_active
 	RoguelikeRun.started_first_battle = _saved_started_first_battle
+	RoguelikeRun.current_star_date = _saved_star_date
 
 
 func _make_ship(ship_type: String) -> Dictionary:
@@ -183,6 +186,102 @@ func test_end_run_clears_enemy_fleet():
 
 	assert_true(RoguelikeRun.enemy_fleet.is_empty(),
 		"enemy_fleet should be cleared when run ends")
+
+
+# ============================================================================
+# JUMP REPAIRS (Engineers + star dates)
+# ============================================================================
+
+const JUMP_DATE_DELTA := 5
+
+func _make_damaged_ship_with_crew(engineer_count: int) -> Dictionary:
+	var ship = _make_ship("corvette")
+	ship["armor_sections"][0]["current_armor"] = 1
+	ship["crew"] = []
+	for i in engineer_count:
+		ship["crew"].append(TestFactories.make_crew_engineer(1.0, ship.ship_id))
+	return ship
+
+
+func _total_armor(ship: Dictionary) -> int:
+	return DamageResolver.calculate_total_armor(ship)
+
+
+func test_jump_repairs_heal_ship_with_engineers():
+	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
+	var before = _total_armor(RoguelikeRun.fleet_ships[0])
+
+	var summary = RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
+
+	assert_gt(_total_armor(RoguelikeRun.fleet_ships[0]), before,
+		"Ship with an engineer should heal during the jump")
+	assert_eq(summary.ships_repaired, 1, "Summary should count the repaired ship")
+	assert_eq(summary.date_delta, JUMP_DATE_DELTA, "Summary should report the star-date gap")
+
+
+func test_jump_repairs_skip_ship_without_engineers():
+	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(0)]
+	var before = _total_armor(RoguelikeRun.fleet_ships[0])
+
+	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
+
+	assert_eq(_total_armor(RoguelikeRun.fleet_ships[0]), before,
+		"Ship without engineers should not heal during the jump")
+
+
+func test_wider_date_gap_heals_more():
+	var start_date = RoguelikeRun.current_star_date
+
+	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
+	RoguelikeRun.apply_jump_repairs(start_date + 2, false)
+	var narrow_gap_armor = _total_armor(RoguelikeRun.fleet_ships[0])
+
+	RoguelikeRun.current_star_date = start_date
+	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
+	RoguelikeRun.apply_jump_repairs(start_date + 9, false)
+	var wide_gap_armor = _total_armor(RoguelikeRun.fleet_ships[0])
+
+	assert_gt(wide_gap_armor, narrow_gap_armor,
+		"A longer jump (more downtime) should repair more")
+
+
+func test_rnr_heals_more_than_battle_jump_at_equal_gap():
+	var start_date = RoguelikeRun.current_star_date
+
+	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
+	RoguelikeRun.apply_jump_repairs(start_date + JUMP_DATE_DELTA, false)
+	var battle_jump_armor = _total_armor(RoguelikeRun.fleet_ships[0])
+
+	RoguelikeRun.current_star_date = start_date
+	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
+	RoguelikeRun.apply_jump_repairs(start_date + JUMP_DATE_DELTA, true)
+	var rnr_armor = _total_armor(RoguelikeRun.fleet_ships[0])
+
+	assert_gt(rnr_armor, battle_jump_armor,
+		"R&R downtime should repair more than a battle jump of the same gap")
+
+
+func test_jump_repairs_restore_destroyed_components():
+	var ship = _make_damaged_ship_with_crew(1)
+	ship["internals"][0]["status"] = "destroyed"
+	ship["internals"][0]["current_health"] = 0
+	RoguelikeRun.fleet_ships = [ship]
+
+	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, true)
+
+	assert_gt(RoguelikeRun.fleet_ships[0]["internals"][0]["current_health"], 0,
+		"Downtime repairs should restore destroyed components")
+	assert_ne(RoguelikeRun.fleet_ships[0]["internals"][0]["status"], "destroyed",
+		"Restored component should no longer be destroyed")
+
+
+func test_jump_advances_current_star_date():
+	var destination = RoguelikeRun.current_star_date + JUMP_DATE_DELTA
+
+	RoguelikeRun.apply_jump_repairs(destination, false)
+
+	assert_eq(RoguelikeRun.current_star_date, destination,
+		"The jump should move the run to the destination star date")
 
 
 func test_fleet_ships_empty_at_run_start():

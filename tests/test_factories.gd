@@ -76,6 +76,8 @@ static func make_ship(id: String, type: String = "fighter", team: int = 0, pos: 
 	}
 	for key in overrides:
 		ship[key] = overrides[key]
+	if not ship.has("base_stats"):
+		ship["base_stats"] = ship["stats"].duplicate(true)
 	return ship
 
 static func make_fighter(id: String = "", pos: Vector2 = Vector2.ZERO, team: int = 0, overrides: Dictionary = {}) -> Dictionary:
@@ -146,13 +148,15 @@ static func make_component(component_id: String, type: String = "", offset: Vect
 	}
 
 static func make_weapon(type: String = "light_cannon", weapon_id: String = "weapon_1", cooldown: float = 0.0) -> Dictionary:
+	var stats: Dictionary = WEAPON_CLASS_STATS.get(type, WEAPON_CLASS_STATS["light_cannon"]).duplicate(true)
 	return {
 		"weapon_id": weapon_id,
 		"type": type,
 		"position_offset": Vector2.ZERO,
 		"facing": 0.0,
 		"arc": WEAPON_CLASS_ARCS.get(type, WEAPON_CLASS_ARCS["light_cannon"]).duplicate(true),
-		"stats": WEAPON_CLASS_STATS.get(type, WEAPON_CLASS_STATS["light_cannon"]).duplicate(true),
+		"stats": stats,
+		"base_stats": stats.duplicate(true),
 		"cooldown_remaining": cooldown,
 	}
 
@@ -176,6 +180,7 @@ static func make_pilot(id: String, ship_id: String, skill: float = DEFAULT_SKILL
 			"skills": {
 				"aim": skill, "piloting": skill, "awareness": skill,
 				"tactics": skill, "composure": skill, "aggression": aggression,
+				"machinery": skill,
 			},
 		},
 		"awareness": {"threats": [], "opportunities": [], "known_entities": []},
@@ -205,6 +210,12 @@ static func make_crew_gunner(skill: float = DEFAULT_CREW_SKILL, ship_id: String 
 
 static func make_crew_captain(skill: float = DEFAULT_CREW_SKILL, ship_id: String = "ship_1") -> Dictionary:
 	return make_crew_member(CrewData.Role.CAPTAIN, skill, ship_id, null, ["pilot_x", "gunner_x"])
+
+## Engineer with a specific machinery skill (other skills track `skill`).
+static func make_crew_engineer(machinery: float = DEFAULT_CREW_SKILL, ship_id: String = "ship_1", skill: float = DEFAULT_CREW_SKILL) -> Dictionary:
+	var crew = make_crew_member(CrewData.Role.ENGINEER, skill, ship_id, "captain_x")
+	crew.stats.skills.machinery = machinery
+	return crew
 
 # ============================================================================
 # AWARENESS ENTRIES AND PROJECTILES

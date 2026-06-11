@@ -15,6 +15,8 @@ func _make_target_with_internals(internals: Array) -> Dictionary:
 		"rotation": 0.0,
 		"velocity": Vector2.ZERO,
 		"status": "operational",
+		"stats": {},
+		"base_stats": {},
 		"armor_sections": [{
 			"section_id": "all",
 			"arc": {"start": 0.0, "end": 360.0},

@@ -74,10 +74,13 @@ func _generate_map() -> void:
 	_connections.clear()
 
 	var num_rows := randi_range(MIN_ROWS, MAX_ROWS)
+	# Each row is a star date; gaps are semi-random and drive jump repairs.
+	var star_date: int = RoguelikeRun.STAR_DATE_RUN_START
 
 	for row_idx in range(num_rows):
 		var row := []
 		var num_nodes: int
+		star_date += randi_range(RoguelikeRun.STAR_DATE_GAP_MIN, RoguelikeRun.STAR_DATE_GAP_MAX)
 
 		# First and last rows have single nodes
 		if row_idx == 0:
@@ -94,6 +97,7 @@ func _generate_map() -> void:
 				"row": row_idx,
 				"col": node_idx,
 				"type": node_type,
+				"star_date": star_date,
 				"visited": false,
 				"accessible": row_idx == 0  # Only first row accessible initially
 			}
@@ -198,6 +202,10 @@ func _build_ui() -> void:
 		row_container.add_theme_constant_override("separation", 40)
 		_map_container.add_child(row_container)
 
+		var date_label := Label.new()
+		date_label.text = "Stardate %d" % int(row[0]["star_date"])
+		row_container.add_child(date_label)
+
 		for node in row:
 			var btn := _create_node_button(node)
 			row_container.add_child(btn)
@@ -252,6 +260,11 @@ func _on_node_pressed(node_id: String) -> void:
 	if node.is_empty():
 		return
 
+	# The jump itself is downtime: engineers repair in proportion to the
+	# star-date gap, with R&R stops multiplying the effect.
+	var repair_summary: Dictionary = RoguelikeRun.apply_jump_repairs(
+		int(node["star_date"]), node["type"] == NodeType.RANDR)
+
 	if node["type"] == NodeType.BATTLE:
 		_launch_battle(node)
 		return
@@ -277,6 +290,14 @@ func _on_node_pressed(node_id: String) -> void:
 		return
 
 	_update_node_states()
+	_show_repair_summary(repair_summary)
+
+
+func _show_repair_summary(summary: Dictionary) -> void:
+	if summary.get("ships_repaired", 0) <= 0:
+		return
+	_info_label.text += "\nEngineers repaired %d ship(s) (+%d) over %d star dates." % [
+		summary["ships_repaired"], summary["points_repaired"], summary["date_delta"]]
 
 
 func _launch_battle(node: Dictionary) -> void:

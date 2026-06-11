@@ -765,7 +765,13 @@ func _get_surviving_player_ships() -> Array:
 			continue
 		if ship.get("status", "") == "destroyed":
 			continue
-		survivors.append(ship.duplicate(true))
+		var survivor: Dictionary = ship.duplicate(true)
+		# Attach the battle's live crew so roguelike jump repairs see the
+		# engineers who actually served aboard this ship.
+		survivor["crew"] = _crew_list \
+			.filter(func(c): return c.get("assigned_to", "") == ship.get("ship_id", "")) \
+			.map(func(c): return c.duplicate(true))
+		survivors.append(survivor)
 	return survivors
 
 # ============================================================================
@@ -1014,8 +1020,8 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> voi
 			# Pilot + torpedo operator for torpedo boats
 			new_crew = CrewData.create_torpedo_boat_crew(base_skill)
 		"corvette", "capital":
-			# Captain + pilot + gunners based on actual weapon count
-			new_crew = CrewData.create_ship_crew(weapon_count, base_skill)
+			# Captain + pilot + gunners based on actual weapon count, plus engineers
+			new_crew = CrewData.create_ship_crew(weapon_count, base_skill, CrewData.roll_engineer_count(ship_type))
 
 	# Assign crew to ship and add to index
 	for crew_member in new_crew:

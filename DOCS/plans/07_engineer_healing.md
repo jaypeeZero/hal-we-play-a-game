@@ -68,6 +68,10 @@ stress/fatigue degrade repair like every other skill.
 
 ## Increments (each independently shippable)
 
+All four increments ✅ SHIPPED in one PR; `_get_surviving_player_ships`
+needed the predicted crew reattachment (battle keeps crew in a separate
+`_crew_list`, so ship dicts carried no crew at all).
+
 1. **Repair primitives.** New `scripts/space/systems/repair_system.gd`
    (pure static funcs): `repair_armor_section(ship, section_id, amount)`,
    `repair_component(ship, component_id, amount)` (clamps to max,

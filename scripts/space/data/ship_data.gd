@@ -124,6 +124,12 @@ static func create_ship_instance(ship_type: String, team: int, position: Vector2
 	# Collision radius derived from hull shape (matches visual exactly)
 	instance.collision_radius = HullShapes.get_collision_radius(ship_type)
 
+	# Pristine snapshots: DamageResolver.recompute_stats_from_components
+	# derives effective stats from these as component statuses change.
+	instance.base_stats = instance.stats.duplicate(true)
+	for weapon in instance.get("weapons", []):
+		weapon.base_stats = weapon.stats.duplicate(true)
+
 	# Create crew for ship if requested
 	if create_crew:
 		var crew = create_crew_for_ship(instance, crew_skill)
@@ -153,16 +159,16 @@ static func create_crew_for_ship(ship_data: Dictionary, skill_level: float = 0.5
 				member.assigned_to = ship_data.ship_id
 			return crew
 		"corvette":
-			# Captain, pilot, and gunners for corvette
+			# Captain, pilot, gunners, and engineers for corvette
 			var weapon_count = ship_data.weapons.size()
-			var crew = CrewData.create_ship_crew(weapon_count, skill_level)
+			var crew = CrewData.create_ship_crew(weapon_count, skill_level, CrewData.roll_engineer_count(ship_data.type))
 			for member in crew:
 				member.assigned_to = ship_data.ship_id
 			return crew
 		"capital":
 			# Full crew for capital ships
 			var weapon_count = ship_data.weapons.size()
-			var crew = CrewData.create_ship_crew(weapon_count, skill_level)
+			var crew = CrewData.create_ship_crew(weapon_count, skill_level, CrewData.roll_engineer_count(ship_data.type))
 			for member in crew:
 				member.assigned_to = ship_data.ship_id
 			return crew
