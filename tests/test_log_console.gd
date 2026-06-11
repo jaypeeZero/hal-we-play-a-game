@@ -61,4 +61,30 @@ func test_entries_are_capped():
 	var cap: int = LogConsoleScript.MAX_LOG_ENTRIES
 	for i in range(cap + 50):
 		_console.add_event(_event("ai_decision", {"n": i}))
-	assert_eq(_console.entry_count(), cap, "Entry buffer is capped to avoid unbounded growth")
+	assert_true(_console.entry_count() <= cap, "Entry buffer never exceeds the cap")
+
+func test_events_buffered_while_closed_appear_on_open():
+	# Rendering is lazy: a closed console does no label work, but everything
+	# buffered must show up once the console opens.
+	_console.add_event(_event("damage_dealt", {"victim_id": "alpha"}))
+	_console.toggle()
+	await wait_process_frames(3)
+	assert_string_contains(_console.get_label_text(), "damage_dealt")
+
+func test_live_events_appear_while_open():
+	_console.toggle()
+	await wait_process_frames(3)
+	_console.add_event(_event("weapon_fired", {"shooter_id": "bravo"}))
+	await wait_process_frames(3)
+	assert_string_contains(_console.get_label_text(), "weapon_fired")
+
+func test_filter_change_rerenders_label():
+	_console.add_event(_event("damage_dealt", {"victim_id": "alpha"}))
+	_console.add_event(_event("weapon_fired", {"shooter_id": "bravo"}))
+	_console.toggle()
+	await wait_process_frames(3)
+	_console.apply_filter("weapon")
+	await wait_process_frames(3)
+	var text: String = _console.get_label_text()
+	assert_string_contains(text, "weapon_fired")
+	assert_false(text.contains("damage_dealt"), "Filtered-out events leave the label")

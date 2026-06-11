@@ -27,6 +27,9 @@ const SLIDE_DURATION: float = 0.18
 # Cap on retained lines so a long battle can't grow memory without bound. The
 # oldest lines are dropped first; this is still far more than a battle produces.
 const MAX_LOG_ENTRIES: int = 5000
+# When over the cap, drop this many oldest entries at once. Trimming forces a
+# full label rebuild, so trim in chunks to keep rebuilds rare.
+const ENTRY_TRIM_CHUNK: int = 500
 const FONT_SIZE: int = 14
 # Padding inside the panel around the text.
 const PANEL_MARGIN: int = 8
@@ -52,6 +55,17 @@ var _is_open: bool = false
 var _console_height: float = 0.0
 var _slide_tween: Tween
 
+# Rendering is decoupled from event arrival so a busy battle costs nothing
+# while the console is closed and at most one append per frame while open:
+# - closed: events only accumulate in _entries; the label is stale.
+# - open:   new matching lines queue in _pending_lines and _process() flushes
+#           them with append_text() (parses only the new lines).
+# - _needs_full_render: label must be rebuilt from _entries (on open, filter
+#   change, or after trimming the buffer).
+var _needs_full_render: bool = true
+var _pending_lines := PackedStringArray()
+var _label_has_content: bool = false
+
 var _panel: Panel
 var _log_label: RichTextLabel
 var _filter_row: HBoxContainer
@@ -70,7 +84,11 @@ func _ready() -> void:
 		for event: Dictionary in logger.event_history:
 			_entries.append(_make_entry(event))
 		logger.event_occurred.connect(add_event)
-	_render()
+
+	# Closed console does zero work: hidden, no per-frame processing, and the
+	# label renders lazily on first open.
+	visible = false
+	set_process(false)
 
 func _logger() -> Node:
 	if BattleEventLoggerAutoload and BattleEventLoggerAutoload.service:
@@ -155,6 +173,9 @@ func is_open() -> bool:
 func _open() -> void:
 	_is_open = true
 	capturing_input = true
+	visible = true
+	set_process(true)
+	_needs_full_render = true
 	_slide_to(0.0)
 
 func _close() -> void:
@@ -169,6 +190,13 @@ func _slide_to(target_y: float) -> void:
 	_slide_tween = create_tween()
 	_slide_tween.tween_property(_panel, "position:y", target_y, SLIDE_DURATION) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_slide_tween.finished.connect(_on_slide_finished)
+
+func _on_slide_finished() -> void:
+	# Once fully retracted, stop drawing and processing entirely.
+	if not _is_open:
+		visible = false
+		set_process(false)
 
 func _open_filter() -> void:
 	_filter_active = true
@@ -190,18 +218,33 @@ func _on_filter_changed(text: String) -> void:
 ## Set the live filter (case-insensitive substring) and re-render.
 func apply_filter(text: String) -> void:
 	_filter = text.to_lower()
-	_render()
+	_needs_full_render = true
 
 # ============================================================================
 # EVENTS & RENDERING
 # ============================================================================
 
-## Append a logged event to the console and tail to it when at the bottom.
+## Buffer a logged event. The label updates lazily: nothing happens while the
+## console is closed; while open, _process() appends the new line next frame.
 func add_event(event: Dictionary) -> void:
-	_entries.append(_make_entry(event))
+	var entry: Dictionary = _make_entry(event)
+	_entries.append(entry)
 	if _entries.size() > MAX_LOG_ENTRIES:
-		_entries = _entries.slice(_entries.size() - MAX_LOG_ENTRIES)
-	_render()
+		_entries = _entries.slice(ENTRY_TRIM_CHUNK)
+		_needs_full_render = true
+	if not _is_open or _needs_full_render:
+		# Closed console buffers only; _open() always schedules a full rebuild.
+		return
+	if _filter == "" or entry.search.contains(_filter):
+		_pending_lines.append(_bbcode_line(entry))
+
+func _process(_delta: float) -> void:
+	if _needs_full_render:
+		_pending_lines.clear()
+		_render_full()
+		_needs_full_render = false
+	elif not _pending_lines.is_empty():
+		_append_pending()
 
 func _make_entry(event: Dictionary) -> Dictionary:
 	var timestamp: float = event.get("timestamp", 0.0)
@@ -216,16 +259,31 @@ func _format_data(data: Dictionary) -> String:
 		parts.append("%s=%s" % [key, str(data[key])])
 	return " ".join(parts)
 
-func _render() -> void:
-	if not is_instance_valid(_log_label):
-		return
-	var was_at_bottom: bool = _is_at_bottom()
+func _bbcode_line(entry: Dictionary) -> String:
+	return "[color=#%s]%s[/color]" % [_color_for_type(entry.type), _escape_bbcode(entry.line)]
+
+## Rebuild the whole label from _entries. Expensive (re-parses all bbcode), so
+## only used on open, filter change, or buffer trim — never per event.
+func _render_full() -> void:
 	var lines := PackedStringArray()
 	for entry: Dictionary in _entries:
 		if _filter != "" and not entry.search.contains(_filter):
 			continue
-		lines.append("[color=#%s]%s[/color]" % [_color_for_type(entry.type), _escape_bbcode(entry.line)])
+		lines.append(_bbcode_line(entry))
 	_log_label.text = "\n".join(lines)
+	_label_has_content = not lines.is_empty()
+	call_deferred("_scroll_to_bottom")
+
+## Append this frame's new lines; parses only the appended bbcode. Tails to the
+## bottom only if the user was already there, so back-scrolling stays put.
+func _append_pending() -> void:
+	var was_at_bottom: bool = _is_at_bottom()
+	var chunk: String = "\n".join(_pending_lines)
+	if _label_has_content:
+		chunk = "\n" + chunk
+	_log_label.append_text(chunk)
+	_label_has_content = true
+	_pending_lines.clear()
 	if was_at_bottom:
 		call_deferred("_scroll_to_bottom")
 
@@ -263,6 +321,10 @@ func _escape_bbcode(text: String) -> String:
 
 func entry_count() -> int:
 	return _entries.size()
+
+## Plain text currently rendered in the log label.
+func get_label_text() -> String:
+	return _log_label.get_parsed_text()
 
 ## Number of entries that pass the current filter (i.e. currently shown).
 func visible_entry_count() -> int:
