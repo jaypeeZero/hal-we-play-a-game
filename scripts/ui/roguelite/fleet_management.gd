@@ -84,13 +84,13 @@ func _create_message_item(msg: Dictionary) -> PanelContainer:
 
 
 func _on_fleet_launch_pressed() -> void:
-	var initial_fleet := FleetDataManager.load_fleet(0)
-	if FleetDataManager.get_fleet_ship_count(initial_fleet) == 0:
+	# The run already started on entering Roguelike mode; the roster and any
+	# doctrine authored in Edit Fleet must survive, so do not restart it here.
+	if FleetDataManager.get_fleet_ship_count(RoguelikeRun.fleet) == 0:
 		_status_label.text = "Configure at least one ship before launch."
 		_status_label.modulate = Color.RED
 		return
 
-	RoguelikeRun.start_run(initial_fleet)
 	get_tree().change_scene_to_file("res://scenes/roguelite_map.tscn")
 
 

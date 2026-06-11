@@ -267,3 +267,23 @@ func test_doctrine_measurably_changes_saved_crew_behavior_in_battle():
 		"The pilot must follow the standing order when it is relevant")
 	assert_ne(instructed_maneuver, baseline_maneuver,
 		"The order must measurably change behavior vs an identical uninstructed pilot")
+
+
+func test_doctrine_authored_before_a_fleet_edit_still_compiles_for_retained_crew():
+	# Author doctrine at Edit Fleet, then change the fleet (reconcile keeps
+	# the first fighter group). The retained crew must still receive the
+	# standing order when the battle compiles their doctrine.
+	RoguelikeRun.start_run({"fighter": 2, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 0, "capital": 0})
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_FLEET, "", CHARGE)
+
+	RoguelikeRun.reconcile_roster_to_counts({"fighter": 1, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 0, "capital": 0})
+
+	var retained = RoguelikeRun.fleet_crew[0].crew[0]
+	var compiled = DoctrineSystem.compile_for_crew(
+		CrewData.reset_for_battle(retained), "fighter", RoguelikeRun.doctrine)
+
+	assert_gt(_doctrine_ids(compiled).size(), 0,
+		"Doctrine authored before a fleet edit must reach the retained crew at battle spawn")

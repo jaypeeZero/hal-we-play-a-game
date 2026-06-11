@@ -356,3 +356,126 @@ func test_run_start_resets_doctrine():
 
 	assert_true(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_FLEET].is_empty(),
 		"Doctrine is run state: a new run starts with no standing instructions")
+
+
+# ROSTER RECONCILE (Edit Fleet adjusts fleet counts mid-setup)
+
+const PILOT_DOCTRINE := "charge_head_on"
+
+
+func _counts(overrides: Dictionary = {}) -> Dictionary:
+	var base := {"fighter": 0, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 0, "capital": 0}
+	for key in overrides:
+		base[key] = overrides[key]
+	return base
+
+
+func _groups_of_type(ship_type: String) -> int:
+	var n := 0
+	for group in RoguelikeRun.fleet_crew:
+		if group.get("ship_type", "") == ship_type:
+			n += 1
+	return n
+
+
+func _roster_has_crew_id(crew_id: String) -> bool:
+	for group in RoguelikeRun.fleet_crew:
+		for member in group.crew:
+			if member.get("crew_id", "") == crew_id:
+				return true
+	return false
+
+
+func test_reconcile_adds_groups_when_a_count_grows():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 3}))
+
+	assert_eq(_groups_of_type("fighter"), 3,
+		"Raising a ship count should add crew groups for the new hulls")
+
+
+func test_reconcile_drops_groups_when_a_count_shrinks():
+	RoguelikeRun.start_run(_counts({"fighter": 3}))
+
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 1}))
+
+	assert_eq(_groups_of_type("fighter"), 1,
+		"Lowering a ship count should drop the surplus crew groups")
+
+
+func test_reconcile_preserves_identity_of_retained_crew():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	var kept_id: String = RoguelikeRun.fleet_crew[0].crew[0].crew_id
+
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 1}))
+
+	assert_true(_roster_has_crew_id(kept_id),
+		"Crew on a retained hull should keep their identity across a fleet edit")
+
+
+func test_reconcile_purges_doctrine_for_dropped_crew():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	var dropped_id: String = RoguelikeRun.fleet_crew[1].crew[0].crew_id
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_CREW, dropped_id, PILOT_DOCTRINE)
+	DoctrineSystem.set_disabled_in_place(
+		RoguelikeRun.doctrine, dropped_id, PILOT_DOCTRINE, true)
+
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 1}))
+
+	assert_false(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CREW].has(dropped_id),
+		"Per-crew doctrine for a removed crew member should be purged")
+	assert_false(RoguelikeRun.doctrine["disabled"].has(dropped_id),
+		"Disable entries for a removed crew member should be purged")
+
+
+func test_reconcile_keeps_fleet_doctrine():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_FLEET, "", PILOT_DOCTRINE)
+
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 1}))
+
+	assert_eq(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_FLEET].size(), 1,
+		"Fleet-wide doctrine should survive a fleet-count edit")
+
+
+func test_reconcile_prunes_class_doctrine_for_an_emptied_type():
+	RoguelikeRun.start_run(_counts({"fighter": 1, "corvette": 1}))
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_CLASS, "corvette", PILOT_DOCTRINE)
+
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 1}))
+
+	assert_false(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CLASS].has("corvette"),
+		"Class doctrine should drop when its ship type is removed from the fleet")
+
+
+func test_reconcile_keeps_class_doctrine_for_a_present_type():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_CLASS, "fighter", PILOT_DOCTRINE)
+
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 1}))
+
+	assert_true(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CLASS].has("fighter"),
+		"Class doctrine should survive while its ship type remains in the fleet")
+
+
+func test_reconcile_keeps_callsigns_unique_after_adding():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 4}))
+
+	var callsigns: Array = []
+	for group in RoguelikeRun.fleet_crew:
+		for member in group.crew:
+			callsigns.append(member.callsign)
+	var unique: Array = []
+	for c in callsigns:
+		if c not in unique:
+			unique.append(c)
+	assert_eq(unique.size(), callsigns.size(),
+		"Crew added by a reconcile must not reuse existing callsigns")

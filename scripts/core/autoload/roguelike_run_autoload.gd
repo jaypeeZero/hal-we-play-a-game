@@ -37,12 +37,17 @@ var last_jump_repair_summary: Dictionary = {}
 ## Matches the battle scene's team-0 crew skill.
 const ROSTER_SKILL_LEVEL := 1.0
 
+## Monotonic source of unique callsigns for the run. Persists across roster
+## reconciles so crew added when the fleet grows never reuse a callsign.
+var _callsign_counter: int = 0
+
 
 func start_run(initial_fleet: Dictionary) -> void:
 	active = true
 	started_first_battle = false
 	fleet = initial_fleet.duplicate(true)
 	fleet_ships = []
+	_callsign_counter = 0
 	fleet_crew = _create_fleet_roster(fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
 	enemy_fleet = FleetDataManager.load_fleet(1)
@@ -64,20 +69,75 @@ func end_run() -> void:
 	pending_battle_node_id = ""
 	current_star_date = STAR_DATE_RUN_START
 	last_jump_repair_summary = {}
+	_callsign_counter = 0
 
 
 func _create_fleet_roster(fleet_counts: Dictionary) -> Array:
 	var roster: Array = []
-	var callsign_index := 0
 	for ship_type in FleetDataManager.SHIP_TYPES:
 		for _i in range(int(fleet_counts.get(ship_type, 0))):
-			var weapon_count: int = ShipData.get_ship_template(ship_type).get("weapons", []).size()
-			var crew: Array = CrewData.create_crew_for_ship_type(ship_type, weapon_count, ROSTER_SKILL_LEVEL)
-			for member in crew:
-				member.callsign = CrewData.callsign_for_index(callsign_index)
-				callsign_index += 1
-			roster.append({"ship_type": ship_type, "crew": crew})
+			roster.append(_make_crew_group(ship_type))
 	return roster
+
+
+## Create one crew group (a hull's worth of crew) for a ship type, drawing
+## unique callsigns from the run's monotonic counter. Shared by initial
+## roster creation and reconcile so both produce identical crew.
+func _make_crew_group(ship_type: String) -> Dictionary:
+	var weapon_count: int = ShipData.get_ship_template(ship_type).get("weapons", []).size()
+	var crew: Array = CrewData.create_crew_for_ship_type(ship_type, weapon_count, ROSTER_SKILL_LEVEL)
+	for member in crew:
+		member.callsign = CrewData.callsign_for_index(_callsign_counter)
+		_callsign_counter += 1
+	return {"ship_type": ship_type, "crew": crew}
+
+
+## Rebuild the crew roster to match new fleet counts while preserving the
+## identity (crew_id, callsign, skills, known_patterns) of crew on ships
+## that remain. Existing groups of each type are kept in order up to the
+## new count; surplus counts spawn fresh groups, shortfalls drop trailing
+## groups. Doctrine is reconciled: per-crew and disabled entries for
+## dropped crew are purged and class doctrine for types reduced to zero is
+## removed; fleet doctrine is untouched. Used by the Edit Fleet screen so
+## fleet edits mid-setup keep the doctrine already authored for survivors.
+func reconcile_roster_to_counts(new_counts: Dictionary) -> void:
+	var existing_by_type := {}
+	for group in fleet_crew:
+		var t: String = group.get("ship_type", "")
+		if not existing_by_type.has(t):
+			existing_by_type[t] = []
+		existing_by_type[t].append(group)
+
+	var new_roster: Array = []
+	var dropped_crew_ids: Array = []
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		var desired: int = int(new_counts.get(ship_type, 0))
+		var existing: Array = existing_by_type.get(ship_type, [])
+		for i in range(desired):
+			if i < existing.size():
+				new_roster.append(existing[i])
+			else:
+				new_roster.append(_make_crew_group(ship_type))
+		for i in range(desired, existing.size()):
+			for member in existing[i].get("crew", []):
+				dropped_crew_ids.append(member.get("crew_id", ""))
+
+	fleet_crew = new_roster
+	fleet = {}
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		fleet[ship_type] = int(new_counts.get(ship_type, 0))
+
+	_prune_doctrine_for_roster(dropped_crew_ids, new_counts)
+
+
+## Drop doctrine that no longer has a referent after a roster change.
+func _prune_doctrine_for_roster(dropped_crew_ids: Array, new_counts: Dictionary) -> void:
+	for crew_id in dropped_crew_ids:
+		doctrine[DoctrineSystem.SCOPE_CREW].erase(crew_id)
+		doctrine["disabled"].erase(crew_id)
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		if int(new_counts.get(ship_type, 0)) == 0:
+			doctrine[DoctrineSystem.SCOPE_CLASS].erase(ship_type)
 
 
 func update_fleet_after_battle(surviving_ships: Array, surviving_crew: Array = []) -> void:

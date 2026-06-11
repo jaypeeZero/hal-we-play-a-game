@@ -32,6 +32,9 @@ const KIND_HULL := "hull"
 var _entries: Array = []
 var _entry_to_group: Dictionary = {}
 var _ship_options: Array = []
+## True on the Edit Fleet screen: the panel is laid out by its parent
+## container (not floated top-right) and has no battle map to sync with.
+var _embedded: bool = false
 
 var _ship_dropdown: OptionButton
 var _crew_dropdown: OptionButton
@@ -46,6 +49,26 @@ func setup(entries: Array) -> void:
 	_entry_to_group = DoctrineSystem.map_entries_to_crew_groups(entries, RoguelikeRun.fleet_crew)
 	_build_ui()
 	_populate_ship_dropdown()
+	_on_ship_selected(0)
+
+
+## Map-less setup for the Edit Fleet screen: builds the panel straight from
+## the current crew roster, with no battle plan and no map sync. Every crew
+## group is offered as a hull so per-crew doctrine stays editable.
+func setup_from_roster() -> void:
+	_embedded = true
+	_entries = []
+	_entry_to_group = {}
+	_build_ui()
+	_populate_ship_dropdown()
+	_on_ship_selected(0)
+
+
+## Re-sync the panel to the current roster after a fleet reconcile.
+func refresh_roster() -> void:
+	_ship_dropdown.clear()
+	_populate_ship_dropdown()
+	_ship_dropdown.select(0)
 	_on_ship_selected(0)
 
 
@@ -65,11 +88,16 @@ func sync_to_entry(entry_index: int) -> void:
 # ============================================================================
 
 func _build_ui() -> void:
-	anchor_left = 1.0
-	anchor_right = 1.0
-	offset_left = -(PANEL_WIDTH + PANEL_MARGIN)
-	offset_right = -PANEL_MARGIN
-	offset_top = PANEL_MARGIN
+	if _embedded:
+		# Laid out by the parent container; just reserve the panel's width.
+		custom_minimum_size = Vector2(PANEL_WIDTH, 0)
+	else:
+		# Float over the pre-battle map at top-right.
+		anchor_left = 1.0
+		anchor_right = 1.0
+		offset_left = -(PANEL_WIDTH + PANEL_MARGIN)
+		offset_right = -PANEL_MARGIN
+		offset_top = PANEL_MARGIN
 
 	var box := VBoxContainer.new()
 	add_child(box)
@@ -121,17 +149,31 @@ func _populate_ship_dropdown() -> void:
 		_ship_dropdown.add_item("All %ss" % _type_label(ship_type))
 
 	var count_by_type := {}
-	for entry_index in _entry_to_group:
-		var group_index: int = _entry_to_group[entry_index]
+	for pair in _hull_group_pairs():
+		var group_index: int = pair.group_index
 		var group: Dictionary = RoguelikeRun.fleet_crew[group_index]
 		var n: int = count_by_type.get(group.ship_type, 0) + 1
 		count_by_type[group.ship_type] = n
 		_ship_options.append({
 			"kind": KIND_HULL, "ship_type": group.ship_type,
-			"group_index": group_index, "entry_index": entry_index,
+			"group_index": group_index, "entry_index": pair.entry_index,
 		})
 		var lead: Dictionary = group.crew[0] if group.crew.size() > 0 else {}
 		_ship_dropdown.add_item("%s %d — %s" % [_type_label(group.ship_type), n, lead.get("callsign", "?")])
+
+
+## Hull dropdown source as {group_index, entry_index} pairs. In roster mode
+## every crew group is a hull with no battle-plan entry (-1); with a battle
+## plan, entries map to groups (and carry the index used for map sync).
+func _hull_group_pairs() -> Array:
+	var pairs: Array = []
+	if _embedded:
+		for g in range(RoguelikeRun.fleet_crew.size()):
+			pairs.append({"group_index": g, "entry_index": -1})
+	else:
+		for entry_index in _entry_to_group:
+			pairs.append({"group_index": _entry_to_group[entry_index], "entry_index": entry_index})
+	return pairs
 
 
 func _type_label(ship_type: String) -> String:
@@ -171,7 +213,8 @@ func _current_scope() -> Dictionary:
 func _on_ship_selected(index: int) -> void:
 	_refresh_for_ship_option(index)
 	var option := _current_ship_option()
-	if option.get("kind", "") == KIND_HULL:
+	# No map to sync in roster mode: hull options there carry entry_index -1.
+	if option.get("kind", "") == KIND_HULL and option.get("entry_index", -1) >= 0:
 		hull_selected.emit(option.entry_index)
 
 

@@ -114,3 +114,63 @@ func test_remove_clears_the_instruction_at_the_edited_scope():
 
 	assert_true(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_FLEET].is_empty(),
 		"Remove should clear the instruction from the edited scope")
+
+
+# ROSTER MODE (Edit Fleet screen — no battle plan, no map)
+
+func _make_roster_panel() -> DoctrinePanel:
+	var panel = DoctrinePanel.new()
+	add_child_autofree(panel)
+	panel.setup_from_roster()
+	return panel
+
+
+func test_roster_mode_offers_a_hull_per_crew_group():
+	var panel = _make_roster_panel()
+
+	var hull_count := 0
+	for option in panel._ship_options:
+		if option.kind == DoctrinePanel.KIND_HULL:
+			hull_count += 1
+	assert_eq(hull_count, RoguelikeRun.fleet_crew.size(),
+		"Roster mode should offer every crew group as a hull, with no battle plan")
+
+
+func test_roster_mode_hull_selection_does_not_emit_a_map_signal():
+	var panel = _make_roster_panel()
+	watch_signals(panel)
+
+	panel._ship_dropdown.select(FIRST_HULL_OPTION)
+	panel._on_ship_selected(FIRST_HULL_OPTION)
+
+	assert_signal_not_emitted(panel, "hull_selected",
+		"There is no map at Edit Fleet, so selecting a hull must not emit hull_selected")
+
+
+func test_roster_mode_add_with_hull_selected_writes_crew_doctrine():
+	var panel = _make_roster_panel()
+	panel._ship_dropdown.select(FIRST_HULL_OPTION)
+	panel._on_ship_selected(FIRST_HULL_OPTION)
+	var member = panel._current_crew_member()
+	assert_false(member.is_empty(), "Hull selection should expose its crew")
+
+	panel._on_add_pressed()
+
+	assert_true(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CREW].has(member.crew_id),
+		"Per-crew doctrine should be editable at Edit Fleet via the crew dropdown")
+
+
+func test_refresh_roster_tracks_added_hulls():
+	var panel = _make_roster_panel()
+	var before := RoguelikeRun.fleet_crew.size()
+
+	RoguelikeRun.reconcile_roster_to_counts({"fighter": before + 2,
+		"heavy_fighter": 0, "torpedo_boat": 0, "corvette": 0, "capital": 0})
+	panel.refresh_roster()
+
+	var hull_count := 0
+	for option in panel._ship_options:
+		if option.kind == DoctrinePanel.KIND_HULL:
+			hull_count += 1
+	assert_eq(hull_count, before + 2,
+		"After a reconcile, refreshing the panel should show the new hulls")

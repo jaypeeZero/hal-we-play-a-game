@@ -15,10 +15,20 @@ extends Control
 @onready var _team1_capital: SpinBox = %Team1CapitalSpinBox
 
 @onready var _status_label: Label = %StatusLabel
+@onready var _crew_tactics_holder: Control = %CrewTacticsHolder
+
+var _doctrine_panel: DoctrinePanel = null
 
 
 func _ready() -> void:
 	_load_fleet_data()
+	# Crew Tactics (doctrine) is run state: only show it during a Roguelike
+	# run, where the crew roster and doctrine already exist.
+	_crew_tactics_holder.visible = RoguelikeRun.active
+	if RoguelikeRun.active:
+		_doctrine_panel = DoctrinePanel.new()
+		_crew_tactics_holder.add_child(_doctrine_panel)
+		_doctrine_panel.setup_from_roster()
 
 
 func _load_fleet_data() -> void:
@@ -68,6 +78,13 @@ func _on_save_pressed() -> void:
 	if team0_saved and team1_saved:
 		_status_label.text = "Fleets saved successfully!"
 		_status_label.modulate = Color.GREEN
+		# In a run, rebuild the crew roster to match the new counts (keeping
+		# doctrine for surviving crew) and re-sync the Crew Tactics panel.
+		if RoguelikeRun.active:
+			RoguelikeRun.reconcile_roster_to_counts(team0_fleet)
+			RoguelikeRun.enemy_fleet = team1_fleet
+			if _doctrine_panel != null:
+				_doctrine_panel.refresh_roster()
 	else:
 		_status_label.text = "Error saving fleets!"
 		_status_label.modulate = Color.RED

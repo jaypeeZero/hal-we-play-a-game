@@ -1,70 +1,4 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "lean-ctx hook observe",
-            "type": "command"
-          }
-        ],
-        "matcher": ".*"
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "command": "lean-ctx hook observe",
-            "type": "command"
-          }
-        ],
-        "matcher": ".*"
-      }
-    ],
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "command": "lean-ctx hook rewrite",
-            "type": "command"
-          }
-        ],
-        "matcher": "Bash|bash"
-      },
-      {
-        "hooks": [
-          {
-            "command": "lean-ctx hook redirect",
-            "type": "command"
-          }
-        ],
-        "matcher": "Read|read|ReadFile|read_file|View|view|Grep|grep|Search|search|ListFiles|list_files|ListDirectory|list_directory"
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "command": "lean-ctx hook observe",
-            "type": "command"
-          }
-        ],
-        "matcher": ".*"
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "command": "lean-ctx hook observe",
-            "type": "command"
-          }
-        ],
-        "matcher": ".*"
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(./test.sh:*)",
@@ -75,9 +9,76 @@
       "Bash(grep:*)",
       "Bash(done)",
       "Bash(git log *)",
-      "Bash(godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gexit)"
+      "Bash(godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gexit)",
+      "mcp__lean-ctx__ctx_edit"
     ],
-    "ask": [],
-    "deny": []
+    "deny": [],
+    "ask": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lean-ctx hook observe"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lean-ctx hook observe"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lean-ctx hook rewrite"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|read|ReadFile|read_file|View|view|Grep|grep|Search|search|ListFiles|list_files|ListDirectory|list_directory",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lean-ctx hook redirect"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lean-ctx hook observe"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lean-ctx hook observe"
+          }
+        ]
+      }
+    ]
   }
 }

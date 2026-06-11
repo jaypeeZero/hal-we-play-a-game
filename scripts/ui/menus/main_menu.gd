@@ -10,6 +10,9 @@ func _on_edit_fleets_pressed() -> void:
 
 
 func _on_roguelite_pressed() -> void:
+	# Entering Roguelike mode starts the run, so crew and doctrine exist for
+	# the Edit Fleet / Fleet Management screens before the first battle.
+	RoguelikeRun.start_run(FleetDataManager.load_fleet(0))
 	get_tree().change_scene_to_file("res://scenes/fleet_management.tscn")
 
 
