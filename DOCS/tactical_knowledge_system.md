@@ -53,13 +53,17 @@ Increments success or failure counter for the tactic. Tactic ID format: `"{type}
 
 **Location**: `scripts/space/systems/tactical_knowledge_system.gd`
 
-**Function**: `query_knowledge(situation: String, role: int, top_k: int = 3) -> Array`
+**Function**: `query_knowledge(situation: String, role: int, top_k: int = 3, known_patterns: Array = []) -> Array`
+
+`known_patterns` restricts retrieval to the pattern ids a specific crew member knows; an empty array means the full role baseline (doctrine from the JSON files only — player-authored patterns are never part of the baseline).
 
 Performs BM25-style text matching:
 
 ```
 score = (matching_terms / total_query_terms) + (0.2 * matching_tags)
 ```
+
+Player-authored patterns (standing instructions, registered with `player_priority`) additionally receive `PLAYER_INSTRUCTION_SCORE_BONUS` when — and only when — their base score is above zero: a relevant instruction always outranks doctrine, an irrelevant one stays silent.
 
 Returns array of dictionaries:
 ```gdscript
@@ -72,13 +76,19 @@ Returns array of dictionaries:
 ```
 
 **Role-specific convenience functions**:
-- `query_pilot_knowledge(situation, top_k)`
-- `query_gunner_knowledge(situation, top_k)`
-- `query_captain_knowledge(situation, top_k)`
-- `query_squadron_knowledge(situation, top_k)`
-- `query_commander_knowledge(situation, top_k)`
+- `query_pilot_knowledge(situation, top_k, known_patterns)`
+- `query_gunner_knowledge(situation, top_k, known_patterns)`
+- `query_captain_knowledge(situation, top_k, known_patterns)`
+- `query_squadron_knowledge(situation, top_k, known_patterns)`
+- `query_commander_knowledge(situation, top_k, known_patterns)`
 
-**Cache**: Results cached by `"{situation}_{role}_{top_k}"` key. Cache cleared when size exceeds 50 entries.
+**Cache**: Results cached by `"{situation}_{role}_{top_k}_{known_patterns.hash()}"` key. Cache cleared when size exceeds 50 entries.
+
+### DoctrineSystem
+
+**Location**: `scripts/space/systems/doctrine_system.gd` — full feature documentation in [fleet_doctrine.md](fleet_doctrine.md)
+
+Player standing instructions for the roguelike run (plan 06). Players pick parameterized templates from `data/instruction_templates.json` (never authoring pattern text) and assign them at fleet, ship-class, or individual-crew scope; the doctrine lives on `RoguelikeRun.doctrine` and is edited via the `DoctrinePanel` dropdowns on the pre-battle positioning screen. At battle spawn `compile_for_crew()` resolves scopes (individual > class > fleet per template, per-crew disables honored), instantiates each template into a normal pattern, registers it with the `player_priority` flag (namespaced `doctrine__{crew_id}__{template_id}`), and adds it to the crew member's `known_patterns` — expanding an empty set to the explicit role baseline first (player-priority patterns excluded) so standing orders extend role doctrine rather than replace it. Previously compiled doctrine ids are stripped on every compile, so instructions removed between battles do not linger.
 
 ## Knowledge Entry Format
 

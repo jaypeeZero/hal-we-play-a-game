@@ -15,6 +15,16 @@ var active: bool = false
 var started_first_battle: bool = false
 var fleet: Dictionary = {}
 var fleet_ships: Array = []
+## The run's crew roster, grouped by the hull type they crew:
+## [{"ship_type": String, "crew": Array of crew dicts}]. Created at run
+## start so crew are addressable (doctrine, pre-battle UI) before the
+## first battle; each battle binds groups to hulls of the same type and
+## battle end re-saves the survivors, so crew identity (crew_id,
+## callsign, skills, known_patterns) persists across the run.
+var fleet_crew: Array = []
+## Player standing instructions for this run (see DoctrineSystem).
+## Run state: reset at run start, wiped at run end.
+var doctrine: Dictionary = DoctrineSystem.empty_doctrine()
 var enemy_fleet: Dictionary = {}
 var map_state: Dictionary = {}
 var pending_battle_node_id: String = ""
@@ -24,12 +34,17 @@ var current_star_date: int = STAR_DATE_RUN_START
 ## happened on the way into a battle once the player returns to the map.
 var last_jump_repair_summary: Dictionary = {}
 
+## Matches the battle scene's team-0 crew skill.
+const ROSTER_SKILL_LEVEL := 1.0
+
 
 func start_run(initial_fleet: Dictionary) -> void:
 	active = true
 	started_first_battle = false
 	fleet = initial_fleet.duplicate(true)
 	fleet_ships = []
+	fleet_crew = _create_fleet_roster(fleet)
+	doctrine = DoctrineSystem.empty_doctrine()
 	enemy_fleet = FleetDataManager.load_fleet(1)
 	map_state = {}
 	pending_battle_node_id = ""
@@ -42,6 +57,8 @@ func end_run() -> void:
 	started_first_battle = false
 	fleet = {}
 	fleet_ships = []
+	fleet_crew = []
+	doctrine = DoctrineSystem.empty_doctrine()
 	enemy_fleet = {}
 	map_state = {}
 	pending_battle_node_id = ""
@@ -49,8 +66,23 @@ func end_run() -> void:
 	last_jump_repair_summary = {}
 
 
-func update_fleet_after_battle(surviving_ships: Array) -> void:
+func _create_fleet_roster(fleet_counts: Dictionary) -> Array:
+	var roster: Array = []
+	var callsign_index := 0
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		for _i in range(int(fleet_counts.get(ship_type, 0))):
+			var weapon_count: int = ShipData.get_ship_template(ship_type).get("weapons", []).size()
+			var crew: Array = CrewData.create_crew_for_ship_type(ship_type, weapon_count, ROSTER_SKILL_LEVEL)
+			for member in crew:
+				member.callsign = CrewData.callsign_for_index(callsign_index)
+				callsign_index += 1
+			roster.append({"ship_type": ship_type, "crew": crew})
+	return roster
+
+
+func update_fleet_after_battle(surviving_ships: Array, surviving_crew: Array = []) -> void:
 	fleet_ships = surviving_ships.duplicate(true)
+	fleet_crew = surviving_crew.duplicate(true)
 	fleet = {}
 	for ship_type in FleetDataManager.SHIP_TYPES:
 		fleet[ship_type] = 0
@@ -58,6 +90,17 @@ func update_fleet_after_battle(surviving_ships: Array) -> void:
 		var t: String = ship.get("type", "")
 		if fleet.has(t):
 			fleet[t] += 1
+
+
+## Take the saved crew group for a hull of this type (first match wins,
+## mirroring how _apply_roguelike_damage_states matches ships by type).
+## Empty array if no saved crew remain for the type.
+func take_saved_crew(ship_type: String) -> Array:
+	for i in range(fleet_crew.size()):
+		if fleet_crew[i].get("ship_type", "") == ship_type:
+			var group: Dictionary = fleet_crew.pop_at(i)
+			return group.get("crew", [])
+	return []
 
 
 func is_fleet_empty() -> bool:

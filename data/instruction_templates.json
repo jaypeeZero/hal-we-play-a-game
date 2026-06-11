@@ -1,0 +1,87 @@
+{
+	"templates": {
+		"charge_head_on": {
+			"name": "Charge head-on",
+			"description": "Close at full speed instead of maneuvering for position.",
+			"role": "pilot",
+			"params": {},
+			"pattern": {
+				"tags": ["fighter", "approach", "mid", "far", "aggressive"],
+				"text": "fighter mid far range approach flank behind position tactical engage charge straight pursue",
+				"content": {
+					"context": "Standing order: charge head-on, no positioning play",
+					"maneuvers": ["fight_pursue_full_speed"],
+					"skill_requirements": {"fight_pursue_full_speed": 0.0},
+					"priority": "standing_order"
+				}
+			}
+		},
+		"flank_attack_runs": {
+			"name": "Flank attack runs",
+			"description": "Work behind the target before committing to an attack.",
+			"role": "pilot",
+			"params": {},
+			"pattern": {
+				"tags": ["fighter", "flank", "mid", "positioning"],
+				"text": "fighter mid range approach engage position tactical flank behind angle attack run",
+				"content": {
+					"context": "Standing order: attack from behind, never head-on",
+					"maneuvers": ["fight_flank_behind", "fight_pursue_tactical"],
+					"skill_requirements": {"fight_flank_behind": 0.6, "fight_pursue_tactical": 0.3},
+					"priority": "standing_order"
+				}
+			}
+		},
+		"keep_clear_of": {
+			"name": "Keep clear of {target_class}s",
+			"description": "Break away rather than engage near this ship class.",
+			"role": "pilot",
+			"params": {
+				"target_class": {"options": ["capital", "corvette"], "default": "capital"}
+			},
+			"pattern": {
+				"tags": ["fighter", "{target_class}", "retreat", "evade", "close"],
+				"text": "fighter {target_class} close mid range retreat evade danger escape keep distance",
+				"content": {
+					"context": "Standing order: keep clear of {target_class}s",
+					"maneuvers": ["fight_evasive_retreat"],
+					"skill_requirements": {"fight_evasive_retreat": 0.0},
+					"priority": "standing_order"
+				}
+			}
+		},
+		"cautious_engagement": {
+			"name": "Cautious engagement",
+			"description": "Probe carefully and keep an escape line open.",
+			"role": "pilot",
+			"params": {},
+			"pattern": {
+				"tags": ["fighter", "approach", "far", "cautious"],
+				"text": "fighter far mid range approach engage cautious careful weave dodge",
+				"content": {
+					"context": "Standing order: engage cautiously",
+					"maneuvers": ["fight_cautious_approach", "fight_dodge_and_weave"],
+					"skill_requirements": {"fight_cautious_approach": 0.0, "fight_dodge_and_weave": 0.3},
+					"priority": "standing_order"
+				}
+			}
+		},
+		"finish_damaged_targets": {
+			"name": "Finish damaged targets",
+			"description": "Always shoot the most damaged enemy in range first.",
+			"role": "gunner",
+			"params": {},
+			"pattern": {
+				"tags": ["gunnery", "targeting", "priority", "damaged"],
+				"text": "target priority damaged disabled weak threat select finish",
+				"content": {
+					"action": "fire",
+					"priority_order": ["damaged_enemies", "close_threats", "high_value"],
+					"reasoning": "finish_weak_first",
+					"subtype": "precision_shot",
+					"priority": "standing_order"
+				}
+			}
+		}
+	}
+}

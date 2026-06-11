@@ -748,7 +748,7 @@ func _end_game(winner: int) -> void:
 
 
 func _handle_roguelike_battle_end() -> void:
-	RoguelikeRun.update_fleet_after_battle(_get_surviving_player_ships())
+	RoguelikeRun.update_fleet_after_battle(_get_surviving_player_ships(), _get_surviving_player_crew())
 
 	var next_scene: String
 	if RoguelikeRun.is_fleet_empty():
@@ -777,6 +777,26 @@ func _get_surviving_player_ships() -> Array:
 			.map(func(c): return c.duplicate(true))
 		survivors.append(survivor)
 	return survivors
+
+
+## Surviving player crew grouped by the ship they crewed, in the shape
+## RoguelikeRun.fleet_crew stores (see take_saved_crew).
+func _get_surviving_player_crew() -> Array:
+	var groups: Array = []
+	for ship in _ships:
+		if ship == null or ship.is_empty():
+			continue
+		if ship.get("team", -1) != 0:
+			continue
+		if ship.get("status", "") == "destroyed":
+			continue
+		var members: Array = []
+		for crew in _crew_list:
+			if crew.assigned_to == ship.ship_id:
+				members.append(crew.duplicate(true))
+		if not members.is_empty():
+			groups.append({"ship_type": ship.get("type", ""), "crew": members})
+	return groups
 
 # ============================================================================
 # PUBLIC API (for testing)
@@ -1013,19 +1033,22 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int) -> voi
 	var weapon_count = ship_data.weapons.size() if not ship_data.is_empty() else 1
 	var new_crew = []
 
-	match ship_type:
-		"fighter":
-			# Solo pilot for fighters
-			new_crew = CrewData.create_solo_fighter_crew(base_skill)
-		"heavy_fighter":
-			# Pilot + gunner for heavy fighters (rear turret defense)
-			new_crew = CrewData.create_heavy_fighter_crew(base_skill)
-		"torpedo_boat":
-			# Pilot + torpedo operator for torpedo boats
-			new_crew = CrewData.create_torpedo_boat_crew(base_skill)
-		"corvette", "capital":
-			# Captain + pilot + gunners based on actual weapon count, plus engineers
-			new_crew = CrewData.create_ship_crew(weapon_count, base_skill, CrewData.roll_engineer_count(ship_type))
+	# In a roguelike run, the player's crew roster persists: bind the next
+	# saved group for this hull type before creating anyone new. Binding
+	# is in entry order — DoctrineSystem.map_entries_to_crew_groups relies
+	# on this contract.
+	if team == 0 and RoguelikeRun.active:
+		for saved_member in RoguelikeRun.take_saved_crew(ship_type):
+			new_crew.append(CrewData.reset_for_battle(saved_member))
+
+	if new_crew.is_empty():
+		new_crew = CrewData.create_crew_for_ship_type(ship_type, weapon_count, base_skill)
+
+	# Compile the run's doctrine (player standing instructions) into each
+	# crew member's knowledge set.
+	if team == 0 and RoguelikeRun.active:
+		for i in range(new_crew.size()):
+			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, RoguelikeRun.doctrine)
 
 	# Assign crew to ship and add to index
 	for crew_member in new_crew:

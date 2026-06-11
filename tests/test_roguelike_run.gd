@@ -5,6 +5,8 @@ extends GutTest
 
 var _saved_fleet: Dictionary
 var _saved_fleet_ships: Array
+var _saved_fleet_crew: Array
+var _saved_doctrine: Dictionary
 var _saved_enemy_fleet: Dictionary
 var _saved_active: bool
 var _saved_started_first_battle: bool
@@ -15,6 +17,8 @@ var _saved_repair_summary: Dictionary
 func before_each() -> void:
 	_saved_fleet = RoguelikeRun.fleet.duplicate(true)
 	_saved_fleet_ships = RoguelikeRun.fleet_ships.duplicate(true)
+	_saved_fleet_crew = RoguelikeRun.fleet_crew.duplicate(true)
+	_saved_doctrine = RoguelikeRun.doctrine.duplicate(true)
 	_saved_enemy_fleet = RoguelikeRun.enemy_fleet.duplicate(true)
 	_saved_active = RoguelikeRun.active
 	_saved_started_first_battle = RoguelikeRun.started_first_battle
@@ -25,6 +29,8 @@ func before_each() -> void:
 func after_each() -> void:
 	RoguelikeRun.fleet = _saved_fleet
 	RoguelikeRun.fleet_ships = _saved_fleet_ships
+	RoguelikeRun.fleet_crew = _saved_fleet_crew
+	RoguelikeRun.doctrine = _saved_doctrine
 	RoguelikeRun.enemy_fleet = _saved_enemy_fleet
 	RoguelikeRun.active = _saved_active
 	RoguelikeRun.started_first_battle = _saved_started_first_battle
@@ -308,3 +314,45 @@ func test_fleet_ships_empty_at_run_start():
 
 	assert_true(RoguelikeRun.fleet_ships.is_empty(),
 		"fleet_ships should be empty at the start of a new run (first battle spawns fresh ships)")
+
+
+# ============================================================================
+# CREW ROSTER
+# ============================================================================
+
+func test_run_start_creates_a_crew_group_per_hull():
+	RoguelikeRun.start_run({"fighter": 2, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 1, "capital": 0})
+
+	assert_eq(RoguelikeRun.fleet_crew.size(), 3,
+		"Each hull in the starting fleet should get a crew group at run start")
+	var types: Array = []
+	for group in RoguelikeRun.fleet_crew:
+		types.append(group.ship_type)
+		assert_gt(group.crew.size(), 0, "Every crew group should have members")
+	assert_eq(types.count("fighter"), 2, "Two fighter crews expected")
+	assert_eq(types.count("corvette"), 1, "One corvette crew expected")
+
+
+func test_roster_crew_have_callsigns():
+	RoguelikeRun.start_run({"fighter": 2, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 0, "capital": 0})
+
+	var callsigns: Array = []
+	for group in RoguelikeRun.fleet_crew:
+		for member in group.crew:
+			assert_true(member.has("callsign"), "Roster crew need a player-facing callsign")
+			callsigns.append(member.callsign)
+	assert_eq(callsigns.size(), 2, "One pilot per fighter")
+	assert_ne(callsigns[0], callsigns[1], "Callsigns should be distinct")
+
+
+func test_run_start_resets_doctrine():
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_FLEET, "", "charge_head_on")
+
+	RoguelikeRun.start_run({"fighter": 1, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 0, "capital": 0})
+
+	assert_true(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_FLEET].is_empty(),
+		"Doctrine is run state: a new run starts with no standing instructions")

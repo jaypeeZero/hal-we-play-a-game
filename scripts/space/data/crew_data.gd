@@ -6,6 +6,19 @@ extends RefCounted
 
 static var _next_crew_id: int = 0
 
+## Callsign pool for roster crew identity; cycles with a numeric suffix
+## once exhausted ("Dash", ..., "Dash 2", ...).
+const CALLSIGN_POOL := [
+	"Dash", "Echo", "Frost", "Hawk", "Iris", "Jinx", "Koda", "Lark",
+	"Moss", "Nova", "Onyx", "Pike", "Quill", "Rook", "Sable", "Tarn",
+	"Umber", "Vesper", "Wren", "Zephyr",
+]
+
+static func callsign_for_index(index: int) -> String:
+	var cycle: int = index / CALLSIGN_POOL.size()
+	var name: String = CALLSIGN_POOL[index % CALLSIGN_POOL.size()]
+	return name if cycle == 0 else "%s %d" % [name, cycle + 1]
+
 ## Crew roles in command hierarchy
 enum Role {
 	PILOT,        # Flies the ship, responds to immediate threats
@@ -312,6 +325,37 @@ static func create_squadron(ship_count: int, weapons_per_ship: int, skill_level:
 		all_crew.append_array(ship_crew)
 
 	return all_crew
+
+## Rebuild a saved crew member for a new battle. Persistent identity —
+## crew_id, callsign, stats/skills, known_patterns, command chain —
+## carries over; per-battle state (awareness, combat_state, orders,
+## decision timing) starts fresh, and stress/fatigue recover between
+## battles.
+static func reset_for_battle(saved: Dictionary) -> Dictionary:
+	var fresh = create_crew_member(saved.get("role", Role.PILOT))
+	fresh.crew_id = saved.get("crew_id", fresh.crew_id)
+	if saved.has("callsign"):
+		fresh.callsign = saved.callsign
+	fresh.stats = saved.get("stats", fresh.stats).duplicate(true)
+	fresh.stats.stress = 0.0
+	fresh.stats.fatigue = 0.0
+	fresh.known_patterns = saved.get("known_patterns", []).duplicate()
+	fresh.command_chain = saved.get("command_chain", fresh.command_chain).duplicate(true)
+	return fresh
+
+## Create the crew complement for one hull of the given ship type.
+static func create_crew_for_ship_type(ship_type: String, weapon_count: int, skill_level: float) -> Array:
+	match ship_type:
+		"fighter":
+			return create_solo_fighter_crew(skill_level)
+		"heavy_fighter":
+			return create_heavy_fighter_crew(skill_level)
+		"torpedo_boat":
+			return create_torpedo_boat_crew(skill_level)
+		"corvette", "capital":
+			return create_ship_crew(weapon_count, skill_level, roll_engineer_count(ship_type))
+		_:
+			return []
 
 ## Assign crew member to entity (ship, weapon, etc.)
 static func assign_crew_to_entity(crew_data: Dictionary, entity_id: String) -> Dictionary:
