@@ -58,10 +58,11 @@ func _ensure_action(action_name: String, key: int) -> void:
 		InputMap.action_add_event(action_name, event)
 
 func _process(delta: float) -> void:
-	# Handle input
-	_handle_zoom_input()
-	_handle_pan_input(delta)
-	_handle_reset_input()
+	# Handle input, unless the log console has captured the keyboard.
+	if not LogConsole.capturing_input:
+		_handle_zoom_input()
+		_handle_pan_input(delta)
+		_handle_reset_input()
 
 	# Smooth interpolation
 	zoom = zoom.lerp(_target_zoom, SMOOTH_SPEED * delta)

@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://b2xq8v9k3space"]
+[gd_scene load_steps=4 format=3 uid="uid://b2xq8v9k3space"]
 
 [ext_resource type="Script" path="res://scripts/space/space_battle_game.gd" id="1_space_game"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
+[ext_resource type="PackedScene" path="res://scenes/log_console.tscn" id="3_log_console"]
 
 [node name="SpaceBattle" type="Control"]
 layout_mode = 3
@@ -40,6 +41,10 @@ WASD - Pan camera
 -/+ - Zoom out/in
 / - Reset camera
 
+Console:
+~ - Toggle log console
+/ - Filter logs (while open)
+
 After pressing a spawn key, click to place ships."
 
 [node name="StatusText" type="Label" parent="UI"]
@@ -71,3 +76,5 @@ Ship Types:
 Teams:
   Blue tint = Player (Team 0)
   Red tint = Enemy (Team 1)"
+
+[node name="LogConsole" parent="UI" instance=ExtResource("3_log_console")]
