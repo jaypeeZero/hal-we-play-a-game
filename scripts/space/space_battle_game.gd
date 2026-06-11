@@ -393,6 +393,10 @@ func _sync_all_entities() -> void:
 # ============================================================================
 
 func _input(event: InputEvent) -> void:
+	# Ignore gameplay input while the log console has captured the keyboard.
+	if LogConsole.capturing_input:
+		return
+
 	# Ship spawn requests
 	if event.is_action_pressed("spawn_fighter"):
 		_request_squadron_spawn("fighter", 0)  # Spawn squadron of 6 fighters
