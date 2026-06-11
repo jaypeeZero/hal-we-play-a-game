@@ -93,12 +93,3 @@ static func _validate_fleet_data(data: Dictionary) -> Dictionary:
 static func fleet_exists(team: int) -> bool:
 	var file_path := TEAM_0_FILE if team == 0 else TEAM_1_FILE
 	return FileAccess.file_exists(file_path)
-
-
-## Get the total ship count for a fleet
-static func get_fleet_ship_count(fleet_data: Dictionary) -> int:
-	var total := 0
-	for ship_type in SHIP_TYPES:
-		if fleet_data.has(ship_type):
-			total += fleet_data[ship_type]
-	return total

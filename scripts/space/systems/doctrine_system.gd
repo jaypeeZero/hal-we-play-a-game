@@ -290,29 +290,21 @@ static func instruction_display_name(template_id: String, params: Dictionary = {
 	return _substitute(template.get("name", template_id), filled)
 
 
-## Map team-0 battle-plan entry indices to roster group indices in
-## RoguelikeRun.fleet_crew. Contract with the battle scene: entries are
-## spawned in order and take_saved_crew() pops the first remaining group
-## of the matching type, so the n-th entry of a type gets the n-th group
-## of that type.
-static func map_entries_to_crew_groups(entries: Array, fleet_crew: Array) -> Dictionary:
-	var groups_by_type := {}
-	for g in range(fleet_crew.size()):
-		var t: String = fleet_crew[g].get("ship_type", "")
-		if not groups_by_type.has(t):
-			groups_by_type[t] = []
-		groups_by_type[t].append(g)
+## Map team-0 battle-plan entry indices to hull indices in
+## RoguelikeRun.fleet_hulls, matched by the entry's hull_id (assigned by
+## BattlePlanner.assign_hull_ids). Entries without a hull_id (or for a hull
+## no longer present) are left unmapped.
+static func map_entries_to_hulls(entries: Array, fleet_hulls: Array) -> Dictionary:
+	var index_by_id := {}
+	for h in range(fleet_hulls.size()):
+		index_by_id[fleet_hulls[h].get("hull_id", "")] = h
 
-	var taken := {}
 	var mapping := {}
 	for i in range(entries.size()):
 		var entry: Dictionary = entries[i]
 		if int(entry.get("team", -1)) != 0:
 			continue
-		var t: String = entry.get("ship_type", "")
-		var n: int = taken.get(t, 0)
-		var group_indices: Array = groups_by_type.get(t, [])
-		if n < group_indices.size():
-			mapping[i] = group_indices[n]
-		taken[t] = n + 1
+		var hull_id: String = entry.get("hull_id", "")
+		if index_by_id.has(hull_id):
+			mapping[i] = index_by_id[hull_id]
 	return mapping

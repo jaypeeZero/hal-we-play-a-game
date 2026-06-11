@@ -11,21 +11,30 @@ const STAR_DATE_RUN_START = 2300
 
 var active: bool = false
 var started_first_battle: bool = false
-var fleet: Dictionary = {}
-var fleet_ships: Array = []
-## The run's crew roster, grouped by the hull type they crew:
-## [{"ship_type": String, "crew": Array of crew dicts}]. Created at run
-## start so crew are addressable (doctrine, pre-battle UI) before the
-## first battle; each battle binds groups to hulls of the same type and
-## battle end re-saves the survivors, so crew identity (crew_id,
-## callsign, skills, known_patterns) persists across the run.
-var fleet_crew: Array = []
+## The player fleet as per-hull records, each with a stable identity:
+## {
+##   "hull_id": String,          # stable for the run
+##   "ship_type": String,
+##   "iced": bool,               # mothballed: never sorties, no per-battle ship cost
+##   "crew": Array,              # crew dicts; may be empty (purchased hull) or partial
+##   "complement": Array,        # fixed standard crew slots [{role, weapon_id?}, ...]
+##   "ship": Dictionary,         # persisted damage state, crew stripped; {} = pristine
+## }
+## Per-hull identity lets ships be moved, iced, lost, or purchased without the
+## old type+order matching: survivors carry their hull_id back from battle.
+var fleet_hulls: Array = []
 ## Player standing instructions for this run (see DoctrineSystem).
 ## Run state: reset at run start, wiped at run end.
 var doctrine: Dictionary = DoctrineSystem.empty_doctrine()
 var enemy_fleet: Dictionary = {}
 ## The multi-sector star chart (see CampaignGenerator.generate).
 var campaign: Dictionary = {}
+## Run economy: credits on hand, spent on ships/upkeep/insurance and earned
+## from battle rewards (see EconomySystem). Rolled at run start.
+var money: int = 0
+## Summary of the most recent battle's economy (reward, insurance, casualties),
+## kept so the map can report it once the player returns. Wiped after display.
+var last_battle_summary: Dictionary = {}
 var pending_battle_node_id: String = ""
 ## Battle outcome (CampaignSystem.RESULT_*) stashed by the battle scene
 ## and consumed by the campaign map's _resolve_pending_battle.
@@ -46,21 +55,22 @@ const ROSTER_SKILL_LEVEL := 1.0
 ## Monotonic source of unique callsigns for the run. Persists across roster
 ## reconciles so crew added when the fleet grows never reuse a callsign.
 var _callsign_counter: int = 0
+## Monotonic source of unique hull ids for the run.
+var _next_hull_id: int = 0
 
 
 func start_run(initial_fleet: Dictionary) -> void:
 	active = true
 	started_first_battle = false
-	fleet = initial_fleet.duplicate(true)
-	fleet_ships = []
 	_callsign_counter = 0
-	fleet_crew = _create_fleet_roster(fleet)
+	_next_hull_id = 0
+	fleet_hulls = _create_fleet_roster(initial_fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	campaign = CampaignGenerator.generate(rng)
+	campaign = CampaignGenerator.generate(_new_rng())
 	enemy_fleet = CampaignSystem.scaled_enemy_fleet(
 		FleetDataManager.load_fleet(1), campaign["current_sector"])
+	money = EconomySystem.roll_starting_money(fleet_hulls, _new_rng())
+	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""
 	lost_fleet_final_ships = []
@@ -72,12 +82,12 @@ func start_run(initial_fleet: Dictionary) -> void:
 func end_run() -> void:
 	active = false
 	started_first_battle = false
-	fleet = {}
-	fleet_ships = []
-	fleet_crew = []
+	fleet_hulls = []
 	doctrine = DoctrineSystem.empty_doctrine()
 	enemy_fleet = {}
 	campaign = {}
+	money = 0
+	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""
 	lost_fleet_final_ships = []
@@ -85,64 +95,198 @@ func end_run() -> void:
 	current_star_date = STAR_DATE_RUN_START
 	last_jump_repair_summary = {}
 	_callsign_counter = 0
+	_next_hull_id = 0
+
+
+## A freshly seeded RNG for economy rolls. Centralized so all run-economy
+## randomness flows through one place.
+func _new_rng() -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	return rng
 
 
 func _create_fleet_roster(fleet_counts: Dictionary) -> Array:
 	var roster: Array = []
 	for ship_type in FleetDataManager.SHIP_TYPES:
 		for _i in range(int(fleet_counts.get(ship_type, 0))):
-			roster.append(_make_crew_group(ship_type))
+			roster.append(_make_hull(ship_type))
 	return roster
 
 
-## Create one crew group (a hull's worth of crew) for a ship type, drawing
-## unique callsigns from the run's monotonic counter. Shared by initial
-## roster creation and reconcile so both produce identical crew.
-func _make_crew_group(ship_type: String) -> Dictionary:
-	var weapon_count: int = ShipData.get_ship_template(ship_type).get("weapons", []).size()
-	var crew: Array = CrewData.create_crew_for_ship_type(ship_type, weapon_count, ROSTER_SKILL_LEVEL)
+## Create one hull record for a ship type. With `with_crew`, a full crew is
+## created (drawing unique callsigns from the run's counter); otherwise the
+## hull arrives empty (a purchased bare hull). The standard `complement` is
+## always derived so vacancies are known even for an empty hull.
+func _make_hull(ship_type: String, with_crew := true) -> Dictionary:
+	var weapons: Array = ShipData.get_ship_template(ship_type).get("weapons", [])
+	var crew: Array = CrewData.create_crew_for_ship_type(ship_type, weapons.size(), ROSTER_SKILL_LEVEL)
+	crew = CrewData.bind_gunners_to_weapons(crew, weapons)
+	var complement: Array = _complement_from_crew(crew)
+	if with_crew:
+		for member in crew:
+			member.callsign = CrewData.callsign_for_index(_callsign_counter)
+			_callsign_counter += 1
+	else:
+		crew = []
+	var hull_id := "hull_%d" % _next_hull_id
+	_next_hull_id += 1
+	return {
+		"hull_id": hull_id,
+		"ship_type": ship_type,
+		"iced": false,
+		"crew": crew,
+		"complement": complement,
+		"ship": {},
+	}
+
+
+## The fixed standard crew slots for a hull, derived from a freshly created
+## crew. Drives vacancy detection when hiring or transferring.
+func _complement_from_crew(crew: Array) -> Array:
+	var complement: Array = []
 	for member in crew:
-		member.callsign = CrewData.callsign_for_index(_callsign_counter)
-		_callsign_counter += 1
-	return {"ship_type": ship_type, "crew": crew}
+		var slot := {"role": member.get("role", CrewData.Role.PILOT)}
+		if member.has("weapon_id"):
+			slot["weapon_id"] = member.weapon_id
+		complement.append(slot)
+	return complement
 
 
-## Rebuild the crew roster to match new fleet counts while preserving the
-## identity (crew_id, callsign, skills, known_patterns) of crew on ships
-## that remain. Existing groups of each type are kept in order up to the
-## new count; surplus counts spawn fresh groups, shortfalls drop trailing
-## groups. Doctrine is reconciled: per-crew and disabled entries for
-## dropped crew are purged and class doctrine for types reduced to zero is
-## removed; fleet doctrine is untouched. Used by the Edit Fleet screen so
+func hull_by_id(hull_id: String) -> Dictionary:
+	for hull in fleet_hulls:
+		if hull.get("hull_id", "") == hull_id:
+			return hull
+	return {}
+
+
+## A hull sorties when it is not mothballed and has someone to fly it.
+func _has_pilot(hull: Dictionary) -> bool:
+	for member in hull.get("crew", []):
+		if member.get("role", -1) == CrewData.Role.PILOT:
+			return true
+	return false
+
+
+## Hulls that take the field this battle: active (not iced) and crewed by a
+## pilot. Empty purchased hulls and mothballed hulls stay home.
+func sortieable_hulls() -> Array:
+	return fleet_hulls.filter(
+		func(hull): return not hull.get("iced", false) and _has_pilot(hull))
+
+
+## Hulls the player likely expects to fight but won't: active (not deliberately
+## iced) yet with no pilot to fly them — a Capital whose pilot was dismissed or
+## killed, or a bought hull never crewed. Surfaced before launch so a ship is
+## never silently left behind.
+func benched_hulls() -> Array:
+	return fleet_hulls.filter(
+		func(hull): return not hull.get("iced", false) and not _has_pilot(hull))
+
+
+## Fleet composition counts by ship type. With `only_sortieable`, counts only
+## the hulls that will actually take the field (drives the battle plan).
+func fleet_counts(only_sortieable := false) -> Dictionary:
+	var counts: Dictionary = {}
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		counts[ship_type] = 0
+	var hulls: Array = sortieable_hulls() if only_sortieable else fleet_hulls
+	for hull in hulls:
+		var t: String = hull.get("ship_type", "")
+		if counts.has(t):
+			counts[t] += 1
+	return counts
+
+
+## Fold a battle's outcome back into the persistent fleet. Survivors carry
+## their hull_id and live crew; their damage state and crew replace the hull's
+## records. Sortied hulls that did not survive are removed (and their doctrine
+## pruned). Iced / uncrewed hulls never sortied and are left untouched.
+func apply_battle_outcome(surviving_ships: Array) -> void:
+	var survivors_by_id: Dictionary = {}
+	for ship in surviving_ships:
+		survivors_by_id[ship.get("hull_id", "")] = ship
+
+	var rng := _new_rng()
+	var new_hulls: Array = []
+	var dropped_crew_ids: Array = []
+	var death_count: int = 0
+	for hull in fleet_hulls:
+		var sortied: bool = not hull.get("iced", false) and _has_pilot(hull)
+		if not sortied:
+			new_hulls.append(hull)
+			continue
+		var hull_id: String = hull.get("hull_id", "")
+		if survivors_by_id.has(hull_id):
+			var survivor: Dictionary = survivors_by_id[hull_id]
+			var after: Dictionary = _strip_crew(survivor)
+			# Crew aboard a surviving hull live or die by the components that
+			# were destroyed this battle (sortie-time state vs the survivor).
+			var live_crew: Array = survivor.get("crew", []).duplicate(true)
+			var casualties: Dictionary = CasualtySystem.resolve_hull_casualties(
+				live_crew, hull.get("ship", {}), after, rng)
+			hull.crew = casualties.survivors
+			hull.ship = after
+			for dead in casualties.deaths:
+				dropped_crew_ids.append(dead.get("crew_id", ""))
+			death_count += casualties.deaths.size()
+			new_hulls.append(hull)
+		else:
+			# A hull lost with all hands: everyone aboard is a casualty.
+			for member in hull.get("crew", []):
+				dropped_crew_ids.append(member.get("crew_id", ""))
+				death_count += 1
+
+	fleet_hulls = new_hulls
+	var insurance: int = EconomySystem.insurance_total(death_count)
+	money -= insurance
+	last_battle_summary = {"casualties": death_count, "insurance": insurance}
+	_prune_doctrine_for_roster(dropped_crew_ids, fleet_counts())
+
+
+## A survivor ship dict as it persists between battles: crew is stored on the
+## hull, not inside the ship damage state.
+func _strip_crew(ship: Dictionary) -> Dictionary:
+	var stripped: Dictionary = ship.duplicate(true)
+	stripped.erase("crew")
+	return stripped
+
+
+## Rebuild the fleet to match new ship counts while preserving the identity of
+## hulls that remain. Existing hulls of each type are kept in order up to the
+## new count; surplus counts spawn fresh hulls, shortfalls drop trailing hulls.
+## Doctrine is reconciled for dropped crew. Used by the Edit Fleet screen so
 ## fleet edits mid-setup keep the doctrine already authored for survivors.
 func reconcile_roster_to_counts(new_counts: Dictionary) -> void:
-	var existing_by_type := {}
-	for group in fleet_crew:
-		var t: String = group.get("ship_type", "")
+	var existing_by_type: Dictionary = {}
+	for hull in fleet_hulls:
+		var t: String = hull.get("ship_type", "")
 		if not existing_by_type.has(t):
 			existing_by_type[t] = []
-		existing_by_type[t].append(group)
+		existing_by_type[t].append(hull)
 
-	var new_roster: Array = []
+	var new_hulls: Array = []
 	var dropped_crew_ids: Array = []
 	for ship_type in FleetDataManager.SHIP_TYPES:
 		var desired: int = int(new_counts.get(ship_type, 0))
 		var existing: Array = existing_by_type.get(ship_type, [])
 		for i in range(desired):
 			if i < existing.size():
-				new_roster.append(existing[i])
+				new_hulls.append(existing[i])
 			else:
-				new_roster.append(_make_crew_group(ship_type))
+				new_hulls.append(_make_hull(ship_type))
 		for i in range(desired, existing.size()):
 			for member in existing[i].get("crew", []):
 				dropped_crew_ids.append(member.get("crew_id", ""))
 
-	fleet_crew = new_roster
-	fleet = {}
-	for ship_type in FleetDataManager.SHIP_TYPES:
-		fleet[ship_type] = int(new_counts.get(ship_type, 0))
-
+	fleet_hulls = new_hulls
 	_prune_doctrine_for_roster(dropped_crew_ids, new_counts)
+
+	# The run starts at the main menu, so the player can still edit the fleet
+	# before the first battle. Keep starting money matched to the fleet they
+	# actually launch with — but freeze it once the run is underway.
+	if not started_first_battle:
+		money = EconomySystem.roll_starting_money(fleet_hulls, _new_rng())
 
 
 ## Drop doctrine that no longer has a referent after a roster change.
@@ -155,36 +299,226 @@ func _prune_doctrine_for_roster(dropped_crew_ids: Array, new_counts: Dictionary)
 			doctrine[DoctrineSystem.SCOPE_CLASS].erase(ship_type)
 
 
-func update_fleet_after_battle(surviving_ships: Array, surviving_crew: Array = []) -> void:
-	fleet_ships = surviving_ships.duplicate(true)
-	fleet_crew = surviving_crew.duplicate(true)
-	fleet = {}
-	for ship_type in FleetDataManager.SHIP_TYPES:
-		fleet[ship_type] = 0
-	for ship in fleet_ships:
-		var t: String = ship.get("type", "")
-		if fleet.has(t):
-			fleet[t] += 1
+# ============================================================================
+# ROSTER OPS (shop screen: buy hulls, hire/transfer crew, ice ships)
+# ============================================================================
+
+## Buy a bare hull of `ship_type`: full standard complement, no crew aboard,
+## price deducted from money. Returns the new hull record.
+func add_purchased_hull(ship_type: String) -> Dictionary:
+	var hull := _make_hull(ship_type, false)
+	money -= EconomySystem.ship_purchase_price(ship_type)
+	fleet_hulls.append(hull)
+	return hull
 
 
-## Take the saved crew group for a hull of this type (first match wins,
-## mirroring how _apply_roguelike_damage_states matches ships by type).
-## Empty array if no saved crew remain for the type.
-func take_saved_crew(ship_type: String) -> Array:
-	for i in range(fleet_crew.size()):
-		if fleet_crew[i].get("ship_type", "") == ship_type:
-			var group: Dictionary = fleet_crew.pop_at(i)
-			return group.get("crew", [])
-	return []
+## The unfilled crew slots on a hull: its standard complement minus the crew
+## currently aboard. Gunner slots are matched by weapon_id (so a hull missing
+## one specific gun's gunner shows exactly that vacancy); other roles match by
+## count.
+func hull_vacancies(hull: Dictionary) -> Array:
+	var filled_weapon_ids: Dictionary = {}
+	var remaining_role_counts: Dictionary = {}
+	for member in hull.get("crew", []):
+		var role: int = member.get("role", -1)
+		if role == CrewData.Role.GUNNER and member.has("weapon_id"):
+			filled_weapon_ids[member.weapon_id] = true
+		else:
+			remaining_role_counts[role] = remaining_role_counts.get(role, 0) + 1
+
+	var vacancies: Array = []
+	for slot in hull.get("complement", []):
+		var role: int = slot.get("role", -1)
+		if role == CrewData.Role.GUNNER and slot.has("weapon_id"):
+			if not filled_weapon_ids.has(slot.weapon_id):
+				vacancies.append(slot)
+		elif remaining_role_counts.get(role, 0) > 0:
+			remaining_role_counts[role] -= 1
+		else:
+			vacancies.append(slot)
+	return vacancies
 
 
+## Hire a fresh crew member into one vacant slot on a hull (roster skill,
+## weapon bound for gunner slots, wired into the hull's command chain). Returns
+## true if the slot was a real vacancy and was filled.
+func fill_vacancy(hull_id: String, slot: Dictionary) -> bool:
+	var hull := hull_by_id(hull_id)
+	if hull.is_empty() or not _slot_is_vacant(hull, slot):
+		return false
+	var member := CrewData.create_crew_member(slot.get("role", CrewData.Role.PILOT), ROSTER_SKILL_LEVEL)
+	member.callsign = CrewData.callsign_for_index(_callsign_counter)
+	_callsign_counter += 1
+	if slot.get("role", -1) == CrewData.Role.GUNNER and slot.has("weapon_id"):
+		member["weapon_id"] = slot.weapon_id
+	_wire_into_command_chain(hull, member)
+	hull.crew.append(member)
+	return true
+
+
+## Move a crew member into a matching vacancy on another hull. Succeeds only
+## when the destination has an unfilled slot of the same role; gunners rebind
+## to that slot's weapon. The crew dict (identity, skills, doctrine) is intact.
+func transfer_crew(crew_id: String, dest_hull_id: String) -> bool:
+	var dest := hull_by_id(dest_hull_id)
+	if dest.is_empty():
+		return false
+
+	var src: Dictionary = {}
+	var member: Dictionary = {}
+	for hull in fleet_hulls:
+		for m in hull.get("crew", []):
+			if m.get("crew_id", "") == crew_id:
+				src = hull
+				member = m
+	if member.is_empty() or src.get("hull_id", "") == dest_hull_id:
+		return false
+
+	var slot := _matching_vacancy(dest, member)
+	if slot.is_empty():
+		return false
+
+	src.crew.erase(member)
+	_unwire_from_command_chain(src, member)
+	if slot.get("role", -1) == CrewData.Role.GUNNER and slot.has("weapon_id"):
+		member["weapon_id"] = slot.weapon_id
+	elif member.has("weapon_id"):
+		member.erase("weapon_id")
+	_wire_into_command_chain(dest, member)
+	dest.crew.append(member)
+	return true
+
+
+## Mothball or reactivate a hull. Iced hulls never sortie and cost no per-battle
+## ship upkeep (their crew are still paid).
+func set_hull_iced(hull_id: String, iced: bool) -> void:
+	var hull := hull_by_id(hull_id)
+	if not hull.is_empty():
+		hull.iced = iced
+
+
+## Dismiss a whole hull and everyone aboard (no insurance — they are let go,
+## not lost). Used by the dismissal dialog to cut upkeep. Doctrine for the
+## dismissed crew is pruned.
+func dismiss_hull(hull_id: String) -> void:
+	var hull := hull_by_id(hull_id)
+	if hull.is_empty():
+		return
+	var dropped: Array = []
+	for member in hull.get("crew", []):
+		dropped.append(member.get("crew_id", ""))
+	fleet_hulls.erase(hull)
+	_prune_doctrine_for_roster(dropped, fleet_counts())
+
+
+## Dismiss a single crew member, opening a vacancy on their hull (no insurance).
+func dismiss_crew(crew_id: String) -> void:
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			if member.get("crew_id", "") == crew_id:
+				_unwire_from_command_chain(hull, member)
+				hull.crew.erase(member)
+				_prune_doctrine_for_roster([crew_id], fleet_counts())
+				return
+
+
+## Whether the player can still field a minimum battle force: at least one
+## piloted hull whose solo upkeep (its ship cost + one pilot's salary, every
+## other hull and crew dismissed) is affordable. False ⇒ the run is lost.
+func can_field_minimum() -> bool:
+	return _can_field_minimum(fleet_hulls, money)
+
+
+## Pure form: is a minimum affordable battle force fieldable from `hulls` with
+## `funds`? Used both for the live check and to vet a prospective dismissal.
+func _can_field_minimum(hulls: Array, funds: int) -> bool:
+	var salary := EconomySystem.crew_salary_per_battle()
+	var cheapest := -1
+	for hull in hulls:
+		if not _has_pilot(hull):
+			continue
+		var cost := EconomySystem.ship_per_battle_cost(hull.get("ship_type", "")) + salary
+		if cheapest < 0 or cost < cheapest:
+			cheapest = cost
+	if cheapest < 0:
+		return false
+	return funds >= cheapest
+
+
+## Whether this crew member may be dismissed without soft-locking the run —
+## i.e. a minimum affordable force is still fieldable afterward. The dismissal
+## dialog disables dismissals that would fail this (e.g. the last affordable
+## pilot). Non-pilots and crew on a redundant hull are always safe.
+func may_dismiss_crew(crew_id: String) -> bool:
+	var hulls := fleet_hulls.duplicate(true)
+	for hull in hulls:
+		var crew: Array = hull.get("crew", [])
+		for i in range(crew.size()):
+			if crew[i].get("crew_id", "") == crew_id:
+				crew.remove_at(i)
+				return _can_field_minimum(hulls, money)
+	return true
+
+
+## Whether this whole hull may be dismissed without soft-locking the run.
+func may_dismiss_hull(hull_id: String) -> bool:
+	var hulls := fleet_hulls.filter(func(h): return h.get("hull_id", "") != hull_id)
+	return _can_field_minimum(hulls, money)
+
+
+func _slot_is_vacant(hull: Dictionary, slot: Dictionary) -> bool:
+	for vacancy in hull_vacancies(hull):
+		if vacancy.get("role", -2) == slot.get("role", -1) \
+				and vacancy.get("weapon_id", "") == slot.get("weapon_id", ""):
+			return true
+	return false
+
+
+func _matching_vacancy(hull: Dictionary, member: Dictionary) -> Dictionary:
+	var role: int = member.get("role", -1)
+	for slot in hull_vacancies(hull):
+		if slot.get("role", -2) == role:
+			return slot
+	return {}
+
+
+## A hull's commander is its captain, or its pilot on craft with no captain.
+func _hull_commander(hull: Dictionary) -> Dictionary:
+	var captain := _find_role(hull, CrewData.Role.CAPTAIN)
+	return captain if not captain.is_empty() else _find_role(hull, CrewData.Role.PILOT)
+
+
+func _find_role(hull: Dictionary, role: int) -> Dictionary:
+	for member in hull.get("crew", []):
+		if member.get("role", -1) == role:
+			return member
+	return {}
+
+
+func _wire_into_command_chain(hull: Dictionary, member: Dictionary) -> void:
+	var commander := _hull_commander(hull)
+	if commander.is_empty() or commander.get("crew_id", "") == member.get("crew_id", ""):
+		return
+	member.command_chain.superior = commander.crew_id
+	if member.crew_id not in commander.command_chain.subordinates:
+		commander.command_chain.subordinates.append(member.crew_id)
+
+
+func _unwire_from_command_chain(hull: Dictionary, member: Dictionary) -> void:
+	var commander := _hull_commander(hull)
+	if not commander.is_empty():
+		commander.command_chain.subordinates.erase(member.get("crew_id", ""))
+
+
+## The run is lost when no hulls remain at all.
 func is_fleet_empty() -> bool:
-	return fleet_ships.is_empty()
+	return fleet_hulls.is_empty()
 
 
 ## Repair the fleet during a jump. Engineers use the downtime: each heals
 ## their ship by REPAIR_FRACTION_PER_STAR_DATE × machinery skill × date gap
-## (× RNR_REPAIR_MULTIPLIER when the destination is an R&R stop).
+## (× RNR_REPAIR_MULTIPLIER when the destination is an R&R stop). Pristine
+## hulls (no recorded damage) and crewless hulls are skipped.
 ## Returns {ships_repaired, points_repaired, date_delta}.
 func apply_jump_repairs(destination_star_date: int, is_rnr: bool) -> Dictionary:
 	var date_delta: int = maxi(0, destination_star_date - current_star_date)
@@ -196,14 +530,19 @@ func apply_jump_repairs(destination_star_date: int, is_rnr: bool) -> Dictionary:
 
 	var ships_repaired := 0
 	var points_repaired := 0
-	for i in fleet_ships.size():
-		var before := _ship_health_total(fleet_ships[i])
-		var repaired: Dictionary = RepairSystem.apply_engineer_repairs(fleet_ships[i], fraction)
+	for hull in fleet_hulls:
+		var saved: Dictionary = hull.get("ship", {})
+		if saved.is_empty():
+			continue
+		var merged: Dictionary = saved.duplicate(true)
+		merged["crew"] = hull.get("crew", [])
+		var before := _ship_health_total(merged)
+		var repaired: Dictionary = RepairSystem.apply_engineer_repairs(merged, fraction)
 		var healed := _ship_health_total(repaired) - before
 		if healed > 0:
 			ships_repaired += 1
 			points_repaired += healed
-		fleet_ships[i] = repaired
+		hull.ship = _strip_crew(repaired)
 
 	last_jump_repair_summary = {
 		"ships_repaired": ships_repaired,
@@ -217,27 +556,28 @@ func _ship_health_total(ship: Dictionary) -> int:
 	return DamageResolver.calculate_total_armor(ship) + DamageResolver.calculate_total_internal_health(ship)
 
 
-## Record a battle's outcome for the campaign map to resolve. Victory
-## keeps the surviving ships and crews; defeat stashes the wiped fleet's
-## final state so a demotion can roll damaged survivors from it. Crew
-## groups are derived from the live crew the battle scene attaches to
-## each ship dict.
+## Record a battle's outcome for the campaign map to resolve. Victory folds
+## the survivors back into the persistent hull fleet (damage, casualties,
+## insurance, doctrine pruning all via apply_battle_outcome). Defeat stashes
+## the wiped fleet's final state so a demotion can roll damaged survivors
+## from it, then empties the hull fleet. `final_ships` is every team-0 ship's
+## end-of-battle state, each carrying its hull_id and its live crew.
 func record_battle_result(result: String, final_ships: Array) -> void:
 	pending_battle_result = result
 	if result == CampaignSystem.RESULT_VICTORY:
-		var survivors: Array = final_ships.filter(
-			func(ship): return ship.get("status", "") != "destroyed")
-		update_fleet_after_battle(survivors, _crew_groups_for_ships(survivors))
+		apply_battle_outcome(final_ships.filter(
+			func(ship): return ship.get("status", "") != "destroyed"))
 		lost_fleet_final_ships = []
 		lost_fleet_final_crew = []
 	else:
 		lost_fleet_final_ships = final_ships.duplicate(true)
 		lost_fleet_final_crew = _crew_groups_for_ships(final_ships)
-		fleet_ships = []
+		fleet_hulls = []
 
 
-## Crew groups (fleet_crew shape) rebuilt from the crew attached to each
-## ship dict.
+## Crew groups (ship_type + crew) rebuilt from the crew attached to each ship
+## dict. Feeds the demotion survivor roll (DemotionFleetBuilder), which matches
+## crews to ships by type.
 func _crew_groups_for_ships(ships: Array) -> Array:
 	var groups: Array = []
 	for ship in ships:
@@ -247,32 +587,55 @@ func _crew_groups_for_ships(ships: Array) -> Array:
 	return groups
 
 
-## Rebuild the run's fleet for a demotion: the saved fleet config plus the
-## rolled survivors of the lost fleet. Fresh hulls spawn undamaged with
-## fresh crews (callsigns stay unique via the run's monotonic counter);
-## survivor hulls keep their damage and their crews. Doctrine authored for
-## crew that did not survive is pruned.
+## Rebuild the run's hull fleet for a demotion: the saved fleet config (fresh
+## hulls, fresh crews, undamaged) plus the rolled survivors of the lost fleet
+## (battered hulls keeping their crews). Survivor crews keep their identity;
+## doctrine authored for crew that did not survive the rout is pruned.
 func apply_demotion(survivors: Dictionary, fleet_config: Dictionary) -> void:
 	var survivor_ships: Array = survivors.get("ships", [])
 	var survivor_crew_groups: Array = survivors.get("crew_groups", [])
 
-	fleet = {}
-	for ship_type in FleetDataManager.SHIP_TYPES:
-		fleet[ship_type] = int(fleet_config.get(ship_type, 0))
-	for ship in survivor_ships:
-		var t: String = ship.get("type", "")
-		if fleet.has(t):
-			fleet[t] += 1
+	var dead_ids := _dead_crew_ids(survivor_crew_groups)
+	fleet_hulls = _create_fleet_roster(fleet_config)
+	for survivor_hull in _hulls_from_survivors(survivor_ships, survivor_crew_groups):
+		fleet_hulls.append(survivor_hull)
 
-	fleet_ships = survivor_ships.duplicate(true)
-	fleet_crew = _create_fleet_roster(fleet_config)
-	for group in survivor_crew_groups:
-		fleet_crew.append(group.duplicate(true))
-
-	_prune_doctrine_for_roster(_dead_crew_ids(survivor_crew_groups), fleet)
+	_prune_doctrine_for_roster(dead_ids, fleet_counts())
 	# The stash is consumed: the demotion is its only reader.
 	lost_fleet_final_ships = []
 	lost_fleet_final_crew = []
+
+
+## Turn the demotion's rolled survivor ships + crew groups into hull records:
+## each battered ship becomes a hull keeping its damage state and (by type) its
+## surviving crew, so the limped-home remnant carries forward intact.
+func _hulls_from_survivors(survivor_ships: Array, survivor_crew_groups: Array) -> Array:
+	var remaining_groups: Array = survivor_crew_groups.duplicate(true)
+	var hulls: Array = []
+	for ship in survivor_ships:
+		var ship_type: String = ship.get("type", "")
+		var crew: Array = _take_crew_group_for_type(remaining_groups, ship_type)
+		var weapons: Array = ShipData.get_ship_template(ship_type).get("weapons", [])
+		var template_crew: Array = CrewData.bind_gunners_to_weapons(
+			CrewData.create_crew_for_ship_type(ship_type, weapons.size(), ROSTER_SKILL_LEVEL), weapons)
+		var hull_id := "hull_%d" % _next_hull_id
+		_next_hull_id += 1
+		hulls.append({
+			"hull_id": hull_id,
+			"ship_type": ship_type,
+			"iced": false,
+			"crew": crew,
+			"complement": _complement_from_crew(template_crew),
+			"ship": _strip_crew(ship),
+		})
+	return hulls
+
+
+func _take_crew_group_for_type(groups: Array, ship_type: String) -> Array:
+	for i in range(groups.size()):
+		if groups[i].get("ship_type", "") == ship_type:
+			return groups.pop_at(i).get("crew", [])
+	return []
 
 
 ## Crew ids present in the lost fleet's final state but absent from the
@@ -294,13 +657,13 @@ func _dead_crew_ids(survivor_crew_groups: Array) -> Array:
 func save_campaign_to_disk() -> bool:
 	return CampaignSaveManager.save_campaign({
 		"campaign": campaign,
-		"fleet": fleet,
-		"fleet_ships": fleet_ships,
-		"fleet_crew": fleet_crew,
+		"fleet_hulls": fleet_hulls,
 		"doctrine": doctrine,
 		"enemy_fleet": enemy_fleet,
+		"money": money,
 		"current_star_date": current_star_date,
 		"callsign_counter": _callsign_counter,
+		"next_hull_id": _next_hull_id,
 	})
 
 
@@ -311,18 +674,19 @@ func load_campaign_from_disk() -> bool:
 	if data.is_empty():
 		return false
 	campaign = data.get("campaign", {})
-	fleet = data.get("fleet", {})
-	fleet_ships = data.get("fleet_ships", [])
-	fleet_crew = data.get("fleet_crew", [])
+	fleet_hulls = data.get("fleet_hulls", [])
 	doctrine = data.get("doctrine", DoctrineSystem.empty_doctrine())
 	enemy_fleet = data.get("enemy_fleet", {})
+	money = int(data.get("money", 0))
 	current_star_date = data.get("current_star_date", STAR_DATE_RUN_START)
 	_callsign_counter = data.get("callsign_counter", 0)
+	_next_hull_id = data.get("next_hull_id", fleet_hulls.size())
+	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""
 	lost_fleet_final_ships = []
 	lost_fleet_final_crew = []
 	last_jump_repair_summary = {}
-	started_first_battle = not fleet_ships.is_empty()
+	started_first_battle = not fleet_hulls.is_empty()
 	active = true
 	return true

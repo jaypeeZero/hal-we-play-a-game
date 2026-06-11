@@ -154,3 +154,71 @@ func test_entries_carry_all_required_keys():
 		assert_true(entry.has(key), "Entry should expose `%s`" % key)
 	assert_gt(float(entry["hull_length"]), 0.0,
 		"hull_length should be a positive size used for hit-testing")
+
+
+# ============================================================================
+# Hull-id binding (per-hull fleet identity)
+# ============================================================================
+
+func _find_hull(hulls: Array, hull_id: String) -> Dictionary:
+	for hull in hulls:
+		if hull.get("hull_id", "") == hull_id:
+			return hull
+	return {}
+
+
+func test_assign_hull_ids_binds_each_team0_entry_to_a_matching_hull():
+	var team0 := _make_fleet({"fighter": 2, "corvette": 1})
+	var entries := BattlePlanner.build_default_plan(team0, _make_fleet({}), BATTLEFIELD_SIZE)
+	var hulls := [
+		{"hull_id": "h1", "ship_type": "fighter"},
+		{"hull_id": "h2", "ship_type": "fighter"},
+		{"hull_id": "h3", "ship_type": "corvette"},
+	]
+
+	BattlePlanner.assign_hull_ids(entries, hulls)
+
+	var assigned: Array = []
+	for entry in _entries_for_team(entries, 0):
+		assert_true(entry.has("hull_id"), "Every team-0 entry should be bound to a hull")
+		var hull := _find_hull(hulls, entry["hull_id"])
+		assert_eq(hull.get("ship_type", ""), entry["ship_type"],
+			"An entry should bind to a hull of its own ship type")
+		assigned.append(entry["hull_id"])
+
+	var unique: Array = []
+	for id in assigned:
+		if id not in unique:
+			unique.append(id)
+	assert_eq(unique.size(), assigned.size(),
+		"No two entries should bind to the same hull")
+
+
+func test_assign_hull_ids_leaves_team1_entries_unbound():
+	var team0 := _make_fleet({"fighter": 1})
+	var team1 := _make_fleet({"fighter": 1})
+	var entries := BattlePlanner.build_default_plan(team0, team1, BATTLEFIELD_SIZE)
+	var hulls := [{"hull_id": "h1", "ship_type": "fighter"}]
+
+	BattlePlanner.assign_hull_ids(entries, hulls)
+
+	for entry in _entries_for_team(entries, 1):
+		assert_false(entry.has("hull_id"),
+			"Enemy entries are not player hulls and should never be bound")
+
+
+func test_assign_hull_ids_only_binds_provided_hulls():
+	# Callers pass sortieable_hulls(), so an iced or pilotless hull (absent from
+	# the list) is never planned: a surplus entry simply stays unbound.
+	var team0 := _make_fleet({"fighter": 2})
+	var entries := BattlePlanner.build_default_plan(team0, _make_fleet({}), BATTLEFIELD_SIZE)
+	var hulls := [{"hull_id": "active", "ship_type": "fighter"}]
+
+	BattlePlanner.assign_hull_ids(entries, hulls)
+
+	var bound: Array = []
+	for entry in _entries_for_team(entries, 0):
+		if entry.has("hull_id"):
+			bound.append(entry["hull_id"])
+	assert_eq(bound, ["active"],
+		"Only the provided (sortieable) hull should be bound; the surplus entry is left unbound")

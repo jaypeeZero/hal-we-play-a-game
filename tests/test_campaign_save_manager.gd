@@ -28,15 +28,20 @@ func _payload() -> Dictionary:
 	ship["armor_sections"][0]["current_armor"] = 1
 	return {
 		"campaign": campaign,
-		"fleet": {"fighter": 2, "heavy_fighter": 0, "torpedo_boat": 0,
-			"corvette": 1, "capital": 0},
-		"fleet_ships": [ship],
-		"fleet_crew": [{"ship_type": "fighter", "crew": [{"crew_id": "c1", "callsign": "Alpha"}]}],
+		"fleet_hulls": [
+			{"hull_id": "hull_0", "ship_type": "fighter", "iced": false,
+				"crew": [{"crew_id": "c1", "callsign": "Alpha"}], "complement": [],
+				"ship": ship},
+			{"hull_id": "hull_1", "ship_type": "corvette", "iced": true,
+				"crew": [], "complement": [], "ship": {}},
+		],
 		"doctrine": DoctrineSystem.empty_doctrine(),
 		"enemy_fleet": {"fighter": 3, "heavy_fighter": 0, "torpedo_boat": 0,
 			"corvette": 0, "capital": 0},
+		"money": 1500,
 		"current_star_date": 2310,
 		"callsign_counter": 6,
+		"next_hull_id": 2,
 	}
 
 
@@ -73,24 +78,28 @@ func test_round_trip_restores_integer_typed_fields():
 
 	assert_typeof(loaded["current_star_date"], TYPE_INT)
 	assert_typeof(loaded["callsign_counter"], TYPE_INT)
-	assert_typeof(loaded["fleet"]["fighter"], TYPE_INT)
+	assert_typeof(loaded["money"], TYPE_INT)
+	assert_typeof(loaded["next_hull_id"], TYPE_INT)
+	assert_typeof(loaded["enemy_fleet"]["fighter"], TYPE_INT)
 	var first_node: Dictionary = loaded["campaign"]["nodes"].values()[0]
 	assert_typeof(first_node["row"], TYPE_INT)
 	assert_typeof(first_node["star_date_gap"], TYPE_INT)
 
 
-func test_round_trip_restores_fleet_counts_and_ship_damage():
+func test_round_trip_restores_fleet_hulls_and_ship_damage():
 	var payload := _payload()
 	CampaignSaveManager.save_campaign(payload)
 
 	var loaded := CampaignSaveManager.load_campaign()
 
-	assert_eq(loaded["fleet"], payload["fleet"], "Fleet counts survive the round trip")
+	assert_eq(loaded["fleet_hulls"].size(), 2, "Every hull survives the round trip")
 	assert_eq(loaded["enemy_fleet"], payload["enemy_fleet"],
 		"Enemy fleet counts survive the round trip")
-	var ship: Dictionary = loaded["fleet_ships"][0]
+	assert_eq(loaded["fleet_hulls"][1]["iced"], true,
+		"A hull's mothballed flag survives the round trip")
+	var ship: Dictionary = loaded["fleet_hulls"][0]["ship"]
 	assert_eq(int(ship["armor_sections"][0]["current_armor"]), 1,
-		"Ship damage state survives the round trip")
+		"Hull damage state survives the round trip")
 	assert_typeof(ship["position"], TYPE_VECTOR2)
 	assert_eq(ship["position"], Vector2(3, 4),
 		"Vector fields inside ship dicts survive the round trip")
@@ -101,7 +110,7 @@ func test_round_trip_restores_crew_identity():
 
 	var loaded := CampaignSaveManager.load_campaign()
 
-	assert_eq(loaded["fleet_crew"][0]["crew"][0]["callsign"], "Alpha",
+	assert_eq(loaded["fleet_hulls"][0]["crew"][0]["callsign"], "Alpha",
 		"Crew identity survives the round trip")
 
 

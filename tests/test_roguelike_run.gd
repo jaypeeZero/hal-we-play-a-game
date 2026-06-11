@@ -1,11 +1,10 @@
 extends GutTest
 
 ## Tests for RoguelikeRun state management - FUNCTIONALITY ONLY
-## Verifies fleet persistence, damage carry-over, and enemy fleet independence
+## Verifies per-hull fleet persistence, damage carry-over, sortie eligibility,
+## jump repairs, and enemy fleet independence.
 
-var _saved_fleet: Dictionary
-var _saved_fleet_ships: Array
-var _saved_fleet_crew: Array
+var _saved_fleet_hulls: Array
 var _saved_doctrine: Dictionary
 var _saved_enemy_fleet: Dictionary
 var _saved_active: bool
@@ -16,12 +15,12 @@ var _saved_campaign: Dictionary
 var _saved_battle_result: String
 var _saved_lost_ships: Array
 var _saved_lost_crew: Array
+var _saved_money: int
+var _saved_battle_summary: Dictionary
 
 
 func before_each() -> void:
-	_saved_fleet = RoguelikeRun.fleet.duplicate(true)
-	_saved_fleet_ships = RoguelikeRun.fleet_ships.duplicate(true)
-	_saved_fleet_crew = RoguelikeRun.fleet_crew.duplicate(true)
+	_saved_fleet_hulls = RoguelikeRun.fleet_hulls.duplicate(true)
 	_saved_doctrine = RoguelikeRun.doctrine.duplicate(true)
 	_saved_enemy_fleet = RoguelikeRun.enemy_fleet.duplicate(true)
 	_saved_active = RoguelikeRun.active
@@ -32,12 +31,12 @@ func before_each() -> void:
 	_saved_battle_result = RoguelikeRun.pending_battle_result
 	_saved_lost_ships = RoguelikeRun.lost_fleet_final_ships.duplicate(true)
 	_saved_lost_crew = RoguelikeRun.lost_fleet_final_crew.duplicate(true)
+	_saved_money = RoguelikeRun.money
+	_saved_battle_summary = RoguelikeRun.last_battle_summary.duplicate(true)
 
 
 func after_each() -> void:
-	RoguelikeRun.fleet = _saved_fleet
-	RoguelikeRun.fleet_ships = _saved_fleet_ships
-	RoguelikeRun.fleet_crew = _saved_fleet_crew
+	RoguelikeRun.fleet_hulls = _saved_fleet_hulls
 	RoguelikeRun.doctrine = _saved_doctrine
 	RoguelikeRun.enemy_fleet = _saved_enemy_fleet
 	RoguelikeRun.active = _saved_active
@@ -48,329 +47,9 @@ func after_each() -> void:
 	RoguelikeRun.pending_battle_result = _saved_battle_result
 	RoguelikeRun.lost_fleet_final_ships = _saved_lost_ships
 	RoguelikeRun.lost_fleet_final_crew = _saved_lost_crew
+	RoguelikeRun.money = _saved_money
+	RoguelikeRun.last_battle_summary = _saved_battle_summary
 
-
-func _make_ship(ship_type: String) -> Dictionary:
-	return ShipData.create_ship_instance(ship_type, 0, Vector2.ZERO)
-
-
-# ============================================================================
-# FLEET TRACKING AFTER BATTLE
-# ============================================================================
-
-func test_update_fleet_stores_surviving_ships():
-	var ship1 = _make_ship("fighter")
-	var ship2 = _make_ship("corvette")
-
-	RoguelikeRun.update_fleet_after_battle([ship1, ship2])
-
-	assert_eq(RoguelikeRun.fleet_ships.size(), 2, "Both surviving ships should be stored")
-
-
-func test_update_fleet_rebuilds_count_dict():
-	var ships := [_make_ship("fighter"), _make_ship("fighter"), _make_ship("corvette")]
-
-	RoguelikeRun.update_fleet_after_battle(ships)
-
-	assert_eq(RoguelikeRun.fleet.get("fighter", 0), 2, "Fleet count should reflect 2 fighters")
-	assert_eq(RoguelikeRun.fleet.get("corvette", 0), 1, "Fleet count should reflect 1 corvette")
-
-
-func test_update_fleet_zeroes_lost_ship_types():
-	var ships := [_make_ship("fighter")]
-	RoguelikeRun.fleet = {"fighter": 2, "corvette": 3, "capital": 1,
-		"heavy_fighter": 0, "torpedo_boat": 0}
-
-	RoguelikeRun.update_fleet_after_battle(ships)
-
-	assert_eq(RoguelikeRun.fleet.get("corvette", -1), 0,
-		"Lost ship types should be zeroed in fleet count")
-	assert_eq(RoguelikeRun.fleet.get("capital", -1), 0,
-		"Lost ship types should be zeroed in fleet count")
-
-
-# ============================================================================
-# FLEET EMPTY CHECK
-# ============================================================================
-
-func test_fleet_is_empty_when_no_survivors():
-	RoguelikeRun.update_fleet_after_battle([])
-
-	assert_true(RoguelikeRun.is_fleet_empty(), "Fleet should be empty with no survivors")
-
-
-func test_fleet_is_not_empty_when_any_ship_survives():
-	RoguelikeRun.update_fleet_after_battle([_make_ship("fighter")])
-
-	assert_false(RoguelikeRun.is_fleet_empty(), "Fleet should not be empty with a surviving ship")
-
-
-# ============================================================================
-# DAMAGE STATE PERSISTENCE
-# ============================================================================
-
-func test_surviving_ship_armor_damage_is_preserved():
-	var ship = _make_ship("fighter")
-	ship["armor_sections"][0]["current_armor"] = 0
-
-	RoguelikeRun.update_fleet_after_battle([ship])
-
-	assert_eq(RoguelikeRun.fleet_ships[0]["armor_sections"][0]["current_armor"], 0,
-		"Depleted armor should carry over to next battle")
-
-
-func test_surviving_ship_internal_damage_is_preserved():
-	var ship = _make_ship("corvette")
-	ship["internals"][0]["status"] = "destroyed"
-	ship["internals"][0]["current_health"] = 0
-
-	RoguelikeRun.update_fleet_after_battle([ship])
-
-	assert_eq(RoguelikeRun.fleet_ships[0]["internals"][0]["status"], "destroyed",
-		"Destroyed internal component should carry over to next battle")
-
-
-func test_surviving_ship_stat_penalties_are_preserved():
-	var ship = _make_ship("corvette")
-	var base_speed: float = ship["stats"]["max_speed"]
-	ship["stats"]["max_speed"] = base_speed * 0.5
-
-	RoguelikeRun.update_fleet_after_battle([ship])
-
-	assert_almost_eq(
-		RoguelikeRun.fleet_ships[0]["stats"]["max_speed"],
-		base_speed * 0.5,
-		0.01,
-		"Speed penalty from engine damage should carry over to next battle"
-	)
-
-
-func test_fleet_ships_are_deep_copied():
-	var ship = _make_ship("fighter")
-	RoguelikeRun.update_fleet_after_battle([ship])
-
-	# Modify the original after storing
-	ship["armor_sections"][0]["current_armor"] = 999.0
-
-	assert_ne(RoguelikeRun.fleet_ships[0]["armor_sections"][0]["current_armor"], 999.0,
-		"fleet_ships should be a deep copy, not a reference")
-
-
-# ============================================================================
-# ENEMY FLEET INDEPENDENCE
-# ============================================================================
-
-func test_enemy_fleet_is_not_affected_by_player_battle_results():
-	RoguelikeRun.enemy_fleet = {
-		"fighter": 3, "corvette": 2, "heavy_fighter": 0, "torpedo_boat": 0, "capital": 0
-	}
-
-	RoguelikeRun.update_fleet_after_battle([_make_ship("fighter")])
-
-	assert_eq(RoguelikeRun.enemy_fleet.get("fighter", 0), 3,
-		"Enemy fighter count should not change after player battle")
-	assert_eq(RoguelikeRun.enemy_fleet.get("corvette", 0), 2,
-		"Enemy corvette count should not change after player battle")
-
-
-func test_enemy_fleet_survives_multiple_battles():
-	RoguelikeRun.enemy_fleet = {
-		"fighter": 2, "corvette": 1, "heavy_fighter": 0, "torpedo_boat": 0, "capital": 0
-	}
-	var enemy_fighter_count: int = RoguelikeRun.enemy_fleet["fighter"]
-
-	RoguelikeRun.update_fleet_after_battle([_make_ship("fighter")])
-	RoguelikeRun.update_fleet_after_battle([_make_ship("fighter")])
-
-	assert_eq(RoguelikeRun.enemy_fleet.get("fighter", 0), enemy_fighter_count,
-		"Enemy fleet should be identical before and after multiple battles")
-
-
-# ============================================================================
-# RUN LIFECYCLE
-# ============================================================================
-
-func test_end_run_clears_fleet_ships():
-	RoguelikeRun.update_fleet_after_battle([_make_ship("fighter")])
-
-	RoguelikeRun.end_run()
-
-	assert_true(RoguelikeRun.fleet_ships.is_empty(),
-		"fleet_ships should be cleared when run ends")
-
-
-func test_end_run_clears_enemy_fleet():
-	RoguelikeRun.enemy_fleet = {"fighter": 3, "corvette": 1,
-		"heavy_fighter": 0, "torpedo_boat": 0, "capital": 0}
-
-	RoguelikeRun.end_run()
-
-	assert_true(RoguelikeRun.enemy_fleet.is_empty(),
-		"enemy_fleet should be cleared when run ends")
-
-
-# ============================================================================
-# JUMP REPAIRS (Engineers + star dates)
-# ============================================================================
-
-const JUMP_DATE_DELTA := 5
-
-func _make_damaged_ship_with_crew(engineer_count: int) -> Dictionary:
-	var ship = _make_ship("corvette")
-	ship["armor_sections"][0]["current_armor"] = 1
-	ship["crew"] = []
-	for i in engineer_count:
-		ship["crew"].append(TestFactories.make_crew_engineer(1.0, ship.ship_id))
-	return ship
-
-
-func _total_armor(ship: Dictionary) -> int:
-	return DamageResolver.calculate_total_armor(ship)
-
-
-func test_jump_repairs_heal_ship_with_engineers():
-	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
-	var before = _total_armor(RoguelikeRun.fleet_ships[0])
-
-	var summary = RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
-
-	assert_gt(_total_armor(RoguelikeRun.fleet_ships[0]), before,
-		"Ship with an engineer should heal during the jump")
-	assert_eq(summary.ships_repaired, 1, "Summary should count the repaired ship")
-	assert_eq(summary.date_delta, JUMP_DATE_DELTA, "Summary should report the star-date gap")
-
-
-func test_jump_repairs_skip_ship_without_engineers():
-	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(0)]
-	var before = _total_armor(RoguelikeRun.fleet_ships[0])
-
-	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
-
-	assert_eq(_total_armor(RoguelikeRun.fleet_ships[0]), before,
-		"Ship without engineers should not heal during the jump")
-
-
-func test_wider_date_gap_heals_more():
-	var start_date = RoguelikeRun.current_star_date
-
-	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
-	RoguelikeRun.apply_jump_repairs(start_date + 2, false)
-	var narrow_gap_armor = _total_armor(RoguelikeRun.fleet_ships[0])
-
-	RoguelikeRun.current_star_date = start_date
-	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
-	RoguelikeRun.apply_jump_repairs(start_date + 9, false)
-	var wide_gap_armor = _total_armor(RoguelikeRun.fleet_ships[0])
-
-	assert_gt(wide_gap_armor, narrow_gap_armor,
-		"A longer jump (more downtime) should repair more")
-
-
-func test_rnr_heals_more_than_battle_jump_at_equal_gap():
-	var start_date = RoguelikeRun.current_star_date
-
-	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
-	RoguelikeRun.apply_jump_repairs(start_date + JUMP_DATE_DELTA, false)
-	var battle_jump_armor = _total_armor(RoguelikeRun.fleet_ships[0])
-
-	RoguelikeRun.current_star_date = start_date
-	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
-	RoguelikeRun.apply_jump_repairs(start_date + JUMP_DATE_DELTA, true)
-	var rnr_armor = _total_armor(RoguelikeRun.fleet_ships[0])
-
-	assert_gt(rnr_armor, battle_jump_armor,
-		"R&R downtime should repair more than a battle jump of the same gap")
-
-
-func test_jump_repairs_restore_destroyed_components():
-	var ship = _make_damaged_ship_with_crew(1)
-	ship["internals"][0]["status"] = "destroyed"
-	ship["internals"][0]["current_health"] = 0
-	RoguelikeRun.fleet_ships = [ship]
-
-	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, true)
-
-	assert_gt(RoguelikeRun.fleet_ships[0]["internals"][0]["current_health"], 0,
-		"Downtime repairs should restore destroyed components")
-	assert_ne(RoguelikeRun.fleet_ships[0]["internals"][0]["status"], "destroyed",
-		"Restored component should no longer be destroyed")
-
-
-func test_jump_advances_current_star_date():
-	var destination = RoguelikeRun.current_star_date + JUMP_DATE_DELTA
-
-	RoguelikeRun.apply_jump_repairs(destination, false)
-
-	assert_eq(RoguelikeRun.current_star_date, destination,
-		"The jump should move the run to the destination star date")
-
-
-func test_jump_repair_summary_persists_for_the_map():
-	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
-
-	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
-
-	assert_gt(RoguelikeRun.last_jump_repair_summary.get("ships_repaired", 0), 0,
-		"The map reports repairs after a battle from the persisted summary")
-
-
-func test_fleet_ships_empty_at_run_start():
-	# start_run reads team1 fleet from disk which may not exist in test env;
-	# we verify fleet_ships is reset regardless of that side-effect
-	RoguelikeRun.fleet_ships = [_make_ship("fighter")]
-	RoguelikeRun.active = true
-
-	var dummy_fleet := {"fighter": 1, "heavy_fighter": 0,
-		"torpedo_boat": 0, "corvette": 0, "capital": 0}
-	RoguelikeRun.start_run(dummy_fleet)
-
-	assert_true(RoguelikeRun.fleet_ships.is_empty(),
-		"fleet_ships should be empty at the start of a new run (first battle spawns fresh ships)")
-
-
-# ============================================================================
-# CREW ROSTER
-# ============================================================================
-
-func test_run_start_creates_a_crew_group_per_hull():
-	RoguelikeRun.start_run({"fighter": 2, "heavy_fighter": 0,
-		"torpedo_boat": 0, "corvette": 1, "capital": 0})
-
-	assert_eq(RoguelikeRun.fleet_crew.size(), 3,
-		"Each hull in the starting fleet should get a crew group at run start")
-	var types: Array = []
-	for group in RoguelikeRun.fleet_crew:
-		types.append(group.ship_type)
-		assert_gt(group.crew.size(), 0, "Every crew group should have members")
-	assert_eq(types.count("fighter"), 2, "Two fighter crews expected")
-	assert_eq(types.count("corvette"), 1, "One corvette crew expected")
-
-
-func test_roster_crew_have_callsigns():
-	RoguelikeRun.start_run({"fighter": 2, "heavy_fighter": 0,
-		"torpedo_boat": 0, "corvette": 0, "capital": 0})
-
-	var callsigns: Array = []
-	for group in RoguelikeRun.fleet_crew:
-		for member in group.crew:
-			assert_true(member.has("callsign"), "Roster crew need a player-facing callsign")
-			callsigns.append(member.callsign)
-	assert_eq(callsigns.size(), 2, "One pilot per fighter")
-	assert_ne(callsigns[0], callsigns[1], "Callsigns should be distinct")
-
-
-func test_run_start_resets_doctrine():
-	DoctrineSystem.set_instruction_in_place(
-		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_FLEET, "", "charge_head_on")
-
-	RoguelikeRun.start_run({"fighter": 1, "heavy_fighter": 0,
-		"torpedo_boat": 0, "corvette": 0, "capital": 0})
-
-	assert_true(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_FLEET].is_empty(),
-		"Doctrine is run state: a new run starts with no standing instructions")
-
-
-# ROSTER RECONCILE (Edit Fleet adjusts fleet counts mid-setup)
 
 const PILOT_DOCTRINE := "charge_head_on"
 
@@ -383,43 +62,495 @@ func _counts(overrides: Dictionary = {}) -> Dictionary:
 	return base
 
 
-func _groups_of_type(ship_type: String) -> int:
+func _make_ship(ship_type: String) -> Dictionary:
+	return ShipData.create_ship_instance(ship_type, 0, Vector2.ZERO)
+
+
+## A survivor ship for the hull, as the battle scene hands one back: it carries
+## the hull's stable id and a deep copy of its live crew.
+func _survivor_for(hull: Dictionary) -> Dictionary:
+	var survivor := _make_ship(hull.ship_type)
+	survivor["hull_id"] = hull.hull_id
+	survivor["crew"] = hull.crew.duplicate(true)
+	return survivor
+
+
+# ============================================================================
+# RUN START: PER-HULL ROSTER
+# ============================================================================
+
+func test_run_start_creates_a_hull_per_ship():
+	RoguelikeRun.start_run(_counts({"fighter": 2, "corvette": 1}))
+
+	assert_eq(RoguelikeRun.fleet_hulls.size(), 3,
+		"Each ship in the starting fleet should get its own hull record")
+	var types: Array = []
+	for hull in RoguelikeRun.fleet_hulls:
+		types.append(hull.ship_type)
+		assert_gt(hull.crew.size(), 0, "Every starting hull should be crewed")
+	assert_eq(types.count("fighter"), 2, "Two fighter hulls expected")
+	assert_eq(types.count("corvette"), 1, "One corvette hull expected")
+
+
+func test_each_hull_has_a_unique_id():
+	RoguelikeRun.start_run(_counts({"fighter": 3}))
+
+	var ids: Array = []
+	for hull in RoguelikeRun.fleet_hulls:
+		ids.append(hull.hull_id)
+	var unique: Array = []
+	for id in ids:
+		if id not in unique:
+			unique.append(id)
+	assert_eq(unique.size(), ids.size(), "Every hull id should be unique within a run")
+
+
+func test_hull_has_a_standard_complement():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	assert_gt(RoguelikeRun.fleet_hulls[0].complement.size(), 0,
+		"A hull's standard complement should be derived at creation")
+
+
+func test_roster_crew_have_unique_callsigns():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+
+	var callsigns: Array = []
+	for hull in RoguelikeRun.fleet_hulls:
+		for member in hull.crew:
+			assert_true(member.has("callsign"), "Roster crew need a player-facing callsign")
+			callsigns.append(member.callsign)
+	assert_eq(callsigns.size(), 2, "One pilot per fighter")
+	assert_ne(callsigns[0], callsigns[1], "Callsigns should be distinct")
+
+
+func test_run_start_resets_doctrine():
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_FLEET, "", PILOT_DOCTRINE)
+
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	assert_true(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_FLEET].is_empty(),
+		"Doctrine is run state: a new run starts with no standing instructions")
+
+
+# ============================================================================
+# SORTIE ELIGIBILITY
+# ============================================================================
+
+func test_sortieable_excludes_iced_hulls():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	RoguelikeRun.fleet_hulls[0].iced = true
+
+	assert_eq(RoguelikeRun.sortieable_hulls().size(), 1,
+		"An iced hull should not sortie")
+
+
+func test_sortieable_excludes_pilotless_hulls():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	RoguelikeRun.fleet_hulls[0].crew = []
+
+	assert_eq(RoguelikeRun.sortieable_hulls().size(), 0,
+		"A hull with no pilot cannot take the field")
+
+
+func test_fleet_counts_only_sortieable_excludes_iced():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	RoguelikeRun.fleet_hulls[0].iced = true
+
+	assert_eq(RoguelikeRun.fleet_counts(true).get("fighter", 0), 1,
+		"Sortieable counts should drop the iced hull")
+	assert_eq(RoguelikeRun.fleet_counts(false).get("fighter", 0), 2,
+		"Full counts should include the iced hull")
+
+
+# ============================================================================
+# BATTLE OUTCOME: SURVIVORS, LOSSES, DAMAGE CARRY-OVER
+# ============================================================================
+
+func test_surviving_hull_keeps_armor_damage():
+	RoguelikeRun.start_run(_counts({"corvette": 1}))
+	var survivor := _survivor_for(RoguelikeRun.fleet_hulls[0])
+	survivor["armor_sections"][0]["current_armor"] = 0
+
+	RoguelikeRun.apply_battle_outcome([survivor])
+
+	assert_eq(RoguelikeRun.fleet_hulls[0].ship["armor_sections"][0]["current_armor"], 0,
+		"Depleted armor should carry over to the hull's persisted state")
+
+
+func test_surviving_hull_keeps_internal_damage():
+	RoguelikeRun.start_run(_counts({"corvette": 1}))
+	var survivor := _survivor_for(RoguelikeRun.fleet_hulls[0])
+	survivor["internals"][0]["status"] = "destroyed"
+
+	RoguelikeRun.apply_battle_outcome([survivor])
+
+	assert_eq(RoguelikeRun.fleet_hulls[0].ship["internals"][0]["status"], "destroyed",
+		"A destroyed internal should carry over to the hull's persisted state")
+
+
+func test_surviving_hull_keeps_crew_identity():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var crew_id: String = RoguelikeRun.fleet_hulls[0].crew[0].crew_id
+	var survivor := _survivor_for(RoguelikeRun.fleet_hulls[0])
+
+	RoguelikeRun.apply_battle_outcome([survivor])
+
+	assert_eq(RoguelikeRun.fleet_hulls[0].crew[0].crew_id, crew_id,
+		"A surviving hull keeps the identity of the crew that flew it")
+
+
+func test_persisted_survivor_is_deep_copied():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var survivor := _survivor_for(RoguelikeRun.fleet_hulls[0])
+	RoguelikeRun.apply_battle_outcome([survivor])
+
+	survivor["armor_sections"][0]["current_armor"] = 999
+
+	assert_ne(RoguelikeRun.fleet_hulls[0].ship["armor_sections"][0]["current_armor"], 999,
+		"The persisted hull state should be a deep copy, not a live reference")
+
+
+func test_lost_sortied_hull_is_removed():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	var kept: Dictionary = RoguelikeRun.fleet_hulls[0]
+
+	RoguelikeRun.apply_battle_outcome([_survivor_for(kept)])
+
+	assert_eq(RoguelikeRun.fleet_hulls.size(), 1,
+		"A sortied hull with no survivor should be removed from the fleet")
+	assert_eq(RoguelikeRun.fleet_hulls[0].hull_id, kept.hull_id,
+		"The surviving hull should be the one that came back")
+
+
+func test_iced_hull_untouched_when_battle_lost():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	RoguelikeRun.fleet_hulls[0].iced = true
+	var iced_id: String = RoguelikeRun.fleet_hulls[0].hull_id
+
+	# The only sortied hull dies; nobody comes back.
+	RoguelikeRun.apply_battle_outcome([])
+
+	assert_false(RoguelikeRun.hull_by_id(iced_id).is_empty(),
+		"An iced hull never sortied, so a lost battle must not remove it")
+
+
+func test_pilotless_hull_untouched_when_battle_lost():
+	RoguelikeRun.start_run(_counts({"fighter": 1, "corvette": 1}))
+	# Strip the fighter's crew so only the corvette sorties.
+	for hull in RoguelikeRun.fleet_hulls:
+		if hull.ship_type == "fighter":
+			hull.crew = []
+	var fighter_present := false
+	for hull in RoguelikeRun.fleet_hulls:
+		if hull.ship_type == "fighter":
+			fighter_present = true
+
+	RoguelikeRun.apply_battle_outcome([])
+
+	var still_present := false
+	for hull in RoguelikeRun.fleet_hulls:
+		if hull.ship_type == "fighter":
+			still_present = true
+	assert_true(fighter_present and still_present,
+		"A pilotless hull stays home, so a lost battle must not remove it")
+
+
+func test_doctrine_pruned_when_hull_lost():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	var kept: Dictionary = RoguelikeRun.fleet_hulls[0]
+	var lost: Dictionary = RoguelikeRun.fleet_hulls[1]
+	var lost_crew_id: String = lost.crew[0].crew_id
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_CREW, lost_crew_id, PILOT_DOCTRINE)
+
+	RoguelikeRun.apply_battle_outcome([_survivor_for(kept)])
+
+	assert_false(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CREW].has(lost_crew_id),
+		"Per-crew doctrine for crew lost with their hull should be purged")
+
+
+# ============================================================================
+# CASUALTIES & INSURANCE
+# ============================================================================
+
+func test_lost_hull_charges_insurance_for_all_aboard():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var crew_size: int = RoguelikeRun.fleet_hulls[0].crew.size()
+	var money_before: int = RoguelikeRun.money
+
+	# The lone sortied hull is lost: everyone aboard is a casualty.
+	RoguelikeRun.apply_battle_outcome([])
+
+	assert_eq(RoguelikeRun.last_battle_summary.get("casualties", 0), crew_size,
+		"Every crew member aboard a lost hull is a casualty")
+	assert_eq(RoguelikeRun.money,
+		money_before - EconomySystem.insurance_total(crew_size),
+		"Insurance is paid out for each casualty")
+
+
+func test_surviving_hull_loses_the_gunner_whose_mount_was_destroyed():
+	RoguelikeRun.start_run(_counts({"corvette": 1}))
+	var hull: Dictionary = RoguelikeRun.fleet_hulls[0]
+	var gunner_id := ""
+	var weapon_id := ""
+	for member in hull.crew:
+		if member.get("role", -1) == CrewData.Role.GUNNER and member.has("weapon_id"):
+			gunner_id = member.crew_id
+			weapon_id = member.weapon_id
+			break
+	assert_ne(gunner_id, "", "precondition: a corvette carries a bound gunner")
+
+	var survivor := _make_ship("corvette")
+	survivor["hull_id"] = hull.hull_id
+	survivor["crew"] = hull.crew.duplicate(true)
+	for component in survivor.internals:
+		if component.get("type", "") == "weapon_mount" and component.get("weapon_id", "") == weapon_id:
+			component.status = "destroyed"
+			component.current_health = 0
+
+	RoguelikeRun.apply_battle_outcome([survivor])
+
+	var survivor_ids: Array = RoguelikeRun.fleet_hulls[0].crew.map(func(m): return m.crew_id)
+	assert_false(gunner_id in survivor_ids,
+		"The gunner whose mount was shot off is a casualty")
+	var has_pilot := false
+	for member in RoguelikeRun.fleet_hulls[0].crew:
+		if member.get("role", -1) == CrewData.Role.PILOT:
+			has_pilot = true
+	assert_true(has_pilot, "The pilot survives a hull that came home")
+
+
+# ============================================================================
+# FLEET EMPTY CHECK
+# ============================================================================
+
+func test_fleet_empty_after_all_hulls_lost():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	RoguelikeRun.apply_battle_outcome([])
+
+	assert_true(RoguelikeRun.is_fleet_empty(),
+		"Losing the last sortied hull empties the fleet")
+
+
+func test_fleet_not_empty_while_a_hull_survives():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	RoguelikeRun.apply_battle_outcome([_survivor_for(RoguelikeRun.fleet_hulls[0])])
+
+	assert_false(RoguelikeRun.is_fleet_empty(),
+		"A surviving hull keeps the fleet non-empty")
+
+
+# ============================================================================
+# ENEMY FLEET INDEPENDENCE
+# ============================================================================
+
+func test_enemy_fleet_is_not_affected_by_battle_outcome():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	RoguelikeRun.enemy_fleet = {
+		"fighter": 3, "corvette": 2, "heavy_fighter": 0, "torpedo_boat": 0, "capital": 0
+	}
+
+	RoguelikeRun.apply_battle_outcome([_survivor_for(RoguelikeRun.fleet_hulls[0])])
+
+	assert_eq(RoguelikeRun.enemy_fleet.get("fighter", 0), 3,
+		"Enemy counts should not change from a player battle outcome")
+	assert_eq(RoguelikeRun.enemy_fleet.get("corvette", 0), 2,
+		"Enemy counts should not change from a player battle outcome")
+
+
+# ============================================================================
+# RUN LIFECYCLE
+# ============================================================================
+
+func test_end_run_clears_fleet_hulls():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	RoguelikeRun.end_run()
+
+	assert_true(RoguelikeRun.fleet_hulls.is_empty(),
+		"fleet_hulls should be cleared when the run ends")
+
+
+func test_end_run_clears_enemy_fleet():
+	RoguelikeRun.enemy_fleet = {"fighter": 3, "corvette": 1,
+		"heavy_fighter": 0, "torpedo_boat": 0, "capital": 0}
+
+	RoguelikeRun.end_run()
+
+	assert_true(RoguelikeRun.enemy_fleet.is_empty(),
+		"enemy_fleet should be cleared when the run ends")
+
+
+# ============================================================================
+# JUMP REPAIRS (Engineers + star dates)
+# ============================================================================
+
+const JUMP_DATE_DELTA := 5
+
+
+## A damaged corvette hull crewed by `engineer_count` engineers, ready for a
+## jump-repair pass. The damage lives in `hull.ship` (crew stripped); the
+## engineers live in `hull.crew`, the way the persistent fleet stores them.
+func _make_damaged_hull(engineer_count: int) -> Dictionary:
+	var ship := _make_ship("corvette")
+	ship["armor_sections"][0]["current_armor"] = 1
+	var crew: Array = []
+	for i in engineer_count:
+		crew.append(TestFactories.make_crew_engineer(1.0, ship.ship_id))
+	return {
+		"hull_id": "hull_jump",
+		"ship_type": "corvette",
+		"iced": false,
+		"crew": crew,
+		"complement": [],
+		"ship": ship,
+	}
+
+
+func _hull_armor(hull: Dictionary) -> int:
+	return DamageResolver.calculate_total_armor(hull.ship)
+
+
+func test_jump_repairs_heal_hull_with_engineers():
+	RoguelikeRun.fleet_hulls = [_make_damaged_hull(1)]
+	var before := _hull_armor(RoguelikeRun.fleet_hulls[0])
+
+	var summary = RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
+
+	assert_gt(_hull_armor(RoguelikeRun.fleet_hulls[0]), before,
+		"A hull with an engineer should heal during the jump")
+	assert_eq(summary.ships_repaired, 1, "Summary should count the repaired hull")
+	assert_eq(summary.date_delta, JUMP_DATE_DELTA, "Summary should report the star-date gap")
+
+
+func test_jump_repairs_skip_hull_without_engineers():
+	RoguelikeRun.fleet_hulls = [_make_damaged_hull(0)]
+	var before := _hull_armor(RoguelikeRun.fleet_hulls[0])
+
+	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
+
+	assert_eq(_hull_armor(RoguelikeRun.fleet_hulls[0]), before,
+		"A hull without engineers should not heal during the jump")
+
+
+func test_wider_date_gap_heals_more():
+	var start_date = RoguelikeRun.current_star_date
+
+	RoguelikeRun.fleet_hulls = [_make_damaged_hull(1)]
+	RoguelikeRun.apply_jump_repairs(start_date + 2, false)
+	var narrow_gap_armor := _hull_armor(RoguelikeRun.fleet_hulls[0])
+
+	RoguelikeRun.current_star_date = start_date
+	RoguelikeRun.fleet_hulls = [_make_damaged_hull(1)]
+	RoguelikeRun.apply_jump_repairs(start_date + 9, false)
+	var wide_gap_armor := _hull_armor(RoguelikeRun.fleet_hulls[0])
+
+	assert_gt(wide_gap_armor, narrow_gap_armor,
+		"A longer jump (more downtime) should repair more")
+
+
+func test_rnr_heals_more_than_battle_jump_at_equal_gap():
+	var start_date = RoguelikeRun.current_star_date
+
+	RoguelikeRun.fleet_hulls = [_make_damaged_hull(1)]
+	RoguelikeRun.apply_jump_repairs(start_date + JUMP_DATE_DELTA, false)
+	var battle_jump_armor := _hull_armor(RoguelikeRun.fleet_hulls[0])
+
+	RoguelikeRun.current_star_date = start_date
+	RoguelikeRun.fleet_hulls = [_make_damaged_hull(1)]
+	RoguelikeRun.apply_jump_repairs(start_date + JUMP_DATE_DELTA, true)
+	var rnr_armor := _hull_armor(RoguelikeRun.fleet_hulls[0])
+
+	assert_gt(rnr_armor, battle_jump_armor,
+		"R&R downtime should repair more than a battle jump of the same gap")
+
+
+func test_jump_repairs_restore_destroyed_components():
+	var hull := _make_damaged_hull(1)
+	hull.ship["internals"][0]["status"] = "destroyed"
+	hull.ship["internals"][0]["current_health"] = 0
+	RoguelikeRun.fleet_hulls = [hull]
+
+	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, true)
+
+	assert_gt(RoguelikeRun.fleet_hulls[0].ship["internals"][0]["current_health"], 0,
+		"Downtime repairs should restore destroyed components")
+	assert_ne(RoguelikeRun.fleet_hulls[0].ship["internals"][0]["status"], "destroyed",
+		"Restored component should no longer be destroyed")
+
+
+func test_jump_repairs_skip_pristine_hulls():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	var summary = RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
+
+	assert_eq(summary.ships_repaired, 0,
+		"A pristine hull (no recorded damage) has nothing to repair")
+
+
+func test_jump_advances_current_star_date():
+	var destination = RoguelikeRun.current_star_date + JUMP_DATE_DELTA
+
+	RoguelikeRun.apply_jump_repairs(destination, false)
+
+	assert_eq(RoguelikeRun.current_star_date, destination,
+		"The jump should move the run to the destination star date")
+
+
+func test_jump_repair_summary_persists_for_the_map():
+	RoguelikeRun.fleet_hulls = [_make_damaged_hull(1)]
+
+	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
+
+	assert_gt(RoguelikeRun.last_jump_repair_summary.get("ships_repaired", 0), 0,
+		"The map reports repairs after a battle from the persisted summary")
+
+
+# ============================================================================
+# ROSTER RECONCILE (Edit Fleet adjusts fleet counts mid-setup)
+# ============================================================================
+
+func _hulls_of_type(ship_type: String) -> int:
 	var n := 0
-	for group in RoguelikeRun.fleet_crew:
-		if group.get("ship_type", "") == ship_type:
+	for hull in RoguelikeRun.fleet_hulls:
+		if hull.get("ship_type", "") == ship_type:
 			n += 1
 	return n
 
 
 func _roster_has_crew_id(crew_id: String) -> bool:
-	for group in RoguelikeRun.fleet_crew:
-		for member in group.crew:
+	for hull in RoguelikeRun.fleet_hulls:
+		for member in hull.crew:
 			if member.get("crew_id", "") == crew_id:
 				return true
 	return false
 
 
-func test_reconcile_adds_groups_when_a_count_grows():
+func test_reconcile_adds_hulls_when_a_count_grows():
 	RoguelikeRun.start_run(_counts({"fighter": 1}))
 
 	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 3}))
 
-	assert_eq(_groups_of_type("fighter"), 3,
-		"Raising a ship count should add crew groups for the new hulls")
+	assert_eq(_hulls_of_type("fighter"), 3,
+		"Raising a ship count should add hulls for the new ships")
 
 
-func test_reconcile_drops_groups_when_a_count_shrinks():
+func test_reconcile_drops_hulls_when_a_count_shrinks():
 	RoguelikeRun.start_run(_counts({"fighter": 3}))
 
 	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 1}))
 
-	assert_eq(_groups_of_type("fighter"), 1,
-		"Lowering a ship count should drop the surplus crew groups")
+	assert_eq(_hulls_of_type("fighter"), 1,
+		"Lowering a ship count should drop the surplus hulls")
 
 
 func test_reconcile_preserves_identity_of_retained_crew():
 	RoguelikeRun.start_run(_counts({"fighter": 2}))
-	var kept_id: String = RoguelikeRun.fleet_crew[0].crew[0].crew_id
+	var kept_id: String = RoguelikeRun.fleet_hulls[0].crew[0].crew_id
 
 	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 1}))
 
@@ -429,7 +560,7 @@ func test_reconcile_preserves_identity_of_retained_crew():
 
 func test_reconcile_purges_doctrine_for_dropped_crew():
 	RoguelikeRun.start_run(_counts({"fighter": 2}))
-	var dropped_id: String = RoguelikeRun.fleet_crew[1].crew[0].crew_id
+	var dropped_id: String = RoguelikeRun.fleet_hulls[1].crew[0].crew_id
 	DoctrineSystem.set_instruction_in_place(
 		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_CREW, dropped_id, PILOT_DOCTRINE)
 	DoctrineSystem.set_disabled_in_place(
@@ -511,19 +642,22 @@ func _ship_with_crew(ship_type: String, status: String, crew_id: String) -> Dict
 	return ship
 
 
-func test_victory_keeps_only_surviving_ships_and_crew():
-	var survivor := _ship_with_crew("fighter", "operational", "alive")
-	var casualty := _ship_with_crew("corvette", "destroyed", "dead")
+func test_victory_keeps_only_surviving_hulls_and_crew():
+	RoguelikeRun.start_run(_counts({"fighter": 1, "corvette": 1}))
+	var fighter: Dictionary = RoguelikeRun.fleet_hulls[0]
+	var corvette: Dictionary = RoguelikeRun.fleet_hulls[1]
+	var survivor := _survivor_for(fighter)
+	var casualty := _survivor_for(corvette)
+	casualty["status"] = "destroyed"
 
 	RoguelikeRun.record_battle_result(
 		CampaignSystem.RESULT_VICTORY, [survivor, casualty])
 
-	assert_eq(RoguelikeRun.fleet_ships.size(), 1, "Only survivors stay in the fleet")
-	assert_eq(RoguelikeRun.fleet_ships[0]["type"], "fighter",
+	assert_eq(RoguelikeRun.fleet_hulls.size(), 1, "Only survivors stay in the fleet")
+	assert_eq(RoguelikeRun.fleet_hulls[0].ship_type, "fighter",
 		"The surviving hull is the one that lived")
-	assert_eq(RoguelikeRun.fleet_crew.size(), 1, "Only surviving crews stay")
-	assert_eq(RoguelikeRun.fleet_crew[0]["crew"][0]["crew_id"], "alive",
-		"The surviving crew kept their identity")
+	assert_eq(RoguelikeRun.fleet_hulls[0].hull_id, fighter.hull_id,
+		"The surviving hull kept its stable identity")
 	assert_true(RoguelikeRun.lost_fleet_final_ships.is_empty(),
 		"A victory leaves no lost fleet to roll survivors from")
 
@@ -539,7 +673,7 @@ func test_defeat_stashes_final_fleet_state_and_empties_fleet():
 		"Defeat stashes the wiped fleet's final ship states")
 	assert_eq(RoguelikeRun.lost_fleet_final_crew.size(), 1,
 		"Defeat stashes the wiped fleet's crew groups")
-	assert_true(RoguelikeRun.is_fleet_empty(), "A wiped fleet has no ships left")
+	assert_true(RoguelikeRun.is_fleet_empty(), "A wiped fleet has no hulls left")
 
 
 # ============================================================================
@@ -554,9 +688,10 @@ func test_apply_demotion_combines_config_with_survivors():
 
 	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
 
-	assert_eq(RoguelikeRun.fleet["fighter"], 2,
+	var counts := RoguelikeRun.fleet_counts()
+	assert_eq(counts["fighter"], 2,
 		"The demoted fleet includes the saved config's hulls")
-	assert_eq(RoguelikeRun.fleet["corvette"], 1,
+	assert_eq(counts["corvette"], 1,
 		"The demoted fleet includes the rolled survivors")
 
 
@@ -568,9 +703,11 @@ func test_apply_demotion_only_survivors_carry_damage_state():
 
 	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
 
-	assert_eq(RoguelikeRun.fleet_ships.size(), 1,
-		"Only survivor hulls carry a saved state; fresh hulls spawn undamaged")
-	assert_eq(int(RoguelikeRun.fleet_ships[0]["armor_sections"][0]["current_armor"]), 1,
+	var damaged_hulls := RoguelikeRun.fleet_hulls.filter(
+		func(h): return not h.ship.is_empty())
+	assert_eq(damaged_hulls.size(), 1,
+		"Only survivor hulls carry a saved damage state; fresh hulls spawn pristine")
+	assert_eq(int(damaged_hulls[0].ship["armor_sections"][0]["current_armor"]), 1,
 		"Survivor damage state carries into the demoted run")
 
 
@@ -582,8 +719,8 @@ func test_apply_demotion_rosters_fresh_crews_plus_survivor_crews():
 
 	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
 
-	assert_eq(RoguelikeRun.fleet_crew.size(), 3,
-		"Two fresh fighter crews plus the surviving corvette crew")
+	assert_eq(RoguelikeRun.fleet_hulls.size(), 3,
+		"Two fresh fighter hulls plus the surviving corvette hull")
 	assert_true(_roster_has_crew_id("veteran"),
 		"The surviving crew keeps its identity through the demotion")
 
@@ -610,8 +747,8 @@ func test_reconcile_keeps_callsigns_unique_after_adding():
 	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 4}))
 
 	var callsigns: Array = []
-	for group in RoguelikeRun.fleet_crew:
-		for member in group.crew:
+	for hull in RoguelikeRun.fleet_hulls:
+		for member in hull.crew:
 			callsigns.append(member.callsign)
 	var unique: Array = []
 	for c in callsigns:

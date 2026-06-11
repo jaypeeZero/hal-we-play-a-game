@@ -3,8 +3,8 @@ extends RefCounted
 
 ## Saves and loads the roguelike campaign to JSON in user://, following
 ## FleetDataManager's pattern. The payload is everything RoguelikeRun
-## needs to resume: {version, campaign, fleet, fleet_ships, fleet_crew,
-## doctrine, enemy_fleet, current_star_date, callsign_counter}.
+## needs to resume: {version, campaign, fleet_hulls, doctrine, enemy_fleet,
+## money, current_star_date, callsign_counter, next_hull_id}.
 
 const SAVE_PATH := "user://campaign_save.json"
 const SAVE_VERSION := 1
@@ -15,9 +15,9 @@ const VECTOR2_TAG := "__vector2"
 
 ## Payload fields that must come back as ints (JSON parses all numbers as
 ## floats); node row/col/star_date_gap are cast separately.
-const INT_FIELDS := ["current_star_date", "callsign_counter"]
+const INT_FIELDS := ["current_star_date", "callsign_counter", "money", "next_hull_id"]
 const INT_NODE_FIELDS := ["row", "col", "star_date_gap"]
-const INT_COUNT_DICTS := ["fleet", "enemy_fleet"]
+const INT_COUNT_DICTS := ["enemy_fleet"]
 
 
 static func save_campaign(payload: Dictionary) -> bool:
