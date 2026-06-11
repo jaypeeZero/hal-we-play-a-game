@@ -33,6 +33,10 @@ const ENTRY_TRIM_CHUNK: int = 500
 const FONT_SIZE: int = 14
 # Padding inside the panel around the text.
 const PANEL_MARGIN: int = 8
+# Slightly translucent so the battle stays visible behind the dropped console.
+const PANEL_BG_ALPHA: float = 0.92
+const PANEL_BORDER_ALPHA: float = 0.6
+const PANEL_BORDER_WIDTH: int = 2
 
 # Toggle key (the `~`/backtick key) and the filter key.
 const TOGGLE_KEY: int = KEY_QUOTELEFT
@@ -106,9 +110,9 @@ func _build_ui() -> void:
 	_panel = Panel.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.06, 0.09, 0.92)
-	style.border_color = Color(0.2, 0.8, 0.9, 0.6)
-	style.border_width_bottom = 2
+	style.bg_color = Color(UiKit.BG, PANEL_BG_ALPHA)
+	style.border_color = Color(UiKit.ACCENT, PANEL_BORDER_ALPHA)
+	style.border_width_bottom = PANEL_BORDER_WIDTH
 	_panel.add_theme_stylebox_override("panel", style)
 	add_child(_panel)
 
