@@ -2,7 +2,7 @@ class_name DismissalDialog
 extends Control
 
 ## Modal shown when the player cannot afford a battle's upkeep, styled via
-## RogueliteUi (see design/dismissal_dialog.mockup.html). They dismiss ships
+## UiKit (see design/dismissal_dialog.mockup.html). They dismiss ships
 ## (the hull and everyone aboard) and crew (opening a vacancy) to cut upkeep —
 ## no insurance is owed, the crew are simply let go. A live ledger (Credits /
 ## Upkeep / Short by) shows the gap closing; Confirm unlocks only once the
@@ -30,7 +30,7 @@ func setup() -> void:
 
 func _build_chrome() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(RogueliteUi.backdrop())
+	add_child(UiKit.backdrop())
 
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -39,7 +39,7 @@ func _build_chrome() -> void:
 	var modal := PanelContainer.new()
 	modal.custom_minimum_size = Vector2(MODAL_WIDTH, 0)
 	modal.add_theme_stylebox_override("panel",
-		RogueliteUi.panel_box(RogueliteUi.PANEL_2, Color("5a2a2a"), 14, 0))
+		UiKit.panel_box(UiKit.PANEL_2, UiKit.WARN_BORDER, 14, 0))
 	center.add_child(modal)
 
 	var root := VBoxContainer.new()
@@ -68,19 +68,19 @@ func _build_chrome() -> void:
 func _build_head() -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 6)
-	box.add_child(RogueliteUi.label("⚠ INSUFFICIENT FUNDS", RogueliteUi.BAD, 11))
-	box.add_child(RogueliteUi.label("Dismiss ships or crew to cover this battle's upkeep", RogueliteUi.INK, 16))
+	box.add_child(UiKit.label("⚠ INSUFFICIENT FUNDS", UiKit.BAD, 11))
+	box.add_child(UiKit.label("Dismiss ships or crew to cover this battle's upkeep", UiKit.INK, 16))
 	return _pad(box, 16)
 
 
 func _build_foot() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
-	var hint := RogueliteUi.label("Dismissed crew are let go — no insurance owed.", RogueliteUi.DIM, 11)
+	var hint := UiKit.label("Dismissed crew are let go — no insurance owed.", UiKit.DIM, 11)
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(hint)
 
-	_confirm = RogueliteUi.style_button(_make_button("Launch battle"), "primary")
+	_confirm = UiKit.style_button(_make_button("Launch battle"), "primary")
 	_confirm.pressed.connect(func(): resolved.emit(true))
 	row.add_child(_confirm)
 	return _pad(row, 14)
@@ -94,12 +94,12 @@ func _rebuild() -> void:
 
 	for child in _ledger.get_children():
 		child.queue_free()
-	_ledger.add_child(_meter("Credits", str(RoguelikeRun.money), RogueliteUi.GOLD, ""))
-	_ledger.add_child(_meter("Upkeep this battle", str(upkeep), RogueliteUi.INK, _fleet_summary()))
+	_ledger.add_child(_meter("Credits", str(RoguelikeRun.money), UiKit.GOLD, ""))
+	_ledger.add_child(_meter("Upkeep this battle", str(upkeep), UiKit.INK, _fleet_summary()))
 	if short > 0:
-		_ledger.add_child(_meter("Short by", str(short), RogueliteUi.BAD, "dismiss to close the gap", true))
+		_ledger.add_child(_meter("Short by", str(short), UiKit.BAD, "dismiss to close the gap", true))
 	else:
-		_ledger.add_child(_meter("Ready", "✓", RogueliteUi.GOOD, "upkeep covered", false, RogueliteUi.GOOD))
+		_ledger.add_child(_meter("Ready", "✓", UiKit.GOOD, "upkeep covered", false, UiKit.GOOD))
 
 	for child in _content.get_children():
 		child.queue_free()
@@ -112,46 +112,46 @@ func _rebuild() -> void:
 # ============================================================================
 
 func _meter(lbl: String, value: String, value_color: Color, sub: String, danger := false, border_override := Color(0, 0, 0, 0)) -> Control:
-	var border := RogueliteUi.LINE
+	var border := UiKit.LINE
 	if danger:
 		border = Color("5a2a2a")
 	elif border_override.a > 0.0:
 		border = Color(border_override.r, border_override.g, border_override.b, 0.5)
-	var card := RogueliteUi.card(RogueliteUi.PANEL, border, 10)
+	var card := UiKit.card(UiKit.PANEL, border, 10)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 3)
 	card.add_child(box)
-	box.add_child(RogueliteUi.label(lbl.to_upper(), RogueliteUi.DIM, 10))
-	box.add_child(RogueliteUi.label(value, value_color, 22))
+	box.add_child(UiKit.label(lbl.to_upper(), UiKit.DIM, 10))
+	box.add_child(UiKit.label(value, value_color, 22))
 	if sub != "":
-		box.add_child(RogueliteUi.label(sub, RogueliteUi.DIM, 11))
+		box.add_child(UiKit.label(sub, UiKit.DIM, 11))
 	return card
 
 
 func _hull_card(hull: Dictionary) -> Control:
-	var card := RogueliteUi.card(RogueliteUi.PANEL, RogueliteUi.LINE, 0)
+	var card := UiKit.card(UiKit.PANEL, UiKit.LINE, 0)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 0)
 	card.add_child(box)
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
-	header.add_child(RogueliteUi.label(_type_label(hull.get("ship_type", "")), RogueliteUi.INK, 13))
-	header.add_child(RogueliteUi.label("· crew %d" % hull.get("crew", []).size(), RogueliteUi.DIM, 12))
+	header.add_child(UiKit.label(_type_label(hull.get("ship_type", "")), UiKit.INK, 13))
+	header.add_child(UiKit.label("· crew %d" % hull.get("crew", []).size(), UiKit.DIM, 12))
 	if hull.get("iced", false):
-		header.add_child(RogueliteUi.badge("On ice"))
+		header.add_child(UiKit.badge("On ice"))
 	elif not _has_pilot(hull):
 		# Dismissing a hull's last pilot benches it — flag it so the player
 		# isn't surprised when it doesn't sortie.
-		header.add_child(RogueliteUi.badge("Won't sortie", RogueliteUi.BAD))
+		header.add_child(UiKit.badge("Won't sortie", UiKit.BAD))
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(spacer)
-	header.add_child(RogueliteUi.label("upkeep %d" % _hull_upkeep(hull), RogueliteUi.DIM, 11))
+	header.add_child(UiKit.label("upkeep %d" % _hull_upkeep(hull), UiKit.DIM, 11))
 
 	var hull_id: String = hull.hull_id
-	var dismiss_ship := RogueliteUi.style_button(_make_button("Dismiss ship"), "warn")
+	var dismiss_ship := UiKit.style_button(_make_button("Dismiss ship"), "warn")
 	dismiss_ship.disabled = not RoguelikeRun.may_dismiss_hull(hull_id)
 	if dismiss_ship.disabled:
 		dismiss_ship.tooltip_text = "Needed to field a battle force"
@@ -159,20 +159,20 @@ func _hull_card(hull: Dictionary) -> Control:
 	header.add_child(dismiss_ship)
 
 	var head_panel := PanelContainer.new()
-	head_panel.add_theme_stylebox_override("panel", RogueliteUi.panel_box(RogueliteUi.PANEL_2, RogueliteUi.LINE, 0, 11))
+	head_panel.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.PANEL_2, UiKit.LINE, 0, 11))
 	head_panel.add_child(header)
 	box.add_child(head_panel)
 
 	for member in hull.get("crew", []):
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
-		row.add_child(RogueliteUi.label(CrewData.get_role_name(member.get("role", -1)), RogueliteUi.DIM, 11))
-		row.add_child(RogueliteUi.label(member.get("callsign", ""), RogueliteUi.INK, 13))
+		row.add_child(UiKit.label(CrewData.get_role_name(member.get("role", -1)), UiKit.DIM, 11))
+		row.add_child(UiKit.label(member.get("callsign", ""), UiKit.INK, 13))
 		var s := Control.new()
 		s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(s)
 		var crew_id: String = member.crew_id
-		var dismiss := RogueliteUi.style_button(_make_button("Dismiss"), "warn")
+		var dismiss := UiKit.style_button(_make_button("Dismiss"), "warn")
 		dismiss.disabled = not RoguelikeRun.may_dismiss_crew(crew_id)
 		if dismiss.disabled:
 			dismiss.tooltip_text = "Needed to field a battle force"

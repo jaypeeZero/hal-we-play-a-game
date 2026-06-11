@@ -9,6 +9,8 @@ const MESSAGES := [
 	{"from": "Flight Command", "title": "Pilot Reports", "message": "All fighter squadrons report green across the board. Ready for deployment."},
 ]
 
+const MESSAGE_BODY_MIN_WIDTH := 300
+
 @onready var _messages_list: VBoxContainer = $MarginContainer/VBoxContainer/MessagesContainer/MessagesList
 @onready var _status_label: Label = $MarginContainer/VBoxContainer/StatusLabel
 
@@ -30,55 +32,22 @@ func _populate_messages() -> void:
 
 
 func _create_message_item(msg: Dictionary) -> PanelContainer:
-	var panel := PanelContainer.new()
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.15, 0.2, 1.0)
-	style.border_color = Color(0.4, 0.4, 0.5, 1.0)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-
-	panel.add_theme_stylebox_override("panel", style)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
-	panel.add_child(margin)
+	var panel := UiKit.card()
 
 	var container := VBoxContainer.new()
 	container.add_theme_constant_override("separation", 4)
-	margin.add_child(container)
+	panel.add_child(container)
 
-	# Header: From and Title
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
 	container.add_child(header)
+	header.add_child(UiKit.label(msg["from"], UiKit.ACCENT, 13))
+	header.add_child(UiKit.label(msg["title"], UiKit.INK, 13))
 
-	var from_label := Label.new()
-	from_label.text = msg["from"]
-	from_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
-	header.add_child(from_label)
-
-	var title_label := Label.new()
-	title_label.text = msg["title"]
-	title_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
-	header.add_child(title_label)
-
-	# Message body
-	var body_label := Label.new()
-	body_label.text = msg["message"]
-	body_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
-	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	body_label.custom_minimum_size = Vector2(300, 0)
-	container.add_child(body_label)
+	var body := UiKit.label(msg["message"], UiKit.DIM, 12)
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.custom_minimum_size = Vector2(MESSAGE_BODY_MIN_WIDTH, 0)
+	container.add_child(body)
 
 	return panel
 
@@ -88,7 +57,7 @@ func _on_fleet_launch_pressed() -> void:
 	# doctrine authored in Edit Fleet must survive, so do not restart it here.
 	if RoguelikeRun.fleet_hulls.is_empty():
 		_status_label.text = "Configure at least one ship before launch."
-		_status_label.modulate = Color.RED
+		_status_label.modulate = UiKit.BAD
 		return
 
 	get_tree().change_scene_to_file("res://scenes/campaign_map_3d.tscn")

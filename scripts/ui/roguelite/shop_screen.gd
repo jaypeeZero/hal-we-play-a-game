@@ -2,7 +2,7 @@ class_name ShopScreen
 extends Control
 
 ## Full-screen shop overlay for a SHOP map node, built in code (no .tscn) and
-## styled via RogueliteUi (see design/shop_screen.mockup.html). Three sections
+## styled via UiKit (see design/shop_screen.mockup.html). Three sections
 ## operate on RoguelikeRun's economy and roster:
 ##   - Ships for sale: buy a bare hull (price deducted, arrives crewless).
 ##   - Hiring: fill a hull's vacant crew slots (recurring salary, no up-front
@@ -40,7 +40,7 @@ func setup(shop_node: Dictionary) -> void:
 
 func _build_chrome() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(RogueliteUi.backdrop())
+	add_child(UiKit.backdrop())
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -64,7 +64,7 @@ func _build_chrome() -> void:
 	_content.add_theme_constant_override("separation", SECTION_GAP)
 	scroll.add_child(_content)
 
-	var leave := RogueliteUi.style_button(_make_button("Leave shop"), "warn")
+	var leave := UiKit.style_button(_make_button("Leave shop"), "warn")
 	leave.pressed.connect(func(): closed.emit())
 	var leave_row := HBoxContainer.new()
 	leave_row.alignment = BoxContainer.ALIGNMENT_END
@@ -73,22 +73,22 @@ func _build_chrome() -> void:
 
 
 func _build_topbar() -> Control:
-	var bar := RogueliteUi.card(RogueliteUi.PANEL_2, RogueliteUi.LINE, 14)
+	var bar := UiKit.card(UiKit.PANEL_2, UiKit.LINE, 14)
 	var row := HBoxContainer.new()
 	bar.add_child(row)
 
 	var title_box := VBoxContainer.new()
 	title_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_box.add_child(RogueliteUi.label("SHIPYARD & CREW HALL", RogueliteUi.INK, 16))
-	title_box.add_child(RogueliteUi.label("Trade outpost", RogueliteUi.DIM, 11))
+	title_box.add_child(UiKit.label("SHIPYARD & CREW HALL", UiKit.INK, 16))
+	title_box.add_child(UiKit.label("Trade outpost", UiKit.DIM, 11))
 	row.add_child(title_box)
 
 	var credits_box := VBoxContainer.new()
 	credits_box.alignment = BoxContainer.ALIGNMENT_END
-	_money_label = RogueliteUi.label("", RogueliteUi.GOLD, 26)
+	_money_label = UiKit.label("", UiKit.GOLD, 26)
 	_money_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	credits_box.add_child(_money_label)
-	var lbl := RogueliteUi.label("CREDITS", RogueliteUi.DIM, 10)
+	var lbl := UiKit.label("CREDITS", UiKit.DIM, 10)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	credits_box.add_child(lbl)
 	row.add_child(credits_box)
@@ -109,10 +109,10 @@ func _rebuild() -> void:
 # ============================================================================
 
 func _build_ships_for_sale() -> void:
-	_content.add_child(RogueliteUi.section_title("Ships for sale", "hulls arrive crewless — hire below"))
+	_content.add_child(UiKit.section_title("Ships for sale", "hulls arrive crewless — hire below"))
 	var stock: Array = _shop_node.get("shop_stock", [])
 	if stock.is_empty():
-		_content.add_child(RogueliteUi.label("Nothing in stock.", RogueliteUi.DIM))
+		_content.add_child(UiKit.label("Nothing in stock.", UiKit.DIM))
 		return
 
 	var grid := HFlowContainer.new()
@@ -128,29 +128,29 @@ func _ship_card(ship_type: String, stock_index: int) -> Control:
 	var price := EconomySystem.ship_purchase_price(ship_type)
 	var affordable := RoguelikeRun.money >= price
 
-	var card := RogueliteUi.card()
+	var card := UiKit.card()
 	card.custom_minimum_size = Vector2(CARD_MIN_WIDTH, 0)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 9)
 	card.add_child(box)
 
-	box.add_child(RogueliteUi.label(_type_label(ship_type), RogueliteUi.INK, 14))
+	box.add_child(UiKit.label(_type_label(ship_type), UiKit.INK, 14))
 
 	var stats := HBoxContainer.new()
-	var upkeep := RogueliteUi.label("upkeep %d/battle" % EconomySystem.ship_per_battle_cost(ship_type), RogueliteUi.DIM, 12)
+	var upkeep := UiKit.label("upkeep %d/battle" % EconomySystem.ship_per_battle_cost(ship_type), UiKit.DIM, 12)
 	upkeep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stats.add_child(upkeep)
-	stats.add_child(RogueliteUi.label("%d cr" % price, RogueliteUi.GOLD if affordable else RogueliteUi.BAD, 13))
+	stats.add_child(UiKit.label("%d cr" % price, UiKit.GOLD if affordable else UiKit.BAD, 13))
 	box.add_child(stats)
 
 	var foot := HBoxContainer.new()
-	var tag := RogueliteUi.label(
+	var tag := UiKit.label(
 		"CREWLESS HULL" if affordable else "CAN'T AFFORD",
-		RogueliteUi.DIM if affordable else RogueliteUi.BAD, 10)
+		UiKit.DIM if affordable else UiKit.BAD, 10)
 	tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	foot.add_child(tag)
 
-	var buy := RogueliteUi.style_button(_make_button("Buy"), "primary")
+	var buy := UiKit.style_button(_make_button("Buy"), "primary")
 	buy.disabled = not affordable
 	buy.pressed.connect(func(): _on_buy(stock_index))
 	foot.add_child(buy)
@@ -175,7 +175,7 @@ func _on_buy(stock_index: int) -> void:
 # ============================================================================
 
 func _build_hiring() -> void:
-	_content.add_child(RogueliteUi.section_title("Hire crew",
+	_content.add_child(UiKit.section_title("Hire crew",
 		"%d/battle salary · %d insurance on death" % [
 			EconomySystem.crew_salary_per_battle(), EconomySystem.crew_insurance_payout()]))
 
@@ -188,11 +188,11 @@ func _build_hiring() -> void:
 		_content.add_child(_hire_hull_card(hull, vacancies))
 
 	if not any:
-		_content.add_child(RogueliteUi.label("Every hull is fully crewed.", RogueliteUi.DIM))
+		_content.add_child(UiKit.label("Every hull is fully crewed.", UiKit.DIM))
 
 
 func _hire_hull_card(hull: Dictionary, vacancies: Array) -> Control:
-	var card := RogueliteUi.card(RogueliteUi.PANEL, RogueliteUi.LINE, 0)
+	var card := UiKit.card(UiKit.PANEL, UiKit.LINE, 0)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 0)
 	card.add_child(box)
@@ -200,15 +200,15 @@ func _hire_hull_card(hull: Dictionary, vacancies: Array) -> Control:
 
 	for slot in vacancies:
 		var row := _row()
-		row.add_child(RogueliteUi.label(CrewData.get_role_name(slot.get("role", -1)), RogueliteUi.GOLD, 11))
+		row.add_child(UiKit.label(CrewData.get_role_name(slot.get("role", -1)), UiKit.GOLD, 11))
 		if slot.has("weapon_id"):
-			row.add_child(RogueliteUi.label(slot.weapon_id, RogueliteUi.ACCENT, 11))
+			row.add_child(UiKit.label(slot.weapon_id, UiKit.ACCENT, 11))
 		var spacer := Control.new()
 		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(spacer)
 		var hull_id: String = hull.hull_id
 		var slot_copy: Dictionary = slot
-		var hire := RogueliteUi.style_button(_make_button("Hire"), "primary")
+		var hire := UiKit.style_button(_make_button("Hire"), "primary")
 		hire.pressed.connect(func(): _on_hire(hull_id, slot_copy))
 		row.add_child(hire)
 		box.add_child(_indented(row))
@@ -225,18 +225,18 @@ func _on_hire(hull_id: String, slot: Dictionary) -> void:
 # ============================================================================
 
 func _build_roster() -> void:
-	_content.add_child(RogueliteUi.section_title("Fleet roster"))
+	_content.add_child(UiKit.section_title("Fleet roster"))
 	if RoguelikeRun.fleet_hulls.is_empty():
-		_content.add_child(RogueliteUi.label("No hulls in the fleet.", RogueliteUi.DIM))
+		_content.add_child(UiKit.label("No hulls in the fleet.", UiKit.DIM))
 		return
 
 	for hull in RoguelikeRun.fleet_hulls:
-		var card := RogueliteUi.card(RogueliteUi.PANEL, RogueliteUi.LINE, 0)
+		var card := UiKit.card(UiKit.PANEL, UiKit.LINE, 0)
 		var box := VBoxContainer.new()
 		box.add_theme_constant_override("separation", 0)
 		card.add_child(box)
 
-		var ice := RogueliteUi.style_button(
+		var ice := UiKit.style_button(
 			_make_button("Activate" if hull.get("iced", false) else "Put on ice"), "ghost")
 		var hull_id: String = hull.hull_id
 		var now_iced: bool = not hull.get("iced", false)
@@ -245,7 +245,7 @@ func _build_roster() -> void:
 
 		var crew: Array = hull.get("crew", [])
 		if crew.is_empty():
-			box.add_child(_indented(RogueliteUi.label("(no crew aboard)", RogueliteUi.DIM, 11)))
+			box.add_child(_indented(UiKit.label("(no crew aboard)", UiKit.DIM, 11)))
 		for member in crew:
 			box.add_child(_crew_row(hull, member))
 		_content.add_child(card)
@@ -253,17 +253,17 @@ func _build_roster() -> void:
 
 func _crew_row(hull: Dictionary, member: Dictionary) -> Control:
 	var row := _row()
-	row.add_child(RogueliteUi.label(CrewData.get_role_name(member.get("role", -1)), RogueliteUi.DIM, 11))
-	row.add_child(RogueliteUi.label(member.get("callsign", ""), RogueliteUi.INK, 13))
+	row.add_child(UiKit.label(CrewData.get_role_name(member.get("role", -1)), UiKit.DIM, 11))
+	row.add_child(UiKit.label(member.get("callsign", ""), UiKit.INK, 13))
 	if member.has("weapon_id"):
-		row.add_child(RogueliteUi.label(member.weapon_id, RogueliteUi.ACCENT, 11))
+		row.add_child(UiKit.label(member.weapon_id, UiKit.ACCENT, 11))
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 
 	var targets := _transfer_targets(hull, member)
 	if targets.is_empty():
-		row.add_child(RogueliteUi.label("(no transfer)", RogueliteUi.DIM, 11))
+		row.add_child(UiKit.label("(no transfer)", UiKit.DIM, 11))
 		return _indented(row)
 
 	# Item 0 is a placeholder header. We do NOT disable it: disabling the
@@ -326,19 +326,19 @@ func _on_transfer(crew_id: String, target_ids: Array, dropdown_index: int) -> vo
 ## action button (the ice/activate toggle on the roster).
 func _hull_header(hull: Dictionary, trailing: Button) -> Control:
 	var head := PanelContainer.new()
-	head.add_theme_stylebox_override("panel", RogueliteUi.panel_box(RogueliteUi.PANEL_2, RogueliteUi.LINE, 0, 11))
+	head.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.PANEL_2, UiKit.LINE, 0, 11))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	head.add_child(row)
 
-	row.add_child(RogueliteUi.label(_type_label(hull.get("ship_type", "")), RogueliteUi.INK, 13))
-	row.add_child(RogueliteUi.label("· crew %d / %d" % [
-		hull.get("crew", []).size(), hull.get("complement", []).size()], RogueliteUi.DIM, 12))
-	row.add_child(RogueliteUi.label("· eng %d" % _engineer_count(hull), RogueliteUi.DIM, 12))
+	row.add_child(UiKit.label(_type_label(hull.get("ship_type", "")), UiKit.INK, 13))
+	row.add_child(UiKit.label("· crew %d / %d" % [
+		hull.get("crew", []).size(), hull.get("complement", []).size()], UiKit.DIM, 12))
+	row.add_child(UiKit.label("· eng %d" % _engineer_count(hull), UiKit.DIM, 12))
 	if hull.get("iced", false):
-		row.add_child(RogueliteUi.badge("On ice"))
+		row.add_child(UiKit.badge("On ice"))
 	elif not _has_pilot(hull):
-		row.add_child(RogueliteUi.badge("Won't sortie", RogueliteUi.BAD))
+		row.add_child(UiKit.badge("Won't sortie", UiKit.BAD))
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -346,9 +346,9 @@ func _hull_header(hull: Dictionary, trailing: Button) -> Control:
 
 	# Armor/systems condition, folded in from the standalone fleet overlay.
 	var cond := _hull_condition(hull)
-	row.add_child(RogueliteUi.mini_meter("Arm", cond.armor, RogueliteUi.ACCENT,
+	row.add_child(UiKit.mini_meter("Arm", cond.armor, UiKit.ACCENT,
 		cond.armor < CONDITION_LOW_RATIO))
-	row.add_child(RogueliteUi.mini_meter("Sys", cond.systems, RogueliteUi.GOLD,
+	row.add_child(UiKit.mini_meter("Sys", cond.systems, UiKit.GOLD,
 		cond.systems < CONDITION_LOW_RATIO))
 
 	if trailing != null:
