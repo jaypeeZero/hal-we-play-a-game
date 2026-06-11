@@ -334,6 +334,11 @@ static func apply_repair_decision(ship_data: Dictionary, decision: Dictionary, _
 	else:
 		return ship_data
 
+	# Stamp the repair pulse so the renderer can show the heal landing.
+	updated = DictUtils.merge_dict(updated, {
+		"_repair_flash_until": decision.get("timestamp", 0.0) + WingConstants.ENGINEER_REPAIR_FLASH_SECONDS
+	})
+
 	if BattleEventLoggerAutoload.service:
 		BattleEventLoggerAutoload.service.log_event("repair_applied", {
 			"ship_id": ship_data.get("ship_id", ""),

@@ -500,6 +500,10 @@ const ENGINEER_REPAIR_CADENCE_MAX = 3.0
 const ENGINEER_IDLE_CADENCE_MIN = 4.0
 const ENGINEER_IDLE_CADENCE_MAX = 6.0
 
+## How long the green repair pulse stays visible on a ship after a repair
+## lands. Shorter than the repair cadence so ongoing repairs blink.
+const ENGINEER_REPAIR_FLASH_SECONDS = 1.2
+
 ## Roguelike jump repair: fraction of max restored per engineer per star
 ## date of travel time, scaled by their machinery skill.
 const REPAIR_FRACTION_PER_STAR_DATE = 0.01

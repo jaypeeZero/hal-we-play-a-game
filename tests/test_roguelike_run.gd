@@ -9,6 +9,7 @@ var _saved_enemy_fleet: Dictionary
 var _saved_active: bool
 var _saved_started_first_battle: bool
 var _saved_star_date: int
+var _saved_repair_summary: Dictionary
 
 
 func before_each() -> void:
@@ -18,6 +19,7 @@ func before_each() -> void:
 	_saved_active = RoguelikeRun.active
 	_saved_started_first_battle = RoguelikeRun.started_first_battle
 	_saved_star_date = RoguelikeRun.current_star_date
+	_saved_repair_summary = RoguelikeRun.last_jump_repair_summary.duplicate(true)
 
 
 func after_each() -> void:
@@ -27,6 +29,7 @@ func after_each() -> void:
 	RoguelikeRun.active = _saved_active
 	RoguelikeRun.started_first_battle = _saved_started_first_battle
 	RoguelikeRun.current_star_date = _saved_star_date
+	RoguelikeRun.last_jump_repair_summary = _saved_repair_summary
 
 
 func _make_ship(ship_type: String) -> Dictionary:
@@ -282,6 +285,15 @@ func test_jump_advances_current_star_date():
 
 	assert_eq(RoguelikeRun.current_star_date, destination,
 		"The jump should move the run to the destination star date")
+
+
+func test_jump_repair_summary_persists_for_the_map():
+	RoguelikeRun.fleet_ships = [_make_damaged_ship_with_crew(1)]
+
+	RoguelikeRun.apply_jump_repairs(RoguelikeRun.current_star_date + JUMP_DATE_DELTA, false)
+
+	assert_gt(RoguelikeRun.last_jump_repair_summary.get("ships_repaired", 0), 0,
+		"The map reports repairs after a battle from the persisted summary")
 
 
 func test_fleet_ships_empty_at_run_start():

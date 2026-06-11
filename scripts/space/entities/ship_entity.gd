@@ -79,6 +79,10 @@ func _create_entity_state(ship_data: Dictionary) -> EntityState:
 		"destroyed":
 			state.add_flag("destroyed")
 
+	# Engineer repair pulse — stamped by CrewIntegrationSystem when a repair lands.
+	if ship_data.get("_repair_flash_until", 0.0) > Time.get_ticks_msec() / 1000.0:
+		state.add_flag("repairing")
+
 	# Add component status effects
 	for internal in ship_data.internals:
 		if internal.status == "damaged":

@@ -41,6 +41,8 @@ var _connections: Array = []  # Array of {from_id, to_id}
 @onready var _title_label: Label = $TitleLabel
 @onready var _info_label: Label = $InfoLabel
 
+var _fleet_label: Label
+
 
 func _ready() -> void:
 	if RoguelikeRun.has_map_state():
@@ -49,6 +51,11 @@ func _ready() -> void:
 		_generate_map()
 	_build_ui()
 	_update_node_states()
+	_create_fleet_status_label()
+	_update_fleet_status()
+	# Report repairs that happened on the jump into the last battle.
+	_show_repair_summary(RoguelikeRun.last_jump_repair_summary)
+	RoguelikeRun.last_jump_repair_summary = {}
 
 
 func _restore_map_state() -> void:
@@ -290,7 +297,9 @@ func _on_node_pressed(node_id: String) -> void:
 		return
 
 	_update_node_states()
+	_update_fleet_status()
 	_show_repair_summary(repair_summary)
+	RoguelikeRun.last_jump_repair_summary = {}
 
 
 func _show_repair_summary(summary: Dictionary) -> void:
@@ -298,6 +307,56 @@ func _show_repair_summary(summary: Dictionary) -> void:
 		return
 	_info_label.text += "\nEngineers repaired %d ship(s) (+%d) over %d star dates." % [
 		summary["ships_repaired"], summary["points_repaired"], summary["date_delta"]]
+
+
+const FLEET_STATUS_POSITION := Vector2(20, 80)
+const FLEET_STATUS_FONT_SIZE := 14
+
+func _create_fleet_status_label() -> void:
+	_fleet_label = Label.new()
+	_fleet_label.name = "FleetStatusLabel"
+	_fleet_label.position = FLEET_STATUS_POSITION
+	_fleet_label.add_theme_font_size_override("font_size", FLEET_STATUS_FONT_SIZE)
+	add_child(_fleet_label)
+
+
+## Ship-by-ship condition panel, so repairs (and the engineers doing them)
+## are visible between battles.
+func _update_fleet_status() -> void:
+	if RoguelikeRun.fleet_ships.is_empty():
+		_fleet_label.text = "Fleet: undamaged (no sorties yet)"
+		return
+	var lines := ["Fleet condition:"]
+	for ship in RoguelikeRun.fleet_ships:
+		lines.append(_ship_condition_line(ship))
+	_fleet_label.text = "\n".join(lines)
+
+
+func _ship_condition_line(ship: Dictionary) -> String:
+	var armor_current := 0
+	var armor_max := 0
+	for section in ship.get("armor_sections", []):
+		armor_current += section.get("current_armor", 0)
+		armor_max += section.get("max_armor", 0)
+
+	var systems_current := 0
+	var systems_max := 0
+	for component in ship.get("internals", []):
+		systems_current += component.get("current_health", 0)
+		systems_max += component.get("max_health", 0)
+
+	var engineers: int = ship.get("crew", []).filter(
+		func(c): return c.get("role", -1) == CrewData.Role.ENGINEER).size()
+
+	return "%s  armor %d%%  systems %d%%  engineers %d" % [
+		ship.get("type", "ship"), _percent(armor_current, armor_max),
+		_percent(systems_current, systems_max), engineers]
+
+
+func _percent(current: int, maximum: int) -> int:
+	if maximum <= 0:
+		return 100
+	return int(round(100.0 * current / maximum))
 
 
 func _launch_battle(node: Dictionary) -> void:

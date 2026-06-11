@@ -143,6 +143,43 @@ func test_higher_machinery_heals_more():
 
 
 # ============================================================================
+# REPAIR VISIBILITY
+# ============================================================================
+
+func test_applied_repair_stamps_visual_pulse():
+	var ship = _ship_with_damage()
+	ship.armor_sections[0].current_armor = 1
+	var decision = {
+		"type": "repair",
+		"subtype": EngineerAI.ARMOR_REPAIR_SUBTYPE,
+		"section_id": "front",
+		"crew_id": "eng_1",
+		"entity_id": ship.ship_id,
+		"skill_factor": HIGH_SKILL,
+		"timestamp": GAME_TIME,
+	}
+
+	var repaired = CrewIntegrationSystem.apply_repair_decision(ship, decision, {})
+
+	assert_gt(repaired.get("_repair_flash_until", 0.0), GAME_TIME,
+		"A landed repair should stamp the renderer pulse window")
+
+
+func test_ship_entity_flags_repairing_while_pulse_active():
+	var ship = _ship_with_damage()
+	ship["_repair_flash_until"] = Time.get_ticks_msec() / 1000.0 + 60.0
+	var entity: ShipEntity = autofree(ShipEntity.new())
+
+	var state = entity._create_entity_state(ship)
+
+	assert_true(state.has_flag("repairing"), "Active repair pulse should flag the entity state")
+
+	ship["_repair_flash_until"] = 0.0
+	var idle_state = entity._create_entity_state(ship)
+	assert_false(idle_state.has_flag("repairing"), "Expired pulse should clear the flag")
+
+
+# ============================================================================
 # CREW COMPOSITION
 # ============================================================================
 

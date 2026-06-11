@@ -20,6 +20,9 @@ var map_state: Dictionary = {}
 var pending_battle_node_id: String = ""
 var editor_return_scene: String = ""
 var current_star_date: int = STAR_DATE_RUN_START
+## Last jump's repair summary, kept so the map can report repairs that
+## happened on the way into a battle once the player returns to the map.
+var last_jump_repair_summary: Dictionary = {}
 
 
 func start_run(initial_fleet: Dictionary) -> void:
@@ -31,6 +34,7 @@ func start_run(initial_fleet: Dictionary) -> void:
 	map_state = {}
 	pending_battle_node_id = ""
 	current_star_date = STAR_DATE_RUN_START
+	last_jump_repair_summary = {}
 
 
 func end_run() -> void:
@@ -42,6 +46,7 @@ func end_run() -> void:
 	map_state = {}
 	pending_battle_node_id = ""
 	current_star_date = STAR_DATE_RUN_START
+	last_jump_repair_summary = {}
 
 
 func update_fleet_after_battle(surviving_ships: Array) -> void:
@@ -82,11 +87,12 @@ func apply_jump_repairs(destination_star_date: int, is_rnr: bool) -> Dictionary:
 			points_repaired += healed
 		fleet_ships[i] = repaired
 
-	return {
+	last_jump_repair_summary = {
 		"ships_repaired": ships_repaired,
 		"points_repaired": points_repaired,
 		"date_delta": date_delta,
 	}
+	return last_jump_repair_summary
 
 
 func _ship_health_total(ship: Dictionary) -> int:
