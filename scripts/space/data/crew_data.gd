@@ -81,7 +81,7 @@ static func _generate_stats_for_role(role: Role, skill_level: float) -> Dictiona
 			"awareness": base,  # Sensor range, detection latency, threat prioritization
 			"tactics": base,    # Command-style, squadron coord, retreat, target prio
 			"composure": base,  # Performance under stress; gates panic
-			"aggression": base, # Engagement bias / persistence — personality, not skill
+			"aggression": randf(), # Engagement bias / persistence — personality, not skill
 			"machinery": base   # Repair size — only exercised in the ENGINEER role
 		}
 	}
@@ -346,10 +346,12 @@ static func create_crew_member_with_varied_skills(role: Role, skill_level: float
 	var crew = create_crew_member(role, skill_level)
 
 	# Generate varied discrete skills around the base skill_level
-	var skill_names = ["aim", "piloting", "awareness", "tactics", "composure", "aggression", "machinery"]
+	var skill_names = ["aim", "piloting", "awareness", "tactics", "composure", "machinery"]
 	for skill_name in skill_names:
 		var variance = randf_range(-0.15, 0.15)
 		crew.stats.skills[skill_name] = clamp(skill_level + variance, 0.0, 1.0)
+	# Aggression is personality, not skill — distribute independently
+	crew.stats.skills["aggression"] = randf()
 
 	return crew
 

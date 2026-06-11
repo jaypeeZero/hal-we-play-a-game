@@ -398,7 +398,7 @@ static func _make_lead_decision(crew_data: Dictionary, ship_data: Dictionary, wi
 ## pilots commit longer to a kill, cautious ones reassess sooner.
 static func _find_best_target_for_wing(crew_data: Dictionary, wing: Dictionary, all_ships: Array, all_crew: Array, game_time: float) -> String:
 	var skill = crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5)
-	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", skill)
+	var aggression = crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)
 	var combat_state: Dictionary = crew_data.get("combat_state", {})
 	var own_ship: Dictionary = _get_ship_by_id(crew_data.get("assigned_to", ""), all_ships)
 
