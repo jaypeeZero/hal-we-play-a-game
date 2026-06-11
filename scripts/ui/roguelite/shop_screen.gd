@@ -10,7 +10,8 @@ extends Control
 ##   - Fleet roster: ice/activate a hull, and transfer crew between hulls into
 ##     a matching vacancy.
 ## Purchases mutate the node's `shop_stock` in place so a bought ship is gone
-## when the player reopens the shop (stock persists via map_state). Every action
+## when the player reopens the shop (stock persists on the campaign node, saved
+## via CampaignSaveManager). Every action
 ## rebuilds the content so money, stock, vacancies, and transfer targets stay
 ## in step. `closed` fires when the player leaves.
 

@@ -9,7 +9,7 @@ var _saved_fleet_hulls: Array
 var _saved_money: int
 var _saved_doctrine: Dictionary
 var _saved_active: bool
-var _saved_map_state: Dictionary
+var _saved_campaign: Dictionary
 
 
 func before_each() -> void:
@@ -17,7 +17,7 @@ func before_each() -> void:
 	_saved_money = RoguelikeRun.money
 	_saved_doctrine = RoguelikeRun.doctrine.duplicate(true)
 	_saved_active = RoguelikeRun.active
-	_saved_map_state = RoguelikeRun.map_state.duplicate(true)
+	_saved_campaign = RoguelikeRun.campaign.duplicate(true)
 
 
 func after_each() -> void:
@@ -25,7 +25,7 @@ func after_each() -> void:
 	RoguelikeRun.money = _saved_money
 	RoguelikeRun.doctrine = _saved_doctrine
 	RoguelikeRun.active = _saved_active
-	RoguelikeRun.map_state = _saved_map_state
+	RoguelikeRun.campaign = _saved_campaign
 
 
 func _counts(overrides: Dictionary = {}) -> Dictionary:
