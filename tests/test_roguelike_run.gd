@@ -12,6 +12,10 @@ var _saved_active: bool
 var _saved_started_first_battle: bool
 var _saved_star_date: int
 var _saved_repair_summary: Dictionary
+var _saved_campaign: Dictionary
+var _saved_battle_result: String
+var _saved_lost_ships: Array
+var _saved_lost_crew: Array
 
 
 func before_each() -> void:
@@ -24,6 +28,10 @@ func before_each() -> void:
 	_saved_started_first_battle = RoguelikeRun.started_first_battle
 	_saved_star_date = RoguelikeRun.current_star_date
 	_saved_repair_summary = RoguelikeRun.last_jump_repair_summary.duplicate(true)
+	_saved_campaign = RoguelikeRun.campaign.duplicate(true)
+	_saved_battle_result = RoguelikeRun.pending_battle_result
+	_saved_lost_ships = RoguelikeRun.lost_fleet_final_ships.duplicate(true)
+	_saved_lost_crew = RoguelikeRun.lost_fleet_final_crew.duplicate(true)
 
 
 func after_each() -> void:
@@ -36,6 +44,10 @@ func after_each() -> void:
 	RoguelikeRun.started_first_battle = _saved_started_first_battle
 	RoguelikeRun.current_star_date = _saved_star_date
 	RoguelikeRun.last_jump_repair_summary = _saved_repair_summary
+	RoguelikeRun.campaign = _saved_campaign
+	RoguelikeRun.pending_battle_result = _saved_battle_result
+	RoguelikeRun.lost_fleet_final_ships = _saved_lost_ships
+	RoguelikeRun.lost_fleet_final_crew = _saved_lost_crew
 
 
 func _make_ship(ship_type: String) -> Dictionary:
@@ -462,6 +474,133 @@ func test_reconcile_keeps_class_doctrine_for_a_present_type():
 
 	assert_true(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CLASS].has("fighter"),
 		"Class doctrine should survive while its ship type remains in the fleet")
+
+
+# ============================================================================
+# CAMPAIGN LIFECYCLE
+# ============================================================================
+
+func test_start_run_generates_a_campaign():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	assert_false(RoguelikeRun.campaign.is_empty(),
+		"Starting a run generates the multi-sector campaign")
+	assert_eq(RoguelikeRun.campaign["current_sector"], CampaignSystem.SECTORS[0],
+		"A new campaign starts in the bottom sector")
+	assert_gt(CampaignSystem.accessible_node_ids(RoguelikeRun.campaign).size(), 0,
+		"A new campaign has an accessible starting node")
+
+
+func test_end_run_clears_campaign():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+
+	RoguelikeRun.end_run()
+
+	assert_true(RoguelikeRun.campaign.is_empty(),
+		"The campaign should be cleared when the run ends")
+
+
+# ============================================================================
+# BATTLE RESULT RECORDING
+# ============================================================================
+
+func _ship_with_crew(ship_type: String, status: String, crew_id: String) -> Dictionary:
+	var ship = _make_ship(ship_type)
+	ship["status"] = status
+	ship["crew"] = [{"crew_id": crew_id, "callsign": crew_id, "assigned_to": ship.ship_id}]
+	return ship
+
+
+func test_victory_keeps_only_surviving_ships_and_crew():
+	var survivor := _ship_with_crew("fighter", "operational", "alive")
+	var casualty := _ship_with_crew("corvette", "destroyed", "dead")
+
+	RoguelikeRun.record_battle_result(
+		CampaignSystem.RESULT_VICTORY, [survivor, casualty], [])
+
+	assert_eq(RoguelikeRun.fleet_ships.size(), 1, "Only survivors stay in the fleet")
+	assert_eq(RoguelikeRun.fleet_ships[0]["type"], "fighter",
+		"The surviving hull is the one that lived")
+	assert_eq(RoguelikeRun.fleet_crew.size(), 1, "Only surviving crews stay")
+	assert_eq(RoguelikeRun.fleet_crew[0]["crew"][0]["crew_id"], "alive",
+		"The surviving crew kept their identity")
+	assert_true(RoguelikeRun.lost_fleet_final_ships.is_empty(),
+		"A victory leaves no lost fleet to roll survivors from")
+
+
+func test_defeat_stashes_final_fleet_state_and_empties_fleet():
+	var lost := _ship_with_crew("fighter", "destroyed", "fallen")
+	var groups := [{"ship_type": "fighter", "crew": lost["crew"].duplicate(true)}]
+
+	RoguelikeRun.record_battle_result(CampaignSystem.RESULT_DEFEAT, [lost], groups)
+
+	assert_eq(RoguelikeRun.pending_battle_result, CampaignSystem.RESULT_DEFEAT,
+		"The defeat is left pending for the campaign map to resolve")
+	assert_eq(RoguelikeRun.lost_fleet_final_ships.size(), 1,
+		"Defeat stashes the wiped fleet's final ship states")
+	assert_eq(RoguelikeRun.lost_fleet_final_crew.size(), 1,
+		"Defeat stashes the wiped fleet's crew groups")
+	assert_true(RoguelikeRun.is_fleet_empty(), "A wiped fleet has no ships left")
+
+
+# ============================================================================
+# DEMOTION
+# ============================================================================
+
+func test_apply_demotion_combines_config_with_survivors():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var survivor := _ship_with_crew("corvette", "operational", "veteran")
+	var survivors := {"ships": [survivor],
+		"crew_groups": [{"ship_type": "corvette", "crew": survivor["crew"].duplicate(true)}]}
+
+	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
+
+	assert_eq(RoguelikeRun.fleet["fighter"], 2,
+		"The demoted fleet includes the saved config's hulls")
+	assert_eq(RoguelikeRun.fleet["corvette"], 1,
+		"The demoted fleet includes the rolled survivors")
+
+
+func test_apply_demotion_only_survivors_carry_damage_state():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var survivor := _ship_with_crew("corvette", "operational", "veteran")
+	survivor["armor_sections"][0]["current_armor"] = 1
+	var survivors := {"ships": [survivor], "crew_groups": []}
+
+	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
+
+	assert_eq(RoguelikeRun.fleet_ships.size(), 1,
+		"Only survivor hulls carry a saved state; fresh hulls spawn undamaged")
+	assert_eq(int(RoguelikeRun.fleet_ships[0]["armor_sections"][0]["current_armor"]), 1,
+		"Survivor damage state carries into the demoted run")
+
+
+func test_apply_demotion_rosters_fresh_crews_plus_survivor_crews():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var survivor := _ship_with_crew("corvette", "operational", "veteran")
+	var survivors := {"ships": [survivor],
+		"crew_groups": [{"ship_type": "corvette", "crew": survivor["crew"].duplicate(true)}]}
+
+	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
+
+	assert_eq(RoguelikeRun.fleet_crew.size(), 3,
+		"Two fresh fighter crews plus the surviving corvette crew")
+	assert_true(_roster_has_crew_id("veteran"),
+		"The surviving crew keeps its identity through the demotion")
+
+
+func test_apply_demotion_prunes_doctrine_of_dead_crew():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var dead := _ship_with_crew("fighter", "destroyed", "casualty")
+	RoguelikeRun.lost_fleet_final_crew = [
+		{"ship_type": "fighter", "crew": dead["crew"].duplicate(true)}]
+	DoctrineSystem.set_instruction_in_place(
+		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_CREW, "casualty", PILOT_DOCTRINE)
+
+	RoguelikeRun.apply_demotion({"ships": [], "crew_groups": []}, _counts({"fighter": 1}))
+
+	assert_false(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CREW].has("casualty"),
+		"Doctrine authored for crew lost in the rout is purged")
 
 
 func test_reconcile_keeps_callsigns_unique_after_adding():

@@ -1,15 +1,13 @@
 extends Node
 
-## Holds state for an active Roguelike run: the player's persistent fleet,
-## the enemy's persistent fleet, and the procedurally generated map.
+## Holds state for an active Roguelike campaign: the player's persistent
+## fleet, the enemy's persistent fleet, and the multi-sector star chart.
 ## When `active` is true, the battle scene and map scene swap their behavior
 ## to use this state instead of the on-disk team fleets.
 
-## Star dates: each map row is a star date; jump repairs scale with the
-## gap between two jumps (longer downtime, more repair time).
+## Star dates: each jump advances the date by the destination node's gap;
+## jump repairs scale with the gap (longer downtime, more repair time).
 const STAR_DATE_RUN_START = 2300
-const STAR_DATE_GAP_MIN = 2
-const STAR_DATE_GAP_MAX = 9
 
 var active: bool = false
 var started_first_battle: bool = false
@@ -26,8 +24,16 @@ var fleet_crew: Array = []
 ## Run state: reset at run start, wiped at run end.
 var doctrine: Dictionary = DoctrineSystem.empty_doctrine()
 var enemy_fleet: Dictionary = {}
-var map_state: Dictionary = {}
+## The multi-sector star chart (see CampaignGenerator.generate).
+var campaign: Dictionary = {}
 var pending_battle_node_id: String = ""
+## Battle outcome (CampaignSystem.RESULT_*) stashed by the battle scene
+## and consumed by the campaign map's _resolve_pending_battle.
+var pending_battle_result: String = ""
+## Final state of a wiped fleet (ships and crew groups at the moment of
+## defeat), kept so a demotion can roll damaged survivors from it.
+var lost_fleet_final_ships: Array = []
+var lost_fleet_final_crew: Array = []
 var editor_return_scene: String = ""
 var current_star_date: int = STAR_DATE_RUN_START
 ## Last jump's repair summary, kept so the map can report repairs that
@@ -50,9 +56,15 @@ func start_run(initial_fleet: Dictionary) -> void:
 	_callsign_counter = 0
 	fleet_crew = _create_fleet_roster(fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
-	enemy_fleet = FleetDataManager.load_fleet(1)
-	map_state = {}
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	campaign = CampaignGenerator.generate(rng)
+	enemy_fleet = CampaignSystem.scaled_enemy_fleet(
+		FleetDataManager.load_fleet(1), campaign["current_sector"])
 	pending_battle_node_id = ""
+	pending_battle_result = ""
+	lost_fleet_final_ships = []
+	lost_fleet_final_crew = []
 	current_star_date = STAR_DATE_RUN_START
 	last_jump_repair_summary = {}
 
@@ -65,8 +77,11 @@ func end_run() -> void:
 	fleet_crew = []
 	doctrine = DoctrineSystem.empty_doctrine()
 	enemy_fleet = {}
-	map_state = {}
+	campaign = {}
 	pending_battle_node_id = ""
+	pending_battle_result = ""
+	lost_fleet_final_ships = []
+	lost_fleet_final_crew = []
 	current_star_date = STAR_DATE_RUN_START
 	last_jump_repair_summary = {}
 	_callsign_counter = 0
@@ -202,17 +217,107 @@ func _ship_health_total(ship: Dictionary) -> int:
 	return DamageResolver.calculate_total_armor(ship) + DamageResolver.calculate_total_internal_health(ship)
 
 
-func save_map_state(nodes: Array, connections: Array, current_row: int) -> void:
-	map_state = {
-		"nodes": nodes.duplicate(true),
-		"connections": connections.duplicate(true),
-		"current_row": current_row,
-	}
+## Record a battle's outcome for the campaign map to resolve. Victory
+## keeps the surviving ships and crews; defeat stashes the wiped fleet's
+## final state so a demotion can roll damaged survivors from it.
+func record_battle_result(result: String, final_ships: Array, final_crew_groups: Array) -> void:
+	pending_battle_result = result
+	if result == CampaignSystem.RESULT_VICTORY:
+		var survivors: Array = final_ships.filter(
+			func(ship): return ship.get("status", "") != "destroyed")
+		update_fleet_after_battle(survivors, _crew_groups_for_ships(survivors))
+		lost_fleet_final_ships = []
+		lost_fleet_final_crew = []
+	else:
+		lost_fleet_final_ships = final_ships.duplicate(true)
+		lost_fleet_final_crew = final_crew_groups.duplicate(true)
+		fleet_ships = []
 
 
-func has_map_state() -> bool:
-	return not map_state.is_empty()
+## Crew groups (fleet_crew shape) rebuilt from the live crew the battle
+## scene attaches to each ship dict.
+func _crew_groups_for_ships(ships: Array) -> Array:
+	var groups: Array = []
+	for ship in ships:
+		var members: Array = ship.get("crew", [])
+		if not members.is_empty():
+			groups.append({"ship_type": ship.get("type", ""), "crew": members.duplicate(true)})
+	return groups
 
 
-func load_map_state() -> Dictionary:
-	return map_state
+## Rebuild the run's fleet for a demotion: the saved fleet config plus the
+## rolled survivors of the lost fleet. Fresh hulls spawn undamaged with
+## fresh crews (callsigns stay unique via the run's monotonic counter);
+## survivor hulls keep their damage and their crews. Doctrine authored for
+## crew that did not survive is pruned.
+func apply_demotion(survivors: Dictionary, fleet_config: Dictionary) -> void:
+	var survivor_ships: Array = survivors.get("ships", [])
+	var survivor_crew_groups: Array = survivors.get("crew_groups", [])
+
+	fleet = {}
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		fleet[ship_type] = int(fleet_config.get(ship_type, 0))
+	for ship in survivor_ships:
+		var t: String = ship.get("type", "")
+		if fleet.has(t):
+			fleet[t] += 1
+
+	fleet_ships = survivor_ships.duplicate(true)
+	fleet_crew = _create_fleet_roster(fleet_config)
+	for group in survivor_crew_groups:
+		fleet_crew.append(group.duplicate(true))
+
+	_prune_doctrine_for_roster(_dead_crew_ids(survivor_crew_groups), fleet)
+
+
+## Crew ids present in the lost fleet's final state but absent from the
+## demotion survivors: their doctrine no longer has a referent.
+func _dead_crew_ids(survivor_crew_groups: Array) -> Array:
+	var survived := {}
+	for group in survivor_crew_groups:
+		for member in group.get("crew", []):
+			survived[member.get("crew_id", "")] = true
+	var dead: Array = []
+	for group in lost_fleet_final_crew:
+		for member in group.get("crew", []):
+			var crew_id: String = member.get("crew_id", "")
+			if not survived.has(crew_id):
+				dead.append(crew_id)
+	return dead
+
+
+func save_campaign_to_disk() -> bool:
+	return CampaignSaveManager.save_campaign({
+		"campaign": campaign,
+		"fleet": fleet,
+		"fleet_ships": fleet_ships,
+		"fleet_crew": fleet_crew,
+		"doctrine": doctrine,
+		"enemy_fleet": enemy_fleet,
+		"current_star_date": current_star_date,
+		"callsign_counter": _callsign_counter,
+	})
+
+
+## Resume a saved campaign. Returns false (leaving the run untouched)
+## when no usable save exists.
+func load_campaign_from_disk() -> bool:
+	var data := CampaignSaveManager.load_campaign()
+	if data.is_empty():
+		return false
+	campaign = data.get("campaign", {})
+	fleet = data.get("fleet", {})
+	fleet_ships = data.get("fleet_ships", [])
+	fleet_crew = data.get("fleet_crew", [])
+	doctrine = data.get("doctrine", DoctrineSystem.empty_doctrine())
+	enemy_fleet = data.get("enemy_fleet", {})
+	current_star_date = data.get("current_star_date", STAR_DATE_RUN_START)
+	_callsign_counter = data.get("callsign_counter", 0)
+	pending_battle_node_id = ""
+	pending_battle_result = ""
+	lost_fleet_final_ships = []
+	lost_fleet_final_crew = []
+	last_jump_repair_summary = {}
+	started_first_battle = not fleet_ships.is_empty()
+	active = true
+	return true

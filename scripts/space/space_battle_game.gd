@@ -55,6 +55,13 @@ var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 var _pending_spawn: Dictionary = {}
 var _battlefield_size: Vector2 = Vector2(5000, 3500)
 
+const CAMPAIGN_MAP_SCENE := "res://scenes/campaign_map_3d.tscn"
+
+## Roguelike defeats need the wiped fleet's final state, but destroyed
+## ships leave _ships (and their crew leave _crew_list) during cleanup;
+## each lost player ship is captured here at the moment of destruction.
+var _fallen_player_ships: Array = []
+
 # Weapon update timer
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
@@ -308,6 +315,8 @@ func _remove_ship(ship_id: String) -> void:
 	# Remove from data
 	var ship = _find_ship_by_id(ship_id)
 	if not ship.is_empty():
+		if RoguelikeRun.active and ship.get("team", -1) == 0:
+			_fallen_player_ships.append(_with_attached_crew(ship))
 		_ships.erase(ship)
 
 	# Remove entity
@@ -744,58 +753,50 @@ func _end_game(winner: int) -> void:
 		BattleEventLoggerAutoload.service.log_event("game_ended", {"winner": winner})
 
 	if RoguelikeRun.active:
-		_handle_roguelike_battle_end()
+		_handle_roguelike_battle_end(winner)
 
 
-func _handle_roguelike_battle_end() -> void:
-	RoguelikeRun.update_fleet_after_battle(_get_surviving_player_ships(), _get_surviving_player_crew())
-
-	var next_scene: String
-	if RoguelikeRun.is_fleet_empty():
-		RoguelikeRun.end_run()
-		next_scene = "res://scenes/fleet_management.tscn"
-	else:
-		next_scene = "res://scenes/roguelite_map.tscn"
-
-	get_tree().call_deferred("change_scene_to_file", next_scene)
+## The campaign map owns all campaign branching; the battle scene only
+## records the outcome and the fleet's final state, then returns to it.
+func _handle_roguelike_battle_end(winner: int) -> void:
+	var result: String = CampaignSystem.RESULT_VICTORY if winner == 0 \
+		else CampaignSystem.RESULT_DEFEAT
+	var final_ships := _get_player_ships_final_state()
+	RoguelikeRun.record_battle_result(result, final_ships, _crew_groups_for_ships(final_ships))
+	get_tree().call_deferred("change_scene_to_file", CAMPAIGN_MAP_SCENE)
 
 
-func _get_surviving_player_ships() -> Array:
-	var survivors: Array = []
+## Every team-0 ship's final state - survivors as they stand, ships lost
+## during the battle as they were at the moment of destruction.
+func _get_player_ships_final_state() -> Array:
+	var final_states: Array = _fallen_player_ships.duplicate(true)
 	for ship in _ships:
 		if ship == null or ship.is_empty():
 			continue
 		if ship.get("team", -1) != 0:
 			continue
-		if ship.get("status", "") == "destroyed":
-			continue
-		var survivor: Dictionary = ship.duplicate(true)
-		# Attach the battle's live crew so roguelike jump repairs see the
-		# engineers who actually served aboard this ship.
-		survivor["crew"] = _crew_list \
-			.filter(func(c): return c.get("assigned_to", "") == ship.get("ship_id", "")) \
-			.map(func(c): return c.duplicate(true))
-		survivors.append(survivor)
-	return survivors
+		final_states.append(_with_attached_crew(ship))
+	return final_states
 
 
-## Surviving player crew grouped by the ship they crewed, in the shape
+## A deep copy of the ship with the battle's live crew attached, so
+## roguelike jump repairs see the engineers who actually served aboard.
+func _with_attached_crew(ship: Dictionary) -> Dictionary:
+	var copy: Dictionary = ship.duplicate(true)
+	copy["crew"] = _crew_list \
+		.filter(func(c): return c.get("assigned_to", "") == ship.get("ship_id", "")) \
+		.map(func(c): return c.duplicate(true))
+	return copy
+
+
+## Crew grouped by the ship they crewed, in the shape
 ## RoguelikeRun.fleet_crew stores (see take_saved_crew).
-func _get_surviving_player_crew() -> Array:
+func _crew_groups_for_ships(ships: Array) -> Array:
 	var groups: Array = []
-	for ship in _ships:
-		if ship == null or ship.is_empty():
-			continue
-		if ship.get("team", -1) != 0:
-			continue
-		if ship.get("status", "") == "destroyed":
-			continue
-		var members: Array = []
-		for crew in _crew_list:
-			if crew.assigned_to == ship.ship_id:
-				members.append(crew.duplicate(true))
+	for ship in ships:
+		var members: Array = ship.get("crew", [])
 		if not members.is_empty():
-			groups.append({"ship_type": ship.get("type", ""), "crew": members})
+			groups.append({"ship_type": ship.get("type", ""), "crew": members.duplicate(true)})
 	return groups
 
 # ============================================================================
