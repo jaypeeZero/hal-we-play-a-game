@@ -80,6 +80,10 @@ var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 var _debug_overlay: DebugOverlay
 var _debug_panel_layer: CanvasLayer = null
 
+# Surrender win condition state (per-team flee countdowns)
+var _surrender_state: Dictionary = SurrenderSystem.initial_state()
+var _surrender_label: Label = null
+
 # Options shown in the in-battle F1 panel and mirrored in the Settings menu.
 const DEBUG_PANEL_OPTIONS: Array = [
 	{"label": "Target Lines",    "setting": "show_target_lines"},
@@ -105,6 +109,7 @@ func _ready() -> void:
 	add_child(_debug_overlay)
 
 	_create_debug_panel()
+	_create_surrender_overlay()
 
 	game_started.emit()
 
@@ -255,6 +260,7 @@ func _process(delta: float) -> void:
 	_sync_all_entities()
 
 	# 9. CHECK WIN CONDITION
+	_check_surrender(delta)
 	_check_win_condition()
 
 ## Process weapons for all ships - returns Array of fire_commands
@@ -767,6 +773,17 @@ func _check_win_condition() -> void:
 	elif enemy_ships == 0 and player_ships > 0:
 		_end_game(0)
 
+## Tick the surrender system: a side whose ships are mostly fleeing for a
+## sustained countdown surrenders, and the other side wins.
+func _check_surrender(delta: float) -> void:
+	_surrender_state = SurrenderSystem.tick(_surrender_state, _ships, _crew_list, delta)
+	_update_surrender_ui()
+	var loser := SurrenderSystem.surrendered_team(_surrender_state)
+	if loser != SurrenderSystem.NO_SURRENDER:
+		# Reset so the deferred scene change doesn't re-trigger _end_game.
+		_surrender_state = SurrenderSystem.initial_state()
+		_end_game(1 - loser)
+
 func _end_game(winner: int) -> void:
 	game_ended.emit(winner)
 
@@ -837,6 +854,52 @@ func _destroyed_enemy_counts() -> Dictionary:
 		if lost > 0:
 			destroyed[ship_type] = lost
 	return destroyed
+
+# ============================================================================
+# SURRENDER COUNTDOWN OVERLAY
+# ============================================================================
+
+const SURRENDER_OVERLAY_LAYER := 11
+const SURRENDER_LABEL_TOP_MARGIN := 24.0
+const SURRENDER_LABEL_FONT_SIZE := 22
+
+## Build the top-center surrender countdown label (hidden unless a
+## countdown is active).
+func _create_surrender_overlay() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = SURRENDER_OVERLAY_LAYER
+	add_child(layer)
+
+	_surrender_label = Label.new()
+	_surrender_label.anchor_left = 0.0
+	_surrender_label.anchor_right = 1.0
+	_surrender_label.anchor_top = 0.0
+	_surrender_label.anchor_bottom = 0.0
+	_surrender_label.offset_top = SURRENDER_LABEL_TOP_MARGIN
+	_surrender_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_surrender_label.add_theme_font_size_override("font_size", SURRENDER_LABEL_FONT_SIZE)
+	_surrender_label.visible = false
+	layer.add_child(_surrender_label)
+
+## Show the active countdown (the most urgent one if both teams are
+## counting down); hide the label when no countdown is running.
+func _update_surrender_ui() -> void:
+	if _surrender_label == null:
+		return
+	var shown_team := SurrenderSystem.NO_SURRENDER
+	var shown_time := SurrenderSystem.SURRENDER_COUNTDOWN_SECONDS + 1.0
+	for team in _surrender_state:
+		var team_state: Dictionary = _surrender_state[team]
+		if team_state.countdown_active and team_state.time_remaining < shown_time:
+			shown_team = team
+			shown_time = team_state.time_remaining
+
+	if shown_team == SurrenderSystem.NO_SURRENDER:
+		_surrender_label.visible = false
+		return
+	var whose := "YOUR FLEET" if shown_team == 0 else "ENEMY FLEET"
+	_surrender_label.text = "%s SURRENDERS IN %ds" % [whose, ceili(shown_time)]
+	_surrender_label.visible = true
 
 # ============================================================================
 # DEBUG PANEL

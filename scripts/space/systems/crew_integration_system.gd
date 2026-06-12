@@ -109,6 +109,10 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		updated.orders.lateral_thrust = decision.get("lateral_thrust", 0)
 		updated.orders.position_side = decision.get("position_side", 0)
 		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
+		# Survival-reflex flee mode ("retreat"/"evade", "" when not fleeing).
+		# SurrenderSystem reads this; defaulting to "" makes it self-clearing
+		# when the pilot's next decision is no longer a survival reflex.
+		updated.orders.survival_mode = decision.get("survival_mode", "")
 		# NEW: Skill-based approach data
 		updated.orders.approach_style = decision.get("approach_style", 0)  # 0 = DIRECT
 		updated.orders.position_advantage = decision.get("position_advantage", "neutral")
