@@ -45,6 +45,9 @@ Console:
 ~ - Toggle log console
 / - Filter logs (while open)
 
+Debug:
+F1 - Toggle debug overlays
+
 After pressing a spawn key, click to place ships."
 
 [node name="StatusText" type="Label" parent="UI"]

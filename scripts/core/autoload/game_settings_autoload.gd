@@ -28,6 +28,11 @@ var debug_mode: bool = false
 # Debug tool settings
 var show_pilot_direction: bool = false
 var show_leader_numbers: bool = false
+var show_target_lines: bool = true
+var show_patrol_areas: bool = true
+var show_crew_stats: bool = false
+var show_wing_lines: bool = false
+var show_squadron_lines: bool = false
 
 func _ready() -> void:
 	load_settings()
@@ -87,6 +92,21 @@ func set_show_pilot_direction(enabled: bool) -> void:
 func set_show_leader_numbers(enabled: bool) -> void:
 	show_leader_numbers = enabled
 
+func set_show_target_lines(enabled: bool) -> void:
+	show_target_lines = enabled
+
+func set_show_patrol_areas(enabled: bool) -> void:
+	show_patrol_areas = enabled
+
+func set_show_crew_stats(enabled: bool) -> void:
+	show_crew_stats = enabled
+
+func set_show_wing_lines(enabled: bool) -> void:
+	show_wing_lines = enabled
+
+func set_show_squadron_lines(enabled: bool) -> void:
+	show_squadron_lines = enabled
+
 # ============================================================================
 # PERSISTENCE
 # ============================================================================
@@ -109,6 +129,11 @@ func save_settings() -> void:
 	# Debug tools
 	config.set_value("debug", "show_pilot_direction", show_pilot_direction)
 	config.set_value("debug", "show_leader_numbers", show_leader_numbers)
+	config.set_value("debug", "show_target_lines", show_target_lines)
+	config.set_value("debug", "show_patrol_areas", show_patrol_areas)
+	config.set_value("debug", "show_crew_stats", show_crew_stats)
+	config.set_value("debug", "show_wing_lines", show_wing_lines)
+	config.set_value("debug", "show_squadron_lines", show_squadron_lines)
 
 	var err = config.save(SETTINGS_PATH)
 	if err != OK:
@@ -137,6 +162,11 @@ func load_settings() -> void:
 	# Debug tools
 	show_pilot_direction = config.get_value("debug", "show_pilot_direction", show_pilot_direction)
 	show_leader_numbers = config.get_value("debug", "show_leader_numbers", show_leader_numbers)
+	show_target_lines = config.get_value("debug", "show_target_lines", show_target_lines)
+	show_patrol_areas = config.get_value("debug", "show_patrol_areas", show_patrol_areas)
+	show_crew_stats = config.get_value("debug", "show_crew_stats", show_crew_stats)
+	show_wing_lines = config.get_value("debug", "show_wing_lines", show_wing_lines)
+	show_squadron_lines = config.get_value("debug", "show_squadron_lines", show_squadron_lines)
 
 	# Apply loaded settings
 	_apply_audio_settings()
