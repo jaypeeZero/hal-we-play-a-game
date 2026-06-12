@@ -191,6 +191,67 @@ func test_default_groups_same_type_together() -> void:
 	assert_eq(squads[0].get("hull_ids", []).size(), 2)
 
 
+func _make_fleet_of_type(count: int, ship_type: String) -> Array:
+	var fleet: Array = []
+	for i in count:
+		fleet.append(_make_hull("%s_h%d" % [ship_type, i], ship_type))
+	return fleet
+
+
+func _collect_hull_ids(squads: Array) -> Array:
+	var all_assigned: Array = []
+	for sq in squads:
+		all_assigned.append_array(sq.get("hull_ids", []))
+	return all_assigned
+
+
+func test_default_caps_squadron_size() -> void:
+	var fleet := _make_fleet_of_type(SquadronSystem.MAX_AUTO_SQUADRON_SIZE * 2 + 2, "fighter")
+	var squads := SquadronSystem.default_squadrons_for_fleet(fleet)
+	for sq in squads:
+		assert_true(
+			sq.get("hull_ids", []).size() <= SquadronSystem.MAX_AUTO_SQUADRON_SIZE,
+			"Squadron exceeds max auto size"
+		)
+
+
+func test_default_oversized_group_assigns_every_hull_exactly_once() -> void:
+	var fleet := _make_fleet_of_type(SquadronSystem.MAX_AUTO_SQUADRON_SIZE * 2 + 2, "fighter")
+	var squads := SquadronSystem.default_squadrons_for_fleet(fleet)
+	var all_assigned := _collect_hull_ids(squads)
+	assert_eq(all_assigned.size(), fleet.size())
+	for hull in fleet:
+		assert_true(hull["hull_id"] in all_assigned)
+
+
+func test_default_small_group_keeps_unnumbered_name() -> void:
+	var fleet := _make_fleet_of_type(SquadronSystem.MAX_AUTO_SQUADRON_SIZE, "fighter")
+	var squads := SquadronSystem.default_squadrons_for_fleet(fleet)
+	assert_eq(squads.size(), 1)
+	assert_false(squads[0].get("name", "").ends_with("1"))
+
+
+func test_default_split_squadrons_get_distinct_names() -> void:
+	var fleet := _make_fleet_of_type(SquadronSystem.MAX_AUTO_SQUADRON_SIZE + 1, "fighter")
+	var squads := SquadronSystem.default_squadrons_for_fleet(fleet)
+	assert_true(squads.size() > 1)
+	var names: Dictionary = {}
+	for sq in squads:
+		names[sq.get("name", "")] = true
+	assert_eq(names.size(), squads.size())
+
+
+func test_default_split_squadrons_do_not_mix_types() -> void:
+	var fleet := _make_fleet_of_type(SquadronSystem.MAX_AUTO_SQUADRON_SIZE + 2, "fighter")
+	fleet.append_array(_make_fleet_of_type(SquadronSystem.MAX_AUTO_SQUADRON_SIZE + 2, "corvette"))
+	var squads := SquadronSystem.default_squadrons_for_fleet(fleet)
+	for sq in squads:
+		var types: Dictionary = {}
+		for hid in sq.get("hull_ids", []):
+			types[hid.split("_")[0]] = true
+		assert_eq(types.size(), 1, "Squadron mixes ship types")
+
+
 func test_default_each_squadron_mission_is_free() -> void:
 	var fleet := _make_fleet([["h1", "fighter"], ["h2", "corvette"]])
 	var squads := SquadronSystem.default_squadrons_for_fleet(fleet)

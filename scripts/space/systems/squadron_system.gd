@@ -4,6 +4,9 @@ extends RefCounted
 ## Pure functional squadron management. All mutation functions return new
 ## arrays rather than modifying their inputs.
 
+## Maximum ships per auto-generated squadron. Manual editing is not capped.
+const MAX_AUTO_SQUADRON_SIZE: int = 6
+
 
 ## Return the squadron containing hull_id, or {} if none.
 static func get_squadron_for_hull(squadrons: Array, hull_id: String) -> Dictionary:
@@ -116,7 +119,9 @@ static func prune_for_roster(squadrons: Array, lost_hull_ids: Array) -> Array:
 	return pruned
 
 
-## Build one squadron per ship_type from fleet_hulls, assigning every hull.
+## Build squadrons per ship_type from fleet_hulls, assigning every hull.
+## Each ship_type group is split into squadrons of at most
+## MAX_AUTO_SQUADRON_SIZE hulls; multiple squadrons of a type get numbered names.
 static func default_squadrons_for_fleet(fleet_hulls: Array) -> Array:
 	var by_type: Dictionary = {}
 	for hull in fleet_hulls:
@@ -127,7 +132,19 @@ static func default_squadrons_for_fleet(fleet_hulls: Array) -> Array:
 
 	var result: Array = []
 	for ship_type in by_type:
-		var sq: Dictionary = SquadronData.create(ship_type.capitalize() + " Squadron")
-		sq["hull_ids"] = by_type[ship_type].duplicate()
-		result.append(sq)
+		var chunks: Array = _chunk_array(by_type[ship_type], MAX_AUTO_SQUADRON_SIZE)
+		var base_name: String = ship_type.capitalize() + " Squadron"
+		for i in chunks.size():
+			var sq_name: String = base_name if chunks.size() == 1 else "%s %d" % [base_name, i + 1]
+			var sq: Dictionary = SquadronData.create(sq_name)
+			sq["hull_ids"] = chunks[i]
+			result.append(sq)
 	return result
+
+
+## Split items into consecutive sub-arrays of at most chunk_size elements.
+static func _chunk_array(items: Array, chunk_size: int) -> Array:
+	var chunks: Array = []
+	for start in range(0, items.size(), chunk_size):
+		chunks.append(items.slice(start, start + chunk_size))
+	return chunks
