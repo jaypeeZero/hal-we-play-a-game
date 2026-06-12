@@ -207,10 +207,12 @@ static func get_hull_length(ship_type: String) -> float:
 
 ## Calculate spawn positions for a fleet - pure function for testability
 ## Returns array of {type: String, position: Vector2, size: float}
+## Ships of the same type spawn tightly grouped (within FORMATION_RANGE) so
+## wings can form immediately. Extra space is distributed between type groups.
 static func calculate_fleet_spawn_positions(fleet: Dictionary, base_x: float, battlefield_height: float) -> Array:
 	var results := []
 
-	# Build list of ships with their hull lengths (not collision radius)
+	# Build list of ships grouped by type (SHIP_TYPES order: fighters first)
 	var ships_to_spawn := []
 	for ship_type in FleetDataManager.SHIP_TYPES:
 		var count: int = fleet.get(ship_type, 0)
@@ -222,31 +224,38 @@ static func calculate_fleet_spawn_positions(fleet: Dictionary, base_x: float, ba
 	if ships_to_spawn.is_empty():
 		return results
 
-	# Calculate minimum spacing needed - ships CANNOT overlap
-	var min_gap := 50.0  # Extra gap between ship edges
-	var total_required := 0.0
-	for ship in ships_to_spawn:
-		total_required += ship["length"] + min_gap
-
-	# Available space
+	var min_gap := 50.0
 	var margin := 100.0
 	var available := battlefield_height - margin * 2.0
 
-	# Distribute extra space as additional gap if we have room
-	var extra_gap := 0.0
-	if total_required < available:
-		extra_gap = (available - total_required) / float(ships_to_spawn.size())
+	# Count type-group boundaries so extra space spreads between groups, not
+	# within them. Keeping same-type ships tight means fighters stay within
+	# FORMATION_RANGE of each other and wings form at battle start.
+	var type_transitions := 0
+	for i in range(1, ships_to_spawn.size()):
+		if ships_to_spawn[i]["type"] != ships_to_spawn[i - 1]["type"]:
+			type_transitions += 1
 
-	# Position each ship - use half-length to find center
-	var current_y := margin
+	var total_ship_space := 0.0
 	for ship in ships_to_spawn:
+		total_ship_space += ship["length"] + min_gap
+
+	var inter_group_gap := 0.0
+	if type_transitions > 0 and total_ship_space < available:
+		inter_group_gap = (available - total_ship_space) / float(type_transitions + 1)
+
+	var current_y := margin + inter_group_gap / 2.0
+	for i in range(ships_to_spawn.size()):
+		var ship = ships_to_spawn[i]
 		var half_length: float = ship["length"] / 2.0
-		current_y += half_length  # Move to ship center
+		current_y += half_length
 		results.append({
 			"type": ship["type"],
 			"position": Vector2(base_x, current_y),
 			"size": ship["length"]
 		})
-		current_y += half_length + min_gap + extra_gap  # Move past ship
+		current_y += half_length + min_gap
+		if i + 1 < ships_to_spawn.size() and ships_to_spawn[i + 1]["type"] != ship["type"]:
+			current_y += inter_group_gap
 
 	return results
