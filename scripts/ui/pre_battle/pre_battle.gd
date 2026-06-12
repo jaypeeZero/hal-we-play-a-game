@@ -30,7 +30,7 @@ const BOX_BORDER_WIDTH: float = 2.0
 
 var _input: PreBattleInput
 var _preview_entities: Dictionary = {}
-var _doctrine_panel: DoctrinePanel = null
+var _squadron_manager: SquadronManager = null
 
 
 func _ready() -> void:
@@ -58,38 +58,29 @@ func _ready() -> void:
 	)
 	_input = PreBattleInput.new(BattlePlan.entries, bounds)
 
-	# Doctrine (standing instructions) is roguelike run state; the panel
-	# only exists when a run is active. Outside a run, say so instead of
-	# showing nothing.
+	# Squadron Manager is the primary roguelike tactics UI; available only
+	# during an active run. Doctrine is accessible per-ship from within it.
 	if RoguelikeRun.active:
-		_doctrine_panel = DoctrinePanel.new()
-		$UI.add_child(_doctrine_panel)
-		_doctrine_panel.setup(BattlePlan.entries)
-		_doctrine_panel.hull_selected.connect(_on_doctrine_hull_selected)
+		_squadron_manager = SquadronManager.new()
+		$UI.add_child(_squadron_manager)
+		_squadron_manager.setup()
+		_squadron_manager.done.connect(_on_start_battle_pressed)
 	else:
-		_add_doctrine_hint()
+		_add_tactics_hint()
 
 	queue_redraw()
 
 
-## Shown where the doctrine panel would be when no run is active, so the
-## feature is discoverable from the direct main-menu pre-battle path.
-func _add_doctrine_hint() -> void:
+## Shown when no run is active so the feature is discoverable.
+func _add_tactics_hint() -> void:
 	var hint := Label.new()
-	hint.text = "Fleet doctrine: standing instructions are issued here\nduring a roguelike run (Main Menu → Fleet Management → Launch)."
+	hint.text = "Squadron tactics and doctrine: available during a roguelike run\n(Main Menu → Fleet Management → Launch)."
 	hint.anchor_left = 1.0
 	hint.anchor_right = 1.0
 	hint.offset_left = -(DoctrinePanel.PANEL_WIDTH + DoctrinePanel.PANEL_MARGIN)
 	hint.offset_right = -DoctrinePanel.PANEL_MARGIN
 	hint.offset_top = DoctrinePanel.PANEL_MARGIN
 	$UI.add_child(hint)
-
-
-## Picking a hull in the doctrine dropdown selects it on the map too.
-func _on_doctrine_hull_selected(entry_index: int) -> void:
-	_input.selected_indices.clear()
-	_input.selected_indices.append(entry_index)
-	queue_redraw()
 
 
 func _spawn_preview_ship(entry: Dictionary) -> ShipEntity:
@@ -126,8 +117,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			var result := _input.on_mouse_down(world_pos, event.shift_pressed, event.ctrl_pressed)
 			if result != PreBattleInput.RESULT_NONE:
 				# A plain single-ship click also syncs the doctrine dropdown.
-				if result == PreBattleInput.RESULT_SELECTED and _doctrine_panel != null:
-					_doctrine_panel.sync_to_entry(_input.selected_indices[0])
 				queue_redraw()
 				get_viewport().set_input_as_handled()
 		else:

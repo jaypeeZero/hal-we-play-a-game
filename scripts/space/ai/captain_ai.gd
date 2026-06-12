@@ -87,12 +87,12 @@ static func _make_ship_tactical_decision(crew_data: Dictionary, game_time: float
 		"concentrate_fire":
 			var target = _select_damaged_target(crew_data)
 			if target.is_empty():
-				target = CrewAIShared.select_best_tactical_target(crew_data)
+				target = _select_mission_target(crew_data)
 			subordinate_orders = _create_concentrate_fire_orders(crew_data, target)
 			decision = _create_captain_decision(updated, {"type": "concentrate_fire", "target_id": target.get("id", "")}, game_time)
 
 		"aggressive_pursuit":
-			var target = CrewAIShared.select_best_tactical_target(crew_data)
+			var target = _select_mission_target(crew_data)
 			subordinate_orders = _create_aggressive_pursuit_orders(crew_data, target)
 			decision = _create_captain_decision(updated, {"type": "aggressive_pursuit", "target_id": target.get("id", "")}, game_time)
 
@@ -102,12 +102,12 @@ static func _make_ship_tactical_decision(crew_data: Dictionary, game_time: float
 				decision = _create_captain_decision(updated, {"type": "support_ally", "target_id": damaged_friendly.get("id", "")}, game_time)
 			else:
 				# Fallback to engage
-				var target = CrewAIShared.select_best_tactical_target(crew_data)
+				var target = _select_mission_target(crew_data)
 				subordinate_orders = _create_engage_orders(crew_data, target)
 				decision = _create_captain_decision(updated, {"type": "engage", "target_id": target.get("id", "")}, game_time)
 
 		"flank":
-			var target = CrewAIShared.select_best_tactical_target(crew_data)
+			var target = _select_mission_target(crew_data)
 			subordinate_orders = _create_flank_orders(crew_data, target)
 			decision = _create_captain_decision(updated, {"type": "flank", "target_id": target.get("id", "")}, game_time)
 
@@ -117,7 +117,7 @@ static func _make_ship_tactical_decision(crew_data: Dictionary, game_time: float
 
 		"engage", _:
 			if has_threats or has_opportunities:
-				var target = CrewAIShared.select_best_tactical_target(crew_data)
+				var target = _select_mission_target(crew_data)
 				subordinate_orders = _create_engage_orders(crew_data, target)
 				decision = _create_captain_decision(updated, {"type": "engage", "target_id": target.get("id", "")}, game_time)
 
@@ -225,6 +225,27 @@ static func _select_action_from_knowledge(knowledge: Array, crew_data: Dictionar
 					return "engage"
 
 	return action
+
+
+## Select the best tactical target, biasing scores with the crew's squadron
+## mission. Falls back to CrewAIShared when no opportunities exist.
+static func _select_mission_target(crew_data: Dictionary) -> Dictionary:
+	var mission: String = crew_data.get("squadron_mission", SquadronData.Mission.FREE)
+	var params: Dictionary = crew_data.get("squadron_mission_params", {})
+	if mission == SquadronData.Mission.FREE:
+		return CrewAIShared.select_best_tactical_target(crew_data)
+	var opportunities: Array = crew_data.get("awareness", {}).get("opportunities", [])
+	if opportunities.is_empty():
+		return {}
+	var best: Dictionary = {}
+	var best_score := -1.0
+	for opp in opportunities:
+		var base_score: float = opp.get("_threat_priority", 1.0)
+		var score: float = base_score * MissionTargetingSystem.score_multiplier(mission, params, opp)
+		if score > best_score:
+			best_score = score
+			best = opp
+	return best
 
 
 ## Check if ship is critically damaged

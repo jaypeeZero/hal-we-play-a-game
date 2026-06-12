@@ -1067,10 +1067,14 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 		new_crew = CrewData.bind_gunners_to_weapons(new_crew, ship_data.get("weapons", []))
 
 	# Compile the run's doctrine (player standing instructions) into each
-	# crew member's knowledge set.
+	# crew member's knowledge set, then stamp the squadron mission so the
+	# AI can read it from crew_data without touching the squadrons array.
 	if team == 0 and RoguelikeRun.active:
+		var mission_info: Dictionary = SquadronSystem.get_mission(RoguelikeRun.squadrons, hull_id)
 		for i in range(new_crew.size()):
 			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, RoguelikeRun.doctrine)
+			new_crew[i]["squadron_mission"] = mission_info.get("mission", SquadronData.Mission.FREE)
+			new_crew[i]["squadron_mission_params"] = mission_info.get("params", {})
 
 	# Assign crew to ship and add to index
 	for crew_member in new_crew:
