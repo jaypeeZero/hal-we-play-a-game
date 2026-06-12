@@ -345,7 +345,7 @@ func test_hire_button_is_disabled_when_the_pool_is_exhausted():
 	RoguelikeRun.money = 100000
 	RoguelikeRun.add_purchased_hull("fighter")
 	for entry in CrewRosterManager.load_roster():
-		if entry.role == "pilot":
+		if entry.roles.has("pilot"):
 			RoguelikeRun.hired_roster_ids.append(entry.id)
 	var shop := ShopScreen.new()
 	add_child_autofree(shop)

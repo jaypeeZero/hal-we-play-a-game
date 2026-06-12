@@ -8,11 +8,11 @@ extends GutTest
 const EDIT_SKILL := 0.9
 
 
-func _entry(role_name: String = "pilot", skill: float = 0.5) -> Dictionary:
+func _entry(role_names: Array = ["pilot"], skill: float = 0.5) -> Dictionary:
 	var skills := {}
 	for skill_name in CrewData.SKILL_NAMES:
 		skills[skill_name] = skill
-	return {"id": "view_test", "callsign": "Testy", "role": role_name, "skills": skills}
+	return {"id": "view_test", "callsign": "Testy", "roles": role_names, "skills": skills}
 
 
 func _view(editable: bool, entry: Dictionary = _entry()) -> CrewMemberView:
@@ -43,7 +43,7 @@ func _find_by_script(node: Node, script: Script, acc: Array) -> Array:
 
 func test_read_only_mode_has_no_editing_controls():
 	var view := _view(false)
-	for klass in ["HSlider", "LineEdit", "OptionButton"]:
+	for klass in ["HSlider", "LineEdit", "CheckBox"]:
 		assert_eq(_find_by_class(view, klass, []).size(), 0,
 			"Read-only mode contains no %s" % klass)
 
@@ -53,7 +53,8 @@ func test_editable_mode_has_a_control_per_editable_field():
 	assert_eq(_find_by_class(view, "HSlider", []).size(), CrewData.SKILL_NAMES.size(),
 		"One slider per skill")
 	assert_eq(_find_by_class(view, "LineEdit", []).size(), 1, "One callsign field")
-	assert_eq(_find_by_class(view, "OptionButton", []).size(), 1, "One role picker")
+	assert_eq(_find_by_class(view, "CheckBox", []).size(), CrewData.ROLE_NAMES.size(),
+		"One qualification checkbox per role")
 
 
 func test_both_modes_share_the_same_visual_anatomy():
@@ -90,16 +91,45 @@ func test_editing_the_callsign_updates_the_entry():
 		"Typing a callsign lands on the entry")
 
 
-func test_picking_a_role_updates_the_entry():
-	var view := _view(true, _entry("pilot"))
-	var picker: OptionButton = _find_by_class(view, "OptionButton", [])[0]
+func _role_checkbox(view: CrewMemberView, role: int) -> CheckBox:
+	for check in _find_by_class(view, "CheckBox", []):
+		if check.text == CrewData.get_role_name(role):
+			return check
+	return null
 
-	var engineer_index := picker.get_item_index(CrewData.Role.ENGINEER)
-	picker.select(engineer_index)
-	picker.item_selected.emit(engineer_index)
 
-	assert_eq(view.current_entry().role, "engineer",
-		"Picking a role stores its stable name on the entry")
+func test_checking_a_role_adds_a_qualification():
+	var view := _view(true, _entry(["pilot"]))
+	var check := _role_checkbox(view, CrewData.Role.ENGINEER)
+
+	check.button_pressed = true
+
+	assert_eq(view.current_entry().roles, ["pilot", "engineer"],
+		"Checking a role appends it, keeping the original primary first")
+
+
+func test_unchecking_a_role_removes_the_qualification():
+	var view := _view(true, _entry(["pilot", "engineer"]))
+	var check := _role_checkbox(view, CrewData.Role.PILOT)
+
+	check.button_pressed = false
+
+	assert_eq(view.current_entry().roles, ["engineer"],
+		"Unchecking removes the qualification")
+
+
+func test_the_last_qualification_cannot_be_unchecked():
+	var view := _view(true, _entry(["pilot"]))
+	var check := _role_checkbox(view, CrewData.Role.PILOT)
+	watch_signals(view)
+
+	check.button_pressed = false
+
+	assert_eq(view.current_entry().roles, ["pilot"],
+		"A crew member always keeps at least one qualified role")
+	assert_true(check.button_pressed, "The checkbox snaps back on")
+	assert_signal_not_emitted(view, "entry_changed",
+		"A reverted uncheck is not an edit")
 
 
 func test_current_entry_is_a_copy_not_a_live_reference():

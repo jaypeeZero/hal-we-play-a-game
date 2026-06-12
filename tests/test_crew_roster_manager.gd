@@ -27,11 +27,11 @@ func after_each() -> void:
 		file.close()
 
 
-func _entry(id: String, role_name: String = "pilot", skill: float = 0.5) -> Dictionary:
+func _entry(id: String, role_names: Array = ["pilot"], skill: float = 0.5) -> Dictionary:
 	var skills := {}
 	for skill_name in CrewData.SKILL_NAMES:
 		skills[skill_name] = skill
-	return {"id": id, "callsign": id.capitalize(), "role": role_name, "skills": skills}
+	return {"id": id, "callsign": id.capitalize(), "roles": role_names, "skills": skills}
 
 
 # SHIPPED ROSTER
@@ -44,8 +44,10 @@ func test_shipped_roster_loads_valid_entries():
 	for entry in roster:
 		assert_false(seen_ids.has(entry.id), "Entry ids are unique (%s)" % entry.id)
 		seen_ids[entry.id] = true
-		assert_true(CrewData.ROLE_NAMES.values().has(entry.role),
-			"Every role name is resolvable (%s)" % entry.role)
+		assert_gt(entry.roles.size(), 0, "Every entry has at least one role")
+		for role_name in entry.roles:
+			assert_true(CrewData.ROLE_NAMES.values().has(role_name),
+				"Every role name is resolvable (%s)" % role_name)
 		for skill_name in CrewData.SKILL_NAMES:
 			assert_between(entry.skills[skill_name], 0.0, 1.0,
 				"Skill '%s' is within 0..1" % skill_name)
@@ -53,7 +55,7 @@ func test_shipped_roster_loads_valid_entries():
 
 func test_shipped_roster_spans_the_skill_range():
 	var piloting: Array = CrewRosterManager.load_roster() \
-		.filter(func(e): return e.role == "pilot") \
+		.filter(func(e): return e.roles.has("pilot")) \
 		.map(func(e): return e.skills.piloting)
 
 	assert_lt(piloting.min(), LOW_BAND, "The roster includes rookie pilots")
@@ -64,14 +66,14 @@ func test_shipped_roster_covers_every_role():
 	var roster := CrewRosterManager.load_roster()
 	for role in CrewData.ROLE_NAMES:
 		var role_name: String = CrewData.ROLE_NAMES[role]
-		assert_gt(roster.filter(func(e): return e.role == role_name).size(), 0,
+		assert_gt(roster.filter(func(e): return e.roles.has(role_name)).size(), 0,
 			"The roster ships candidates for role '%s'" % role_name)
 
 
 # OVERRIDE LIFECYCLE
 
 func test_saved_override_wins_over_the_shipped_roster():
-	assert_true(CrewRosterManager.save_roster([_entry("custom_1", "gunner")]),
+	assert_true(CrewRosterManager.save_roster([_entry("custom_1", ["gunner"])]),
 		"Saving an override succeeds")
 	assert_true(CrewRosterManager.has_user_override(), "The override file exists")
 
@@ -105,22 +107,22 @@ func test_entries_without_an_id_are_dropped():
 
 
 func test_duplicate_ids_keep_the_first_entry():
-	var first := _entry("twin", "pilot")
-	var second := _entry("twin", "gunner")
+	var first := _entry("twin", ["pilot"])
+	var second := _entry("twin", ["gunner"])
 	CrewRosterManager.save_roster([first, second])
 
 	var roster := CrewRosterManager.load_roster()
 	assert_eq(roster.size(), 1, "Duplicate ids collapse to one entry")
-	assert_eq(roster[0].role, "pilot", "The first occurrence wins")
+	assert_eq(roster[0].roles, ["pilot"], "The first occurrence wins")
 
 
 func test_malformed_fields_are_backfilled_not_fatal():
-	var broken := {"id": "fixme", "role": "janitor", "skills": {"aim": 7.0}}
+	var broken := {"id": "fixme", "roles": ["janitor"], "skills": {"aim": 7.0}}
 	CrewRosterManager.save_roster([broken])
 
 	var roster := CrewRosterManager.load_roster()
 	var entry: Dictionary = roster[0]
-	assert_eq(entry.role, "pilot", "Unknown roles backfill to pilot")
+	assert_eq(entry.roles, ["pilot"], "Unknown role names backfill to pilot")
 	assert_ne(entry.callsign, "", "A missing callsign is backfilled")
 	assert_eq(entry.skills.aim, 1.0, "Out-of-range skills clamp into 0..1")
 	for skill_name in CrewData.SKILL_NAMES:
@@ -139,7 +141,7 @@ func test_an_override_with_zero_valid_entries_falls_back_to_shipped():
 # HIRING POOL
 
 func test_available_entries_excludes_hired_ids():
-	CrewRosterManager.save_roster([_entry("a", "pilot"), _entry("b", "pilot")])
+	CrewRosterManager.save_roster([_entry("a", ["pilot"]), _entry("b", ["pilot"])])
 
 	var pool := CrewRosterManager.available_entries(["a"])
 
@@ -148,7 +150,7 @@ func test_available_entries_excludes_hired_ids():
 
 
 func test_available_entries_filters_by_role():
-	CrewRosterManager.save_roster([_entry("p", "pilot"), _entry("g", "gunner")])
+	CrewRosterManager.save_roster([_entry("p", ["pilot"]), _entry("g", ["gunner"])])
 
 	var gunners := CrewRosterManager.available_entries([], CrewData.Role.GUNNER)
 
@@ -158,10 +160,30 @@ func test_available_entries_filters_by_role():
 		"No role filter returns the whole pool")
 
 
-func test_entry_by_id_finds_entries_and_misses_cleanly():
-	CrewRosterManager.save_roster([_entry("findme", "engineer")])
+func test_multi_role_candidates_appear_in_each_qualified_pool():
+	CrewRosterManager.save_roster([_entry("dual", ["pilot", "engineer"])])
 
-	assert_eq(CrewRosterManager.entry_by_id("findme").role, "engineer",
+	assert_eq(CrewRosterManager.available_entries([], CrewData.Role.PILOT).size(), 1,
+		"A pilot+engineer qualifies for the pilot pool")
+	assert_eq(CrewRosterManager.available_entries([], CrewData.Role.ENGINEER).size(), 1,
+		"...and the engineer pool")
+	assert_eq(CrewRosterManager.available_entries([], CrewData.Role.GUNNER).size(), 0,
+		"...but not for pools they hold no qualification for")
+
+
+func test_an_entry_without_roles_backfills_to_pilot():
+	var no_roles := _entry("rookie")
+	no_roles.erase("roles")
+	CrewRosterManager.save_roster([no_roles])
+
+	assert_eq(CrewRosterManager.load_roster()[0].roles, ["pilot"],
+		"A missing roles array backfills to the pilot qualification")
+
+
+func test_entry_by_id_finds_entries_and_misses_cleanly():
+	CrewRosterManager.save_roster([_entry("findme", ["engineer"])])
+
+	assert_eq(CrewRosterManager.entry_by_id("findme").roles, ["engineer"],
 		"A present id resolves to its entry")
 	assert_true(CrewRosterManager.entry_by_id("ghost").is_empty(),
 		"An absent id returns an empty dict, not an error")

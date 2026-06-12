@@ -22,6 +22,8 @@ const SECTION_GAP := 16
 const CARD_MIN_WIDTH := 230
 ## Below this fraction, an armor/systems meter is shown in the warning colour.
 const CONDITION_LOW_RATIO := 0.6
+## Flag shown beside crew serving in a role they are not qualified for.
+const OFF_ROLE_TAG := "⚠ off-role %d%%" % int(round((CrewData.OFF_ROLE_PERFORMANCE_MULTIPLIER - 1.0) * 100.0))
 
 var _shop_node: Dictionary = {}
 var _money_label: Label
@@ -267,6 +269,8 @@ func _build_roster() -> void:
 func _crew_row(hull: Dictionary, member: Dictionary) -> Control:
 	var row := _row()
 	row.add_child(UiKit.label(CrewData.get_role_name(member.get("role", -1)), UiKit.DIM, 11))
+	if CrewData.is_off_role(member):
+		row.add_child(UiKit.label(OFF_ROLE_TAG, UiKit.BAD, 11))
 	# The callsign opens the member's stat sheet.
 	var name_btn := UiKit.style_button(_make_button(member.get("callsign", "")), "ghost")
 	name_btn.pressed.connect(func(): CrewViewModal.open(self, CrewData.entry_from_crew(member)))

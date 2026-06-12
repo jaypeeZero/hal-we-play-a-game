@@ -163,8 +163,11 @@ static func apply_pilot_skill_modifiers(ship_data: Dictionary, crew_data: Dictio
 	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
 	updated.crew_modifiers.pilot_aggression = float(skills.get("aggression", skill_factor))
 
-	# Pilot-as-gunner fields for solo fighters. See function doc.
-	var aim_skill: float = float(skills.get("aim", skill_factor))
+	# Pilot-as-gunner fields for solo fighters. See function doc. Off-role
+	# pilots aim worse too — the penalty hits all areas, including the raw
+	# aim read that stress/fatigue deliberately leave alone.
+	var aim_skill: float = float(skills.get("aim", skill_factor)) \
+		* CrewData.role_performance_multiplier(crew_data)
 	var composure: float = float(skills.get("composure", skill_factor))
 	var stress: float = float(crew_data.get("stats", {}).get("stress", 0.0))
 	var effective_composure: float = composure * (1.0 - stress * 0.5)
@@ -215,7 +218,9 @@ static func apply_gunner_skill_modifiers(ship_data: Dictionary, crew_data: Dicti
 	# Raw aim skill drives the spread cone. Stress/fatigue degrade
 	# `skill_factor` for other downstream effects, but the cone uses raw aim
 	# so a 20-aim crew stays tight even under fire — composure gates panic.
-	updated.crew_modifiers.aim_skill = float(crew_data.get("stats", {}).get("skills", {}).get("aim", skill_factor))
+	# The off-role penalty DOES hit the cone: it degrades all areas.
+	updated.crew_modifiers.aim_skill = float(crew_data.get("stats", {}).get("skills", {}).get("aim", skill_factor)) \
+		* CrewData.role_performance_multiplier(crew_data)
 	updated.crew_modifiers.gunner_panicking = is_panicking
 	updated.crew_modifiers.gunner_reaction = crew_data.stats.reaction_time
 

@@ -6,7 +6,7 @@ extends PanelContainer
 ## serves both display and editing — `setup(entry, editable)` decides which
 ## control each row gets; the layout is shared so the two modes cannot drift.
 ##
-## Operates on the roster-entry shape ({id, callsign, role, skills}); adapt
+## Operates on the roster-entry shape ({id, callsign, roles, skills}); adapt
 ## live crew dicts with CrewData.entry_from_crew. Derived stats (reaction,
 ## decision, awareness range) are recomputed for display on every change and
 ## never stored on the entry.
@@ -79,12 +79,12 @@ func _top_row() -> Control:
 		name_edit.text = str(_entry.get("callsign", ""))
 		name_edit.text_changed.connect(_on_callsign_changed)
 		identity.add_child(name_edit)
-		identity.add_child(_role_picker())
+		identity.add_child(_role_checks())
 	else:
 		identity.add_child(UiKit.label(
 			str(_entry.get("callsign", "")), UiKit.INK, CALLSIGN_FONT_SIZE))
 		identity.add_child(UiKit.label(
-			CrewData.get_role_name(_entry_role()), UiKit.DIM, 12))
+			CrewData.display_role_names(_entry.get("roles", [])), UiKit.DIM, 12))
 	row.add_child(identity)
 
 	_radar = SkillRadarChart.new()
@@ -96,14 +96,18 @@ func _top_row() -> Control:
 	return row
 
 
-func _role_picker() -> OptionButton:
-	var picker := OptionButton.new()
+## One CheckBox per role; the checked set is the entry's qualified roles.
+func _role_checks() -> Control:
+	var box := VBoxContainer.new()
+	var roles: Array = _entry.get("roles", [])
 	for role in CrewData.ROLE_NAMES:
-		picker.add_item(CrewData.get_role_name(role), role)
-	picker.select(picker.get_item_index(_entry_role()))
-	picker.item_selected.connect(
-		func(index: int): _on_role_selected(picker.get_item_id(index)))
-	return picker
+		var check := CheckBox.new()
+		check.text = CrewData.get_role_name(role)
+		check.button_pressed = roles.has(CrewData.role_to_name(role))
+		check.toggled.connect(
+			func(pressed: bool): _on_role_toggled(check, role, pressed))
+		box.add_child(check)
+	return box
 
 
 func _derived_row() -> Control:
@@ -158,8 +162,21 @@ func _on_callsign_changed(text: String) -> void:
 	entry_changed.emit(current_entry())
 
 
-func _on_role_selected(role: int) -> void:
-	_entry["role"] = CrewData.role_to_name(role)
+## Checking adds a qualification (at the end — the primary role is whichever
+## was acquired first); unchecking removes one. The uncheck that would empty
+## the set is reverted: a crew member always holds at least one role.
+func _on_role_toggled(check: CheckBox, role: int, pressed: bool) -> void:
+	var roles: Array = _entry.get("roles", [])
+	var role_name := CrewData.role_to_name(role)
+	if pressed:
+		if not roles.has(role_name):
+			roles.append(role_name)
+	else:
+		if roles.size() == 1 and roles.has(role_name):
+			check.set_pressed_no_signal(true)
+			return
+		roles.erase(role_name)
+	_entry["roles"] = roles
 	_refresh_derived()
 	entry_changed.emit(current_entry())
 
@@ -191,8 +208,12 @@ func _refresh_derived() -> void:
 	_derived_labels["awareness_range"].text = "%d" % int(stats.awareness_range)
 
 
+## The entry's primary role (first qualification) — drives derived stats.
 func _entry_role() -> int:
-	return CrewData.role_from_name(str(_entry.get("role", "")))
+	var roles: Array = _entry.get("roles", [])
+	if roles.is_empty():
+		return CrewData.Role.PILOT
+	return CrewData.role_from_name(str(roles[0]))
 
 
 func _format_skill(value: float) -> String:
