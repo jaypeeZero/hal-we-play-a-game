@@ -243,6 +243,8 @@ static func _assign_squadron_targets(crew_data: Dictionary) -> Array:
 	var skill = CrewAISystem.calculate_effective_skill(crew_data)
 	var subordinates = crew_data.command_chain.subordinates
 	var targets = crew_data.awareness.opportunities.duplicate()
+	var mission: String = crew_data.get("squadron_mission", SquadronData.Mission.FREE)
+	var mission_params: Dictionary = crew_data.get("squadron_mission_params", {})
 
 	# Assignment quality based on skill (using constants)
 	var assignment_quality = lerp(WingConstants.SQUADRON_ASSIGNMENT_QUALITY_MIN,
@@ -251,8 +253,8 @@ static func _assign_squadron_targets(crew_data: Dictionary) -> Array:
 	# High skill: Sort targets by priority (damaged, close, threatening)
 	if assignment_quality > HIGH_SKILL_THRESHOLD:
 		targets.sort_custom(func(a, b):
-			var score_a = _calculate_target_priority_score(a)
-			var score_b = _calculate_target_priority_score(b)
+			var score_a = _calculate_target_priority_score(a, mission, mission_params)
+			var score_b = _calculate_target_priority_score(b, mission, mission_params)
 			return score_a > score_b
 		)
 	# Medium skill: Partial sorting (top half sorted)
@@ -261,7 +263,7 @@ static func _assign_squadron_targets(crew_data: Dictionary) -> Array:
 		if half > 0:
 			var top_half = targets.slice(0, half)
 			top_half.sort_custom(func(a, b):
-				return _calculate_target_priority_score(a) > _calculate_target_priority_score(b)
+				return _calculate_target_priority_score(a, mission, mission_params) > _calculate_target_priority_score(b, mission, mission_params)
 			)
 			for i in half:
 				targets[i] = top_half[i]
@@ -281,8 +283,9 @@ static func _assign_squadron_targets(crew_data: Dictionary) -> Array:
 	return orders
 
 
-## Calculate priority score for target assignment
-static func _calculate_target_priority_score(target: Dictionary) -> float:
+## Calculate priority score for target assignment, biased by the leader's
+## squadron mission when one is active.
+static func _calculate_target_priority_score(target: Dictionary, mission: String = "", params: Dictionary = {}) -> float:
 	var score = 0.0
 
 	# Damaged targets are higher priority
@@ -298,6 +301,7 @@ static func _calculate_target_priority_score(target: Dictionary) -> float:
 	if target.get("is_threat", false):
 		score += THREATENING_TARGET_BONUS
 
+	score *= MissionTargetingSystem.score_multiplier(mission, params, target)
 	return score
 
 

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://squadron_manager_scene"]
+
+[ext_resource type="Script" path="res://scripts/ui/pre_battle/squadron_manager.gd" id="1_sqmgr"]
+
+[node name="SquadronManager" type="Control"]
+script = ExtResource("1_sqmgr")

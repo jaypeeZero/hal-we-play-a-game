@@ -48,6 +48,8 @@ var current_star_date: int = STAR_DATE_RUN_START
 ## Last jump's repair summary, kept so the map can report repairs that
 ## happened on the way into a battle once the player returns to the map.
 var last_jump_repair_summary: Dictionary = {}
+## Player-defined squadrons for this run (see SquadronSystem / SquadronData).
+var squadrons: Array = []
 
 ## Skill for throwaway template crews that only derive a hull's standard
 ## complement (slot roles + weapon bindings); template members are never
@@ -81,6 +83,7 @@ func start_run(initial_fleet: Dictionary) -> void:
 	lost_fleet_final_crew = []
 	current_star_date = STAR_DATE_RUN_START
 	last_jump_repair_summary = {}
+	squadrons = []
 
 
 func end_run() -> void:
@@ -98,6 +101,7 @@ func end_run() -> void:
 	lost_fleet_final_crew = []
 	current_star_date = STAR_DATE_RUN_START
 	last_jump_repair_summary = {}
+	squadrons = []
 	hired_roster_ids = []
 	_next_hull_id = 0
 
@@ -279,11 +283,20 @@ func apply_battle_outcome(surviving_ships: Array) -> void:
 				dropped_crew_ids.append(member.get("crew_id", ""))
 				death_count += 1
 
+	var surviving_ids: Dictionary = {}
+	for h in new_hulls:
+		surviving_ids[h.get("hull_id", "")] = true
+	var lost_hull_ids: Array = []
+	for h in fleet_hulls:
+		var hid: String = h.get("hull_id", "")
+		if not surviving_ids.has(hid):
+			lost_hull_ids.append(hid)
 	fleet_hulls = new_hulls
 	var insurance: int = EconomySystem.insurance_total(death_count)
 	money -= insurance
 	last_battle_summary = {"casualties": death_count, "insurance": insurance}
 	_prune_doctrine_for_roster(dropped_crew_ids, fleet_counts())
+	squadrons = SquadronSystem.prune_for_roster(squadrons, lost_hull_ids)
 
 
 ## A survivor ship dict as it persists between battles: crew is stored on the
@@ -714,6 +727,7 @@ func save_campaign_to_disk() -> bool:
 		"current_star_date": current_star_date,
 		"hired_roster_ids": hired_roster_ids,
 		"next_hull_id": _next_hull_id,
+		"squadrons": squadrons,
 	})
 
 
@@ -733,6 +747,7 @@ func load_campaign_from_disk() -> bool:
 	# for them, since their crews predate roster hiring.
 	hired_roster_ids = data.get("hired_roster_ids", [])
 	_next_hull_id = data.get("next_hull_id", fleet_hulls.size())
+	squadrons = data.get("squadrons", [])
 	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""
