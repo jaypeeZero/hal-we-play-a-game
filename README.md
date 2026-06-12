@@ -161,7 +161,10 @@ don't wait for the next scheduled wake.
 - `ShipDebugVisualizer` — Debug overlay (armor sections, weapon arcs, velocity)
 
 #### Rendering Layer (IVisualRenderer)
+- `Renderer3D` (active) — 3D models (CC0 Quaternius pack) rendered top-down in a
+  SubViewport beneath the 2D world; ship type → model mapping in `data/ship_visuals.json`
 - `Renderer78` — line-based hull outlines drawn from `data/hull_shapes/` JSON
+  (kept for A/B comparison until the 3D migration completes)
 
 ### Data Structure Example
 
