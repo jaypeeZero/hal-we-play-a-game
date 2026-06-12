@@ -32,7 +32,7 @@ const MISSION_ORDER := [
 const SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat", "corvette", "capital"]
 
 var _selected_squadron_id: String = ""
-var _doctrine_overlay: DoctrinePanel = null
+var _showing_doctrine_for_hull: String = ""
 
 # Layout nodes built once in _build_layout.
 var _squad_list: VBoxContainer
@@ -204,6 +204,10 @@ func _rebuild_mission_panel() -> void:
 	for c in _mission_panel.get_children():
 		c.queue_free()
 
+	if not _showing_doctrine_for_hull.is_empty():
+		_build_doctrine_view()
+		return
+
 	var sq: Dictionary = _current_squadron()
 	if sq.is_empty():
 		_mission_panel.add_child(UiKit.label("Select a squadron.", UiKit.DIM))
@@ -297,6 +301,7 @@ func _build_param_controls(mission: String, params: Dictionary) -> void:
 
 func _on_squadron_clicked(squadron_id: String) -> void:
 	_selected_squadron_id = squadron_id
+	_showing_doctrine_for_hull = ""
 	_rebuild_all()
 
 
@@ -354,11 +359,27 @@ func _on_battle_pressed() -> void:
 
 
 func _on_ship_advanced_pressed(hull_id: String) -> void:
-	if _doctrine_overlay != null:
-		_doctrine_overlay.queue_free()
-	_doctrine_overlay = DoctrinePanel.new()
-	add_child(_doctrine_overlay)
-	_doctrine_overlay.setup_from_roster()
+	_showing_doctrine_for_hull = hull_id
+	_rebuild_mission_panel()
+
+
+func _build_doctrine_view() -> void:
+	var hull: Dictionary = _hull_by_id(_showing_doctrine_for_hull)
+	var back_btn := Button.new()
+	back_btn.text = "← Mission"
+	back_btn.pressed.connect(func():
+		_showing_doctrine_for_hull = ""
+		_rebuild_mission_panel()
+	)
+	_mission_panel.add_child(back_btn)
+	_mission_panel.add_child(UiKit.label(
+		hull.get("hull_id", _showing_doctrine_for_hull), UiKit.ACCENT, 12
+	))
+	_mission_panel.add_child(UiKit.separator())
+	var panel := DoctrinePanel.new()
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_mission_panel.add_child(panel)
+	panel.setup_from_roster()
 
 
 # --- helpers ---
