@@ -243,3 +243,68 @@ text = "Leader Numbers"
 [node name="LeaderNumbersToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/LeaderNumbersContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+
+[node name="TargetLinesContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TargetLinesLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/TargetLinesContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Target Lines"
+
+[node name="TargetLinesToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/TargetLinesContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="PatrolAreasContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="PatrolAreasLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/PatrolAreasContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Patrol Areas"
+
+[node name="PatrolAreasToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/PatrolAreasContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="CrewStatsContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="CrewStatsLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/CrewStatsContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Crew Stats"
+
+[node name="CrewStatsToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/CrewStatsContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="WingLinesContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="WingLinesLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/WingLinesContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Wing Lines"
+
+[node name="WingLinesToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/WingLinesContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SquadronLinesContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="SquadronLinesLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/SquadronLinesContainer"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Squadron Lines"
+
+[node name="SquadronLinesToggle" type="CheckButton" parent="MarginContainer/VBoxContainer/ScrollContainer/SettingsContainer/DebugToolsSection/SquadronLinesContainer"]
+unique_name_in_owner = true
+layout_mode = 2

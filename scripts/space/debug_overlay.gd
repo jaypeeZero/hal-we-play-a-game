@@ -1,19 +1,21 @@
 class_name DebugOverlay
 extends Node2D
 
-## Always-on debug overlay: draws each ship's current focus and a floating
-## crew stat table.
-## - Dotted line to enemy target (no circle).
-## - Dotted line + dotted circle to patrol/move-to area.
-## - Floating crew table per ship anchored to the hull bottom-right.
-## Pure data consumer: reads parent SpaceBattleGame state, never mutates.
+## Toggleable debug overlay: draws ship focus lines, patrol areas, crew stats,
+## and formation links. Each layer is independently gated by GameSettings so
+## the user can enable only what they need. Toggle the panel with F1 in battle.
+## Pure data consumer: reads SpaceBattleGame state, never mutates.
 
 const TEAM_COLORS: Array = [
 	Color(0.4, 0.7, 1.0, 0.6),  # team 0 — blue
 	Color(1.0, 0.4, 0.4, 0.6),  # team 1 — red
 ]
 
-# ---- Crew table layout ----------------------------------------------------
+const SQUADRON_COLORS: Array = [
+	Color(0.3, 1.0, 0.4, 0.65),  # team 0 — green
+	Color(1.0, 0.65, 0.2, 0.65), # team 1 — orange
+]
+
 # Six stats in column order. The plan locks this order (01_overview.md §3).
 const STAT_NAMES: Array = [
 	"aim", "piloting", "awareness", "tactics", "composure", "aggression"
@@ -54,14 +56,23 @@ func _process(_delta: float) -> void:
 func _draw() -> void:
 	if _game == null:
 		return
+
+	if GameSettings.show_wing_lines:
+		_draw_wing_lines()
+	if GameSettings.show_squadron_lines:
+		_draw_squadron_lines()
+
 	for ship in _game._ships:
 		if ship.get("status", "") == "destroyed":
 			continue
 		var team: int = int(ship.get("team", 0))
 		var color: Color = TEAM_COLORS[team] if team >= 0 and team < TEAM_COLORS.size() else TEAM_COLORS[0]
-		_draw_enemy_focus(ship, color)
-		_draw_area_focus(ship, color)
-		_draw_crew_table(ship)
+		if GameSettings.show_target_lines:
+			_draw_enemy_focus(ship, color)
+		if GameSettings.show_patrol_areas:
+			_draw_area_focus(ship, color)
+		if GameSettings.show_crew_stats:
+			_draw_crew_table(ship)
 
 
 func _draw_enemy_focus(ship: Dictionary, color: Color) -> void:
@@ -95,6 +106,71 @@ func _draw_area_focus(ship: Dictionary, color: Color) -> void:
 		line_end = ship.position + to_center / dist * (dist - radius)
 	DottedDraw.draw_dotted_line(self, ship.position, line_end, color)
 	DottedDraw.draw_dotted_circle(self, center, radius, color)
+
+
+## Draw dotted lines between each wing lead and its wingmen, using the wing's
+## assigned color so they visually match the wing circles on the ships.
+func _draw_wing_lines() -> void:
+	for wing in _game._previous_wings:
+		var lead_id: String = wing.get("lead_ship_id", "")
+		var lead_ship: Dictionary = _game._find_ship_by_id(lead_id)
+		if lead_ship.is_empty() or lead_ship.get("status", "") == "destroyed":
+			continue
+		var color: Color = wing.get("wing_color", Color(1.0, 1.0, 1.0, 0.5))
+		color.a = 0.7
+		for wingman in wing.get("wingmen", []):
+			var wm_ship: Dictionary = _game._find_ship_by_id(wingman.get("ship_id", ""))
+			if wm_ship.is_empty() or wm_ship.get("status", "") == "destroyed":
+				continue
+			DottedDraw.draw_dotted_line(self, lead_ship.position, wm_ship.position, color)
+
+
+## Draw hub-and-spoke dotted lines from each squadron leader to its members.
+## Uses crew command chain: non-leaders point to their leader via superior.
+func _draw_squadron_lines() -> void:
+	# squadrons: leader_crew_id -> {leader_pos, team, members: [Vector2]}
+	var squadrons: Dictionary = {}
+
+	for crew in _game._crew_list:
+		if not crew.has("squadron_rank"):
+			continue
+		var ship_id: String = crew.get("assigned_to", "")
+		if ship_id == "":
+			continue
+		var ship: Dictionary = _game._find_ship_by_id(ship_id)
+		if ship.is_empty() or ship.get("status", "") == "destroyed":
+			continue
+
+		var root_id: String
+		if crew.get("is_squadron_leader", false):
+			root_id = crew.get("crew_id", "")
+		else:
+			root_id = crew.get("command_chain", {}).get("superior", "")
+		if root_id == "":
+			continue
+
+		if not squadrons.has(root_id):
+			squadrons[root_id] = {
+				"leader_pos": Vector2.ZERO,
+				"leader_found": false,
+				"members": [],
+				"team": ship.get("team", 0),
+			}
+		if crew.get("is_squadron_leader", false):
+			squadrons[root_id]["leader_pos"] = ship.position
+			squadrons[root_id]["leader_found"] = true
+		else:
+			squadrons[root_id]["members"].append(ship.position)
+
+	for root_id in squadrons.keys():
+		var entry: Dictionary = squadrons[root_id]
+		if not entry.get("leader_found", false):
+			continue
+		var team: int = entry.get("team", 0)
+		var color: Color = SQUADRON_COLORS[team] if team >= 0 and team < SQUADRON_COLORS.size() else SQUADRON_COLORS[0]
+		var leader_pos: Vector2 = entry.get("leader_pos", Vector2.ZERO)
+		for member_pos: Vector2 in entry.get("members", []):
+			DottedDraw.draw_dotted_line(self, leader_pos, member_pos, color)
 
 
 # ============================================================================

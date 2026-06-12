@@ -78,6 +78,18 @@ var _wings_last_formed_at: float = -1.0  # game_time of last form_wings() call
 var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 
 var _debug_overlay: DebugOverlay
+var _debug_panel_layer: CanvasLayer = null
+
+# Options shown in the in-battle F1 panel and mirrored in the Settings menu.
+const DEBUG_PANEL_OPTIONS: Array = [
+	{"label": "Target Lines",    "setting": "show_target_lines"},
+	{"label": "Patrol Areas",    "setting": "show_patrol_areas"},
+	{"label": "Crew Stats",      "setting": "show_crew_stats"},
+	{"label": "Wing Lines",      "setting": "show_wing_lines"},
+	{"label": "Squadron Lines",  "setting": "show_squadron_lines"},
+	{"label": "Pilot Direction", "setting": "show_pilot_direction"},
+	{"label": "Leader Numbers",  "setting": "show_leader_numbers"},
+]
 
 func _ready() -> void:
 	_setup_input_actions()
@@ -92,6 +104,8 @@ func _ready() -> void:
 	_debug_overlay.z_index = 100
 	add_child(_debug_overlay)
 
+	_create_debug_panel()
+
 	game_started.emit()
 
 	if BattleEventLoggerAutoload.service:
@@ -99,6 +113,7 @@ func _ready() -> void:
 
 ## Setup input actions
 func _setup_input_actions() -> void:
+	_ensure_action("toggle_debug_panel", KEY_F1)
 	_ensure_action("spawn_fighter", KEY_1)
 	_ensure_action("spawn_corvette", KEY_2)
 	_ensure_action("spawn_capital", KEY_3)
@@ -405,6 +420,9 @@ func _input(event: InputEvent) -> void:
 	# Ignore gameplay input while the log console has captured the keyboard.
 	if LogConsole.capturing_input:
 		return
+
+	if event.is_action_pressed("toggle_debug_panel"):
+		_toggle_debug_panel()
 
 	# Ship spawn requests
 	if event.is_action_pressed("spawn_fighter"):
@@ -819,6 +837,70 @@ func _destroyed_enemy_counts() -> Dictionary:
 		if lost > 0:
 			destroyed[ship_type] = lost
 	return destroyed
+
+# ============================================================================
+# DEBUG PANEL
+# ============================================================================
+
+## Build the right-side debug overlay panel (hidden by default, toggled by F1).
+func _create_debug_panel() -> void:
+	_debug_panel_layer = CanvasLayer.new()
+	_debug_panel_layer.layer = 10
+	_debug_panel_layer.visible = false
+	add_child(_debug_panel_layer)
+
+	const PANEL_WIDTH := 220.0
+	const MARGIN := 8.0
+	const ITEM_HEIGHT := 28.0
+	const HEADER_HEIGHT := 38.0
+	const INNER_PADDING := 16.0
+
+	var panel := PanelContainer.new()
+	panel.anchor_left = 1.0
+	panel.anchor_right = 1.0
+	panel.anchor_top = 0.0
+	panel.anchor_bottom = 0.0
+	panel.offset_left = -(PANEL_WIDTH + MARGIN)
+	panel.offset_right = -MARGIN
+	panel.offset_top = MARGIN
+	panel.offset_bottom = MARGIN + HEADER_HEIGHT + DEBUG_PANEL_OPTIONS.size() * ITEM_HEIGHT + INNER_PADDING
+	_debug_panel_layer.add_child(panel)
+
+	var margin_container := MarginContainer.new()
+	margin_container.add_theme_constant_override("margin_left", 8)
+	margin_container.add_theme_constant_override("margin_right", 8)
+	margin_container.add_theme_constant_override("margin_top", 6)
+	margin_container.add_theme_constant_override("margin_bottom", 6)
+	panel.add_child(margin_container)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 2)
+	margin_container.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "DEBUG  [F1]"
+	title.add_theme_font_size_override("font_size", 13)
+	vbox.add_child(title)
+	vbox.add_child(HSeparator.new())
+
+	for option: Dictionary in DEBUG_PANEL_OPTIONS:
+		var cb := CheckBox.new()
+		cb.text = option.label
+		cb.add_theme_font_size_override("font_size", 12)
+		var setting_name: String = option.setting
+		cb.button_pressed = GameSettings.get(setting_name)
+		cb.toggled.connect(func(val: bool) -> void: _on_debug_option_toggled(setting_name, val))
+		vbox.add_child(cb)
+
+
+func _toggle_debug_panel() -> void:
+	if _debug_panel_layer != null:
+		_debug_panel_layer.visible = not _debug_panel_layer.visible
+
+
+func _on_debug_option_toggled(setting_name: String, value: bool) -> void:
+	GameSettings.set(setting_name, value)
+	GameSettings.save_settings()
 
 # ============================================================================
 # PUBLIC API (for testing)

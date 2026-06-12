@@ -18,6 +18,11 @@ extends Control
 # Debug tool controls
 @onready var pilot_direction_toggle: CheckButton = %PilotDirectionToggle
 @onready var leader_numbers_toggle: CheckButton = %LeaderNumbersToggle
+@onready var target_lines_toggle: CheckButton = %TargetLinesToggle
+@onready var patrol_areas_toggle: CheckButton = %PatrolAreasToggle
+@onready var crew_stats_toggle: CheckButton = %CrewStatsToggle
+@onready var wing_lines_toggle: CheckButton = %WingLinesToggle
+@onready var squadron_lines_toggle: CheckButton = %SquadronLinesToggle
 
 # Back button
 @onready var back_button: Button = %BackButton
@@ -68,6 +73,11 @@ func _load_current_settings() -> void:
 	# Load debug tool settings
 	pilot_direction_toggle.button_pressed = GameSettings.show_pilot_direction
 	leader_numbers_toggle.button_pressed = GameSettings.show_leader_numbers
+	target_lines_toggle.button_pressed = GameSettings.show_target_lines
+	patrol_areas_toggle.button_pressed = GameSettings.show_patrol_areas
+	crew_stats_toggle.button_pressed = GameSettings.show_crew_stats
+	wing_lines_toggle.button_pressed = GameSettings.show_wing_lines
+	squadron_lines_toggle.button_pressed = GameSettings.show_squadron_lines
 
 func _connect_signals() -> void:
 	# Audio signals
@@ -85,6 +95,11 @@ func _connect_signals() -> void:
 	# Debug tool signals
 	pilot_direction_toggle.toggled.connect(_on_pilot_direction_toggled)
 	leader_numbers_toggle.toggled.connect(_on_leader_numbers_toggled)
+	target_lines_toggle.toggled.connect(_on_target_lines_toggled)
+	patrol_areas_toggle.toggled.connect(_on_patrol_areas_toggled)
+	crew_stats_toggle.toggled.connect(_on_crew_stats_toggled)
+	wing_lines_toggle.toggled.connect(_on_wing_lines_toggled)
+	squadron_lines_toggle.toggled.connect(_on_squadron_lines_toggled)
 
 	# Back button
 	back_button.pressed.connect(_on_back_pressed)
@@ -123,6 +138,21 @@ func _on_pilot_direction_toggled(enabled: bool) -> void:
 
 func _on_leader_numbers_toggled(enabled: bool) -> void:
 	GameSettings.set_show_leader_numbers(enabled)
+
+func _on_target_lines_toggled(enabled: bool) -> void:
+	GameSettings.set_show_target_lines(enabled)
+
+func _on_patrol_areas_toggled(enabled: bool) -> void:
+	GameSettings.set_show_patrol_areas(enabled)
+
+func _on_crew_stats_toggled(enabled: bool) -> void:
+	GameSettings.set_show_crew_stats(enabled)
+
+func _on_wing_lines_toggled(enabled: bool) -> void:
+	GameSettings.set_show_wing_lines(enabled)
+
+func _on_squadron_lines_toggled(enabled: bool) -> void:
+	GameSettings.set_show_squadron_lines(enabled)
 
 func _on_back_pressed() -> void:
 	# Save settings before leaving
