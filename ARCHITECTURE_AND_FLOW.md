@@ -114,8 +114,11 @@ now query a uniform grid keyed by cell coordinate.
 ### Rendering
 
 - `VisualBridge` (autoload) — registers/unregisters renderable entities.
-- `IVisualRenderer` — interface; sole implementation is `Renderer78`,
-  which draws line-based hull outlines from `data/hull_shapes/` JSON.
+- `IVisualRenderer` — interface; active implementation is `Renderer3D`,
+  which renders 3D ship models (mapped in `data/ship_visuals.json`) through
+  an orthographic top-down camera slaved to the game's Camera2D.
+  `Renderer78` (line-based hull outlines from `data/hull_shapes/` JSON)
+  remains available until the 3D migration completes.
 
 ## The crew tick in detail
 

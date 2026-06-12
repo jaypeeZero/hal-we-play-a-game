@@ -59,22 +59,19 @@ offset_left = 1620.0
 offset_top = 10.0
 offset_right = 1910.0
 offset_bottom = 200.0
-text = "SPRITE RENDERER KEY
+text = "RENDERER KEY
 
-Ship Types:
-  Fighter: Small, 2 parts
-    (narrow nose, wider tail)
-
-  Corvette: Medium, 3 parts
-    (wide front, thin mid,
-     thick rear)
-
-  Capital: Large, 4 parts
-    (triangle widening
-     from nose to rear)
+Ships: 3D models,
+sized by class
+(fighter -> capital)
 
 Teams:
   Blue tint = Player (Team 0)
-  Red tint = Enemy (Team 1)"
+  Red tint = Enemy (Team 1)
+
+Damage:
+  Smoke = section armor low
+  Fire = section critical
+  Explosion = destroyed"
 
 [node name="LogConsole" parent="UI" instance=ExtResource("3_log_console")]

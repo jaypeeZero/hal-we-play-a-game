@@ -77,7 +77,10 @@ When working on this codebase:
 **Rendering system:**
 - `IRenderable` base class for all visual entities
 - `VisualBridge` manages rendering of entities
-- Sole renderer is `Renderer78` (hull outlines from `data/hull_shapes/` JSON)
+- Active renderer is `Renderer3D` (3D ship models from `data/ship_visuals.json`
+  drawn top-down beneath the 2D world; see `DOCS/plans/06_ship_visuals_3d.md`)
+- `Renderer78` (hull outlines from `data/hull_shapes/` JSON) is retained for
+  A/B comparison until the 3D migration completes, then gets deleted
 
 ## Testing Standards
 

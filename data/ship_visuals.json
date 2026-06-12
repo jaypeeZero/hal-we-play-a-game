@@ -1,0 +1,27 @@
+{
+	"fighter": {
+		"model": "res://assets/models/ships/Striker.gltf",
+		"scale": 1.0,
+		"yaw_offset_deg": 180.0
+	},
+	"heavy_fighter": {
+		"model": "res://assets/models/ships/Challenger.gltf",
+		"scale": 1.0,
+		"yaw_offset_deg": 180.0
+	},
+	"torpedo_boat": {
+		"model": "res://assets/models/ships/Insurgent.gltf",
+		"scale": 1.0,
+		"yaw_offset_deg": 180.0
+	},
+	"corvette": {
+		"model": "res://assets/models/ships/Omen.gltf",
+		"scale": 1.0,
+		"yaw_offset_deg": 180.0
+	},
+	"capital": {
+		"model": "res://assets/models/ships/Imperial.gltf",
+		"scale": 1.0,
+		"yaw_offset_deg": 180.0
+	}
+}
