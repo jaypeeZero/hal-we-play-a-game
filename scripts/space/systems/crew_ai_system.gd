@@ -83,6 +83,9 @@ static func calculate_effective_skill(crew_data: Dictionary) -> float:
 			base_skill = float(skills.get("machinery", 0.5))
 		_:
 			base_skill = 0.5
+	# Off-role assignment degrades performance before situational penalties
+	# stack on top, so off-role + stressed is worse than either alone.
+	base_skill *= CrewData.role_performance_multiplier(crew_data)
 	var stress_penalty = crew_data.stats.stress * 0.3  # Up to 30% penalty
 	var fatigue_penalty = crew_data.stats.fatigue * 0.2  # Up to 20% penalty
 	return max(0.1, base_skill - stress_penalty - fatigue_penalty)
@@ -250,7 +253,9 @@ static func make_evasive_decision(crew_data: Dictionary, game_time: float) -> Di
 ## usual; a steady rookie performs above their baseline.
 static func calculate_reaction_delay(crew_data: Dictionary, skill_key: String) -> float:
 	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
-	var skill = clamp(float(skills.get(skill_key, 0.5)), 0.0, 1.0)
+	# Off-role crew read the gating skill at reduced effect — they commit slower.
+	var skill = clamp(float(skills.get(skill_key, 0.5)), 0.0, 1.0) \
+		* CrewData.role_performance_multiplier(crew_data)
 	var base = (1.0 - skill) * WingConstants.MAX_REACTION_DELAY
 	var composure = float(skills.get("composure", 0.5))
 	var stress = float(crew_data.get("stats", {}).get("stress", 0.0))

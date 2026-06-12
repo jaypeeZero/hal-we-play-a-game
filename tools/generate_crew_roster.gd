@@ -98,7 +98,7 @@ func _make_entry(index: int, role_name: String, base: float, callsigns: Array, r
 	return {
 		"id": "roster_%03d" % index,
 		"callsign": callsigns[index],
-		"role": role_name,
+		"roles": [role_name],
 		"skills": skills,
 	}
 

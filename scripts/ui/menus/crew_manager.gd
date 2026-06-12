@@ -163,8 +163,8 @@ func _refresh_subtitle() -> void:
 
 
 func _row_text(entry: Dictionary) -> String:
-	var role := CrewData.role_from_name(str(entry.get("role", "")))
-	return "%s · %s" % [entry.get("callsign", "?"), CrewData.get_role_name(role)]
+	return "%s · %s" % [
+		entry.get("callsign", "?"), CrewData.display_role_names(entry.get("roles", []))]
 
 
 func _make_button(text: String) -> Button:

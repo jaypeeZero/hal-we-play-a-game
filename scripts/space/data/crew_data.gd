@@ -17,10 +17,17 @@ enum Role {
 }
 
 ## Canonical skill order — single source of truth for roster entries,
-## radar chart axes, editor rows, and validation.
+## radar chart axes, editor rows, and validation. Physical skills lead so
+## they cluster on the radar chart's top-right arc (axis 0 points up,
+## winding clockwise); the mental skills fill the bottom-left arc.
 const SKILL_NAMES := [
-	"aim", "piloting", "awareness", "tactics", "composure", "aggression", "machinery",
+	"aim", "piloting", "machinery", "awareness", "tactics", "composure", "aggression",
 ]
+
+## Skill groupings for chart clustering and UI labelling. Together they are
+## exactly SKILL_NAMES; each skill belongs to one group.
+const PHYSICAL_SKILLS := ["aim", "piloting", "machinery"]
+const MENTAL_SKILLS := ["awareness", "tactics", "composure", "aggression"]
 
 ## Aggression is personality, not competence — excluded from the derived
 ## reaction/decision scalar and distributed independently by generators.
@@ -48,6 +55,47 @@ static func role_from_name(name: String) -> int:
 			return role
 	return Role.PILOT
 
+## Resolve a roster entry's `roles` array (snake_case names, first entry is
+## the default/primary role) into Role ints, deduplicated. An empty or
+## missing array backfills to PILOT, matching role_from_name's policy.
+static func qualified_roles_from_entry(entry: Dictionary) -> Array:
+	var roles: Array = []
+	for role_name in entry.get("roles", []):
+		var role := role_from_name(str(role_name))
+		if not roles.has(role):
+			roles.append(role)
+	if roles.is_empty():
+		roles.append(Role.PILOT)
+	return roles
+
+## Whether the crew member is qualified to serve in `role`.
+static func is_qualified_for(crew: Dictionary, role: int) -> bool:
+	return crew.get("qualified_roles", []).has(role)
+
+## Crew assigned to a role outside their qualifications operate at 70%
+## performance in all areas: every effective skill read and the derived
+## reaction/decision speeds degrade by 30%.
+const OFF_ROLE_PERFORMANCE_MULTIPLIER := 0.7
+
+## True when the crew member's assigned role is outside their qualifications.
+## Crew carrying no qualification data (hand-assembled battle crew) count as
+## qualified for whatever they are assigned to.
+static func is_off_role(crew: Dictionary) -> bool:
+	var qualified: Array = crew.get("qualified_roles", [])
+	return not qualified.is_empty() and not qualified.has(int(crew.get("role", -1)))
+
+## The performance multiplier this crew member's assignment earns: the
+## off-role penalty, or full performance when serving in a qualified role.
+static func role_performance_multiplier(crew: Dictionary) -> float:
+	return OFF_ROLE_PERFORMANCE_MULTIPLIER if is_off_role(crew) else 1.0
+
+## Human-readable, comma-joined display names for a roster `roles` array.
+static func display_role_names(roles: Array) -> String:
+	var names: Array = []
+	for role_name in roles:
+		names.append(get_role_name(role_from_name(str(role_name))))
+	return ", ".join(names)
+
 ## Create a crew member with given role and skill level
 static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictionary:
 	var crew_id = "crew_" + str(_next_crew_id)
@@ -55,7 +103,8 @@ static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictiona
 
 	var base_crew = {
 		"crew_id": crew_id,
-		"role": role,
+		"role": role,  # the role they are assigned to serve in
+		"qualified_roles": [role],  # roles they are trained for (>= 1)
 		"assigned_to": null,  # entity_id they're assigned to
 		"stats": _generate_stats_for_role(role, skill_level),
 		# Tactical pattern ids this crew member knows (data/knowledge/*.json).
@@ -189,10 +238,13 @@ static func derived_skill_scalar(skills: Dictionary) -> float:
 ## Recompute the derived stats (reaction_time, decision_time,
 ## awareness_range) from role + skills. The only place these are ever
 ## computed for skill-edited crew — callers must never set them directly.
-static func recompute_derived_stats(stats: Dictionary, role: int) -> Dictionary:
+## `performance_multiplier` scales the skill scalar DOWN (off-role crew pass
+## OFF_ROLE_PERFORMANCE_MULTIPLIER), so the derived times worsen — never
+## multiply the times themselves, which would improve them.
+static func recompute_derived_stats(stats: Dictionary, role: int, performance_multiplier: float = 1.0) -> Dictionary:
 	var updated: Dictionary = stats.duplicate(true)
 	var modifiers := _get_role_modifiers(role)
-	var scalar := derived_skill_scalar(updated.get("skills", {}))
+	var scalar := derived_skill_scalar(updated.get("skills", {})) * performance_multiplier
 	updated["reaction_time"] = _calculate_reaction_time(scalar, modifiers.reaction_base)
 	updated["decision_time"] = _calculate_decision_time(scalar, modifiers.decision_base)
 	updated["awareness_range"] = modifiers.awareness_range
@@ -382,6 +434,7 @@ static func reset_for_battle(saved: Dictionary) -> Dictionary:
 	fresh.stats = saved.get("stats", fresh.stats).duplicate(true)
 	fresh.stats.stress = 0.0
 	fresh.stats.fatigue = 0.0
+	fresh.qualified_roles = saved.get("qualified_roles", fresh.qualified_roles).duplicate()
 	fresh.known_patterns = saved.get("known_patterns", []).duplicate()
 	fresh.command_chain = saved.get("command_chain", fresh.command_chain).duplicate(true)
 	# A gunner's weapon binding is persistent identity: it decides which weapon
@@ -391,24 +444,37 @@ static func reset_for_battle(saved: Dictionary) -> Dictionary:
 	return fresh
 
 ## Build a full battle-ready crew dict from a roster entry
-## ({id, callsign, role: String, skills: {...}}). Pure with respect to the
-## roster — consuming the entry from the hiring pool is the caller's job.
+## ({id, callsign, roles: Array[String], skills: {...}}). The first listed
+## role becomes the assigned role. Pure with respect to the roster —
+## consuming the entry from the hiring pool is the caller's job.
 static func from_roster_entry(entry: Dictionary) -> Dictionary:
-	var role := role_from_name(str(entry.get("role", "")))
-	return apply_roster_entry(create_crew_member(role), entry)
+	var roles := qualified_roles_from_entry(entry)
+	return apply_roster_entry(create_crew_member(roles[0]), entry)
 
-## Give an existing crew dict a roster entry's identity: callsign and skills
-## carry over, derived stats recompute for the member's role. Structure
-## (crew_id, command chain, weapon binding) is untouched — used both to build
-## fresh hires and to crew run-start complements in place.
+## Give an existing crew dict a roster entry's identity: callsign, skills,
+## and qualified roles carry over, derived stats recompute for the member's
+## assigned role. Structure (crew_id, command chain, weapon binding) is
+## untouched — used both to build fresh hires and to crew run-start
+## complements in place.
 static func apply_roster_entry(member: Dictionary, entry: Dictionary) -> Dictionary:
 	member["callsign"] = str(entry.get("callsign", member.crew_id))
+	member["qualified_roles"] = qualified_roles_from_entry(entry)
 	var entry_skills: Dictionary = entry.get("skills", {})
 	var skills: Dictionary = member.stats.skills
 	for skill_name in SKILL_NAMES:
 		# Missing skills keep the canonical default from create_crew_member.
 		skills[skill_name] = clampf(float(entry_skills.get(skill_name, skills[skill_name])), 0.0, 1.0)
-	member["stats"] = recompute_derived_stats(member.stats, int(member.get("role", Role.PILOT)))
+	member["stats"] = recompute_derived_stats(
+		member.stats, int(member.get("role", Role.PILOT)), role_performance_multiplier(member))
+	return member
+
+## Assign a crew member to serve in `role` — which may be outside their
+## qualifications, in which case the off-role penalty lands on the derived
+## stats — and recompute their derived stats for it. Mutates and returns
+## the member.
+static func assign_role(member: Dictionary, role: int) -> Dictionary:
+	member["role"] = role
+	member["stats"] = recompute_derived_stats(member.stats, role, role_performance_multiplier(member))
 	return member
 
 ## Adapt a live crew dict to the roster-entry shape so fleet crew can feed
@@ -419,10 +485,13 @@ static func entry_from_crew(member: Dictionary) -> Dictionary:
 	var skills := {}
 	for skill_name in SKILL_NAMES:
 		skills[skill_name] = clampf(float(member_skills.get(skill_name, 0.0)), 0.0, 1.0)
+	var role_names: Array = []
+	for role in member.get("qualified_roles", [int(member.get("role", Role.PILOT))]):
+		role_names.append(role_to_name(int(role)))
 	return {
 		"id": str(member.get("crew_id", "")),
 		"callsign": str(member.get("callsign", member.get("crew_id", ""))),
-		"role": role_to_name(int(member.get("role", Role.PILOT))),
+		"roles": role_names,
 		"skills": skills,
 	}
 

@@ -395,9 +395,11 @@ func hull_vacancies(hull: Dictionary) -> Array:
 
 
 ## Hire one roster candidate into one vacant slot on a hull (weapon bound for
-## gunner slots, wired into the hull's command chain). Fails when the slot is
-## not a real vacancy, the candidate is already consumed this run, no longer
-## exists in the roster (mid-run override edit), or has the wrong role.
+## gunner slots, wired into the hull's command chain). The candidate serves
+## in the slot's role even when unqualified for it — off-role service is a
+## soft performance penalty, not a hard gate. Fails when the slot is not a
+## real vacancy, the candidate is already consumed this run, or no longer
+## exists in the roster (mid-run override edit).
 func fill_vacancy(hull_id: String, slot: Dictionary, roster_id: String) -> bool:
 	var hull := hull_by_id(hull_id)
 	if hull.is_empty() or not _slot_is_vacant(hull, slot):
@@ -408,9 +410,7 @@ func fill_vacancy(hull_id: String, slot: Dictionary, roster_id: String) -> bool:
 	if entry.is_empty():
 		return false
 	var slot_role: int = slot.get("role", CrewData.Role.PILOT)
-	if CrewData.role_from_name(entry.role) != slot_role:
-		return false
-	var member := CrewData.from_roster_entry(entry)
+	var member := CrewData.assign_role(CrewData.from_roster_entry(entry), slot_role)
 	if slot_role == CrewData.Role.GUNNER and slot.has("weapon_id"):
 		member["weapon_id"] = slot.weapon_id
 	_wire_into_command_chain(hull, member)

@@ -16,8 +16,9 @@ const USER_PATH := "user://crew_roster.json"
 const ROSTER_VERSION := 1
 const DEFAULT_SKILL := 0.5
 
-## Roster entry shape: {id: String, callsign: String, role: String (snake_case
-## CrewData.ROLE_NAMES value), skills: {CrewData.SKILL_NAMES -> 0..1}}.
+## Roster entry shape: {id: String, callsign: String, roles: Array[String]
+## (snake_case CrewData.ROLE_NAMES values, >= 1 entry, first is the
+## default/primary role), skills: {CrewData.SKILL_NAMES -> 0..1}}.
 
 
 ## The active roster: the user override when it exists and yields at least
@@ -53,14 +54,14 @@ static func has_user_override() -> bool:
 
 
 ## The hiring pool: roster entries not yet consumed this run, optionally
-## filtered to one role. Pure given its inputs.
+## filtered to candidates qualified for one role. Pure given its inputs.
 static func available_entries(hired_ids: Array, role: int = -1) -> Array:
 	var role_name: String = CrewData.role_to_name(role) if role >= 0 else ""
 	var available: Array = []
 	for entry in load_roster():
 		if hired_ids.has(entry.id):
 			continue
-		if role_name != "" and entry.role != role_name:
+		if role_name != "" and not entry.roles.has(role_name):
 			continue
 		available.append(entry)
 	return available
@@ -97,8 +98,9 @@ static func _read_entries(path: String) -> Array:
 
 
 ## Per-entry validation and backfill. Drops what cannot be repaired (no id),
-## fixes everything else: unknown roles become pilot, missing callsigns come
-## from the id, skills are completed and clamped into 0..1.
+## fixes everything else: unknown role names become pilot, an empty roles
+## array backfills to [pilot], missing callsigns come from the id, skills
+## are completed and clamped into 0..1.
 static func _validate_entries(raw: Array) -> Array:
 	var validated: Array = []
 	var seen_ids := {}
@@ -111,7 +113,7 @@ static func _validate_entries(raw: Array) -> Array:
 			continue
 		seen_ids[id] = true
 
-		var role_name: String = CrewData.role_to_name(CrewData.role_from_name(str(entry.get("role", ""))))
+		var role_names := _validated_role_names(entry)
 		var callsign := str(entry.get("callsign", ""))
 		if callsign == "":
 			callsign = id.capitalize()
@@ -121,5 +123,15 @@ static func _validate_entries(raw: Array) -> Array:
 		for skill_name in CrewData.SKILL_NAMES:
 			skills[skill_name] = clampf(float(raw_skills.get(skill_name, DEFAULT_SKILL)), 0.0, 1.0)
 
-		validated.append({"id": id, "callsign": callsign, "role": role_name, "skills": skills})
+		validated.append({"id": id, "callsign": callsign, "roles": role_names, "skills": skills})
 	return validated
+
+
+## The entry's qualified role names, resolved through the canonical Role
+## round-trip so every name is a known ROLE_NAMES value, deduplicated
+## (qualified_roles_from_entry dedupes) and never empty.
+static func _validated_role_names(entry: Dictionary) -> Array:
+	var role_names: Array = []
+	for role in CrewData.qualified_roles_from_entry(entry):
+		role_names.append(CrewData.role_to_name(role))
+	return role_names
