@@ -40,7 +40,7 @@ func _payload() -> Dictionary:
 			"corvette": 0, "capital": 0},
 		"money": 1500,
 		"current_star_date": 2310,
-		"callsign_counter": 6,
+		"hired_roster_ids": ["roster_000", "roster_001"],
 		"next_hull_id": 2,
 	}
 
@@ -77,7 +77,6 @@ func test_round_trip_restores_integer_typed_fields():
 	var loaded := CampaignSaveManager.load_campaign()
 
 	assert_typeof(loaded["current_star_date"], TYPE_INT)
-	assert_typeof(loaded["callsign_counter"], TYPE_INT)
 	assert_typeof(loaded["money"], TYPE_INT)
 	assert_typeof(loaded["next_hull_id"], TYPE_INT)
 	assert_typeof(loaded["enemy_fleet"]["fighter"], TYPE_INT)

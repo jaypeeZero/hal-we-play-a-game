@@ -208,16 +208,29 @@ func _hire_hull_card(hull: Dictionary, vacancies: Array) -> Control:
 		row.add_child(spacer)
 		var hull_id: String = hull.hull_id
 		var slot_copy: Dictionary = slot
-		var hire := UiKit.style_button(_make_button("Hire"), "primary")
-		hire.pressed.connect(func(): _on_hire(hull_id, slot_copy))
+		var candidates := CrewRosterManager.available_entries(
+			RoguelikeRun.hired_roster_ids, slot.get("role", CrewData.Role.PILOT))
+		var hire := UiKit.style_button(
+			_make_button("Hire (%d)" % candidates.size()), "primary")
+		hire.disabled = candidates.is_empty()
+		if candidates.is_empty():
+			hire.tooltip_text = "No candidates left in the roster pool"
+		hire.pressed.connect(func(): _open_hire_dialog(hull_id, slot_copy))
 		row.add_child(hire)
 		box.add_child(_indented(row))
 	return card
 
 
-func _on_hire(hull_id: String, slot: Dictionary) -> void:
-	RoguelikeRun.fill_vacancy(hull_id, slot)
-	_rebuild()
+## Open the candidate picker for one vacancy; a hire fills the slot through
+## RoguelikeRun and consumes the candidate from the run's pool.
+func _open_hire_dialog(hull_id: String, slot: Dictionary) -> void:
+	var role: int = slot.get("role", CrewData.Role.PILOT)
+	var dialog := CrewHireDialog.new()
+	add_child(dialog)
+	dialog.setup(role, CrewRosterManager.available_entries(RoguelikeRun.hired_roster_ids, role))
+	dialog.hired.connect(func(roster_id: String):
+		RoguelikeRun.fill_vacancy(hull_id, slot, roster_id)
+		_rebuild())
 
 
 # ============================================================================
@@ -254,7 +267,10 @@ func _build_roster() -> void:
 func _crew_row(hull: Dictionary, member: Dictionary) -> Control:
 	var row := _row()
 	row.add_child(UiKit.label(CrewData.get_role_name(member.get("role", -1)), UiKit.DIM, 11))
-	row.add_child(UiKit.label(member.get("callsign", ""), UiKit.INK, 13))
+	# The callsign opens the member's stat sheet.
+	var name_btn := UiKit.style_button(_make_button(member.get("callsign", "")), "ghost")
+	name_btn.pressed.connect(func(): CrewViewModal.open(self, CrewData.entry_from_crew(member)))
+	row.add_child(name_btn)
 	if member.has("weapon_id"):
 		row.add_child(UiKit.label(member.weapon_id, UiKit.ACCENT, 11))
 	var spacer := Control.new()

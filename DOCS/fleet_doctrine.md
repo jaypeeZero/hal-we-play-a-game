@@ -142,8 +142,9 @@ crew) never see player patterns.
 ### Crew roster and hull binding
 
 `RoguelikeRun.start_run()` builds the roster
-(`_create_fleet_roster`): one crew group per hull, callsigns
-assigned, skills at `ROSTER_SKILL_LEVEL`. Battle spawn *binds* groups
+(`_create_fleet_roster`): one crew group per hull, each member drawn
+from the shipped crew roster pool (identity, callsign, and skills from
+`data/crew_roster.json` via `CrewRosterManager`). Battle spawn *binds* groups
 to hulls instead of creating crew: ships spawn in battle-plan entry
 order and `take_saved_crew(ship_type)` pops the first remaining group
 of that type, so the n-th entry of a type always gets the n-th group.

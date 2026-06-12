@@ -68,6 +68,10 @@ text = "Settings"
 layout_mode = 2
 text = "Ship Editor"
 
+[node name="CrewManagerButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
+layout_mode = 2
+text = "Crew Manager"
+
 [node name="QuitButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
 layout_mode = 2
 text = "Quit"
@@ -124,4 +128,5 @@ text = "A tactical space combat simulator featuring ship-to-ship combat with rea
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/ContinueButton" to="." method="_on_continue_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/ShipEditorButton" to="." method="_on_ship_editor_pressed"]
+[connection signal="pressed" from="HBoxContainer/MenuSide/Container/CrewManagerButton" to="." method="_on_crew_manager_pressed"]
 [connection signal="pressed" from="HBoxContainer/MenuSide/Container/QuitButton" to="." method="_on_quit_pressed"]

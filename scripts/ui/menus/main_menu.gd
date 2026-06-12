@@ -35,5 +35,9 @@ func _on_ship_editor_pressed() -> void:
 	get_tree().change_scene_to_file("res://tools/ship_editor.tscn")
 
 
+func _on_crew_manager_pressed() -> void:
+	get_tree().change_scene_to_file("res://scenes/crew_manager.tscn")
+
+
 func _on_quit_pressed() -> void:
 	get_tree().quit()

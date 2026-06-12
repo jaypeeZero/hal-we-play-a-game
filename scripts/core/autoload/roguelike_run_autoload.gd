@@ -49,12 +49,16 @@ var current_star_date: int = STAR_DATE_RUN_START
 ## happened on the way into a battle once the player returns to the map.
 var last_jump_repair_summary: Dictionary = {}
 
-## Matches the battle scene's team-0 crew skill.
-const ROSTER_SKILL_LEVEL := 1.0
+## Skill for throwaway template crews that only derive a hull's standard
+## complement (slot roles + weapon bindings); template members are never
+## fielded, so the value is irrelevant.
+const COMPLEMENT_TEMPLATE_SKILL := 0.5
 
-## Monotonic source of unique callsigns for the run. Persists across roster
-## reconciles so crew added when the fleet grows never reuse a callsign.
-var _callsign_counter: int = 0
+## Roster entry ids consumed from the hiring pool this run — by run-start
+## crews, demotion refills, and shop hires alike. Consumed ids never return
+## to the pool, even when the crew member dies or is dismissed. Reset when a
+## run starts or ends; persisted with the campaign save.
+var hired_roster_ids: Array = []
 ## Monotonic source of unique hull ids for the run.
 var _next_hull_id: int = 0
 
@@ -62,7 +66,7 @@ var _next_hull_id: int = 0
 func start_run(initial_fleet: Dictionary) -> void:
 	active = true
 	started_first_battle = false
-	_callsign_counter = 0
+	hired_roster_ids = []
 	_next_hull_id = 0
 	fleet_hulls = _create_fleet_roster(initial_fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
@@ -94,7 +98,7 @@ func end_run() -> void:
 	lost_fleet_final_crew = []
 	current_star_date = STAR_DATE_RUN_START
 	last_jump_repair_summary = {}
-	_callsign_counter = 0
+	hired_roster_ids = []
 	_next_hull_id = 0
 
 
@@ -114,21 +118,18 @@ func _create_fleet_roster(fleet_counts: Dictionary) -> Array:
 	return roster
 
 
-## Create one hull record for a ship type. With `with_crew`, a full crew is
-## created (drawing unique callsigns from the run's counter); otherwise the
-## hull arrives empty (a purchased bare hull). The standard `complement` is
-## always derived so vacancies are known even for an empty hull.
+## Create one hull record for a ship type. With `with_crew`, the complement
+## is crewed from the roster hiring pool (slots whose role is exhausted in
+## the pool stay vacant); otherwise the hull arrives empty (a purchased bare
+## hull). The standard `complement` is always derived so vacancies are known
+## even for an empty hull.
 func _make_hull(ship_type: String, with_crew := true) -> Dictionary:
 	var weapons: Array = ShipData.get_ship_template(ship_type).get("weapons", [])
-	var crew: Array = CrewData.create_crew_for_ship_type(ship_type, weapons.size(), ROSTER_SKILL_LEVEL)
-	crew = CrewData.bind_gunners_to_weapons(crew, weapons)
-	var complement: Array = _complement_from_crew(crew)
-	if with_crew:
-		for member in crew:
-			member.callsign = CrewData.callsign_for_index(_callsign_counter)
-			_callsign_counter += 1
-	else:
-		crew = []
+	var template_crew: Array = CrewData.create_crew_for_ship_type(
+		ship_type, weapons.size(), COMPLEMENT_TEMPLATE_SKILL)
+	template_crew = CrewData.bind_gunners_to_weapons(template_crew, weapons)
+	var complement: Array = _complement_from_crew(template_crew)
+	var crew: Array = _crew_from_pool(template_crew) if with_crew else []
 	var hull_id := "hull_%d" % _next_hull_id
 	_next_hull_id += 1
 	return {
@@ -139,6 +140,47 @@ func _make_hull(ship_type: String, with_crew := true) -> Dictionary:
 		"complement": complement,
 		"ship": {},
 	}
+
+
+## Crew a template complement from the roster hiring pool: each template
+## member takes a drawn pool entry's identity and skills while keeping the
+## template's structure (crew_id, command chain, weapon binding). Members
+## whose role is exhausted in the pool are dropped — their slot stays a
+## vacancy for the shop to fill later.
+func _crew_from_pool(template_crew: Array) -> Array:
+	var rng := _new_rng()
+	var crew: Array = []
+	for member in template_crew:
+		var entry := _draw_from_pool(int(member.get("role", CrewData.Role.PILOT)), rng)
+		if entry.is_empty():
+			continue
+		crew.append(CrewData.apply_roster_entry(member, entry))
+	return _prune_command_chains(crew)
+
+
+## Draw one random available roster entry of `role` and consume it from the
+## run's pool. {} when the pool has no one of that role left.
+func _draw_from_pool(role: int, rng: RandomNumberGenerator) -> Dictionary:
+	var candidates := CrewRosterManager.available_entries(hired_roster_ids, role)
+	if candidates.is_empty():
+		return {}
+	var entry: Dictionary = candidates[rng.randi_range(0, candidates.size() - 1)]
+	hired_roster_ids.append(entry.id)
+	return entry
+
+
+## Remove command-chain references to crew that were dropped (pool-exhausted
+## slots), so nobody reports to or commands a member who never boarded.
+func _prune_command_chains(crew: Array) -> Array:
+	var kept := {}
+	for member in crew:
+		kept[member.crew_id] = true
+	for member in crew:
+		if member.command_chain.superior != null and not kept.has(member.command_chain.superior):
+			member.command_chain.superior = null
+		member.command_chain.subordinates = member.command_chain.subordinates.filter(
+			func(crew_id): return kept.has(crew_id))
+	return crew
 
 
 ## The fixed standard crew slots for a hull, derived from a freshly created
@@ -339,20 +381,28 @@ func hull_vacancies(hull: Dictionary) -> Array:
 	return vacancies
 
 
-## Hire a fresh crew member into one vacant slot on a hull (roster skill,
-## weapon bound for gunner slots, wired into the hull's command chain). Returns
-## true if the slot was a real vacancy and was filled.
-func fill_vacancy(hull_id: String, slot: Dictionary) -> bool:
+## Hire one roster candidate into one vacant slot on a hull (weapon bound for
+## gunner slots, wired into the hull's command chain). Fails when the slot is
+## not a real vacancy, the candidate is already consumed this run, no longer
+## exists in the roster (mid-run override edit), or has the wrong role.
+func fill_vacancy(hull_id: String, slot: Dictionary, roster_id: String) -> bool:
 	var hull := hull_by_id(hull_id)
 	if hull.is_empty() or not _slot_is_vacant(hull, slot):
 		return false
-	var member := CrewData.create_crew_member(slot.get("role", CrewData.Role.PILOT), ROSTER_SKILL_LEVEL)
-	member.callsign = CrewData.callsign_for_index(_callsign_counter)
-	_callsign_counter += 1
-	if slot.get("role", -1) == CrewData.Role.GUNNER and slot.has("weapon_id"):
+	if hired_roster_ids.has(roster_id):
+		return false
+	var entry := CrewRosterManager.entry_by_id(roster_id)
+	if entry.is_empty():
+		return false
+	var slot_role: int = slot.get("role", CrewData.Role.PILOT)
+	if CrewData.role_from_name(entry.role) != slot_role:
+		return false
+	var member := CrewData.from_roster_entry(entry)
+	if slot_role == CrewData.Role.GUNNER and slot.has("weapon_id"):
 		member["weapon_id"] = slot.weapon_id
 	_wire_into_command_chain(hull, member)
 	hull.crew.append(member)
+	hired_roster_ids.append(roster_id)
 	return true
 
 
@@ -617,7 +667,7 @@ func _hulls_from_survivors(survivor_ships: Array, survivor_crew_groups: Array) -
 		var crew: Array = _take_crew_group_for_type(remaining_groups, ship_type)
 		var weapons: Array = ShipData.get_ship_template(ship_type).get("weapons", [])
 		var template_crew: Array = CrewData.bind_gunners_to_weapons(
-			CrewData.create_crew_for_ship_type(ship_type, weapons.size(), ROSTER_SKILL_LEVEL), weapons)
+			CrewData.create_crew_for_ship_type(ship_type, weapons.size(), COMPLEMENT_TEMPLATE_SKILL), weapons)
 		var hull_id := "hull_%d" % _next_hull_id
 		_next_hull_id += 1
 		hulls.append({
@@ -662,7 +712,7 @@ func save_campaign_to_disk() -> bool:
 		"enemy_fleet": enemy_fleet,
 		"money": money,
 		"current_star_date": current_star_date,
-		"callsign_counter": _callsign_counter,
+		"hired_roster_ids": hired_roster_ids,
 		"next_hull_id": _next_hull_id,
 	})
 
@@ -679,7 +729,9 @@ func load_campaign_from_disk() -> bool:
 	enemy_fleet = data.get("enemy_fleet", {})
 	money = int(data.get("money", 0))
 	current_star_date = data.get("current_star_date", STAR_DATE_RUN_START)
-	_callsign_counter = data.get("callsign_counter", 0)
+	# Older saves have no consumed-pool list: an unconsumed pool is correct
+	# for them, since their crews predate roster hiring.
+	hired_roster_ids = data.get("hired_roster_ids", [])
 	_next_hull_id = data.get("next_hull_id", fleet_hulls.size())
 	last_battle_summary = {}
 	pending_battle_node_id = ""

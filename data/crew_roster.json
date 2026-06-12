@@ -1,0 +1,2805 @@
+{
+	"entries": [
+		{
+			"callsign": "Static Falcon",
+			"id": "roster_000",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.12,
+				"aim": 0.05,
+				"awareness": 0.14,
+				"composure": 0.11,
+				"machinery": 0.06,
+				"piloting": 0.0,
+				"tactics": 0.14
+			}
+		},
+		{
+			"callsign": "Drift Viper",
+			"id": "roster_001",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.24,
+				"aim": 0.0,
+				"awareness": 0.0,
+				"composure": 0.0,
+				"machinery": 0.0,
+				"piloting": 0.2,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Ghost Raven",
+			"id": "roster_002",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.69,
+				"aim": 0.06,
+				"awareness": 0.0,
+				"composure": 0.1,
+				"machinery": 0.0,
+				"piloting": 0.16,
+				"tactics": 0.09
+			}
+		},
+		{
+			"callsign": "Silent Comet",
+			"id": "roster_003",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.66,
+				"aim": 0.08,
+				"awareness": 0.16,
+				"composure": 0.0,
+				"machinery": 0.0,
+				"piloting": 0.08,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Solar Raven",
+			"id": "roster_004",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.44,
+				"aim": 0.01,
+				"awareness": 0.22,
+				"composure": 0.01,
+				"machinery": 0.19,
+				"piloting": 0.21,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Amber Wolf",
+			"id": "roster_005",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.82,
+				"aim": 0.08,
+				"awareness": 0.0,
+				"composure": 0.0,
+				"machinery": 0.0,
+				"piloting": 0.33,
+				"tactics": 0.15
+			}
+		},
+		{
+			"callsign": "Static Comet",
+			"id": "roster_006",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.6,
+				"aim": 0.23,
+				"awareness": 0.23,
+				"composure": 0.13,
+				"machinery": 0.12,
+				"piloting": 0.27,
+				"tactics": 0.11
+			}
+		},
+		{
+			"callsign": "Cobalt Lance",
+			"id": "roster_007",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.14,
+				"aim": 0.02,
+				"awareness": 0.11,
+				"composure": 0.0,
+				"machinery": 0.06,
+				"piloting": 0.11,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Crimson Viper",
+			"id": "roster_008",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.45,
+				"aim": 0.0,
+				"awareness": 0.07,
+				"composure": 0.04,
+				"machinery": 0.08,
+				"piloting": 0.37,
+				"tactics": 0.28
+			}
+		},
+		{
+			"callsign": "Static Mantis",
+			"id": "roster_009",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.83,
+				"aim": 0.22,
+				"awareness": 0.26,
+				"composure": 0.05,
+				"machinery": 0.19,
+				"piloting": 0.26,
+				"tactics": 0.27
+			}
+		},
+		{
+			"callsign": "Crimson Wolf",
+			"id": "roster_010",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.93,
+				"aim": 0.14,
+				"awareness": 0.22,
+				"composure": 0.29,
+				"machinery": 0.15,
+				"piloting": 0.23,
+				"tactics": 0.14
+			}
+		},
+		{
+			"callsign": "Crimson Harrier",
+			"id": "roster_011",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.09,
+				"aim": 0.22,
+				"awareness": 0.08,
+				"composure": 0.17,
+				"machinery": 0.06,
+				"piloting": 0.43,
+				"tactics": 0.09
+			}
+		},
+		{
+			"callsign": "Crimson Jackal",
+			"id": "roster_012",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.99,
+				"aim": 0.14,
+				"awareness": 0.31,
+				"composure": 0.16,
+				"machinery": 0.11,
+				"piloting": 0.45,
+				"tactics": 0.1
+			}
+		},
+		{
+			"callsign": "Amber Viper",
+			"id": "roster_013",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.26,
+				"aim": 0.36,
+				"awareness": 0.29,
+				"composure": 0.08,
+				"machinery": 0.12,
+				"piloting": 0.29,
+				"tactics": 0.37
+			}
+		},
+		{
+			"callsign": "Lunar Saber",
+			"id": "roster_014",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.22,
+				"aim": 0.3,
+				"awareness": 0.1,
+				"composure": 0.21,
+				"machinery": 0.2,
+				"piloting": 0.44,
+				"tactics": 0.23
+			}
+		},
+		{
+			"callsign": "Night Saber",
+			"id": "roster_015",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.02,
+				"aim": 0.31,
+				"awareness": 0.38,
+				"composure": 0.21,
+				"machinery": 0.34,
+				"piloting": 0.33,
+				"tactics": 0.13
+			}
+		},
+		{
+			"callsign": "Ember Mantis",
+			"id": "roster_016",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.66,
+				"aim": 0.15,
+				"awareness": 0.16,
+				"composure": 0.35,
+				"machinery": 0.22,
+				"piloting": 0.33,
+				"tactics": 0.36
+			}
+		},
+		{
+			"callsign": "Drift Lance",
+			"id": "roster_017",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.5,
+				"aim": 0.33,
+				"awareness": 0.27,
+				"composure": 0.42,
+				"machinery": 0.35,
+				"piloting": 0.43,
+				"tactics": 0.38
+			}
+		},
+		{
+			"callsign": "Ember Lance",
+			"id": "roster_018",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.41,
+				"aim": 0.27,
+				"awareness": 0.31,
+				"composure": 0.23,
+				"machinery": 0.22,
+				"piloting": 0.37,
+				"tactics": 0.44
+			}
+		},
+		{
+			"callsign": "Slate Lance",
+			"id": "roster_019",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.51,
+				"aim": 0.44,
+				"awareness": 0.18,
+				"composure": 0.18,
+				"machinery": 0.35,
+				"piloting": 0.49,
+				"tactics": 0.2
+			}
+		},
+		{
+			"callsign": "Cobalt Falcon",
+			"id": "roster_020",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.07,
+				"aim": 0.38,
+				"awareness": 0.23,
+				"composure": 0.32,
+				"machinery": 0.33,
+				"piloting": 0.39,
+				"tactics": 0.42
+			}
+		},
+		{
+			"callsign": "Gilded Comet",
+			"id": "roster_021",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.61,
+				"aim": 0.46,
+				"awareness": 0.41,
+				"composure": 0.21,
+				"machinery": 0.41,
+				"piloting": 0.37,
+				"tactics": 0.3
+			}
+		},
+		{
+			"callsign": "Ghost Harrier",
+			"id": "roster_022",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.89,
+				"aim": 0.51,
+				"awareness": 0.28,
+				"composure": 0.47,
+				"machinery": 0.51,
+				"piloting": 0.39,
+				"tactics": 0.36
+			}
+		},
+		{
+			"callsign": "Halo Saber",
+			"id": "roster_023",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.89,
+				"aim": 0.28,
+				"awareness": 0.47,
+				"composure": 0.42,
+				"machinery": 0.3,
+				"piloting": 0.6,
+				"tactics": 0.46
+			}
+		},
+		{
+			"callsign": "Static Harrier",
+			"id": "roster_024",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.62,
+				"aim": 0.38,
+				"awareness": 0.4,
+				"composure": 0.55,
+				"machinery": 0.51,
+				"piloting": 0.39,
+				"tactics": 0.26
+			}
+		},
+		{
+			"callsign": "Feral Lance",
+			"id": "roster_025",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.06,
+				"aim": 0.46,
+				"awareness": 0.36,
+				"composure": 0.54,
+				"machinery": 0.48,
+				"piloting": 0.4,
+				"tactics": 0.48
+			}
+		},
+		{
+			"callsign": "Crimson Lance",
+			"id": "roster_026",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.25,
+				"aim": 0.59,
+				"awareness": 0.41,
+				"composure": 0.58,
+				"machinery": 0.35,
+				"piloting": 0.66,
+				"tactics": 0.47
+			}
+		},
+		{
+			"callsign": "Gilded Saber",
+			"id": "roster_027",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.11,
+				"aim": 0.58,
+				"awareness": 0.54,
+				"composure": 0.37,
+				"machinery": 0.43,
+				"piloting": 0.45,
+				"tactics": 0.54
+			}
+		},
+		{
+			"callsign": "Solar Saber",
+			"id": "roster_028",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.62,
+				"aim": 0.37,
+				"awareness": 0.53,
+				"composure": 0.49,
+				"machinery": 0.57,
+				"piloting": 0.45,
+				"tactics": 0.34
+			}
+		},
+		{
+			"callsign": "Razor Saber",
+			"id": "roster_029",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.18,
+				"aim": 0.4,
+				"awareness": 0.4,
+				"composure": 0.42,
+				"machinery": 0.55,
+				"piloting": 0.71,
+				"tactics": 0.4
+			}
+		},
+		{
+			"callsign": "Storm Harrier",
+			"id": "roster_030",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.75,
+				"aim": 0.62,
+				"awareness": 0.51,
+				"composure": 0.61,
+				"machinery": 0.56,
+				"piloting": 0.7,
+				"tactics": 0.54
+			}
+		},
+		{
+			"callsign": "Drift Jackal",
+			"id": "roster_031",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.49,
+				"aim": 0.55,
+				"awareness": 0.46,
+				"composure": 0.55,
+				"machinery": 0.52,
+				"piloting": 0.59,
+				"tactics": 0.54
+			}
+		},
+		{
+			"callsign": "Lunar Wolf",
+			"id": "roster_032",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.73,
+				"aim": 0.42,
+				"awareness": 0.62,
+				"composure": 0.5,
+				"machinery": 0.56,
+				"piloting": 0.74,
+				"tactics": 0.43
+			}
+		},
+		{
+			"callsign": "Iron Saber",
+			"id": "roster_033",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.89,
+				"aim": 0.57,
+				"awareness": 0.59,
+				"composure": 0.54,
+				"machinery": 0.51,
+				"piloting": 0.54,
+				"tactics": 0.67
+			}
+		},
+		{
+			"callsign": "Feral Saber",
+			"id": "roster_034",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.39,
+				"aim": 0.46,
+				"awareness": 0.64,
+				"composure": 0.57,
+				"machinery": 0.66,
+				"piloting": 0.7,
+				"tactics": 0.45
+			}
+		},
+		{
+			"callsign": "Halo Comet",
+			"id": "roster_035",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.65,
+				"aim": 0.61,
+				"awareness": 0.63,
+				"composure": 0.73,
+				"machinery": 0.53,
+				"piloting": 0.75,
+				"tactics": 0.44
+			}
+		},
+		{
+			"callsign": "Silent Saber",
+			"id": "roster_036",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.59,
+				"aim": 0.63,
+				"awareness": 0.71,
+				"composure": 0.58,
+				"machinery": 0.6,
+				"piloting": 0.61,
+				"tactics": 0.55
+			}
+		},
+		{
+			"callsign": "Ghost Viper",
+			"id": "roster_037",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.93,
+				"aim": 0.74,
+				"awareness": 0.5,
+				"composure": 0.57,
+				"machinery": 0.77,
+				"piloting": 0.73,
+				"tactics": 0.59
+			}
+		},
+		{
+			"callsign": "Lunar Comet",
+			"id": "roster_038",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.49,
+				"aim": 0.69,
+				"awareness": 0.5,
+				"composure": 0.7,
+				"machinery": 0.63,
+				"piloting": 0.75,
+				"tactics": 0.58
+			}
+		},
+		{
+			"callsign": "Razor Lance",
+			"id": "roster_039",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.84,
+				"aim": 0.53,
+				"awareness": 0.55,
+				"composure": 0.58,
+				"machinery": 0.57,
+				"piloting": 0.81,
+				"tactics": 0.56
+			}
+		},
+		{
+			"callsign": "Ghost Comet",
+			"id": "roster_040",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.6,
+				"aim": 0.57,
+				"awareness": 0.72,
+				"composure": 0.8,
+				"machinery": 0.58,
+				"piloting": 0.71,
+				"tactics": 0.54
+			}
+		},
+		{
+			"callsign": "Crimson Raven",
+			"id": "roster_041",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.79,
+				"aim": 0.67,
+				"awareness": 0.73,
+				"composure": 0.59,
+				"machinery": 0.66,
+				"piloting": 0.65,
+				"tactics": 0.59
+			}
+		},
+		{
+			"callsign": "Ghost Mantis",
+			"id": "roster_042",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.62,
+				"aim": 0.59,
+				"awareness": 0.66,
+				"composure": 0.65,
+				"machinery": 0.58,
+				"piloting": 0.86,
+				"tactics": 0.76
+			}
+		},
+		{
+			"callsign": "Ghost Lance",
+			"id": "roster_043",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.01,
+				"aim": 0.62,
+				"awareness": 0.67,
+				"composure": 0.79,
+				"machinery": 0.62,
+				"piloting": 0.92,
+				"tactics": 0.76
+			}
+		},
+		{
+			"callsign": "Argent Viper",
+			"id": "roster_044",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.01,
+				"aim": 0.67,
+				"awareness": 0.78,
+				"composure": 0.76,
+				"machinery": 0.63,
+				"piloting": 0.9,
+				"tactics": 0.82
+			}
+		},
+		{
+			"callsign": "Argent Falcon",
+			"id": "roster_045",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.9,
+				"aim": 0.83,
+				"awareness": 0.85,
+				"composure": 0.89,
+				"machinery": 0.62,
+				"piloting": 0.97,
+				"tactics": 0.79
+			}
+		},
+		{
+			"callsign": "Ember Viper",
+			"id": "roster_046",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.34,
+				"aim": 0.92,
+				"awareness": 0.71,
+				"composure": 0.66,
+				"machinery": 0.74,
+				"piloting": 0.81,
+				"tactics": 0.93
+			}
+		},
+		{
+			"callsign": "Amber Jackal",
+			"id": "roster_047",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.56,
+				"aim": 0.82,
+				"awareness": 0.69,
+				"composure": 0.74,
+				"machinery": 0.72,
+				"piloting": 1.0,
+				"tactics": 0.66
+			}
+		},
+		{
+			"callsign": "Razor Viper",
+			"id": "roster_048",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.61,
+				"aim": 0.71,
+				"awareness": 0.96,
+				"composure": 0.76,
+				"machinery": 0.87,
+				"piloting": 1.0,
+				"tactics": 0.92
+			}
+		},
+		{
+			"callsign": "Solar Falcon",
+			"id": "roster_049",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.43,
+				"aim": 0.79,
+				"awareness": 0.77,
+				"composure": 0.95,
+				"machinery": 0.93,
+				"piloting": 0.9,
+				"tactics": 0.92
+			}
+		},
+		{
+			"callsign": "Argent Saber",
+			"id": "roster_050",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.33,
+				"aim": 0.89,
+				"awareness": 0.81,
+				"composure": 0.87,
+				"machinery": 0.87,
+				"piloting": 1.0,
+				"tactics": 0.93
+			}
+		},
+		{
+			"callsign": "Cobalt Saber",
+			"id": "roster_051",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.76,
+				"aim": 0.91,
+				"awareness": 0.85,
+				"composure": 0.75,
+				"machinery": 0.95,
+				"piloting": 0.96,
+				"tactics": 0.8
+			}
+		},
+		{
+			"callsign": "Lunar Falcon",
+			"id": "roster_052",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.15,
+				"aim": 0.99,
+				"awareness": 0.79,
+				"composure": 0.86,
+				"machinery": 0.84,
+				"piloting": 1.0,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Ember Comet",
+			"id": "roster_053",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.61,
+				"aim": 0.78,
+				"awareness": 0.93,
+				"composure": 0.92,
+				"machinery": 0.92,
+				"piloting": 0.94,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Void Falcon",
+			"id": "roster_054",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.76,
+				"aim": 0.96,
+				"awareness": 0.98,
+				"composure": 0.87,
+				"machinery": 0.86,
+				"piloting": 1.0,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Solar Wolf",
+			"id": "roster_055",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.17,
+				"aim": 0.98,
+				"awareness": 0.84,
+				"composure": 0.99,
+				"machinery": 0.86,
+				"piloting": 1.0,
+				"tactics": 0.97
+			}
+		},
+		{
+			"callsign": "Silent Harrier",
+			"id": "roster_056",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.51,
+				"aim": 0.87,
+				"awareness": 0.95,
+				"composure": 1.0,
+				"machinery": 0.92,
+				"piloting": 1.0,
+				"tactics": 0.89
+			}
+		},
+		{
+			"callsign": "Argent Wolf",
+			"id": "roster_057",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.55,
+				"aim": 0.94,
+				"awareness": 0.91,
+				"composure": 0.86,
+				"machinery": 0.98,
+				"piloting": 0.99,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Ghost Falcon",
+			"id": "roster_058",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.52,
+				"aim": 0.96,
+				"awareness": 1.0,
+				"composure": 1.0,
+				"machinery": 1.0,
+				"piloting": 0.97,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Silent Raven",
+			"id": "roster_059",
+			"role": "pilot",
+			"skills": {
+				"aggression": 0.98,
+				"aim": 1.0,
+				"awareness": 1.0,
+				"composure": 0.95,
+				"machinery": 0.94,
+				"piloting": 1.0,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Feral Jackal",
+			"id": "roster_060",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.92,
+				"aim": 0.13,
+				"awareness": 0.0,
+				"composure": 0.09,
+				"machinery": 0.12,
+				"piloting": 0.03,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Lunar Harrier",
+			"id": "roster_061",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.56,
+				"aim": 0.13,
+				"awareness": 0.0,
+				"composure": 0.15,
+				"machinery": 0.0,
+				"piloting": 0.0,
+				"tactics": 0.02
+			}
+		},
+		{
+			"callsign": "Night Harrier",
+			"id": "roster_062",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.67,
+				"aim": 0.17,
+				"awareness": 0.0,
+				"composure": 0.07,
+				"machinery": 0.0,
+				"piloting": 0.0,
+				"tactics": 0.09
+			}
+		},
+		{
+			"callsign": "Slate Jackal",
+			"id": "roster_063",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.76,
+				"aim": 0.01,
+				"awareness": 0.0,
+				"composure": 0.1,
+				"machinery": 0.01,
+				"piloting": 0.14,
+				"tactics": 0.03
+			}
+		},
+		{
+			"callsign": "Night Lance",
+			"id": "roster_064",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.95,
+				"aim": 0.12,
+				"awareness": 0.1,
+				"composure": 0.0,
+				"machinery": 0.0,
+				"piloting": 0.0,
+				"tactics": 0.07
+			}
+		},
+		{
+			"callsign": "Halo Raven",
+			"id": "roster_065",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.83,
+				"aim": 0.32,
+				"awareness": 0.0,
+				"composure": 0.17,
+				"machinery": 0.0,
+				"piloting": 0.18,
+				"tactics": 0.05
+			}
+		},
+		{
+			"callsign": "Drift Saber",
+			"id": "roster_066",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.63,
+				"aim": 0.26,
+				"awareness": 0.01,
+				"composure": 0.08,
+				"machinery": 0.16,
+				"piloting": 0.1,
+				"tactics": 0.1
+			}
+		},
+		{
+			"callsign": "Amber Harrier",
+			"id": "roster_067",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.26,
+				"aim": 0.12,
+				"awareness": 0.18,
+				"composure": 0.0,
+				"machinery": 0.0,
+				"piloting": 0.24,
+				"tactics": 0.07
+			}
+		},
+		{
+			"callsign": "Argent Mantis",
+			"id": "roster_068",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.83,
+				"aim": 0.32,
+				"awareness": 0.13,
+				"composure": 0.21,
+				"machinery": 0.24,
+				"piloting": 0.0,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Void Harrier",
+			"id": "roster_069",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.87,
+				"aim": 0.32,
+				"awareness": 0.02,
+				"composure": 0.25,
+				"machinery": 0.23,
+				"piloting": 0.24,
+				"tactics": 0.28
+			}
+		},
+		{
+			"callsign": "Halo Falcon",
+			"id": "roster_070",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.74,
+				"aim": 0.37,
+				"awareness": 0.25,
+				"composure": 0.11,
+				"machinery": 0.03,
+				"piloting": 0.24,
+				"tactics": 0.26
+			}
+		},
+		{
+			"callsign": "Solar Harrier",
+			"id": "roster_071",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.88,
+				"aim": 0.37,
+				"awareness": 0.04,
+				"composure": 0.08,
+				"machinery": 0.21,
+				"piloting": 0.12,
+				"tactics": 0.27
+			}
+		},
+		{
+			"callsign": "Amber Raven",
+			"id": "roster_072",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.53,
+				"aim": 0.31,
+				"awareness": 0.22,
+				"composure": 0.07,
+				"machinery": 0.07,
+				"piloting": 0.05,
+				"tactics": 0.16
+			}
+		},
+		{
+			"callsign": "Gilded Jackal",
+			"id": "roster_073",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.84,
+				"aim": 0.38,
+				"awareness": 0.24,
+				"composure": 0.25,
+				"machinery": 0.05,
+				"piloting": 0.09,
+				"tactics": 0.19
+			}
+		},
+		{
+			"callsign": "Ghost Saber",
+			"id": "roster_074",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.2,
+				"aim": 0.33,
+				"awareness": 0.1,
+				"composure": 0.3,
+				"machinery": 0.11,
+				"piloting": 0.12,
+				"tactics": 0.2
+			}
+		},
+		{
+			"callsign": "Slate Mantis",
+			"id": "roster_075",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.62,
+				"aim": 0.25,
+				"awareness": 0.32,
+				"composure": 0.12,
+				"machinery": 0.24,
+				"piloting": 0.36,
+				"tactics": 0.21
+			}
+		},
+		{
+			"callsign": "Static Viper",
+			"id": "roster_076",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.43,
+				"aim": 0.28,
+				"awareness": 0.11,
+				"composure": 0.16,
+				"machinery": 0.14,
+				"piloting": 0.26,
+				"tactics": 0.35
+			}
+		},
+		{
+			"callsign": "Crimson Falcon",
+			"id": "roster_077",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.56,
+				"aim": 0.47,
+				"awareness": 0.19,
+				"composure": 0.1,
+				"machinery": 0.34,
+				"piloting": 0.16,
+				"tactics": 0.33
+			}
+		},
+		{
+			"callsign": "Lunar Mantis",
+			"id": "roster_078",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.79,
+				"aim": 0.43,
+				"awareness": 0.14,
+				"composure": 0.33,
+				"machinery": 0.35,
+				"piloting": 0.28,
+				"tactics": 0.4
+			}
+		},
+		{
+			"callsign": "Halo Lance",
+			"id": "roster_079",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.77,
+				"aim": 0.28,
+				"awareness": 0.15,
+				"composure": 0.31,
+				"machinery": 0.13,
+				"piloting": 0.18,
+				"tactics": 0.15
+			}
+		},
+		{
+			"callsign": "Solar Lance",
+			"id": "roster_080",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.26,
+				"aim": 0.44,
+				"awareness": 0.25,
+				"composure": 0.37,
+				"machinery": 0.29,
+				"piloting": 0.29,
+				"tactics": 0.2
+			}
+		},
+		{
+			"callsign": "Halo Mantis",
+			"id": "roster_081",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.29,
+				"aim": 0.38,
+				"awareness": 0.17,
+				"composure": 0.17,
+				"machinery": 0.18,
+				"piloting": 0.21,
+				"tactics": 0.21
+			}
+		},
+		{
+			"callsign": "Halo Jackal",
+			"id": "roster_082",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.92,
+				"aim": 0.4,
+				"awareness": 0.19,
+				"composure": 0.37,
+				"machinery": 0.35,
+				"piloting": 0.42,
+				"tactics": 0.45
+			}
+		},
+		{
+			"callsign": "Amber Mantis",
+			"id": "roster_083",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.18,
+				"aim": 0.54,
+				"awareness": 0.39,
+				"composure": 0.42,
+				"machinery": 0.48,
+				"piloting": 0.37,
+				"tactics": 0.35
+			}
+		},
+		{
+			"callsign": "Iron Comet",
+			"id": "roster_084",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.51,
+				"aim": 0.49,
+				"awareness": 0.2,
+				"composure": 0.2,
+				"machinery": 0.38,
+				"piloting": 0.47,
+				"tactics": 0.32
+			}
+		},
+		{
+			"callsign": "Gilded Falcon",
+			"id": "roster_085",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.35,
+				"aim": 0.49,
+				"awareness": 0.38,
+				"composure": 0.31,
+				"machinery": 0.3,
+				"piloting": 0.4,
+				"tactics": 0.36
+			}
+		},
+		{
+			"callsign": "Razor Comet",
+			"id": "roster_086",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.11,
+				"aim": 0.42,
+				"awareness": 0.33,
+				"composure": 0.28,
+				"machinery": 0.28,
+				"piloting": 0.51,
+				"tactics": 0.32
+			}
+		},
+		{
+			"callsign": "Storm Comet",
+			"id": "roster_087",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.61,
+				"aim": 0.34,
+				"awareness": 0.28,
+				"composure": 0.52,
+				"machinery": 0.3,
+				"piloting": 0.28,
+				"tactics": 0.25
+			}
+		},
+		{
+			"callsign": "Ember Raven",
+			"id": "roster_088",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.02,
+				"aim": 0.57,
+				"awareness": 0.36,
+				"composure": 0.31,
+				"machinery": 0.35,
+				"piloting": 0.48,
+				"tactics": 0.48
+			}
+		},
+		{
+			"callsign": "Silent Jackal",
+			"id": "roster_089",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.48,
+				"aim": 0.55,
+				"awareness": 0.38,
+				"composure": 0.56,
+				"machinery": 0.27,
+				"piloting": 0.47,
+				"tactics": 0.51
+			}
+		},
+		{
+			"callsign": "Night Jackal",
+			"id": "roster_090",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.74,
+				"aim": 0.49,
+				"awareness": 0.35,
+				"composure": 0.53,
+				"machinery": 0.57,
+				"piloting": 0.55,
+				"tactics": 0.33
+			}
+		},
+		{
+			"callsign": "Crimson Saber",
+			"id": "roster_091",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.24,
+				"aim": 0.54,
+				"awareness": 0.57,
+				"composure": 0.59,
+				"machinery": 0.48,
+				"piloting": 0.47,
+				"tactics": 0.38
+			}
+		},
+		{
+			"callsign": "Argent Lance",
+			"id": "roster_092",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.42,
+				"aim": 0.44,
+				"awareness": 0.35,
+				"composure": 0.49,
+				"machinery": 0.61,
+				"piloting": 0.51,
+				"tactics": 0.6
+			}
+		},
+		{
+			"callsign": "Razor Harrier",
+			"id": "roster_093",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.5,
+				"aim": 0.48,
+				"awareness": 0.47,
+				"composure": 0.38,
+				"machinery": 0.4,
+				"piloting": 0.42,
+				"tactics": 0.47
+			}
+		},
+		{
+			"callsign": "Gilded Raven",
+			"id": "roster_094",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.5,
+				"aim": 0.69,
+				"awareness": 0.35,
+				"composure": 0.51,
+				"machinery": 0.51,
+				"piloting": 0.48,
+				"tactics": 0.44
+			}
+		},
+		{
+			"callsign": "Ghost Jackal",
+			"id": "roster_095",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.69,
+				"aim": 0.59,
+				"awareness": 0.47,
+				"composure": 0.36,
+				"machinery": 0.59,
+				"piloting": 0.62,
+				"tactics": 0.45
+			}
+		},
+		{
+			"callsign": "Void Lance",
+			"id": "roster_096",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.46,
+				"aim": 0.53,
+				"awareness": 0.43,
+				"composure": 0.48,
+				"machinery": 0.53,
+				"piloting": 0.38,
+				"tactics": 0.38
+			}
+		},
+		{
+			"callsign": "Feral Harrier",
+			"id": "roster_097",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.48,
+				"aim": 0.62,
+				"awareness": 0.54,
+				"composure": 0.45,
+				"machinery": 0.6,
+				"piloting": 0.44,
+				"tactics": 0.47
+			}
+		},
+		{
+			"callsign": "Void Comet",
+			"id": "roster_098",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.23,
+				"aim": 0.69,
+				"awareness": 0.46,
+				"composure": 0.44,
+				"machinery": 0.52,
+				"piloting": 0.53,
+				"tactics": 0.47
+			}
+		},
+		{
+			"callsign": "Ghost Wolf",
+			"id": "roster_099",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.15,
+				"aim": 0.53,
+				"awareness": 0.56,
+				"composure": 0.64,
+				"machinery": 0.57,
+				"piloting": 0.65,
+				"tactics": 0.69
+			}
+		},
+		{
+			"callsign": "Ember Harrier",
+			"id": "roster_100",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.61,
+				"aim": 0.7,
+				"awareness": 0.44,
+				"composure": 0.61,
+				"machinery": 0.69,
+				"piloting": 0.64,
+				"tactics": 0.54
+			}
+		},
+		{
+			"callsign": "Void Wolf",
+			"id": "roster_101",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.01,
+				"aim": 0.66,
+				"awareness": 0.45,
+				"composure": 0.5,
+				"machinery": 0.57,
+				"piloting": 0.58,
+				"tactics": 0.69
+			}
+		},
+		{
+			"callsign": "Solar Viper",
+			"id": "roster_102",
+			"role": "gunner",
+			"skills": {
+				"aggression": 1.0,
+				"aim": 0.8,
+				"awareness": 0.72,
+				"composure": 0.74,
+				"machinery": 0.74,
+				"piloting": 0.54,
+				"tactics": 0.64
+			}
+		},
+		{
+			"callsign": "Slate Wolf",
+			"id": "roster_103",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.88,
+				"aim": 0.78,
+				"awareness": 0.74,
+				"composure": 0.74,
+				"machinery": 0.74,
+				"piloting": 0.64,
+				"tactics": 0.63
+			}
+		},
+		{
+			"callsign": "Argent Jackal",
+			"id": "roster_104",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.3,
+				"aim": 0.77,
+				"awareness": 0.58,
+				"composure": 0.54,
+				"machinery": 0.55,
+				"piloting": 0.73,
+				"tactics": 0.58
+			}
+		},
+		{
+			"callsign": "Drift Falcon",
+			"id": "roster_105",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.42,
+				"aim": 0.86,
+				"awareness": 0.53,
+				"composure": 0.7,
+				"machinery": 0.66,
+				"piloting": 0.65,
+				"tactics": 0.63
+			}
+		},
+		{
+			"callsign": "Silent Wolf",
+			"id": "roster_106",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.99,
+				"aim": 0.87,
+				"awareness": 0.68,
+				"composure": 0.8,
+				"machinery": 0.53,
+				"piloting": 0.61,
+				"tactics": 0.79
+			}
+		},
+		{
+			"callsign": "Iron Raven",
+			"id": "roster_107",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.83,
+				"aim": 0.84,
+				"awareness": 0.78,
+				"composure": 0.57,
+				"machinery": 0.78,
+				"piloting": 0.83,
+				"tactics": 0.59
+			}
+		},
+		{
+			"callsign": "Feral Mantis",
+			"id": "roster_108",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.03,
+				"aim": 0.86,
+				"awareness": 0.84,
+				"composure": 0.77,
+				"machinery": 0.72,
+				"piloting": 0.57,
+				"tactics": 0.68
+			}
+		},
+		{
+			"callsign": "Silent Mantis",
+			"id": "roster_109",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.9,
+				"aim": 0.84,
+				"awareness": 0.7,
+				"composure": 0.66,
+				"machinery": 0.72,
+				"piloting": 0.71,
+				"tactics": 0.73
+			}
+		},
+		{
+			"callsign": "Feral Wolf",
+			"id": "roster_110",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.36,
+				"aim": 0.79,
+				"awareness": 0.6,
+				"composure": 0.83,
+				"machinery": 0.6,
+				"piloting": 0.83,
+				"tactics": 0.76
+			}
+		},
+		{
+			"callsign": "Lunar Jackal",
+			"id": "roster_111",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.12,
+				"aim": 0.7,
+				"awareness": 0.63,
+				"composure": 0.8,
+				"machinery": 0.59,
+				"piloting": 0.84,
+				"tactics": 0.66
+			}
+		},
+		{
+			"callsign": "Void Jackal",
+			"id": "roster_112",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.76,
+				"aim": 0.92,
+				"awareness": 0.65,
+				"composure": 0.87,
+				"machinery": 0.71,
+				"piloting": 0.66,
+				"tactics": 0.67
+			}
+		},
+		{
+			"callsign": "Night Comet",
+			"id": "roster_113",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.65,
+				"aim": 0.85,
+				"awareness": 0.73,
+				"composure": 0.79,
+				"machinery": 0.85,
+				"piloting": 0.7,
+				"tactics": 0.69
+			}
+		},
+		{
+			"callsign": "Silent Viper",
+			"id": "roster_114",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.02,
+				"aim": 0.84,
+				"awareness": 0.92,
+				"composure": 0.82,
+				"machinery": 0.72,
+				"piloting": 0.7,
+				"tactics": 0.92
+			}
+		},
+		{
+			"callsign": "Razor Mantis",
+			"id": "roster_115",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.12,
+				"aim": 1.0,
+				"awareness": 0.92,
+				"composure": 0.83,
+				"machinery": 0.93,
+				"piloting": 0.73,
+				"tactics": 0.94
+			}
+		},
+		{
+			"callsign": "Night Raven",
+			"id": "roster_116",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.24,
+				"aim": 0.84,
+				"awareness": 0.95,
+				"composure": 0.67,
+				"machinery": 0.71,
+				"piloting": 0.84,
+				"tactics": 0.87
+			}
+		},
+		{
+			"callsign": "Argent Raven",
+			"id": "roster_117",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.93,
+				"aim": 0.93,
+				"awareness": 0.92,
+				"composure": 0.87,
+				"machinery": 0.71,
+				"piloting": 0.74,
+				"tactics": 0.71
+			}
+		},
+		{
+			"callsign": "Razor Jackal",
+			"id": "roster_118",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.7,
+				"aim": 0.89,
+				"awareness": 0.97,
+				"composure": 0.73,
+				"machinery": 0.75,
+				"piloting": 0.89,
+				"tactics": 0.83
+			}
+		},
+		{
+			"callsign": "Gilded Harrier",
+			"id": "roster_119",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.87,
+				"aim": 0.87,
+				"awareness": 0.79,
+				"composure": 0.89,
+				"machinery": 0.84,
+				"piloting": 0.94,
+				"tactics": 0.97
+			}
+		},
+		{
+			"callsign": "Iron Mantis",
+			"id": "roster_120",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.02,
+				"aim": 1.0,
+				"awareness": 0.93,
+				"composure": 0.81,
+				"machinery": 0.88,
+				"piloting": 0.74,
+				"tactics": 0.73
+			}
+		},
+		{
+			"callsign": "Storm Viper",
+			"id": "roster_121",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.45,
+				"aim": 0.85,
+				"awareness": 0.78,
+				"composure": 0.83,
+				"machinery": 0.78,
+				"piloting": 0.91,
+				"tactics": 0.74
+			}
+		},
+		{
+			"callsign": "Cobalt Comet",
+			"id": "roster_122",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.32,
+				"aim": 1.0,
+				"awareness": 0.84,
+				"composure": 0.92,
+				"machinery": 0.94,
+				"piloting": 1.0,
+				"tactics": 0.77
+			}
+		},
+		{
+			"callsign": "Static Saber",
+			"id": "roster_123",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.31,
+				"aim": 1.0,
+				"awareness": 0.91,
+				"composure": 1.0,
+				"machinery": 0.9,
+				"piloting": 0.99,
+				"tactics": 0.87
+			}
+		},
+		{
+			"callsign": "Void Mantis",
+			"id": "roster_124",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.41,
+				"aim": 0.96,
+				"awareness": 1.0,
+				"composure": 1.0,
+				"machinery": 0.96,
+				"piloting": 1.0,
+				"tactics": 0.78
+			}
+		},
+		{
+			"callsign": "Crimson Mantis",
+			"id": "roster_125",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.76,
+				"aim": 1.0,
+				"awareness": 0.94,
+				"composure": 1.0,
+				"machinery": 0.95,
+				"piloting": 1.0,
+				"tactics": 0.98
+			}
+		},
+		{
+			"callsign": "Static Lance",
+			"id": "roster_126",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.82,
+				"aim": 1.0,
+				"awareness": 0.9,
+				"composure": 1.0,
+				"machinery": 1.0,
+				"piloting": 1.0,
+				"tactics": 0.84
+			}
+		},
+		{
+			"callsign": "Night Viper",
+			"id": "roster_127",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.03,
+				"aim": 1.0,
+				"awareness": 1.0,
+				"composure": 1.0,
+				"machinery": 0.84,
+				"piloting": 0.98,
+				"tactics": 0.83
+			}
+		},
+		{
+			"callsign": "Iron Falcon",
+			"id": "roster_128",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.08,
+				"aim": 0.97,
+				"awareness": 0.87,
+				"composure": 1.0,
+				"machinery": 1.0,
+				"piloting": 0.9,
+				"tactics": 0.89
+			}
+		},
+		{
+			"callsign": "Amber Saber",
+			"id": "roster_129",
+			"role": "gunner",
+			"skills": {
+				"aggression": 0.16,
+				"aim": 1.0,
+				"awareness": 0.9,
+				"composure": 1.0,
+				"machinery": 0.9,
+				"piloting": 0.97,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Solar Mantis",
+			"id": "roster_130",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.33,
+				"aim": 0.0,
+				"awareness": 0.14,
+				"composure": 0.0,
+				"machinery": 0.0,
+				"piloting": 0.0,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Gilded Lance",
+			"id": "roster_131",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.84,
+				"aim": 0.02,
+				"awareness": 0.0,
+				"composure": 0.18,
+				"machinery": 0.22,
+				"piloting": 0.09,
+				"tactics": 0.18
+			}
+		},
+		{
+			"callsign": "Void Saber",
+			"id": "roster_132",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.49,
+				"aim": 0.0,
+				"awareness": 0.0,
+				"composure": 0.14,
+				"machinery": 0.24,
+				"piloting": 0.03,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Storm Saber",
+			"id": "roster_133",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.45,
+				"aim": 0.12,
+				"awareness": 0.1,
+				"composure": 0.2,
+				"machinery": 0.3,
+				"piloting": 0.09,
+				"tactics": 0.12
+			}
+		},
+		{
+			"callsign": "Iron Harrier",
+			"id": "roster_134",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.31,
+				"aim": 0.12,
+				"awareness": 0.1,
+				"composure": 0.07,
+				"machinery": 0.15,
+				"piloting": 0.02,
+				"tactics": 0.06
+			}
+		},
+		{
+			"callsign": "Static Jackal",
+			"id": "roster_135",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.06,
+				"aim": 0.1,
+				"awareness": 0.14,
+				"composure": 0.09,
+				"machinery": 0.19,
+				"piloting": 0.1,
+				"tactics": 0.14
+			}
+		},
+		{
+			"callsign": "Razor Raven",
+			"id": "roster_136",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.64,
+				"aim": 0.15,
+				"awareness": 0.09,
+				"composure": 0.2,
+				"machinery": 0.16,
+				"piloting": 0.16,
+				"tactics": 0.23
+			}
+		},
+		{
+			"callsign": "Feral Raven",
+			"id": "roster_137",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.39,
+				"aim": 0.18,
+				"awareness": 0.2,
+				"composure": 0.14,
+				"machinery": 0.29,
+				"piloting": 0.18,
+				"tactics": 0.33
+			}
+		},
+		{
+			"callsign": "Feral Comet",
+			"id": "roster_138",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.91,
+				"aim": 0.36,
+				"awareness": 0.32,
+				"composure": 0.13,
+				"machinery": 0.33,
+				"piloting": 0.25,
+				"tactics": 0.32
+			}
+		},
+		{
+			"callsign": "Night Wolf",
+			"id": "roster_139",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.06,
+				"aim": 0.19,
+				"awareness": 0.29,
+				"composure": 0.32,
+				"machinery": 0.34,
+				"piloting": 0.29,
+				"tactics": 0.21
+			}
+		},
+		{
+			"callsign": "Silent Falcon",
+			"id": "roster_140",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.43,
+				"aim": 0.25,
+				"awareness": 0.27,
+				"composure": 0.39,
+				"machinery": 0.59,
+				"piloting": 0.24,
+				"tactics": 0.44
+			}
+		},
+		{
+			"callsign": "Halo Harrier",
+			"id": "roster_141",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.57,
+				"aim": 0.51,
+				"awareness": 0.44,
+				"composure": 0.43,
+				"machinery": 0.48,
+				"piloting": 0.28,
+				"tactics": 0.46
+			}
+		},
+		{
+			"callsign": "Drift Comet",
+			"id": "roster_142",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.91,
+				"aim": 0.4,
+				"awareness": 0.55,
+				"composure": 0.4,
+				"machinery": 0.62,
+				"piloting": 0.44,
+				"tactics": 0.55
+			}
+		},
+		{
+			"callsign": "Argent Comet",
+			"id": "roster_143",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.35,
+				"aim": 0.41,
+				"awareness": 0.49,
+				"composure": 0.44,
+				"machinery": 0.62,
+				"piloting": 0.45,
+				"tactics": 0.4
+			}
+		},
+		{
+			"callsign": "Amber Comet",
+			"id": "roster_144",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.97,
+				"aim": 0.48,
+				"awareness": 0.42,
+				"composure": 0.47,
+				"machinery": 0.72,
+				"piloting": 0.62,
+				"tactics": 0.49
+			}
+		},
+		{
+			"callsign": "Iron Lance",
+			"id": "roster_145",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.64,
+				"aim": 0.51,
+				"awareness": 0.53,
+				"composure": 0.4,
+				"machinery": 0.64,
+				"piloting": 0.54,
+				"tactics": 0.55
+			}
+		},
+		{
+			"callsign": "Slate Saber",
+			"id": "roster_146",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.0,
+				"aim": 0.45,
+				"awareness": 0.54,
+				"composure": 0.51,
+				"machinery": 0.74,
+				"piloting": 0.43,
+				"tactics": 0.65
+			}
+		},
+		{
+			"callsign": "Cobalt Raven",
+			"id": "roster_147",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.01,
+				"aim": 0.71,
+				"awareness": 0.46,
+				"composure": 0.67,
+				"machinery": 0.54,
+				"piloting": 0.71,
+				"tactics": 0.63
+			}
+		},
+		{
+			"callsign": "Crimson Comet",
+			"id": "roster_148",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.06,
+				"aim": 0.67,
+				"awareness": 0.64,
+				"composure": 0.51,
+				"machinery": 0.73,
+				"piloting": 0.61,
+				"tactics": 0.56
+			}
+		},
+		{
+			"callsign": "Static Wolf",
+			"id": "roster_149",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.54,
+				"aim": 0.77,
+				"awareness": 0.59,
+				"composure": 0.55,
+				"machinery": 0.73,
+				"piloting": 0.58,
+				"tactics": 0.6
+			}
+		},
+		{
+			"callsign": "Gilded Mantis",
+			"id": "roster_150",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.64,
+				"aim": 0.55,
+				"awareness": 0.75,
+				"composure": 0.79,
+				"machinery": 0.88,
+				"piloting": 0.7,
+				"tactics": 0.81
+			}
+		},
+		{
+			"callsign": "Slate Viper",
+			"id": "roster_151",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.51,
+				"aim": 0.87,
+				"awareness": 0.73,
+				"composure": 0.61,
+				"machinery": 0.69,
+				"piloting": 0.85,
+				"tactics": 0.69
+			}
+		},
+		{
+			"callsign": "Storm Jackal",
+			"id": "roster_152",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.08,
+				"aim": 0.79,
+				"awareness": 0.72,
+				"composure": 0.84,
+				"machinery": 0.98,
+				"piloting": 0.65,
+				"tactics": 0.81
+			}
+		},
+		{
+			"callsign": "Cobalt Viper",
+			"id": "roster_153",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.2,
+				"aim": 0.94,
+				"awareness": 0.94,
+				"composure": 0.88,
+				"machinery": 0.87,
+				"piloting": 0.86,
+				"tactics": 0.88
+			}
+		},
+		{
+			"callsign": "Storm Lance",
+			"id": "roster_154",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.12,
+				"aim": 0.74,
+				"awareness": 0.82,
+				"composure": 0.82,
+				"machinery": 0.84,
+				"piloting": 0.91,
+				"tactics": 0.96
+			}
+		},
+		{
+			"callsign": "Lunar Raven",
+			"id": "roster_155",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.48,
+				"aim": 0.89,
+				"awareness": 0.86,
+				"composure": 0.77,
+				"machinery": 0.82,
+				"piloting": 0.71,
+				"tactics": 0.75
+			}
+		},
+		{
+			"callsign": "Feral Falcon",
+			"id": "roster_156",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.1,
+				"aim": 0.9,
+				"awareness": 0.94,
+				"composure": 0.91,
+				"machinery": 0.97,
+				"piloting": 0.93,
+				"tactics": 0.8
+			}
+		},
+		{
+			"callsign": "Night Mantis",
+			"id": "roster_157",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.83,
+				"aim": 0.97,
+				"awareness": 0.96,
+				"composure": 0.98,
+				"machinery": 0.89,
+				"piloting": 0.88,
+				"tactics": 0.89
+			}
+		},
+		{
+			"callsign": "Drift Wolf",
+			"id": "roster_158",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.89,
+				"aim": 0.86,
+				"awareness": 0.82,
+				"composure": 0.88,
+				"machinery": 0.92,
+				"piloting": 1.0,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Razor Falcon",
+			"id": "roster_159",
+			"role": "engineer",
+			"skills": {
+				"aggression": 0.71,
+				"aim": 0.87,
+				"awareness": 0.86,
+				"composure": 1.0,
+				"machinery": 1.0,
+				"piloting": 0.97,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Slate Harrier",
+			"id": "roster_160",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.65,
+				"aim": 0.0,
+				"awareness": 0.08,
+				"composure": 0.0,
+				"machinery": 0.0,
+				"piloting": 0.0,
+				"tactics": 0.07
+			}
+		},
+		{
+			"callsign": "Storm Raven",
+			"id": "roster_161",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.6,
+				"aim": 0.0,
+				"awareness": 0.16,
+				"composure": 0.18,
+				"machinery": 0.14,
+				"piloting": 0.01,
+				"tactics": 0.19
+			}
+		},
+		{
+			"callsign": "Slate Raven",
+			"id": "roster_162",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.36,
+				"aim": 0.08,
+				"awareness": 0.2,
+				"composure": 0.18,
+				"machinery": 0.1,
+				"piloting": 0.04,
+				"tactics": 0.29
+			}
+		},
+		{
+			"callsign": "Lunar Viper",
+			"id": "roster_163",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.96,
+				"aim": 0.19,
+				"awareness": 0.13,
+				"composure": 0.19,
+				"machinery": 0.26,
+				"piloting": 0.07,
+				"tactics": 0.2
+			}
+		},
+		{
+			"callsign": "Halo Wolf",
+			"id": "roster_164",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.04,
+				"aim": 0.16,
+				"awareness": 0.35,
+				"composure": 0.36,
+				"machinery": 0.25,
+				"piloting": 0.14,
+				"tactics": 0.2
+			}
+		},
+		{
+			"callsign": "Void Raven",
+			"id": "roster_165",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.87,
+				"aim": 0.29,
+				"awareness": 0.18,
+				"composure": 0.28,
+				"machinery": 0.41,
+				"piloting": 0.31,
+				"tactics": 0.37
+			}
+		},
+		{
+			"callsign": "Amber Lance",
+			"id": "roster_166",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.98,
+				"aim": 0.25,
+				"awareness": 0.38,
+				"composure": 0.23,
+				"machinery": 0.46,
+				"piloting": 0.24,
+				"tactics": 0.45
+			}
+		},
+		{
+			"callsign": "Ember Jackal",
+			"id": "roster_167",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.48,
+				"aim": 0.27,
+				"awareness": 0.26,
+				"composure": 0.29,
+				"machinery": 0.23,
+				"piloting": 0.37,
+				"tactics": 0.52
+			}
+		},
+		{
+			"callsign": "Ember Falcon",
+			"id": "roster_168",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.78,
+				"aim": 0.57,
+				"awareness": 0.37,
+				"composure": 0.38,
+				"machinery": 0.53,
+				"piloting": 0.46,
+				"tactics": 0.55
+			}
+		},
+		{
+			"callsign": "Gilded Viper",
+			"id": "roster_169",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.05,
+				"aim": 0.47,
+				"awareness": 0.41,
+				"composure": 0.55,
+				"machinery": 0.39,
+				"piloting": 0.54,
+				"tactics": 0.52
+			}
+		},
+		{
+			"callsign": "Storm Falcon",
+			"id": "roster_170",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.14,
+				"aim": 0.63,
+				"awareness": 0.41,
+				"composure": 0.46,
+				"machinery": 0.42,
+				"piloting": 0.63,
+				"tactics": 0.7
+			}
+		},
+		{
+			"callsign": "Cobalt Jackal",
+			"id": "roster_171",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.49,
+				"aim": 0.58,
+				"awareness": 0.47,
+				"composure": 0.48,
+				"machinery": 0.72,
+				"piloting": 0.44,
+				"tactics": 0.74
+			}
+		},
+		{
+			"callsign": "Drift Mantis",
+			"id": "roster_172",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.7,
+				"aim": 0.67,
+				"awareness": 0.68,
+				"composure": 0.74,
+				"machinery": 0.55,
+				"piloting": 0.7,
+				"tactics": 0.66
+			}
+		},
+		{
+			"callsign": "Argent Harrier",
+			"id": "roster_173",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.33,
+				"aim": 0.77,
+				"awareness": 0.56,
+				"composure": 0.71,
+				"machinery": 0.56,
+				"piloting": 0.57,
+				"tactics": 0.78
+			}
+		},
+		{
+			"callsign": "Night Falcon",
+			"id": "roster_174",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.3,
+				"aim": 0.7,
+				"awareness": 0.62,
+				"composure": 0.8,
+				"machinery": 0.62,
+				"piloting": 0.71,
+				"tactics": 0.94
+			}
+		},
+		{
+			"callsign": "Silent Lance",
+			"id": "roster_175",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.03,
+				"aim": 0.65,
+				"awareness": 0.87,
+				"composure": 0.68,
+				"machinery": 0.73,
+				"piloting": 0.76,
+				"tactics": 0.88
+			}
+		},
+		{
+			"callsign": "Iron Viper",
+			"id": "roster_176",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.33,
+				"aim": 0.85,
+				"awareness": 0.98,
+				"composure": 0.82,
+				"machinery": 0.84,
+				"piloting": 0.91,
+				"tactics": 0.95
+			}
+		},
+		{
+			"callsign": "Cobalt Wolf",
+			"id": "roster_177",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.33,
+				"aim": 0.92,
+				"awareness": 0.76,
+				"composure": 1.0,
+				"machinery": 0.91,
+				"piloting": 0.88,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Cobalt Harrier",
+			"id": "roster_178",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.64,
+				"aim": 0.81,
+				"awareness": 0.9,
+				"composure": 1.0,
+				"machinery": 0.89,
+				"piloting": 0.84,
+				"tactics": 0.99
+			}
+		},
+		{
+			"callsign": "Void Viper",
+			"id": "roster_179",
+			"role": "captain",
+			"skills": {
+				"aggression": 0.58,
+				"aim": 1.0,
+				"awareness": 1.0,
+				"composure": 0.96,
+				"machinery": 0.96,
+				"piloting": 1.0,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Ember Saber",
+			"id": "roster_180",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.49,
+				"aim": 0.02,
+				"awareness": 0.04,
+				"composure": 0.03,
+				"machinery": 0.0,
+				"piloting": 0.0,
+				"tactics": 0.0
+			}
+		},
+		{
+			"callsign": "Halo Viper",
+			"id": "roster_181",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.23,
+				"aim": 0.22,
+				"awareness": 0.04,
+				"composure": 0.1,
+				"machinery": 0.0,
+				"piloting": 0.0,
+				"tactics": 0.31
+			}
+		},
+		{
+			"callsign": "Solar Jackal",
+			"id": "roster_182",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.36,
+				"aim": 0.3,
+				"awareness": 0.2,
+				"composure": 0.06,
+				"machinery": 0.14,
+				"piloting": 0.28,
+				"tactics": 0.32
+			}
+		},
+		{
+			"callsign": "Iron Jackal",
+			"id": "roster_183",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.4,
+				"aim": 0.2,
+				"awareness": 0.25,
+				"composure": 0.34,
+				"machinery": 0.25,
+				"piloting": 0.37,
+				"tactics": 0.47
+			}
+		},
+		{
+			"callsign": "Drift Harrier",
+			"id": "roster_184",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.78,
+				"aim": 0.32,
+				"awareness": 0.46,
+				"composure": 0.45,
+				"machinery": 0.42,
+				"piloting": 0.51,
+				"tactics": 0.33
+			}
+		},
+		{
+			"callsign": "Drift Raven",
+			"id": "roster_185",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.27,
+				"aim": 0.46,
+				"awareness": 0.5,
+				"composure": 0.37,
+				"machinery": 0.34,
+				"piloting": 0.37,
+				"tactics": 0.57
+			}
+		},
+		{
+			"callsign": "Storm Wolf",
+			"id": "roster_186",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.56,
+				"aim": 0.46,
+				"awareness": 0.52,
+				"composure": 0.64,
+				"machinery": 0.64,
+				"piloting": 0.6,
+				"tactics": 0.65
+			}
+		},
+		{
+			"callsign": "Static Raven",
+			"id": "roster_187",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.34,
+				"aim": 0.64,
+				"awareness": 0.56,
+				"composure": 0.61,
+				"machinery": 0.77,
+				"piloting": 0.78,
+				"tactics": 0.76
+			}
+		},
+		{
+			"callsign": "Iron Wolf",
+			"id": "roster_188",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.47,
+				"aim": 0.78,
+				"awareness": 0.77,
+				"composure": 0.79,
+				"machinery": 0.77,
+				"piloting": 0.59,
+				"tactics": 0.9
+			}
+		},
+		{
+			"callsign": "Ember Wolf",
+			"id": "roster_189",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.39,
+				"aim": 0.71,
+				"awareness": 0.68,
+				"composure": 0.78,
+				"machinery": 0.84,
+				"piloting": 0.89,
+				"tactics": 0.92
+			}
+		},
+		{
+			"callsign": "Solar Comet",
+			"id": "roster_190",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.21,
+				"aim": 0.99,
+				"awareness": 1.0,
+				"composure": 0.85,
+				"machinery": 0.84,
+				"piloting": 1.0,
+				"tactics": 0.91
+			}
+		},
+		{
+			"callsign": "Slate Falcon",
+			"id": "roster_191",
+			"role": "squadron_leader",
+			"skills": {
+				"aggression": 0.3,
+				"aim": 0.93,
+				"awareness": 1.0,
+				"composure": 1.0,
+				"machinery": 1.0,
+				"piloting": 0.95,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Lunar Lance",
+			"id": "roster_192",
+			"role": "fleet_commander",
+			"skills": {
+				"aggression": 0.59,
+				"aim": 0.07,
+				"awareness": 0.0,
+				"composure": 0.08,
+				"machinery": 0.15,
+				"piloting": 0.08,
+				"tactics": 0.04
+			}
+		},
+		{
+			"callsign": "Razor Wolf",
+			"id": "roster_193",
+			"role": "fleet_commander",
+			"skills": {
+				"aggression": 0.79,
+				"aim": 0.21,
+				"awareness": 0.14,
+				"composure": 0.01,
+				"machinery": 0.0,
+				"piloting": 0.12,
+				"tactics": 0.21
+			}
+		},
+		{
+			"callsign": "Storm Mantis",
+			"id": "roster_194",
+			"role": "fleet_commander",
+			"skills": {
+				"aggression": 0.01,
+				"aim": 0.3,
+				"awareness": 0.27,
+				"composure": 0.35,
+				"machinery": 0.34,
+				"piloting": 0.15,
+				"tactics": 0.42
+			}
+		},
+		{
+			"callsign": "Slate Comet",
+			"id": "roster_195",
+			"role": "fleet_commander",
+			"skills": {
+				"aggression": 0.04,
+				"aim": 0.41,
+				"awareness": 0.38,
+				"composure": 0.42,
+				"machinery": 0.41,
+				"piloting": 0.44,
+				"tactics": 0.52
+			}
+		},
+		{
+			"callsign": "Feral Viper",
+			"id": "roster_196",
+			"role": "fleet_commander",
+			"skills": {
+				"aggression": 0.93,
+				"aim": 0.63,
+				"awareness": 0.63,
+				"composure": 0.45,
+				"machinery": 0.64,
+				"piloting": 0.69,
+				"tactics": 0.58
+			}
+		},
+		{
+			"callsign": "Gilded Wolf",
+			"id": "roster_197",
+			"role": "fleet_commander",
+			"skills": {
+				"aggression": 0.95,
+				"aim": 0.64,
+				"awareness": 0.72,
+				"composure": 0.78,
+				"machinery": 0.81,
+				"piloting": 0.71,
+				"tactics": 0.71
+			}
+		},
+		{
+			"callsign": "Amber Falcon",
+			"id": "roster_198",
+			"role": "fleet_commander",
+			"skills": {
+				"aggression": 0.93,
+				"aim": 0.83,
+				"awareness": 0.71,
+				"composure": 0.84,
+				"machinery": 0.77,
+				"piloting": 0.74,
+				"tactics": 1.0
+			}
+		},
+		{
+			"callsign": "Cobalt Mantis",
+			"id": "roster_199",
+			"role": "fleet_commander",
+			"skills": {
+				"aggression": 0.01,
+				"aim": 0.91,
+				"awareness": 1.0,
+				"composure": 1.0,
+				"machinery": 1.0,
+				"piloting": 0.98,
+				"tactics": 1.0
+			}
+		}
+	],
+	"version": 1
+}

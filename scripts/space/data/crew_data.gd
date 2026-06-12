@@ -6,19 +6,6 @@ extends RefCounted
 
 static var _next_crew_id: int = 0
 
-## Callsign pool for roster crew identity; cycles with a numeric suffix
-## once exhausted ("Dash", ..., "Dash 2", ...).
-const CALLSIGN_POOL := [
-	"Dash", "Echo", "Frost", "Hawk", "Iris", "Jinx", "Koda", "Lark",
-	"Moss", "Nova", "Onyx", "Pike", "Quill", "Rook", "Sable", "Tarn",
-	"Umber", "Vesper", "Wren", "Zephyr",
-]
-
-static func callsign_for_index(index: int) -> String:
-	var cycle: int = index / CALLSIGN_POOL.size()
-	var name: String = CALLSIGN_POOL[index % CALLSIGN_POOL.size()]
-	return name if cycle == 0 else "%s %d" % [name, cycle + 1]
-
 ## Crew roles in command hierarchy
 enum Role {
 	PILOT,        # Flies the ship, responds to immediate threats
@@ -28,6 +15,38 @@ enum Role {
 	FLEET_COMMANDER,  # Strategic decisions for entire fleet
 	ENGINEER      # Repairs the ship; machinery skill sets repair size
 }
+
+## Canonical skill order — single source of truth for roster entries,
+## radar chart axes, editor rows, and validation.
+const SKILL_NAMES := [
+	"aim", "piloting", "awareness", "tactics", "composure", "aggression", "machinery",
+]
+
+## Aggression is personality, not competence — excluded from the derived
+## reaction/decision scalar and distributed independently by generators.
+const PERSONALITY_SKILL := "aggression"
+
+## Stable snake_case role names for human-editable data files. Roster JSON
+## stores these strings, never enum ints, so files survive enum reordering.
+const ROLE_NAMES := {
+	Role.PILOT: "pilot",
+	Role.GUNNER: "gunner",
+	Role.CAPTAIN: "captain",
+	Role.SQUADRON_LEADER: "squadron_leader",
+	Role.FLEET_COMMANDER: "fleet_commander",
+	Role.ENGINEER: "engineer",
+}
+
+static func role_to_name(role: int) -> String:
+	return ROLE_NAMES.get(role, ROLE_NAMES[Role.PILOT])
+
+## Resolve a snake_case role name to a Role value; unknown names default
+## to PILOT (validation backfill, never an error).
+static func role_from_name(name: String) -> int:
+	for role in ROLE_NAMES:
+		if ROLE_NAMES[role] == name:
+			return role
+	return Role.PILOT
 
 ## Create a crew member with given role and skill level
 static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictionary:
@@ -154,6 +173,30 @@ static func _calculate_reaction_time(skill: float, base: float) -> float:
 static func _calculate_decision_time(skill: float, base: float) -> float:
 	# Similar to reaction time but for complex decisions
 	return base * (1.5 - skill)
+
+## Overall competence scalar for a heterogeneous skill set: mean of all
+## skills except aggression (personality). Drives reaction/decision time.
+static func derived_skill_scalar(skills: Dictionary) -> float:
+	var total := 0.0
+	var count := 0
+	for skill_name in SKILL_NAMES:
+		if skill_name == PERSONALITY_SKILL:
+			continue
+		total += clampf(float(skills.get(skill_name, 0.0)), 0.0, 1.0)
+		count += 1
+	return total / float(count)
+
+## Recompute the derived stats (reaction_time, decision_time,
+## awareness_range) from role + skills. The only place these are ever
+## computed for skill-edited crew — callers must never set them directly.
+static func recompute_derived_stats(stats: Dictionary, role: int) -> Dictionary:
+	var updated: Dictionary = stats.duplicate(true)
+	var modifiers := _get_role_modifiers(role)
+	var scalar := derived_skill_scalar(updated.get("skills", {}))
+	updated["reaction_time"] = _calculate_reaction_time(scalar, modifiers.reaction_base)
+	updated["decision_time"] = _calculate_decision_time(scalar, modifiers.decision_base)
+	updated["awareness_range"] = modifiers.awareness_range
+	return updated
 
 ## Create a solo fighter crew (pilot who does everything)
 static func create_solo_fighter_crew(skill_level: float = 0.5) -> Array:
@@ -347,6 +390,42 @@ static func reset_for_battle(saved: Dictionary) -> Dictionary:
 		fresh.weapon_id = saved.weapon_id
 	return fresh
 
+## Build a full battle-ready crew dict from a roster entry
+## ({id, callsign, role: String, skills: {...}}). Pure with respect to the
+## roster — consuming the entry from the hiring pool is the caller's job.
+static func from_roster_entry(entry: Dictionary) -> Dictionary:
+	var role := role_from_name(str(entry.get("role", "")))
+	return apply_roster_entry(create_crew_member(role), entry)
+
+## Give an existing crew dict a roster entry's identity: callsign and skills
+## carry over, derived stats recompute for the member's role. Structure
+## (crew_id, command chain, weapon binding) is untouched — used both to build
+## fresh hires and to crew run-start complements in place.
+static func apply_roster_entry(member: Dictionary, entry: Dictionary) -> Dictionary:
+	member["callsign"] = str(entry.get("callsign", member.crew_id))
+	var entry_skills: Dictionary = entry.get("skills", {})
+	var skills: Dictionary = member.stats.skills
+	for skill_name in SKILL_NAMES:
+		# Missing skills keep the canonical default from create_crew_member.
+		skills[skill_name] = clampf(float(entry_skills.get(skill_name, skills[skill_name])), 0.0, 1.0)
+	member["stats"] = recompute_derived_stats(member.stats, int(member.get("role", Role.PILOT)))
+	return member
+
+## Adapt a live crew dict to the roster-entry shape so fleet crew can feed
+## the same CrewMemberView as roster candidates. Display use only.
+static func entry_from_crew(member: Dictionary) -> Dictionary:
+	var stats: Dictionary = member.get("stats", {})
+	var member_skills: Dictionary = stats.get("skills", {})
+	var skills := {}
+	for skill_name in SKILL_NAMES:
+		skills[skill_name] = clampf(float(member_skills.get(skill_name, 0.0)), 0.0, 1.0)
+	return {
+		"id": str(member.get("crew_id", "")),
+		"callsign": str(member.get("callsign", member.get("crew_id", ""))),
+		"role": role_to_name(int(member.get("role", Role.PILOT))),
+		"skills": skills,
+	}
+
 
 ## Bind each gunner to a weapon by id, assigning from the END of the weapons
 ## array backwards. This pairs partial complements correctly — a lone gunner
@@ -412,12 +491,13 @@ static func create_crew_member_with_varied_skills(role: Role, skill_level: float
 	var crew = create_crew_member(role, skill_level)
 
 	# Generate varied discrete skills around the base skill_level
-	var skill_names = ["aim", "piloting", "awareness", "tactics", "composure", "machinery"]
-	for skill_name in skill_names:
+	for skill_name in SKILL_NAMES:
+		if skill_name == PERSONALITY_SKILL:
+			continue
 		var variance = randf_range(-0.15, 0.15)
 		crew.stats.skills[skill_name] = clamp(skill_level + variance, 0.0, 1.0)
 	# Aggression is personality, not skill — distribute independently
-	crew.stats.skills["aggression"] = randf()
+	crew.stats.skills[PERSONALITY_SKILL] = randf()
 
 	return crew
 

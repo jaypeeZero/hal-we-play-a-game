@@ -10,6 +10,7 @@ var _saved_money: int
 var _saved_doctrine: Dictionary
 var _saved_active: bool
 var _saved_campaign: Dictionary
+var _saved_hired_ids: Array
 
 
 func before_each() -> void:
@@ -18,6 +19,7 @@ func before_each() -> void:
 	_saved_doctrine = RoguelikeRun.doctrine.duplicate(true)
 	_saved_active = RoguelikeRun.active
 	_saved_campaign = RoguelikeRun.campaign.duplicate(true)
+	_saved_hired_ids = RoguelikeRun.hired_roster_ids.duplicate()
 
 
 func after_each() -> void:
@@ -26,6 +28,14 @@ func after_each() -> void:
 	RoguelikeRun.doctrine = _saved_doctrine
 	RoguelikeRun.active = _saved_active
 	RoguelikeRun.campaign = _saved_campaign
+	RoguelikeRun.hired_roster_ids = _saved_hired_ids
+
+
+## First available roster candidate id for a slot's role.
+func _candidate_id(slot: Dictionary) -> String:
+	var candidates := CrewRosterManager.available_entries(
+		RoguelikeRun.hired_roster_ids, slot.get("role", -1))
+	return candidates[0].id if not candidates.is_empty() else ""
 
 
 func _counts(overrides: Dictionary = {}) -> Dictionary:
@@ -92,7 +102,8 @@ func test_hiring_fills_one_vacancy():
 	var hull := RoguelikeRun.add_purchased_hull("fighter")
 	var vacancies_before := RoguelikeRun.hull_vacancies(hull).size()
 
-	var ok := RoguelikeRun.fill_vacancy(hull.hull_id, RoguelikeRun.hull_vacancies(hull)[0])
+	var slot: Dictionary = RoguelikeRun.hull_vacancies(hull)[0]
+	var ok := RoguelikeRun.fill_vacancy(hull.hull_id, slot, _candidate_id(slot))
 
 	assert_true(ok, "Hiring into a real vacancy succeeds")
 	assert_eq(hull.crew.size(), 1, "One crew member is hired")
@@ -105,10 +116,11 @@ func test_hiring_never_exceeds_the_complement():
 	RoguelikeRun.money = 100000
 	var hull := RoguelikeRun.add_purchased_hull("fighter")
 	for slot in RoguelikeRun.hull_vacancies(hull).duplicate(true):
-		RoguelikeRun.fill_vacancy(hull.hull_id, slot)
+		RoguelikeRun.fill_vacancy(hull.hull_id, slot, _candidate_id(slot))
 
 	# With no vacancy left, another pilot cannot be hired.
-	var ok := RoguelikeRun.fill_vacancy(hull.hull_id, {"role": CrewData.Role.PILOT})
+	var full_slot := {"role": CrewData.Role.PILOT}
+	var ok := RoguelikeRun.fill_vacancy(hull.hull_id, full_slot, _candidate_id(full_slot))
 
 	assert_false(ok, "A fully crewed hull rejects further hires")
 	assert_eq(hull.crew.size(), hull.complement.size(),
@@ -122,7 +134,7 @@ func test_hiring_a_gunner_binds_them_to_the_vacant_weapon():
 	var gunner_slot := _find_gunner_slot(hull)
 	assert_false(gunner_slot.is_empty(), "precondition: a heavy fighter has a gunner slot")
 
-	RoguelikeRun.fill_vacancy(hull.hull_id, gunner_slot)
+	RoguelikeRun.fill_vacancy(hull.hull_id, gunner_slot, _candidate_id(gunner_slot))
 
 	var hired_weapon := ""
 	for member in hull.crew:
@@ -292,6 +304,94 @@ func test_buying_through_the_overlay_consumes_stock_and_grows_the_fleet():
 
 	assert_true(node.shop_stock.is_empty(), "The bought ship is removed from the node's stock")
 	assert_eq(RoguelikeRun.fleet_hulls.size(), before + 1, "The fleet gains the purchased hull")
+
+
+func _find_buttons_prefix(node: Node, prefix: String, acc: Array) -> Array:
+	for child in node.get_children():
+		if child is Button and child.text.begins_with(prefix):
+			acc.append(child)
+		_find_buttons_prefix(child, prefix, acc)
+	return acc
+
+
+## is_class only knows engine classes; script classes are found by script.
+func _find_by_script(node: Node, script: Script, acc: Array) -> Array:
+	for child in node.get_children():
+		if child.get_script() == script:
+			acc.append(child)
+		_find_by_script(child, script, acc)
+	return acc
+
+
+func test_hire_button_shows_the_remaining_candidate_count():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	RoguelikeRun.money = 100000
+	RoguelikeRun.add_purchased_hull("fighter")
+	var pilots_left := CrewRosterManager.available_entries(
+		RoguelikeRun.hired_roster_ids, CrewData.Role.PILOT).size()
+	var shop := ShopScreen.new()
+	add_child_autofree(shop)
+	shop.setup({"shop_stock": []})
+
+	var hires := _find_buttons_prefix(shop, "Hire (", [])
+	assert_eq(hires.size(), 1, "One vacancy offers a hire")
+	assert_eq(hires[0].text, "Hire (%d)" % pilots_left,
+		"The hire button shows how many candidates remain in the pool")
+	assert_false(hires[0].disabled, "With candidates available the button is live")
+
+
+func test_hire_button_is_disabled_when_the_pool_is_exhausted():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	RoguelikeRun.money = 100000
+	RoguelikeRun.add_purchased_hull("fighter")
+	for entry in CrewRosterManager.load_roster():
+		if entry.role == "pilot":
+			RoguelikeRun.hired_roster_ids.append(entry.id)
+	var shop := ShopScreen.new()
+	add_child_autofree(shop)
+	shop.setup({"shop_stock": []})
+
+	var hires := _find_buttons_prefix(shop, "Hire (", [])
+	assert_eq(hires[0].text, "Hire (0)", "An exhausted pool reads zero candidates")
+	assert_true(hires[0].disabled, "...and cannot be pressed")
+
+
+func test_hiring_through_the_candidate_dialog_fills_the_vacancy():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	RoguelikeRun.money = 100000
+	var hull := RoguelikeRun.add_purchased_hull("fighter")
+	var shop := ShopScreen.new()
+	add_child_autofree(shop)
+	shop.setup({"shop_stock": []})
+
+	_find_buttons_prefix(shop, "Hire (", [])[0].pressed.emit()
+	var dialogs := _find_by_script(shop, CrewHireDialog, [])
+	assert_eq(dialogs.size(), 1, "Pressing Hire opens the candidate picker")
+
+	# The first candidate is pre-selected; the footer hire button carries
+	# their callsign ("Hire <callsign>", never "Hire (").
+	var confirm: Button = _find_buttons_prefix(dialogs[0], "Hire ", [])[0]
+	assert_false(confirm.disabled, "A pre-selected candidate can be hired")
+	confirm.pressed.emit()
+
+	assert_eq(hull.crew.size(), 1, "Confirming the candidate fills the vacancy")
+	assert_eq(RoguelikeRun.hull_vacancies(hull).size(), 0,
+		"The fighter's only slot is no longer vacant")
+
+
+func test_clicking_a_crew_callsign_opens_their_stat_sheet():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var callsign: String = RoguelikeRun.fleet_hulls[0].crew[0].callsign
+	var shop := ShopScreen.new()
+	add_child_autofree(shop)
+	shop.setup({"shop_stock": []})
+
+	var name_buttons := _find_buttons(shop, callsign, [])
+	assert_eq(name_buttons.size(), 1, "The crew member's callsign is clickable")
+	name_buttons[0].pressed.emit()
+
+	assert_eq(_find_by_script(shop, CrewViewModal, []).size(), 1,
+		"Clicking a callsign opens the crew member's stat sheet")
 
 
 func test_roster_renders_condition_for_a_damaged_hull():
