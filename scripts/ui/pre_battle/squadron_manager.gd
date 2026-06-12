@@ -3,8 +3,8 @@ extends Control
 
 ## Pre-battle squadron management screen.
 ## Three-column layout: squadron list | ship assignment | mission config.
-## All state lives in RoguelikeRun.squadrons; this UI reads and writes it
-## via SquadronSystem pure functions.
+## Accepts fleet hulls and initial squadrons as parameters; persists back to
+## RoguelikeRun.squadrons only when a run is active.
 
 signal done()
 
@@ -33,6 +33,8 @@ const SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat", "corvette", "ca
 
 var _selected_squadron_id: String = ""
 var _showing_doctrine_for_hull: String = ""
+var _fleet_hulls: Array = []
+var _squadrons: Array = []
 
 # Layout nodes built once in _build_layout.
 var _squad_list: VBoxContainer
@@ -40,13 +42,22 @@ var _ship_list: VBoxContainer
 var _mission_panel: VBoxContainer
 
 
-func setup() -> void:
-	"""Populate from RoguelikeRun.squadrons, seeding defaults if empty."""
-	if RoguelikeRun.squadrons.is_empty():
-		RoguelikeRun.squadrons = SquadronSystem.default_squadrons_for_fleet(RoguelikeRun.fleet_hulls)
-	if not RoguelikeRun.squadrons.is_empty():
-		_selected_squadron_id = RoguelikeRun.squadrons[0].get("squadron_id", "")
+## fleet_hulls: Array of {hull_id, ship_type} dicts for the player's fleet.
+## initial_squadrons: pre-existing assignments (e.g. from RoguelikeRun); pass [] to seed defaults.
+func setup(fleet_hulls: Array, initial_squadrons: Array = []) -> void:
+	_fleet_hulls = fleet_hulls
+	_squadrons = initial_squadrons if not initial_squadrons.is_empty() \
+		else SquadronSystem.default_squadrons_for_fleet(_fleet_hulls)
+	if not _squadrons.is_empty():
+		_selected_squadron_id = _squadrons[0].get("squadron_id", "")
 	_rebuild_all()
+
+
+## Write squadrons back to persistent state when in roguelike mode.
+func _set_squadrons(new_squadrons: Array) -> void:
+	_squadrons = new_squadrons
+	if RoguelikeRun.active:
+		RoguelikeRun.squadrons = new_squadrons
 
 
 func _build_layout() -> void:
@@ -129,7 +140,7 @@ func _rebuild_squadron_list() -> void:
 	for c in _squad_list.get_children():
 		c.queue_free()
 
-	for sq in RoguelikeRun.squadrons:
+	for sq in _squadrons:
 		var sq_id: String = sq.get("squadron_id", "")
 		var count: int = sq.get("hull_ids", []).size()
 		var is_selected: bool = sq_id == _selected_squadron_id
@@ -165,8 +176,8 @@ func _rebuild_ship_list() -> void:
 		_ship_list.add_child(UiKit.separator())
 
 	_ship_list.add_child(UiKit.label("Unassigned", UiKit.DIM, 12))
-	var all_ids: Array = RoguelikeRun.fleet_hulls.map(func(h): return h.get("hull_id", ""))
-	var unassigned := SquadronSystem.unassigned_hulls(RoguelikeRun.squadrons, all_ids)
+	var all_ids: Array = _fleet_hulls.map(func(h): return h.get("hull_id", ""))
+	var unassigned := SquadronSystem.unassigned_hulls(_squadrons, all_ids)
 	if unassigned.is_empty():
 		_ship_list.add_child(UiKit.label("(none)", UiKit.DIM, 12))
 	for hull_id in unassigned:
@@ -245,7 +256,7 @@ func _build_param_controls(mission: String, params: Dictionary) -> void:
 
 		SquadronData.Mission.ESCORT:
 			_mission_panel.add_child(UiKit.label("Escort hull:", UiKit.DIM, 12))
-			var all_ids: Array = RoguelikeRun.fleet_hulls.map(func(h): return h.get("hull_id", ""))
+			var all_ids: Array = _fleet_hulls.map(func(h): return h.get("hull_id", ""))
 			var sq_ids: Array = _current_squadron().get("hull_ids", [])
 			var candidates: Array = all_ids.filter(func(hid): return hid not in sq_ids)
 			if candidates.is_empty():
@@ -261,7 +272,7 @@ func _build_param_controls(mission: String, params: Dictionary) -> void:
 
 		SquadronData.Mission.SCREEN:
 			_mission_panel.add_child(UiKit.label("Screen for hull:", UiKit.DIM, 12))
-			var capitals: Array = RoguelikeRun.fleet_hulls.filter(
+			var capitals: Array = _fleet_hulls.filter(
 				func(h): return h.get("ship_type", "") == "capital"
 			).map(func(h): return h.get("hull_id", ""))
 			if capitals.is_empty():
@@ -308,38 +319,32 @@ func _on_squadron_clicked(squadron_id: String) -> void:
 func _on_add_ship_pressed(hull_id: String) -> void:
 	if _selected_squadron_id.is_empty():
 		return
-	RoguelikeRun.squadrons = SquadronSystem.add_hull(
-		RoguelikeRun.squadrons, _selected_squadron_id, hull_id
-	)
+	_set_squadrons(SquadronSystem.add_hull(_squadrons, _selected_squadron_id, hull_id))
 	_rebuild_all()
 
 
 func _on_remove_ship_pressed(hull_id: String) -> void:
-	RoguelikeRun.squadrons = SquadronSystem.remove_hull(RoguelikeRun.squadrons, hull_id)
+	_set_squadrons(SquadronSystem.remove_hull(_squadrons, hull_id))
 	_rebuild_all()
 
 
 func _on_new_squadron_pressed() -> void:
-	RoguelikeRun.squadrons = SquadronSystem.create_squadron(
-		RoguelikeRun.squadrons, "Squadron %d" % RoguelikeRun.squadrons.size()
-	)
-	_selected_squadron_id = RoguelikeRun.squadrons.back().get("squadron_id", "")
+	_set_squadrons(SquadronSystem.create_squadron(_squadrons, "Squadron %d" % _squadrons.size()))
+	_selected_squadron_id = _squadrons.back().get("squadron_id", "")
 	_rebuild_all()
 
 
 func _on_delete_squadron_pressed(squadron_id: String) -> void:
-	RoguelikeRun.squadrons = SquadronSystem.delete_squadron(RoguelikeRun.squadrons, squadron_id)
+	_set_squadrons(SquadronSystem.delete_squadron(_squadrons, squadron_id))
 	if _selected_squadron_id == squadron_id:
-		_selected_squadron_id = RoguelikeRun.squadrons[0].get("squadron_id", "") if not RoguelikeRun.squadrons.is_empty() else ""
+		_selected_squadron_id = _squadrons[0].get("squadron_id", "") if not _squadrons.is_empty() else ""
 	_rebuild_all()
 
 
 func _on_mission_selected(mission: String) -> void:
 	if _selected_squadron_id.is_empty():
 		return
-	RoguelikeRun.squadrons = SquadronSystem.set_mission(
-		RoguelikeRun.squadrons, _selected_squadron_id, mission, {}
-	)
+	_set_squadrons(SquadronSystem.set_mission(_squadrons, _selected_squadron_id, mission, {}))
 	_rebuild_all()
 
 
@@ -349,9 +354,9 @@ func _on_param_changed(key: String, value: Variant) -> void:
 	var sq: Dictionary = _current_squadron()
 	var params: Dictionary = sq.get("mission_params", {}).duplicate()
 	params[key] = value
-	RoguelikeRun.squadrons = SquadronSystem.set_mission(
-		RoguelikeRun.squadrons, _selected_squadron_id, sq.get("mission", SquadronData.Mission.FREE), params
-	)
+	_set_squadrons(SquadronSystem.set_mission(
+		_squadrons, _selected_squadron_id, sq.get("mission", SquadronData.Mission.FREE), params
+	))
 
 
 func _on_battle_pressed() -> void:
@@ -385,14 +390,14 @@ func _build_doctrine_view() -> void:
 # --- helpers ---
 
 func _current_squadron() -> Dictionary:
-	for sq in RoguelikeRun.squadrons:
+	for sq in _squadrons:
 		if sq.get("squadron_id", "") == _selected_squadron_id:
 			return sq
 	return {}
 
 
 func _hull_by_id(hull_id: String) -> Dictionary:
-	for hull in RoguelikeRun.fleet_hulls:
+	for hull in _fleet_hulls:
 		if hull.get("hull_id", "") == hull_id:
 			return hull
 	return {}

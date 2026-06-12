@@ -58,29 +58,32 @@ func _ready() -> void:
 	)
 	_input = PreBattleInput.new(BattlePlan.entries, bounds)
 
-	# Squadron Manager is the primary roguelike tactics UI; available only
-	# during an active run. Doctrine is accessible per-ship from within it.
+	_squadron_manager = SquadronManager.new()
+	$UI.add_child(_squadron_manager)
 	if RoguelikeRun.active:
-		_squadron_manager = SquadronManager.new()
-		$UI.add_child(_squadron_manager)
-		_squadron_manager.setup()
-		_squadron_manager.done.connect(_on_start_battle_pressed)
+		_squadron_manager.setup(RoguelikeRun.fleet_hulls, RoguelikeRun.squadrons)
 	else:
-		_add_tactics_hint()
+		_squadron_manager.setup(_fleet_hulls_from_plan())
+	_squadron_manager.done.connect(_on_start_battle_pressed)
 
 	queue_redraw()
 
 
-## Shown when no run is active so the feature is discoverable.
-func _add_tactics_hint() -> void:
-	var hint := Label.new()
-	hint.text = "Squadron tactics and doctrine: available during a roguelike run\n(Main Menu → Fleet Management → Launch)."
-	hint.anchor_left = 1.0
-	hint.anchor_right = 1.0
-	hint.offset_left = -(DoctrinePanel.PANEL_WIDTH + DoctrinePanel.PANEL_MARGIN)
-	hint.offset_right = -DoctrinePanel.PANEL_MARGIN
-	hint.offset_top = DoctrinePanel.PANEL_MARGIN
-	$UI.add_child(hint)
+## Build a minimal hull list from team-0 plan entries for non-roguelike battles.
+## Also stamps synthetic hull_ids onto those entries so SquadronSystem can key on them.
+func _fleet_hulls_from_plan() -> Array:
+	var hulls: Array = []
+	var counters: Dictionary = {}
+	for entry in BattlePlan.entries:
+		if int(entry.get("team", -1)) != 0:
+			continue
+		var st: String = entry.get("ship_type", "unknown")
+		var n: int = counters.get(st, 0)
+		var hull_id := "%s_%d" % [st, n]
+		entry["hull_id"] = hull_id
+		hulls.append({"hull_id": hull_id, "ship_type": st})
+		counters[st] = n + 1
+	return hulls
 
 
 func _spawn_preview_ship(entry: Dictionary) -> ShipEntity:
