@@ -15,10 +15,13 @@ func after_each() -> void:
 	CampaignSaveManager.delete_save()
 
 
+const TEST_ENEMY_FLEET := {"fighter": 3, "capital": 1}
+
+
 func _campaign() -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = TEST_SEED
-	return CampaignGenerator.generate(rng)
+	return CampaignGenerator.generate(rng, TEST_ENEMY_FLEET)
 
 
 func _payload() -> Dictionary:
@@ -135,3 +138,27 @@ func test_wrong_version_loads_as_empty():
 
 	assert_eq(CampaignSaveManager.load_campaign(), {},
 		"A save from an unknown version is treated as missing")
+
+
+func test_battle_node_enemy_fleet_and_name_survive_round_trip():
+	var payload := _payload()
+	CampaignSaveManager.save_campaign(payload)
+
+	var loaded := CampaignSaveManager.load_campaign()
+	var campaign: Dictionary = loaded["campaign"]
+
+	var battle_node: Dictionary = {}
+	for node in campaign["nodes"].values():
+		if node.get("type", "") == CampaignSystem.NODE_TYPE_BATTLE:
+			battle_node = node
+			break
+	assert_false(battle_node.is_empty(), "A battle node must exist in the campaign")
+
+	assert_true(battle_node.has("enemy_fleet"),
+		"Battle node enemy_fleet survives the round trip")
+	for ship_type in battle_node["enemy_fleet"]:
+		assert_typeof(battle_node["enemy_fleet"][ship_type], TYPE_INT,
+			"Battle node enemy_fleet counts are int-typed after load")
+
+	assert_true(battle_node.has("name"), "Battle node name survives the round trip")
+	assert_gt(battle_node["name"].length(), 0, "Battle node name is non-empty after load")

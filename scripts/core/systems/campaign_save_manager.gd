@@ -7,7 +7,7 @@ extends RefCounted
 ## money, current_star_date, hired_roster_ids, next_hull_id}.
 
 const SAVE_PATH := "user://campaign_save.json"
-const SAVE_VERSION := 1
+const SAVE_VERSION := 2
 
 ## Ship dicts carry Vector2s (positions, weapon mount offsets); JSON has
 ## no vector type, so they round-trip through a tagged single-key dict.
@@ -109,4 +109,7 @@ static func _cast_int_fields(data: Dictionary) -> Dictionary:
 		for field in INT_NODE_FIELDS:
 			if node.has(field):
 				node[field] = int(node[field])
+		var node_fleet: Dictionary = node.get("enemy_fleet", {})
+		for ship_type in node_fleet:
+			node_fleet[ship_type] = maxi(0, int(node_fleet[ship_type]))
 	return data

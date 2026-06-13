@@ -26,6 +26,8 @@ var fleet_hulls: Array = []
 ## Player standing instructions for this run (see DoctrineSystem).
 ## Run state: reset at run start, wiped at run end.
 var doctrine: Dictionary = DoctrineSystem.empty_doctrine()
+## The enemy fleet for the next/pending battle, set from the destination node
+## when a battle is launched (the campaign map sets it). Empty until a battle node is selected.
 var enemy_fleet: Dictionary = {}
 ## The multi-sector star chart (see CampaignGenerator.generate).
 var campaign: Dictionary = {}
@@ -72,9 +74,8 @@ func start_run(initial_fleet: Dictionary) -> void:
 	_next_hull_id = 0
 	fleet_hulls = _create_fleet_roster(initial_fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
-	campaign = CampaignGenerator.generate(_new_rng())
-	enemy_fleet = CampaignSystem.scaled_enemy_fleet(
-		FleetDataManager.load_fleet(1), campaign["current_sector"])
+	campaign = CampaignGenerator.generate(_new_rng(), FleetDataManager.load_fleet(1))
+	enemy_fleet = {}
 	money = EconomySystem.roll_starting_money(fleet_hulls, _new_rng())
 	last_battle_summary = {}
 	pending_battle_node_id = ""
