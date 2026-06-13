@@ -91,6 +91,7 @@ func _ready() -> void:
 	_fleet_panel = FleetConditionPanel.new()
 	_fleet_panel.hull_selected.connect(func(hull: Dictionary):
 		ShipViewModal.open(_ui_layer, hull))
+	_fleet_panel.manage_crew_requested.connect(_open_manage_crew)
 	_ui_layer.add_child(_fleet_panel)
 
 	_destination_panel = DestinationPanel.new()
@@ -248,6 +249,11 @@ func _travel_to_node(node_id: String) -> void:
 		_open_shop(node, repair_summary)
 		return
 
+	# R&R nodes open the rest overlay; the visit completes when it closes.
+	if node["type"] == CampaignSystem.NODE_TYPE_RANDR:
+		_open_rest(node, repair_summary)
+		return
+
 	_complete_node_visit(node, repair_summary)
 
 
@@ -260,6 +266,31 @@ func _complete_node_visit(node: Dictionary, repair_summary: Dictionary) -> void:
 	_refresh_map()
 	_show_repair_summary(repair_summary)
 	RoguelikeRun.last_jump_repair_summary = {}
+
+
+## Open the crew management overlay from the campaign map fleet panel.
+func _open_manage_crew() -> void:
+	_fleet_panel.visible = false
+	var screen := CrewManagementScreen.open(_ui_layer)
+	screen.closed.connect(func():
+		_fleet_panel.visible = true
+		_update_fleet_status())
+
+
+## Open the R&R overlay for a rest node, completing the node visit once the
+## player closes it. The 3× repair multiplier already ran via apply_jump_repairs
+## (called above in _travel_to_node), so this screen is purely interactive
+## crew/fleet management on top of those passive repairs.
+func _open_rest(node: Dictionary, repair_summary: Dictionary) -> void:
+	var rest := RestScreen.new()
+	add_child(rest)
+	_fleet_panel.visible = false
+	_destination_panel.dismiss()
+	rest.closed.connect(func():
+		rest.queue_free()
+		_fleet_panel.visible = true
+		_complete_node_visit(node, repair_summary))
+	rest.setup()
 
 
 ## Open the shop overlay for a shop node, completing the node visit once the

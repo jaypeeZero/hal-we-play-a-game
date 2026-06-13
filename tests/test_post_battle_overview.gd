@@ -186,6 +186,41 @@ func test_defeat_shows_no_crew_rows_but_still_shows_fleet() -> void:
 		"Defeat screen should show no-survivors message in crew section")
 
 
+# --- Manage Crew button ---
+
+func _find_button(node: Node, text: String) -> Button:
+	for child in node.get_children():
+		if child is Button and child.text == text:
+			return child
+		var found := _find_button(child, text)
+		if found != null:
+			return found
+	return null
+
+
+func test_manage_crew_button_present_during_active_run() -> void:
+	_setup_victory_state()
+	RoguelikeRun.start_run({"fighter": 1, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 0, "capital": 0})
+	RoguelikeRun.pending_battle_result = "victory"
+	await get_tree().process_frame
+	_make_scene()
+	await get_tree().process_frame
+	var btn := _find_button(_scene, "Manage Crew")
+	assert_not_null(btn, "Manage Crew button present when active run has hulls")
+
+
+func test_manage_crew_button_absent_without_active_run() -> void:
+	RoguelikeRun.active = false
+	RoguelikeRun.fleet_hulls = []
+	RoguelikeRun.pending_battle_result = "victory"
+	await get_tree().process_frame
+	_make_scene()
+	await get_tree().process_frame
+	var btn := _find_button(_scene, "Manage Crew")
+	assert_null(btn, "Manage Crew button absent when no active run")
+
+
 # --- Continue wipes transient state ---
 
 func test_continue_wipes_last_battle_progression() -> void:

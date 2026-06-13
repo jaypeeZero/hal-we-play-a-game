@@ -1,13 +1,12 @@
-extends Control
+extends OverlayScreen
 
 ## Crew Manager: browse and edit the crew roster that the roguelite hiring
 ## pool draws from. The list shows every entry in the active roster; the
 ## selected entry is edited in place through an editable CrewMemberView.
 ## Save writes the whole roster to user://crew_roster.json (the local
 ## override); Reset deletes the override so the shipped roster applies again.
+## Lifecycle: standalone scene — Back calls change_scene_to_file.
 
-const SCREEN_MARGIN := 40
-const SECTION_GAP := 16
 const LIST_WIDTH := 300
 
 var _entries: Array = []
@@ -21,32 +20,17 @@ var _row_buttons: Array = []
 
 func _ready() -> void:
 	_entries = CrewRosterManager.load_roster()
-	_build_chrome()
+	build_chrome()
+	var topbar := _build_topbar()
+	var body_node := _build_body()
+	_build_footer_buttons()
+	_finalize_chrome(topbar, body_node)
 	_rebuild_list()
 	if not _entries.is_empty():
 		_select(0)
 
 
 # UI CONSTRUCTION
-
-func _build_chrome() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(UiKit.backdrop())
-
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, SCREEN_MARGIN)
-	add_child(margin)
-
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", SECTION_GAP)
-	margin.add_child(root)
-
-	root.add_child(_build_topbar())
-	root.add_child(_build_body())
-	root.add_child(_build_footer())
-
 
 func _build_topbar() -> Control:
 	var bar := UiKit.card(UiKit.PANEL_2, UiKit.LINE, 14)
@@ -60,9 +44,8 @@ func _build_topbar() -> Control:
 
 
 func _build_body() -> Control:
-	var body := HBoxContainer.new()
-	body.add_theme_constant_override("separation", SECTION_GAP)
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var body_node := HBoxContainer.new()
+	body_node.add_theme_constant_override("separation", SECTION_GAP)
 
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(LIST_WIDTH, 0)
@@ -70,21 +53,17 @@ func _build_body() -> Control:
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_list)
-	body.add_child(scroll)
+	body_node.add_child(scroll)
 
 	_detail = CrewMemberView.new()
 	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_detail.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_detail.entry_changed.connect(_on_entry_changed)
-	body.add_child(_detail)
-	return body
+	body_node.add_child(_detail)
+	return body_node
 
 
-func _build_footer() -> Control:
-	var footer := HBoxContainer.new()
-	footer.alignment = BoxContainer.ALIGNMENT_END
-	footer.add_theme_constant_override("separation", SECTION_GAP)
-
+func _build_footer_buttons() -> void:
 	var back := UiKit.style_button(_make_button("Back"), "ghost")
 	back.pressed.connect(_on_back)
 	footer.add_child(back)
@@ -96,7 +75,6 @@ func _build_footer() -> Control:
 	var save := UiKit.style_button(_make_button("Save"), "primary")
 	save.pressed.connect(_on_save)
 	footer.add_child(save)
-	return footer
 
 
 func _rebuild_list() -> void:

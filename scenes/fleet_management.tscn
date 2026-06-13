@@ -56,6 +56,14 @@ size_flags_vertical = 4
 text = "Fleet Launch"
 custom_minimum_size = Vector2(150, 50)
 
+[node name="ManageCrewButton" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 2
+size_flags_vertical = 4
+text = "Manage Crew"
+custom_minimum_size = Vector2(150, 50)
+visible = false
+
 [node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 horizontal_alignment = 1
@@ -77,3 +85,4 @@ theme_override_constants/separation = 10
 
 [connection signal="pressed" from="MarginContainer/VBoxContainer/EditFleetButton" to="." method="_on_edit_fleet_pressed"]
 [connection signal="pressed" from="MarginContainer/VBoxContainer/FleetLaunchButton" to="." method="_on_fleet_launch_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ManageCrewButton" to="." method="_on_manage_crew_pressed"]
