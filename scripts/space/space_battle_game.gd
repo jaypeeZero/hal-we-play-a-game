@@ -1023,6 +1023,10 @@ func _update_crew_ai_systems(delta: float, ship_grid: Dictionary, projectile_gri
 		_wings_last_formed_at = game_time
 		_wings_dirty = false
 	var wings = _previous_wings
+	# Stamp command hats (squadron_leader / commander) onto crew immediately
+	# after fresh wings are available.  Pure data pass — nothing consumes the
+	# hats yet; behavior is unchanged until Step B wires up command dispatch.
+	_crew_list = CommandDesignationSystem.designate(_crew_list, _ships, wings)
 	_update_ship_wing_colors(wings)
 	_update_ship_debug_data(wings)
 
