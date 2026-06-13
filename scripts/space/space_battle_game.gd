@@ -56,6 +56,7 @@ var _pending_spawn: Dictionary = {}
 var _battlefield_size: Vector2 = Vector2(5000, 3500)
 
 const CAMPAIGN_MAP_SCENE := "res://scenes/campaign_map_3d.tscn"
+const POST_BATTLE_SCENE := "res://scenes/post_battle.tscn"
 
 ## Roguelike defeats need the wiped fleet's final state, but destroyed
 ## ships leave _ships (and their crew leave _crew_list) during cleanup;
@@ -808,7 +809,17 @@ func _handle_roguelike_battle_end(winner: int) -> void:
 		RoguelikeRun.money += reward
 		RoguelikeRun.last_battle_summary["reward"] = reward
 		RoguelikeRun.last_battle_summary["destroyed_enemies"] = destroyed_enemies
-	get_tree().call_deferred("change_scene_to_file", CAMPAIGN_MAP_SCENE)
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		var events: Array = []
+		if BattleEventLoggerAutoload.service != null:
+			events = BattleEventLoggerAutoload.service.event_history
+		var ship_deltas: Array = RoguelikeRun.last_battle_summary.get("ship_deltas", [])
+		RoguelikeRun.last_battle_progression = CrewProgressionSystem.award_experience(
+			RoguelikeRun.fleet_hulls, events, ship_deltas, rng)
+	else:
+		RoguelikeRun.last_battle_progression = []
+	get_tree().call_deferred("change_scene_to_file", POST_BATTLE_SCENE)
 
 
 ## Every team-0 ship's final state - survivors as they stand, ships lost
