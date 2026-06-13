@@ -250,44 +250,56 @@ func test_buy_button_is_disabled_when_unaffordable():
 	assert_true(buys[0].disabled, "Buy is disabled when the player cannot afford the ship")
 
 
-func _find_option_buttons(node: Node, acc: Array) -> Array:
-	for child in node.get_children():
-		if child is OptionButton:
-			acc.append(child)
-		_find_option_buttons(child, acc)
-	return acc
-
-
-func test_transfer_dropdown_defaults_to_placeholder_not_a_target():
+func test_roster_section_has_an_assignment_board():
 	RoguelikeRun.start_run(_counts({"fighter": 1}))
-	RoguelikeRun.money = 100000
-	RoguelikeRun.add_purchased_hull("fighter")  # empty hull → a pilot vacancy
 	var shop := ShopScreen.new()
 	add_child_autofree(shop)
 	shop.setup({"shop_stock": []})
 
-	var dropdowns := _find_option_buttons(shop, [])
-	assert_gt(dropdowns.size(), 0, "A transfer dropdown appears once a matching vacancy exists")
-	var dd: OptionButton = dropdowns[0]
-	assert_eq(dd.selected, 0, "The dropdown shows the placeholder by default, not a hull")
-	assert_eq(dd.get_item_text(0), "Transfer to…", "Item 0 is the placeholder header")
+	assert_gt(_find_by_script(shop, CrewAssignmentBoard, []).size(), 0,
+		"The roster section contains a CrewAssignmentBoard")
 
 
-func test_picking_a_transfer_target_moves_the_crew():
+func test_board_drag_to_vacant_transfers_crew():
 	RoguelikeRun.start_run(_counts({"fighter": 1}))
 	RoguelikeRun.money = 100000
 	var src: Dictionary = RoguelikeRun.fleet_hulls[0]
 	var dest := RoguelikeRun.add_purchased_hull("fighter")
-	var shop := ShopScreen.new()
-	add_child_autofree(shop)
-	shop.setup({"shop_stock": []})
+	var pilot_id: String = src.crew[0].crew_id
 
-	var dd: OptionButton = _find_option_buttons(shop, [])[0]
-	dd.item_selected.emit(1)  # user picks the first transfer target
+	# _drop_data on a vacant slot is the code path for a move — call it directly.
+	assert_true(RoguelikeRun.can_transfer(pilot_id, dest.hull_id),
+		"can_transfer confirms a pilot can move to the empty hull's pilot vacancy")
+	RoguelikeRun.transfer_crew(pilot_id, dest.hull_id)
 
 	assert_eq(RoguelikeRun.hull_by_id(dest.hull_id).crew.size(), 1,
-		"Choosing a target transfers the crew member there")
-	assert_true(src.crew.is_empty(), "...and removes them from the source hull")
+		"Pilot arrives on the destination hull after the transfer")
+	assert_true(src.crew.is_empty(), "Source hull is now empty")
+
+
+func test_board_same_role_swap_between_hulls():
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	var id_a: String = RoguelikeRun.fleet_hulls[0].crew[0].crew_id
+	var id_b: String = RoguelikeRun.fleet_hulls[1].crew[0].crew_id
+	var hull_a_id: String = RoguelikeRun.fleet_hulls[0].hull_id
+	var hull_b_id: String = RoguelikeRun.fleet_hulls[1].hull_id
+
+	# can_swap + swap_crew are the code paths the chip's _drop_data calls.
+	assert_true(RoguelikeRun.can_swap(id_a, id_b),
+		"can_swap confirms two pilots on different hulls are swappable")
+	RoguelikeRun.swap_crew(id_a, id_b)
+
+	# After swap each pilot is on the other hull.
+	var found_a_on_b := false
+	var found_b_on_a := false
+	for member in RoguelikeRun.hull_by_id(hull_b_id).crew:
+		if member.crew_id == id_a:
+			found_a_on_b = true
+	for member in RoguelikeRun.hull_by_id(hull_a_id).crew:
+		if member.crew_id == id_b:
+			found_b_on_a = true
+	assert_true(found_a_on_b, "Pilot A landed on hull B after the swap")
+	assert_true(found_b_on_a, "Pilot B landed on hull A after the swap")
 
 
 func test_buying_through_the_overlay_consumes_stock_and_grows_the_fleet():

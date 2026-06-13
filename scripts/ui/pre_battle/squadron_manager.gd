@@ -75,6 +75,12 @@ func _build_layout() -> void:
 	var title := UiKit.label("Squadron Manager", UiKit.ACCENT, 16)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
+	if RoguelikeRun.has_fleet():
+		var manage_btn := Button.new()
+		manage_btn.text = "Manage Crew"
+		UiKit.style_button(manage_btn, "ghost")
+		manage_btn.pressed.connect(func(): CrewManagementScreen.open(get_parent()))
+		header.add_child(manage_btn)
 	var battle_btn := Button.new()
 	battle_btn.text = "Battle →"
 	UiKit.style_button(battle_btn, "primary")

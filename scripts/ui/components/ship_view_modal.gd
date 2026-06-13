@@ -1,15 +1,11 @@
 class_name ShipViewModal
-extends Control
+extends ModalDialog
 
 ## Read-only hull/ship view in a centered modal over a dimmed backdrop.
-## Mirrors CrewViewModal's chrome exactly. Shows condition meters and
-## a crew list where each callsign opens a CrewViewModal.
-
-signal closed
+## Shows condition meters and a crew list where each callsign opens a
+## CrewViewModal.
 
 const MODAL_WIDTH := 560
-const BACKDROP_ALPHA := 0.85
-const FOOTER_GAP := 10
 const CONDITION_LOW_RATIO := 0.4
 
 
@@ -22,23 +18,7 @@ static func open(parent: Node, hull: Dictionary) -> ShipViewModal:
 
 
 func setup(hull: Dictionary) -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var dim := UiKit.BG
-	dim.a = BACKDROP_ALPHA
-	add_child(UiKit.backdrop(dim))
-
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
-
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(MODAL_WIDTH, 0)
-	panel.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.PANEL_2, UiKit.LINE))
-	center.add_child(panel)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", FOOTER_GAP)
-	panel.add_child(box)
+	build_chrome(MODAL_WIDTH)
 
 	# Header: ship type + on-ice badge
 	var header_row := HBoxContainer.new()
@@ -47,34 +27,28 @@ func setup(hull: Dictionary) -> void:
 	header_row.add_child(UiKit.label(ship_type.capitalize(), UiKit.INK, 18))
 	if hull.get("iced", false):
 		header_row.add_child(UiKit.badge("On ice"))
-	box.add_child(header_row)
+	content.add_child(header_row)
 
 	# Condition meters
 	var cond := HullConditionSystem.condition(hull)
-	box.add_child(UiKit.meter_bar("Armor", cond.armor, UiKit.ACCENT,
+	content.add_child(UiKit.meter_bar("Armor", cond.armor, UiKit.ACCENT,
 		cond.armor < CONDITION_LOW_RATIO))
-	box.add_child(UiKit.meter_bar("Systems", cond.systems, UiKit.GOLD,
+	content.add_child(UiKit.meter_bar("Systems", cond.systems, UiKit.GOLD,
 		cond.systems < CONDITION_LOW_RATIO))
 
 	# Crew section
-	box.add_child(UiKit.section_title("Crew"))
+	content.add_child(UiKit.section_title("Crew"))
 	var crew: Array = hull.get("crew", [])
 	for member in crew:
-		box.add_child(_crew_row(member))
+		content.add_child(_crew_row(member))
 
 	# Vacant slots note
 	var complement_count: int = hull.get("complement", []).size()
 	var vacant := complement_count - crew.size()
 	if vacant > 0:
-		box.add_child(UiKit.label("%d vacant slot(s)" % vacant, UiKit.DIM))
+		content.add_child(UiKit.label("%d vacant slot(s)" % vacant, UiKit.DIM))
 
-	# Footer close button
-	var close := UiKit.style_button(_make_button("Close"), "ghost")
-	close.pressed.connect(_on_close)
-	var footer := HBoxContainer.new()
-	footer.alignment = BoxContainer.ALIGNMENT_END
-	footer.add_child(close)
-	box.add_child(footer)
+	add_footer()
 
 
 func _crew_row(member: Dictionary) -> Control:
@@ -92,14 +66,3 @@ func _crew_row(member: Dictionary) -> Control:
 	row.add_child(callsign_btn)
 
 	return row
-
-
-func _on_close() -> void:
-	closed.emit()
-	queue_free()
-
-
-func _make_button(text: String) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	return btn

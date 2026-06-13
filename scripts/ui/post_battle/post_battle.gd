@@ -262,6 +262,13 @@ func _build_footer() -> Control:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_END
 
+	if RoguelikeRun.has_fleet():
+		var manage_btn := Button.new()
+		manage_btn.text = "Manage Crew"
+		UiKit.style_button(manage_btn, "ghost")
+		manage_btn.pressed.connect(func(): CrewManagementScreen.open(self))
+		row.add_child(manage_btn)
+
 	var continue_btn := Button.new()
 	continue_btn.text = "Continue →"
 	UiKit.style_button(continue_btn, "primary")

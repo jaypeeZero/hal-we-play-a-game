@@ -1,24 +1,17 @@
 class_name ShopScreen
-extends Control
+extends OverlayScreen
 
-## Full-screen shop overlay for a SHOP map node, built in code (no .tscn) and
-## styled via UiKit (see design/shop_screen.mockup.html). Three sections
-## operate on RoguelikeRun's economy and roster:
+## Full-screen shop overlay for a SHOP map node. Three sections operate on
+## RoguelikeRun's economy and roster:
 ##   - Ships for sale: buy a bare hull (price deducted, arrives crewless).
 ##   - Hiring: fill a hull's vacant crew slots (recurring salary, no up-front
 ##     cost; insurance is owed if they later die).
-##   - Fleet roster: ice/activate a hull, and transfer crew between hulls into
-##     a matching vacancy.
+##   - Fleet roster: crew assignment board (drag-and-drop + ice/activate).
 ## Purchases mutate the node's `shop_stock` in place so a bought ship is gone
 ## when the player reopens the shop (stock persists on the campaign node, saved
-## via CampaignSaveManager). Every action
-## rebuilds the content so money, stock, vacancies, and transfer targets stay
-## in step. `closed` fires when the player leaves.
+## via CampaignSaveManager). Every action rebuilds the content. `closed` fires
+## when the player leaves.
 
-signal closed
-
-const SCREEN_MARGIN := 40
-const SECTION_GAP := 16
 const CARD_MIN_WIDTH := 230
 ## Below this fraction, an armor/systems meter is shown in the warning colour.
 const CONDITION_LOW_RATIO := 0.6
@@ -32,47 +25,17 @@ var _content: VBoxContainer
 
 func setup(shop_node: Dictionary) -> void:
 	_shop_node = shop_node
-	_build_chrome()
+	build_chrome()
+	var topbar := _build_topbar()
+	var body_scroll := _build_body()
+	var leave := UiKit.style_button(_make_button("Leave shop"), "warn")
+	leave.pressed.connect(func(): emit_closed())
+	footer.add_child(leave)
+	_finalize_chrome(topbar, body_scroll)
 	_rebuild()
 
 
-# ============================================================================
 # UI CONSTRUCTION
-# ============================================================================
-
-func _build_chrome() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(UiKit.backdrop())
-
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, SCREEN_MARGIN)
-	add_child(margin)
-
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", SECTION_GAP)
-	margin.add_child(root)
-
-	root.add_child(_build_topbar())
-
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	root.add_child(scroll)
-
-	_content = VBoxContainer.new()
-	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_content.add_theme_constant_override("separation", SECTION_GAP)
-	scroll.add_child(_content)
-
-	var leave := UiKit.style_button(_make_button("Leave shop"), "warn")
-	leave.pressed.connect(func(): closed.emit())
-	var leave_row := HBoxContainer.new()
-	leave_row.alignment = BoxContainer.ALIGNMENT_END
-	leave_row.add_child(leave)
-	root.add_child(leave_row)
-
 
 func _build_topbar() -> Control:
 	var bar := UiKit.card(UiKit.PANEL_2, UiKit.LINE, 14)
@@ -97,6 +60,17 @@ func _build_topbar() -> Control:
 	return bar
 
 
+func _build_body() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	_content = VBoxContainer.new()
+	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_content.add_theme_constant_override("separation", SECTION_GAP)
+	scroll.add_child(_content)
+	return scroll
+
+
 func _rebuild() -> void:
 	_money_label.text = _commas(RoguelikeRun.money)
 	for child in _content.get_children():
@@ -106,9 +80,7 @@ func _rebuild() -> void:
 	_build_roster()
 
 
-# ============================================================================
 # SECTION: SHIPS FOR SALE
-# ============================================================================
 
 func _build_ships_for_sale() -> void:
 	_content.add_child(UiKit.section_title("Ships for sale", "hulls arrive crewless — hire below"))
@@ -172,9 +144,7 @@ func _on_buy(stock_index: int) -> void:
 	_rebuild()
 
 
-# ============================================================================
 # SECTION: HIRING
-# ============================================================================
 
 func _build_hiring() -> void:
 	_content.add_child(UiKit.section_title("Hire crew",
@@ -223,8 +193,6 @@ func _hire_hull_card(hull: Dictionary, vacancies: Array) -> Control:
 	return card
 
 
-## Open the candidate picker for one vacancy; a hire fills the slot through
-## RoguelikeRun and consumes the candidate from the run's pool.
 func _open_hire_dialog(hull_id: String, slot: Dictionary) -> void:
 	var role: int = slot.get("role", CrewData.Role.PILOT)
 	var dialog := CrewHireDialog.new()
@@ -235,9 +203,7 @@ func _open_hire_dialog(hull_id: String, slot: Dictionary) -> void:
 		_rebuild())
 
 
-# ============================================================================
-# SECTION: FLEET ROSTER (ice/activate, transfer)
-# ============================================================================
+# SECTION: FLEET ROSTER (assignment board + ice/activate)
 
 func _build_roster() -> void:
 	_content.add_child(UiKit.section_title("Fleet roster"))
@@ -245,105 +211,18 @@ func _build_roster() -> void:
 		_content.add_child(UiKit.label("No hulls in the fleet.", UiKit.DIM))
 		return
 
-	for hull in RoguelikeRun.fleet_hulls:
-		var card := UiKit.card(UiKit.PANEL, UiKit.LINE, 0)
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 0)
-		card.add_child(box)
-
-		var ice := UiKit.style_button(
-			_make_button("Activate" if hull.get("iced", false) else "Put on ice"), "ghost")
-		var hull_id: String = hull.hull_id
-		var now_iced: bool = not hull.get("iced", false)
-		ice.pressed.connect(func(): _on_set_iced(hull_id, now_iced))
-		box.add_child(_hull_header(hull, ice))
-
-		var crew: Array = hull.get("crew", [])
-		if crew.is_empty():
-			box.add_child(_indented(UiKit.label("(no crew aboard)", UiKit.DIM, 11)))
-		for member in crew:
-			box.add_child(_crew_row(hull, member))
-		_content.add_child(card)
+	var board := CrewAssignmentBoard.new()
+	board.show_ice = true
+	board.modal_host = self
+	board.setup()
+	board.changed.connect(_rebuild)
+	_content.add_child(board)
 
 
-func _crew_row(hull: Dictionary, member: Dictionary) -> Control:
-	var row := _row()
-	row.add_child(UiKit.label(CrewData.get_role_name(member.get("role", -1)), UiKit.DIM, 11))
-	if CrewData.is_off_role(member):
-		row.add_child(UiKit.label(OFF_ROLE_TAG, UiKit.BAD, 11))
-	# The callsign opens the member's stat sheet.
-	var name_btn := UiKit.style_button(_make_button(member.get("callsign", "")), "ghost")
-	name_btn.pressed.connect(func(): CrewViewModal.open(self, CrewData.entry_from_crew(member)))
-	row.add_child(name_btn)
-	if member.has("weapon_id"):
-		row.add_child(UiKit.label(member.weapon_id, UiKit.ACCENT, 11))
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
-
-	var targets := _transfer_targets(hull, member)
-	if targets.is_empty():
-		row.add_child(UiKit.label("(no transfer)", UiKit.DIM, 11))
-		return _indented(row)
-
-	# Item 0 is a placeholder header. We do NOT disable it: disabling the
-	# selected item makes OptionButton auto-jump the selection to the first
-	# enabled target, so the placeholder never shows and re-picking that target
-	# fires no item_selected. Keep it enabled and force it selected instead.
-	var dropdown := OptionButton.new()
-	dropdown.add_item("Transfer to…")
-	for dest in targets:
-		dropdown.add_item(_dest_label(dest))
-	dropdown.select(0)
-	var crew_id: String = member.crew_id
-	var target_ids: Array = targets.map(func(h): return h.hull_id)
-	dropdown.item_selected.connect(func(index): _on_transfer(crew_id, target_ids, index))
-	row.add_child(dropdown)
-	return _indented(row)
-
-
-## Transfer-target label, disambiguating same-type hulls by their lead crew
-## callsign (or "empty" for a freshly bought, crewless hull).
-func _dest_label(dest: Dictionary) -> String:
-	var crew: Array = dest.get("crew", [])
-	var tag: String = crew[0].get("callsign", "?") if crew.size() > 0 else "empty"
-	return "%s · %s" % [_type_label(dest.ship_type), tag]
-
-
-## Hulls (other than this one) that have a vacancy matching this crew member.
-func _transfer_targets(hull: Dictionary, member: Dictionary) -> Array:
-	var role: int = member.get("role", -1)
-	var targets: Array = []
-	for other in RoguelikeRun.fleet_hulls:
-		if other.hull_id == hull.hull_id:
-			continue
-		for slot in RoguelikeRun.hull_vacancies(other):
-			if slot.get("role", -2) == role:
-				targets.append(other)
-				break
-	return targets
-
-
-func _on_set_iced(hull_id: String, iced: bool) -> void:
-	RoguelikeRun.set_hull_iced(hull_id, iced)
-	_rebuild()
-
-
-func _on_transfer(crew_id: String, target_ids: Array, dropdown_index: int) -> void:
-	# Dropdown index 0 is the disabled placeholder; targets start at 1.
-	var target := dropdown_index - 1
-	if target < 0 or target >= target_ids.size():
-		return
-	RoguelikeRun.transfer_crew(crew_id, target_ids[target])
-	_rebuild()
-
-
-# ============================================================================
 # HELPERS
-# ============================================================================
 
 ## A hull card header: name, crew count, on-ice badge, and an optional trailing
-## action button (the ice/activate toggle on the roster).
+## action button (the ice/activate toggle on the hiring section).
 func _hull_header(hull: Dictionary, trailing: Button) -> Control:
 	var head := PanelContainer.new()
 	head.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.PANEL_2, UiKit.LINE, 0, 11))
@@ -364,8 +243,7 @@ func _hull_header(hull: Dictionary, trailing: Button) -> Control:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 
-	# Armor/systems condition, folded in from the standalone fleet overlay.
-	var cond := _hull_condition(hull)
+	var cond := HullConditionSystem.condition(hull)
 	row.add_child(UiKit.mini_meter("Arm", cond.armor, UiKit.ACCENT,
 		cond.armor < CONDITION_LOW_RATIO))
 	row.add_child(UiKit.mini_meter("Sys", cond.systems, UiKit.GOLD,
@@ -391,30 +269,6 @@ func _has_pilot(hull: Dictionary) -> bool:
 	return false
 
 
-## Armor and systems condition as 0..1 ratios, from the hull's persisted damage
-## state. A pristine hull (no recorded `ship`) reads fully intact.
-func _hull_condition(hull: Dictionary) -> Dictionary:
-	var ship: Dictionary = hull.get("ship", {})
-	if ship.is_empty():
-		return {"armor": 1.0, "systems": 1.0}
-	var armor_current := 0.0
-	var armor_max := 0.0
-	for section in ship.get("armor_sections", []):
-		armor_current += float(section.get("current_armor", 0))
-		armor_max += float(section.get("max_armor", 0))
-	var systems_current := 0.0
-	var systems_max := 0.0
-	for component in ship.get("internals", []):
-		systems_current += float(component.get("current_health", 0))
-		systems_max += float(component.get("max_health", 0))
-	return {
-		"armor": armor_current / armor_max if armor_max > 0.0 else 1.0,
-		"systems": systems_current / systems_max if systems_max > 0.0 else 1.0,
-	}
-
-
-## A horizontal row of widgets with the standard crew/vacancy-row indent and
-## vertical padding (matches the mockup). Build an HBox, populate it, wrap it.
 func _row() -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)

@@ -6,6 +6,7 @@ extends PanelContainer
 ## The hull list is scrollable; a persistent collapsible header survives rebuilds.
 
 signal hull_selected(hull: Dictionary)
+signal manage_crew_requested
 
 const MARGIN_LEFT := 20
 const MARGIN_TOP := 80
@@ -49,6 +50,13 @@ func _ready() -> void:
 	header.add_child(_toggle_btn)
 
 	header.add_child(UiKit.label("Fleet", UiKit.INK))
+
+	if RoguelikeRun.has_fleet():
+		var manage_btn := Button.new()
+		manage_btn.text = "Manage Crew"
+		UiKit.style_button(manage_btn, "ghost")
+		manage_btn.pressed.connect(func(): manage_crew_requested.emit())
+		header.add_child(manage_btn)
 
 	# Permanent body container — cleared and refilled on each refresh
 	_body = VBoxContainer.new()

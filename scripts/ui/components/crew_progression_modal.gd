@@ -1,20 +1,14 @@
 class_name CrewProgressionModal
-extends Control
+extends ModalDialog
 
 ## Drill-down modal for one crew member's post-battle skill development.
-## Mirrors CrewViewModal/ShipViewModal chrome exactly (centered panel,
-## BACKDROP_ALPHA, MODAL_WIDTH, ghost Close button).
 ##
 ## Shows:
 ##   1. CrewMemberView (after state — skills already mutated)
 ##   2. "This battle" skill-delta panel (one row per changed skill)
 ##   3. Coaching note when the crew member was coached by a commander.
 
-signal closed
-
 const MODAL_WIDTH := 600
-const BACKDROP_ALPHA := 0.85
-const FOOTER_GAP := 10
 const SECTION_SEPARATION := 10
 const ROW_SEPARATION := 6
 
@@ -28,23 +22,7 @@ static func open(parent: Node, record: Dictionary) -> CrewProgressionModal:
 
 
 func setup(record: Dictionary) -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var dim := UiKit.BG
-	dim.a = BACKDROP_ALPHA
-	add_child(UiKit.backdrop(dim))
-
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
-
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(MODAL_WIDTH, 0)
-	panel.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.PANEL_2, UiKit.LINE))
-	center.add_child(panel)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", FOOTER_GAP)
-	panel.add_child(box)
+	build_chrome(MODAL_WIDTH)
 
 	# 1. Crew sheet (after state — live crew skills already mutated by the system)
 	var crew_id: String = str(record.get("crew_id", ""))
@@ -55,25 +33,19 @@ func setup(record: Dictionary) -> void:
 			var entry := CrewData.entry_from_crew(member)
 			var view := CrewMemberView.new()
 			view.setup(entry, false)
-			box.add_child(view)
+			content.add_child(view)
 
 	# 2. Development panel
-	box.add_child(_build_delta_panel(record))
+	content.add_child(_build_delta_panel(record))
 
 	# 3. Coaching note
 	var commander_callsign: String = str(record.get("commander_callsign", ""))
 	var coach_mult: float = float(record.get("coach_mult", 1.0))
 	if commander_callsign != "" and not is_equal_approx(coach_mult, 1.0):
-		box.add_child(UiKit.label(
+		content.add_child(UiKit.label(
 			"Coached by %s (×%.2f)" % [commander_callsign, coach_mult], UiKit.DIM))
 
-	# Footer
-	var close_btn := UiKit.style_button(_make_button("Close"), "ghost")
-	close_btn.pressed.connect(_on_close)
-	var footer := HBoxContainer.new()
-	footer.alignment = BoxContainer.ALIGNMENT_END
-	footer.add_child(close_btn)
-	box.add_child(footer)
+	add_footer()
 
 
 func _build_delta_panel(record: Dictionary) -> Control:
@@ -110,22 +82,17 @@ func _delta_row(s: Dictionary) -> Control:
 	var sign := "+" if diff >= 0 else ""
 	var delta_color := UiKit.GOOD if delta >= 0 else UiKit.BAD
 
-	# Skill name (fixed width)
 	var name_label := UiKit.label(skill_name.capitalize(), UiKit.INK, 12)
 	name_label.custom_minimum_size = Vector2(80, 0)
 	row.add_child(name_label)
 
-	# Before → after %
 	row.add_child(UiKit.label("%d%% → %d%%" % [before_pct, after_pct], UiKit.DIM, 11))
-
-	# Delta
 	row.add_child(UiKit.label("%s %s%d%%" % [arrow, sign, diff], delta_color, 11))
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 
-	# Source annotation
 	var source_text := ""
 	match source:
 		"used":
@@ -156,14 +123,3 @@ func _find_member(hull: Dictionary, crew_id: String) -> Dictionary:
 		if member.get("crew_id", "") == crew_id:
 			return member
 	return {}
-
-
-func _on_close() -> void:
-	closed.emit()
-	queue_free()
-
-
-func _make_button(text: String) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	return btn

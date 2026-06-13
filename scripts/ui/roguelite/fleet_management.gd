@@ -13,11 +13,13 @@ const MESSAGE_BODY_MIN_WIDTH := 300
 
 @onready var _messages_list: VBoxContainer = $MarginContainer/VBoxContainer/MessagesContainer/MessagesList
 @onready var _status_label: Label = $MarginContainer/VBoxContainer/StatusLabel
+@onready var _manage_crew_btn: Button = $MarginContainer/VBoxContainer/ManageCrewButton
 
 
 func _ready() -> void:
 	_populate_messages()
 	_status_label.text = ""
+	_manage_crew_btn.visible = RoguelikeRun.has_fleet()
 
 
 func _populate_messages() -> void:
@@ -66,3 +68,7 @@ func _on_fleet_launch_pressed() -> void:
 func _on_edit_fleet_pressed() -> void:
 	RoguelikeRun.editor_return_scene = "res://scenes/fleet_management.tscn"
 	get_tree().change_scene_to_file("res://scenes/fleet_editor.tscn")
+
+
+func _on_manage_crew_pressed() -> void:
+	CrewManagementScreen.open(get_tree().current_scene)

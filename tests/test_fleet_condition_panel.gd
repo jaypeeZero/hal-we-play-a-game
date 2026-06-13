@@ -144,6 +144,55 @@ func test_hull_selected_emits_from_inside_scroll_container():
 	assert_signal_emitted(panel, "hull_selected")
 
 
+# --- Manage Crew button ---
+
+func test_manage_crew_button_present_during_active_run():
+	RoguelikeRun.start_run({"fighter": 1, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 0, "capital": 0})
+	var panel := FleetConditionPanel.new()
+	add_child_autofree(panel)
+	panel.refresh(500, [_make_hull("fighter")])
+	var buttons := _collect_buttons(panel)
+	var found := false
+	for btn in buttons:
+		if btn.text == "Manage Crew":
+			found = true
+	assert_true(found, "Manage Crew button present during active run")
+	RoguelikeRun.active = false
+	RoguelikeRun.fleet_hulls = []
+
+
+func test_manage_crew_button_absent_without_active_run():
+	RoguelikeRun.active = false
+	RoguelikeRun.fleet_hulls = []
+	var panel := FleetConditionPanel.new()
+	add_child_autofree(panel)
+	panel.refresh(0, [])
+	var buttons := _collect_buttons(panel)
+	var found := false
+	for btn in buttons:
+		if btn.text == "Manage Crew":
+			found = true
+	assert_false(found, "Manage Crew button absent when no active run")
+
+
+func test_manage_crew_button_emits_signal():
+	RoguelikeRun.start_run({"fighter": 1, "heavy_fighter": 0,
+		"torpedo_boat": 0, "corvette": 0, "capital": 0})
+	var panel := FleetConditionPanel.new()
+	add_child_autofree(panel)
+	watch_signals(panel)
+	panel.refresh(500, [_make_hull("fighter")])
+	var buttons := _collect_buttons(panel)
+	for btn in buttons:
+		if btn.text == "Manage Crew":
+			btn.emit_signal("pressed")
+	assert_signal_emitted(panel, "manage_crew_requested",
+		"Pressing Manage Crew button emits manage_crew_requested signal")
+	RoguelikeRun.active = false
+	RoguelikeRun.fleet_hulls = []
+
+
 # --- helpers ---
 
 func _collect_hull_buttons(panel: FleetConditionPanel) -> Array:

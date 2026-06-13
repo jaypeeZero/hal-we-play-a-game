@@ -610,6 +610,12 @@ func is_fleet_empty() -> bool:
 	return fleet_hulls.is_empty()
 
 
+## True when an active run has at least one hull — the gate for showing crew
+## management (crew instances only exist on fleet_hulls during a live run).
+func has_fleet() -> bool:
+	return active and not fleet_hulls.is_empty()
+
+
 ## Repair the fleet during a jump. Engineers use the downtime: each heals
 ## their ship by REPAIR_FRACTION_PER_STAR_DATE × machinery skill × date gap
 ## (× RNR_REPAIR_MULTIPLIER when the destination is an R&R stop). Pristine
@@ -795,6 +801,94 @@ func _dead_crew_ids(survivor_crew_groups: Array) -> Array:
 			if not survived.has(crew_id):
 				dead.append(crew_id)
 	return dead
+
+
+## True when `crew_id` can be moved to `dest_hull_id`: the member exists,
+## the source and destination differ, and the destination has a same-role vacancy.
+func can_transfer(crew_id: String, dest_hull_id: String) -> bool:
+	var dest := hull_by_id(dest_hull_id)
+	if dest.is_empty():
+		return false
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			if member.get("crew_id", "") == crew_id:
+				if hull.get("hull_id", "") == dest_hull_id:
+					return false  # same hull
+				return not _matching_vacancy(dest, member).is_empty()
+	return false  # crew not found
+
+
+## True when two crew members can swap ships: both exist, they are on different
+## hulls, and they share the same role (cross-role swaps would break each hull's
+## complement).
+func can_swap(crew_id_a: String, crew_id_b: String) -> bool:
+	if crew_id_a == crew_id_b:
+		return false
+	var hull_a: Dictionary = {}
+	var member_a: Dictionary = {}
+	var hull_b: Dictionary = {}
+	var member_b: Dictionary = {}
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			var cid: String = member.get("crew_id", "")
+			if cid == crew_id_a:
+				hull_a = hull
+				member_a = member
+			elif cid == crew_id_b:
+				hull_b = hull
+				member_b = member
+	if member_a.is_empty() or member_b.is_empty():
+		return false
+	if hull_a.get("hull_id", "") == hull_b.get("hull_id", ""):
+		return false  # same hull
+	return member_a.get("role", -1) == member_b.get("role", -2)
+
+
+## Exchange two crew members between ships. Both command chains are rewired;
+## gunners inherit each other's weapon_id. Returns false when can_swap fails.
+func swap_crew(crew_id_a: String, crew_id_b: String) -> bool:
+	if not can_swap(crew_id_a, crew_id_b):
+		return false
+
+	var hull_a: Dictionary = {}
+	var member_a: Dictionary = {}
+	var hull_b: Dictionary = {}
+	var member_b: Dictionary = {}
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			var cid: String = member.get("crew_id", "")
+			if cid == crew_id_a:
+				hull_a = hull
+				member_a = member
+			elif cid == crew_id_b:
+				hull_b = hull
+				member_b = member
+
+	_unwire_from_command_chain(hull_a, member_a)
+	_unwire_from_command_chain(hull_b, member_b)
+
+	# Gunners exchange weapon bindings so each serves the gun that was
+	# already mounted on the destination hull.
+	if member_a.get("role", -1) == CrewData.Role.GUNNER:
+		var wid_a: String = member_a.get("weapon_id", "")
+		var wid_b: String = member_b.get("weapon_id", "")
+		if wid_b != "":
+			member_a["weapon_id"] = wid_b
+		elif member_a.has("weapon_id"):
+			member_a.erase("weapon_id")
+		if wid_a != "":
+			member_b["weapon_id"] = wid_a
+		elif member_b.has("weapon_id"):
+			member_b.erase("weapon_id")
+
+	hull_a.crew.erase(member_a)
+	hull_b.crew.erase(member_b)
+	hull_a.crew.append(member_b)
+	hull_b.crew.append(member_a)
+
+	_wire_into_command_chain(hull_a, member_b)
+	_wire_into_command_chain(hull_b, member_a)
+	return true
 
 
 func save_campaign_to_disk() -> bool:
