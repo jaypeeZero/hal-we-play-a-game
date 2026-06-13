@@ -216,3 +216,71 @@ func test_thrust_active_true_when_throttle_above_threshold():
 	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
 	assert_eq(ctrl["thrust_active"], ctrl["throttle"] > 0.1,
 		"thrust_active must equal (throttle > 0.1)")
+
+
+# ---------------------------------------------------------------------------
+# 8. Formation goal: dominant formation weight + far slot → steers toward slot
+# ---------------------------------------------------------------------------
+
+## Ship with a dominant formation weight and explicit formation_slot.
+func _make_ship_with_slot(
+	pos: Vector2,
+	preferred_range: float,
+	goal_weights: Dictionary,
+	formation_slot: Vector2
+) -> Dictionary:
+	return {
+		"ship_id": "test_ship",
+		"type": "fighter",
+		"position": pos,
+		"velocity": Vector2.ZERO,
+		"rotation": 0.0,
+		"status": "operational",
+		"stats": {
+			"max_speed": 300.0,
+			"acceleration": 100.0,
+			"turn_rate": 3.0,
+			"size": 15.0,
+		},
+		"orders": {
+			"current_order": "tactical",
+			"engagement_target": "target_1",
+			"goal_weights": goal_weights,
+			"preferred_range": preferred_range,
+			"formation_slot":  formation_slot,
+			"anchor_position": Vector2.ZERO,
+		},
+		"crew_modifiers": {},
+	}
+
+## Formation-dominant weights: the ship should hold its slot.
+func _formation_weights() -> Dictionary:
+	return {"pursue": 0.05, "keep_range": 0.1, "evade": 0.05, "formation": 2.0}
+
+
+func test_dominant_formation_weight_steers_toward_far_slot():
+	# Formation slot is far above the ship (+Y); target is to the right (+X).
+	# With formation weight >> others the heading should have a strong +Y component.
+	var ship_pos: Vector2     = Vector2.ZERO
+	var slot_pos: Vector2     = Vector2(0.0, 5000.0)   # far above
+	var target_pos: Vector2   = Vector2(5000.0, 0.0)   # far right
+	var ship   := _make_ship_with_slot(ship_pos, OPTIMAL_RANGE, _formation_weights(), slot_pos)
+	var target := _make_target(target_pos)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var facing: Vector2 = _heading_to_dir(ctrl["desired_heading"])
+	assert_gt(facing.y, 0.0,
+		"With dominant formation weight and slot above, ship must have upward (+Y) heading component")
+
+
+func test_formation_slot_at_ship_position_does_not_override_pursuit():
+	# When formation_slot == ship position, the formation goal vector is ~zero
+	# and pursue + keep_range dominate → ship should close on distant target.
+	var ship_pos: Vector2   = Vector2.ZERO
+	var slot_pos: Vector2   = Vector2.ZERO    # slot is right here
+	var target_pos: Vector2 = Vector2(5000.0, 0.0)
+	var ship   := _make_ship_with_slot(ship_pos, 200.0, _formation_weights(), slot_pos)
+	var target := _make_target(target_pos)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	# Slot is zero-distance → formation goal vanishes; pursue takes over.
+	assert_gt(ctrl["throttle"], 0.0,
+		"With formation slot at ship position, the ship must still apply throttle toward the distant target")

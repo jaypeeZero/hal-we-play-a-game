@@ -2716,12 +2716,12 @@ static func calculate_blended_control(
 			if away.length() > BLENDED_MOVE_MIN_LENGTH:
 				goal_evade = away.normalized()
 
-	# formation: toward anchor_position + formation_slot (zero-weighted in Phase 1)
+	# formation: toward formation_slot, which is an ABSOLUTE world position
+	# stamped by FormationSystem each frame (not an offset from anchor_position).
 	var goal_formation: Vector2 = Vector2.ZERO
-	var anchor: Vector2  = orders.get("anchor_position", Vector2.ZERO)
 	var slot: Vector2    = orders.get("formation_slot",  Vector2.ZERO)
 	if w_form > 0.0:
-		var to_slot: Vector2 = (anchor + slot) - my_pos
+		var to_slot: Vector2 = slot - my_pos
 		if to_slot.length() > BLENDED_MOVE_MIN_LENGTH:
 			goal_formation = to_slot.normalized()
 

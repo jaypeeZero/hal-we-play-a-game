@@ -2,14 +2,16 @@ class_name SteeringBlender
 extends RefCounted
 
 ## Pure brain-side logic: converts resolved tactics + live situation into a
-## directive dict on ship.orders (the frozen Phase-1 contract).
+## directive dict on ship.orders (the frozen Phase-2 contract).
 ##
 ## Contract fields produced (02b-directive-contract.md):
 ##   engagement_target  : String   — ship_id to fight; "" = none
 ##   goal_weights       : Dictionary — {pursue, keep_range, evade, formation} ≥ 0
 ##   preferred_range    : float    — desired distance to engagement_target
-##   formation_slot     : Vector2  — offset from anchor (Phase 2; always ZERO here)
-##   anchor_position    : Vector2  — fleet anchor world point (Phase 2; ZERO here)
+##
+## formation_slot and anchor_position are NOT set here — FormationSystem stamps
+## them each frame with live positions (the enemy centroid moves every tick).
+## The brain only sets the formation *weight* in goal_weights (from duty).
 ##
 ## All inputs are read-only. Nothing here mutates ship or tactics state.
 
@@ -66,8 +68,13 @@ const HULL_CRITICAL_THRESHOLD := 0.3
 const EVADE_WEIGHT_PER_EXTRA_ENEMY := 0.08
 const EVADE_OUTNUMBER_CAP_ENEMIES := 3
 
-## Formation weight is zero in Phase 1 — formation goal computed in Phase 2.
-const FORMATION_WEIGHT_PHASE1 := 0.0
+## Formation weights by duty — how strongly a ship holds its formation slot.
+## hold   → high formation: the ship is an anchor for the line; keeps shape.
+## support → moderate formation: flexibility between holding and engaging.
+## press  → low formation: the ship breaks toward targets; shape loosens.
+const FORMATION_WEIGHT_HOLD    := 0.6
+const FORMATION_WEIGHT_SUPPORT := 0.3
+const FORMATION_WEIGHT_PRESS   := 0.05
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +94,8 @@ const FORMATION_WEIGHT_PHASE1 := 0.0
 ##                        each may carry .target_id for "is this ship targeted?" checks
 ##   weapon_optimal_range : float — preferred firing range for this ship's weapons
 ##
-## Returns all six Phase-1 contract fields.
+## Returns all Phase-2 contract fields. formation_slot and anchor_position
+## are zero here — FormationSystem stamps live values onto orders each frame.
 static func build_directive(
 	ship: Dictionary,
 	tactics: Dictionary,
@@ -101,13 +109,14 @@ static func build_directive(
 	var engagement_target: String = target.get("ship_id", "")
 
 	var preferred_range: float = _compute_preferred_range(range_scalar, weapon_optimal_range)
-	var goal_weights: Dictionary = _compute_goal_weights(ship, mentality_scalar, threats)
+	var goal_weights: Dictionary = _compute_goal_weights(ship, mentality_scalar, tactics, threats)
 
 	return {
 		"engagement_target": engagement_target,
 		"goal_weights":      goal_weights,
 		"preferred_range":   preferred_range,
-		# Phase 2 fields: zero-valued placeholders so callers can read safely
+		# FormationSystem owns these; zero here so callers can read safely
+		# without a null check before MovementSystem runs.
 		"formation_slot":    Vector2.ZERO,
 		"anchor_position":   Vector2.ZERO,
 	}
@@ -126,17 +135,20 @@ static func _compute_preferred_range(range_scalar: float, weapon_optimal_range: 
 	return maxf(weapon_optimal_range * multiplier, MIN_PREFERRED_RANGE)
 
 
-## Compute goal_weights from mentality and live situation.
+## Compute goal_weights from mentality, duty, and live situation.
 ##
 ## pursue:     rises with mentality_scalar — aggressive ships chase hard
 ## keep_range: constant — orbit geometry is always in play
 ## evade:      floor + situational bumps (targeted, low hull, outnumbered)
-## formation:  0.0 — Phase 2
+## formation:  set from duty — hold keeps the line; press breaks to chase;
+##             support sits between. FormationSystem supplies the actual slot
+##             position each frame, so a high weight really does hold the shape.
 ##
 ## Weights are not normalized here; the converter normalizes on use.
 static func _compute_goal_weights(
 	ship: Dictionary,
 	mentality_scalar: float,
+	tactics: Dictionary,
 	threats: Array
 ) -> Dictionary:
 	# pursue: scales linearly from near-zero (defensive) to near-full (all_out)
@@ -157,11 +169,20 @@ static func _compute_goal_weights(
 	if extra_enemies > 0:
 		evade += extra_enemies * EVADE_WEIGHT_PER_EXTRA_ENEMY
 
+	# Formation weight from duty: hold → line holds; press → ship chases; support → mid.
+	# This composes with pursue/evade — a hold ship still fires but won't abandon its slot.
+	var duty: String = tactics.get("duty", "support")
+	var formation: float
+	match duty:
+		"hold":    formation = FORMATION_WEIGHT_HOLD
+		"press":   formation = FORMATION_WEIGHT_PRESS
+		_:         formation = FORMATION_WEIGHT_SUPPORT   # "support" and any unknown duty
+
 	return {
 		"pursue":     pursue,
 		"keep_range": KEEP_RANGE_WEIGHT,
 		"evade":      evade,
-		"formation":  FORMATION_WEIGHT_PHASE1,
+		"formation":  formation,
 	}
 
 

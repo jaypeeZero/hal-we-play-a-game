@@ -163,6 +163,11 @@ func _process(delta: float) -> void:
 	if ENABLE_CREW_AI:
 		_commit_pending_intents()
 
+	# 1. FORMATION SYSTEM - Stamp live formation slots onto orders before movement.
+	# FormationSystem owns formation_slot and anchor_position; they must be
+	# recomputed every frame because the enemy centroid (the anchor) moves.
+	_ships = FormationSystem.assign_slots(_ships)
+
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
 	var game_time = Time.get_ticks_msec() / 1000.0
 	_ships = MovementSystem.update_all_ships(_ships, delta, game_time, _obstacles)

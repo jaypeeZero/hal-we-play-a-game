@@ -38,11 +38,13 @@ func _make_threat_targeting(target_id: String, pos: Vector2 = Vector2(500.0, 0.0
 func _make_neutral_threat(pos: Vector2 = Vector2(500.0, 0.0)) -> Dictionary:
 	return {"ship_id": "threat_y", "position": pos}
 
-## Resolved tactics with explicit mentality_scalar and range_scalar.
-func _make_tactics(mentality_scalar: float = 0.5, range_scalar: float = 0.5) -> Dictionary:
+## Resolved tactics with explicit mentality_scalar, range_scalar, and optional duty.
+## duty defaults to "support" (mid formation weight) to keep existing tests neutral.
+func _make_tactics(mentality_scalar: float = 0.5, range_scalar: float = 0.5, duty: String = "support") -> Dictionary:
 	return {
 		"mentality_scalar": mentality_scalar,
 		"range_scalar":     range_scalar,
+		"duty":             duty,
 	}
 
 func _build(ship: Dictionary, tactics: Dictionary, target: Dictionary, threats: Array, optimal_range: float = 1000.0) -> Dictionary:
@@ -80,15 +82,62 @@ func test_directive_with_no_target_still_has_all_contract_keys():
 	assert_true(d.has("anchor_position"),   "empty-target directive must have anchor_position")
 
 
-func test_phase1_formation_fields_are_zero():
+func test_formation_slot_and_anchor_are_zero_from_blender():
+	# FormationSystem stamps live values each frame; blender always emits ZERO
+	# so MovementSystem never reads stale positions from a stale decision.
 	var d := _build(_make_ship(), _make_tactics(), _make_target(), [])
-	assert_eq(d["formation_slot"],  Vector2.ZERO, "formation_slot must be ZERO in Phase 1")
-	assert_eq(d["anchor_position"], Vector2.ZERO, "anchor_position must be ZERO in Phase 1")
+	assert_eq(d["formation_slot"],  Vector2.ZERO, "blender must not set formation_slot — FormationSystem owns it")
+	assert_eq(d["anchor_position"], Vector2.ZERO, "blender must not set anchor_position — FormationSystem owns it")
 
 
-func test_phase1_formation_weight_is_zero():
-	var d := _build(_make_ship(), _make_tactics(), _make_target(), [])
-	assert_eq(d["goal_weights"]["formation"], 0.0, "formation weight must be 0.0 in Phase 1")
+# 1b. Formation weight — duty-driven (Phase 2)
+
+func test_hold_duty_has_higher_formation_weight_than_press():
+	var ship   := _make_ship()
+	var target := _make_target()
+	var d_hold  := _build(ship, _make_tactics(0.5, 0.5, "hold"),  target, [])
+	var d_press := _build(ship, _make_tactics(0.5, 0.5, "press"), target, [])
+	assert_gt(d_hold["goal_weights"]["formation"], d_press["goal_weights"]["formation"],
+		"hold duty must produce a higher formation weight than press")
+
+
+func test_press_duty_raises_pursue_relative_to_hold():
+	# press ships break toward targets; hold ships anchor the line.
+	# Same mentality_scalar so only duty varies — pursue should be equal;
+	# the difference comes in formation. But press also allows pursue to dominate
+	# because formation isn't competing. We verify hold formation > press formation
+	# and press formation is very low (ship is free to chase).
+	var ship   := _make_ship()
+	var target := _make_target()
+	var d_hold  := _build(ship, _make_tactics(0.5, 0.5, "hold"),  target, [])
+	var d_press := _build(ship, _make_tactics(0.5, 0.5, "press"), target, [])
+	# pursue is the same (same mentality); formation differs — that's the point
+	assert_eq(d_hold["goal_weights"]["pursue"], d_press["goal_weights"]["pursue"],
+		"pursue weight must not differ between hold and press at same mentality")
+	assert_gt(d_hold["goal_weights"]["formation"], d_press["goal_weights"]["formation"],
+		"hold must have higher formation weight so the line holds")
+
+
+func test_support_duty_formation_weight_is_between_hold_and_press():
+	var ship   := _make_ship()
+	var target := _make_target()
+	var d_hold    := _build(ship, _make_tactics(0.5, 0.5, "hold"),    target, [])
+	var d_support := _build(ship, _make_tactics(0.5, 0.5, "support"), target, [])
+	var d_press   := _build(ship, _make_tactics(0.5, 0.5, "press"),   target, [])
+	var fw_hold:    float = d_hold["goal_weights"]["formation"]
+	var fw_support: float = d_support["goal_weights"]["formation"]
+	var fw_press:   float = d_press["goal_weights"]["formation"]
+	assert_gt(fw_hold,    fw_support, "hold formation > support formation")
+	assert_gt(fw_support, fw_press,   "support formation > press formation")
+
+
+func test_formation_weight_is_positive_for_all_duties():
+	var ship   := _make_ship()
+	var target := _make_target()
+	for duty in ["hold", "support", "press"]:
+		var d := _build(ship, _make_tactics(0.5, 0.5, duty), target, [])
+		assert_gt(d["goal_weights"]["formation"], 0.0,
+			"formation weight must be positive for duty: %s" % duty)
 
 
 # ---------------------------------------------------------------------------
