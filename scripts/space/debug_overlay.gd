@@ -32,6 +32,10 @@ const ROLE_READ_STATS: Dictionary = {
 	"fleet_commander": ["tactics", "awareness", "composure"],
 }
 
+const BOUNDARY_SEGMENTS: int = 96
+const BOUNDARY_COLOR: Color = Color(1.0, 0.85, 0.2, 0.5)  # amber — distinct from team colors
+const BOUNDARY_WIDTH: float = 4.0
+
 const TABLE_FONT_SIZE: int = 10
 const TABLE_LINE_HEIGHT: int = 12
 const TABLE_COL_WIDTH: int = 28
@@ -61,6 +65,8 @@ func _draw() -> void:
 		_draw_wing_lines()
 	if GameSettings.show_squadron_lines:
 		_draw_squadron_lines()
+	if GameSettings.show_escape_boundary:
+		_draw_escape_boundary()
 
 	for ship in _game._ships:
 		if ship.get("status", "") == "destroyed":
@@ -106,6 +112,19 @@ func _draw_area_focus(ship: Dictionary, color: Color) -> void:
 		line_end = ship.position + to_center / dist * (dist - radius)
 	DottedDraw.draw_dotted_line(self, ship.position, line_end, color)
 	DottedDraw.draw_dotted_circle(self, center, radius, color)
+
+
+## Draw the escape boundary ovoid as a closed polyline (Godot has no ellipse
+## stroke primitive). Sized off the game's battlefield via FleeBoundarySystem.
+func _draw_escape_boundary() -> void:
+	var size: Vector2 = _game._battlefield_size
+	var c: Vector2 = FleeBoundarySystem.center(size)
+	var ax: Vector2 = FleeBoundarySystem.semi_axes(size)
+	var pts := PackedVector2Array()
+	for i in range(BOUNDARY_SEGMENTS + 1):
+		var t: float = TAU * float(i) / float(BOUNDARY_SEGMENTS)
+		pts.append(c + Vector2(cos(t) * ax.x, sin(t) * ax.y))
+	draw_polyline(pts, BOUNDARY_COLOR, BOUNDARY_WIDTH)
 
 
 ## Draw dotted lines between each wing lead and its wingmen, using the wing's

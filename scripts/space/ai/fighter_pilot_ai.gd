@@ -36,6 +36,8 @@ const SURVIVAL_AGGRESSION_TOLERANCE      = 0.6
 const AREA_HARD_RETURN_MULTIPLIER        = 1.5
 const PLAY_WAYPOINT_REACHED_DISTANCE     = 250.0
 const COLLISION_DETECTION_RANGE          = 2000.0
+## Decision delay (s) for flee maneuvers — slow cadence; the steer target is stable.
+const FLEE_DECISION_DELAY                = 0.3
 
 
 ## Entry point — called by CrewAISystem every decision tick.
@@ -50,7 +52,12 @@ static func make_decision(
 	if not FleetDataManager.is_fighter_class(ship_data.get("type", "")):
 		return {}
 
-	var decision := _reflex_survival(crew_data, ship_data, all_ships, game_time)
+	# The escape boundary is a harder bound than the patrol leash or survival
+	# running-outward, so the edge reflex is evaluated FIRST.
+	var decision := _reflex_edge_boundary(crew_data, ship_data, all_ships, game_time)
+	if not decision.is_empty(): return decision
+
+	decision = _reflex_survival(crew_data, ship_data, all_ships, game_time)
 	if not decision.is_empty(): return decision
 
 	decision = _reflex_area_leash(crew_data, ship_data, all_ships, game_time)
@@ -75,6 +82,73 @@ static func make_decision(
 # ---------------------------------------------------------------------------
 # Reflexes
 # ---------------------------------------------------------------------------
+
+## Escape-boundary reflex. A locked-in flee decision keeps steering (out to the
+## exit when committed, back inward when returning) regardless of distance; an
+## unlocked ship only decides once it nears the edge.
+static func _reflex_edge_boundary(
+	crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float
+) -> Dictionary:
+	var pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var size: Vector2 = ship_data.get("battlefield_size", FleeBoundarySystem.DEFAULT_BATTLEFIELD_SIZE)
+	var locked: String = ship_data.get("orders", {}).get("flee_decision", "")
+
+	# Already committed: keep running for the exit regardless of distance.
+	if locked == FleeDecisionSystem.COMMITTED:
+		return _flee_maneuver(crew_data, ship_data, game_time, FleeDecisionSystem.COMMITTED,
+			FleeBoundarySystem.outward_exit_point(pos, size))
+
+	# Returning: keep heading inward until well clear, then release the lock.
+	if locked == FleeDecisionSystem.RETURNING:
+		if FleeBoundarySystem.is_clear_inside(pos, size):
+			return _clear_flee_lock(crew_data, ship_data, game_time)
+		return _flee_maneuver(crew_data, ship_data, game_time, FleeDecisionSystem.RETURNING,
+			FleeBoundarySystem.inward_point(size))
+
+	# No lock yet: only decide once near the edge.
+	if not FleeBoundarySystem.is_near_edge(pos, size):
+		return {}
+	var choice := FleeDecisionSystem.decide(crew_data, ship_data, all_ships)
+	var target: Vector2 = FleeBoundarySystem.outward_exit_point(pos, size) \
+		if choice == FleeDecisionSystem.COMMITTED else FleeBoundarySystem.inward_point(size)
+	return _flee_maneuver(crew_data, ship_data, game_time, choice, target)
+
+
+## Build a flee maneuver decision carrying the locked flee_decision + target.
+static func _flee_maneuver(
+	crew_data: Dictionary, ship_data: Dictionary, game_time: float, choice: String, target: Vector2
+) -> Dictionary:
+	return {
+		"type": "maneuver",
+		"subtype": "flee_to_boundary" if choice == FleeDecisionSystem.COMMITTED else "flee_turn_back",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": "",
+		"skill_factor": crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5),
+		"delay": FLEE_DECISION_DELAY,
+		"timestamp": game_time,
+		"flee_decision": choice,
+		"flee_target": target,
+	}
+
+
+## Release the flee lock so normal AI resumes; a later edge approach re-decides.
+static func _clear_flee_lock(
+	crew_data: Dictionary, ship_data: Dictionary, game_time: float
+) -> Dictionary:
+	return {
+		"type": "maneuver",
+		"subtype": "flee_turn_back",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": "",
+		"skill_factor": crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5),
+		"delay": FLEE_DECISION_DELAY,
+		"timestamp": game_time,
+		"flee_decision": "",
+		"flee_target": ship_data.get("position", Vector2.ZERO),
+	}
+
 
 static func _reflex_survival(
 	crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float

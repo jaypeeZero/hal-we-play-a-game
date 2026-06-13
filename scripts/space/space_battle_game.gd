@@ -62,6 +62,10 @@ const CAMPAIGN_MAP_SCENE := "res://scenes/campaign_map_3d.tscn"
 ## each lost player ship is captured here at the moment of destruction.
 var _fallen_player_ships: Array = []
 
+## Team-0 ships that fled across the escape boundary, captured at flee time with
+## their crew. Recovered on victory; carried forward alone on a defeat-with-flee.
+var _fled_player_ships: Array = []
+
 # Weapon update timer
 var _weapon_update_timer: float = 0.0
 const WEAPON_UPDATE_INTERVAL: float = 0.1
@@ -80,10 +84,6 @@ var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 var _debug_overlay: DebugOverlay
 var _debug_panel_layer: CanvasLayer = null
 
-# Surrender win condition state (per-team flee countdowns)
-var _surrender_state: Dictionary = SurrenderSystem.initial_state()
-var _surrender_label: Label = null
-
 # Options shown in the in-battle F1 panel and mirrored in the Settings menu.
 const DEBUG_PANEL_OPTIONS: Array = [
 	{"label": "Target Lines",    "setting": "show_target_lines"},
@@ -91,6 +91,7 @@ const DEBUG_PANEL_OPTIONS: Array = [
 	{"label": "Crew Stats",      "setting": "show_crew_stats"},
 	{"label": "Wing Lines",      "setting": "show_wing_lines"},
 	{"label": "Squadron Lines",  "setting": "show_squadron_lines"},
+	{"label": "Escape Boundary", "setting": "show_escape_boundary"},
 	{"label": "Pilot Direction", "setting": "show_pilot_direction"},
 	{"label": "Leader Numbers",  "setting": "show_leader_numbers"},
 ]
@@ -109,7 +110,6 @@ func _ready() -> void:
 	add_child(_debug_overlay)
 
 	_create_debug_panel()
-	_create_surrender_overlay()
 
 	game_started.emit()
 
@@ -252,15 +252,15 @@ func _process(delta: float) -> void:
 	for expired_id in effect_result.expired_ids:
 		_remove_visual_effect(expired_id)
 
-	# 7. CHECK FOR DESTROYED SHIPS AND OBSTACLES
+	# 7. CHECK FOR DESTROYED / FLED SHIPS AND OBSTACLES
 	_cleanup_destroyed_ships()
+	_cleanup_fled_ships()
 	_cleanup_destroyed_obstacles()
 
 	# 8. SYNC ENTITIES - Update Godot nodes from data
 	_sync_all_entities()
 
 	# 9. CHECK WIN CONDITION
-	_check_surrender(delta)
 	_check_win_condition()
 
 ## Process weapons for all ships - returns Array of fire_commands
@@ -328,27 +328,59 @@ func _cleanup_destroyed_ships() -> void:
 	for ship in destroyed_ships:
 		_remove_ship(ship.ship_id)
 
-## Remove ship and entity
-func _remove_ship(ship_id: String) -> void:
+## Remove ships that committed to fleeing and have crossed the escape boundary.
+## A team-0 fled ship is captured (with crew, flagged fled) for the Roguelike
+## carry-forward — it is an escape, not a casualty, so it never joins
+## _fallen_player_ships.
+func _cleanup_fled_ships() -> void:
+	var fled: Array = []
+	for ship in _ships:
+		if ship == null or ship.is_empty():
+			continue
+		if ship.get("status", "") == "destroyed":
+			continue
+		if ship.get("orders", {}).get("flee_decision", "") != "committed":
+			continue
+		if FleeBoundarySystem.is_outside(ship.get("position", Vector2.ZERO), _battlefield_size):
+			fled.append(ship)
+
+	for ship in fled:
+		if RoguelikeRun.active and ship.get("team", -1) == 0:
+			var captured := _with_attached_crew(ship)
+			captured["fled"] = true
+			_fled_player_ships.append(captured)
+		if BattleEventLoggerAutoload.service:
+			BattleEventLoggerAutoload.service.log_event("ship_fled",
+				{"ship_id": ship.ship_id, "team": ship.team})
+		_despawn_ship(ship.ship_id)
+
+## Remove a ship's data, entity, and crew from the battle. Shared by the
+## destroyed path (_remove_ship) and the fled path (_cleanup_fled_ships);
+## neither capture nor logging happens here.
+func _despawn_ship(ship_id: String) -> void:
 	# Removing a ship can break wing membership (lead death, formation gap).
 	_wings_dirty = true
 
-	# Remove from data
 	var ship = _find_ship_by_id(ship_id)
 	if not ship.is_empty():
-		if RoguelikeRun.active and ship.get("team", -1) == 0:
-			_fallen_player_ships.append(_with_attached_crew(ship))
 		_ships.erase(ship)
 
-	# Remove entity
 	if _ship_entities.has(ship_id):
 		var entity = _ship_entities[ship_id]
 		entity.queue_free()
 		_ship_entities.erase(ship_id)
 
-	# Remove crew assigned to this ship (if AI enabled)
 	if ENABLE_CREW_AI:
 		_remove_crew_for_ship(ship_id)
+
+## Remove a destroyed ship, capturing it as a fallen player ship for the
+## Roguelike demotion roll first.
+func _remove_ship(ship_id: String) -> void:
+	var ship = _find_ship_by_id(ship_id)
+	if not ship.is_empty() and RoguelikeRun.active and ship.get("team", -1) == 0:
+		_fallen_player_ships.append(_with_attached_crew(ship))
+
+	_despawn_ship(ship_id)
 
 	# Log event
 	if BattleEventLoggerAutoload.service:
@@ -581,6 +613,9 @@ func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: 
 		"center": patrol_center,
 		"radius": patrol_radius,
 	}
+	# Single source of truth for the arena size the pilot AI reads to decide
+	# when a ship has neared the escape boundary.
+	ship_data["battlefield_size"] = _battlefield_size
 	# Stable per-run hull identity carries through to survivor reconciliation.
 	ship_data["hull_id"] = hull_id
 
@@ -768,21 +803,15 @@ func _check_win_condition() -> void:
 		else:
 			enemy_ships += 1
 
-	if player_ships == 0 and enemy_ships > 0:
+	# A tick that empties BOTH sides (mutual flee/death) must still resolve to a
+	# single winner — otherwise the battle continues with 0 ships. Mutual
+	# collapse goes to the player so the run stays resolvable.
+	if player_ships == 0 and enemy_ships == 0:
+		_end_game(0)
+	elif player_ships == 0 and enemy_ships > 0:
 		_end_game(1)
 	elif enemy_ships == 0 and player_ships > 0:
 		_end_game(0)
-
-## Tick the surrender system: a side whose ships are mostly fleeing for a
-## sustained countdown surrenders, and the other side wins.
-func _check_surrender(delta: float) -> void:
-	_surrender_state = SurrenderSystem.tick(_surrender_state, _ships, _crew_list, delta)
-	_update_surrender_ui()
-	var loser := SurrenderSystem.surrendered_team(_surrender_state)
-	if loser != SurrenderSystem.NO_SURRENDER:
-		# Reset so the deferred scene change doesn't re-trigger _end_game.
-		_surrender_state = SurrenderSystem.initial_state()
-		_end_game(1 - loser)
 
 func _end_game(winner: int) -> void:
 	game_ended.emit(winner)
@@ -815,6 +844,7 @@ func _handle_roguelike_battle_end(winner: int) -> void:
 ## during the battle as they were at the moment of destruction.
 func _get_player_ships_final_state() -> Array:
 	var final_states: Array = _fallen_player_ships.duplicate(true)
+	final_states.append_array(_fled_player_ships.duplicate(true))
 	for ship in _ships:
 		if ship == null or ship.is_empty():
 			continue
@@ -854,52 +884,6 @@ func _destroyed_enemy_counts() -> Dictionary:
 		if lost > 0:
 			destroyed[ship_type] = lost
 	return destroyed
-
-# ============================================================================
-# SURRENDER COUNTDOWN OVERLAY
-# ============================================================================
-
-const SURRENDER_OVERLAY_LAYER := 11
-const SURRENDER_LABEL_TOP_MARGIN := 24.0
-const SURRENDER_LABEL_FONT_SIZE := 22
-
-## Build the top-center surrender countdown label (hidden unless a
-## countdown is active).
-func _create_surrender_overlay() -> void:
-	var layer := CanvasLayer.new()
-	layer.layer = SURRENDER_OVERLAY_LAYER
-	add_child(layer)
-
-	_surrender_label = Label.new()
-	_surrender_label.anchor_left = 0.0
-	_surrender_label.anchor_right = 1.0
-	_surrender_label.anchor_top = 0.0
-	_surrender_label.anchor_bottom = 0.0
-	_surrender_label.offset_top = SURRENDER_LABEL_TOP_MARGIN
-	_surrender_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_surrender_label.add_theme_font_size_override("font_size", SURRENDER_LABEL_FONT_SIZE)
-	_surrender_label.visible = false
-	layer.add_child(_surrender_label)
-
-## Show the active countdown (the most urgent one if both teams are
-## counting down); hide the label when no countdown is running.
-func _update_surrender_ui() -> void:
-	if _surrender_label == null:
-		return
-	var shown_team := SurrenderSystem.NO_SURRENDER
-	var shown_time := SurrenderSystem.SURRENDER_COUNTDOWN_SECONDS + 1.0
-	for team in _surrender_state:
-		var team_state: Dictionary = _surrender_state[team]
-		if team_state.countdown_active and team_state.time_remaining < shown_time:
-			shown_team = team
-			shown_time = team_state.time_remaining
-
-	if shown_team == SurrenderSystem.NO_SURRENDER:
-		_surrender_label.visible = false
-		return
-	var whose := "YOUR FLEET" if shown_team == 0 else "ENEMY FLEET"
-	_surrender_label.text = "%s SURRENDERS IN %ds" % [whose, ceili(shown_time)]
-	_surrender_label.visible = true
 
 # ============================================================================
 # DEBUG PANEL
