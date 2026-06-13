@@ -1,11 +1,11 @@
 class_name CrewAISystem
 extends RefCounted
 
-## Pure functional crew AI system.
-## Dispatcher + crew-state + pilot-role decisions.
-## Role-specific decision logic lives in scripts/space/ai/{gunner,captain,squadron_leader,commander}_ai.gd
-## (pilot decisions remain here pending Phase 1/2 absorption into FighterPilotAI / LargeShipPilotAI).
-## Following functional programming principles - all data is immutable.
+## Pure functional crew AI system — dispatcher and cadence controller.
+## All role decisions now live behind per-role GOAP brains:
+##   GunnerBrain, EngineerBrain, CaptainBrain, SquadronLeaderBrain, CommanderBrain,
+##   FighterBrain (fighters), LargeShipPilotAI (large-ship engagement FSM).
+## Following functional programming principles — all data is immutable.
 
 # ============================================================================
 # MAIN API - Process crew decisions
