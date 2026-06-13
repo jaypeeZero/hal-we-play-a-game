@@ -131,8 +131,12 @@ func _resolve_pending_battle() -> void:
 		return
 	if result == CampaignSystem.RESULT_VICTORY:
 		await _resolve_battle_victory(node_id)
+	elif RoguelikeRun.pending_battle_fled:
+		# Lost the engagement but ships escaped — takes precedence over demotion.
+		await _resolve_battle_fled_retreat()
 	else:
 		await _resolve_battle_defeat()
+	RoguelikeRun.pending_battle_fled = false
 
 
 func _resolve_battle_victory(node_id: String) -> void:
@@ -172,6 +176,16 @@ func _resolve_battle_defeat() -> void:
 	_tween_camera_to_current_shell()
 	_status_message = "Fleet lost in Sector %s. Demoted to Sector %s; %d battered ship(s) limped home." % [
 		from_sector, campaign["current_sector"], survivors["ships"].size()]
+	RoguelikeRun.save_campaign_to_disk()
+
+
+## Lost the engagement but ships escaped: no demotion, no game-over (even in the
+## bottom sector). The fled fleet regroups in place; the node is NOT marked
+## visited (the battle wasn't won) so the player re-attempts or picks another.
+## Fleeing is the deliberate escape hatch from a total loss.
+func _resolve_battle_fled_retreat() -> void:
+	_status_message = "Engagement lost — %d ship(s) escaped and regrouped." % \
+		RoguelikeRun.fleet_hulls.size()
 	RoguelikeRun.save_campaign_to_disk()
 
 

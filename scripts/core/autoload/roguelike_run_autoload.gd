@@ -41,6 +41,10 @@ var pending_battle_node_id: String = ""
 ## Battle outcome (CampaignSystem.RESULT_*) stashed by the battle scene
 ## and consumed by the campaign map's _resolve_pending_battle.
 var pending_battle_result: String = ""
+## True when the last recorded battle had at least one ship flee the field.
+## Read by the campaign map to route a defeat-with-flee to a regroup-in-place
+## instead of demotion / game-over. Consumed by _resolve_pending_battle.
+var pending_battle_fled: bool = false
 ## Final state of a wiped fleet (ships and crew groups at the moment of
 ## defeat), kept so a demotion can roll damaged survivors from it.
 var lost_fleet_final_ships: Array = []
@@ -83,6 +87,7 @@ func start_run(initial_fleet: Dictionary) -> void:
 	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""
+	pending_battle_fled = false
 	lost_fleet_final_ships = []
 	lost_fleet_final_crew = []
 	current_star_date = STAR_DATE_RUN_START
@@ -102,6 +107,7 @@ func end_run() -> void:
 	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""
+	pending_battle_fled = false
 	lost_fleet_final_ships = []
 	lost_fleet_final_crew = []
 	current_star_date = STAR_DATE_RUN_START
@@ -653,15 +659,63 @@ func _ship_health_total(ship: Dictionary) -> int:
 ## end-of-battle state, each carrying its hull_id and its live crew.
 func record_battle_result(result: String, final_ships: Array) -> void:
 	pending_battle_result = result
+	var fled: Array = final_ships.filter(func(ship): return ship.get("fled", false))
+	pending_battle_fled = not fled.is_empty()
+
 	if result == CampaignSystem.RESULT_VICTORY:
+		# Fled ships are non-destroyed, so they fold in as survivors here —
+		# recovered with their flee-time damage (Decision 5: recovered on win).
 		apply_battle_outcome(final_ships.filter(
 			func(ship): return ship.get("status", "") != "destroyed"))
 		lost_fleet_final_ships = []
 		lost_fleet_final_crew = []
+	elif pending_battle_fled:
+		# Defeat, but ships escaped → carry ONLY the fled hulls forward.
+		_carry_forward_fled(fled)
+		lost_fleet_final_ships = []
+		lost_fleet_final_crew = []
 	else:
+		# Defeat, total loss → existing demotion / game-over path, unchanged.
 		lost_fleet_final_ships = final_ships.duplicate(true)
 		lost_fleet_final_crew = _crew_groups_for_ships(final_ships)
 		fleet_hulls = []
+
+
+## Rebuild fleet_hulls to contain only the fled hulls, reconciled by hull_id
+## against the pre-battle records (keeping complement, iced, identity). Each
+## fled hull folds in its flee-time damage and live crew — a clean escape takes
+## no new casualties beyond who was already aboard. Crew on hulls lost with the
+## battle are pruned from doctrine, and squadrons are pruned for the lost hulls.
+func _carry_forward_fled(fled_ships: Array) -> void:
+	var fled_by_id: Dictionary = {}
+	for ship in fled_ships:
+		fled_by_id[ship.get("hull_id", "")] = ship
+
+	var kept: Array = []
+	var dropped_crew_ids: Array = []
+	for hull in fleet_hulls:
+		var hull_id: String = hull.get("hull_id", "")
+		if fled_by_id.has(hull_id):
+			var ship: Dictionary = fled_by_id[hull_id]
+			hull.crew = ship.get("crew", []).duplicate(true)
+			hull.ship = _strip_crew(ship)
+			kept.append(hull)
+		else:
+			for member in hull.get("crew", []):
+				dropped_crew_ids.append(member.get("crew_id", ""))
+
+	var kept_ids: Dictionary = {}
+	for h in kept:
+		kept_ids[h.get("hull_id", "")] = true
+	var lost_hull_ids: Array = []
+	for h in fleet_hulls:
+		var hid: String = h.get("hull_id", "")
+		if not kept_ids.has(hid):
+			lost_hull_ids.append(hid)
+
+	fleet_hulls = kept
+	_prune_doctrine_for_roster(dropped_crew_ids, fleet_counts())
+	squadrons = SquadronSystem.prune_for_roster(squadrons, lost_hull_ids)
 
 
 ## Crew groups (ship_type + crew) rebuilt from the crew attached to each ship
@@ -777,6 +831,7 @@ func load_campaign_from_disk() -> bool:
 	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""
+	pending_battle_fled = false
 	lost_fleet_final_ships = []
 	lost_fleet_final_crew = []
 	last_jump_repair_summary = {}

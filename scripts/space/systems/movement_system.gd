@@ -151,6 +151,10 @@ const LEASH_PULL_SCALE_AT_AGGRESSION_FULL: float = 0.0
 ## `assigned_area` are unaffected. The pilot's aggression dial scales the
 ## pull when an enemy target is set; see constants above.
 static func apply_area_leash(ship_data: Dictionary, desired_heading: float) -> float:
+	# A committed flee runs for the boundary and must not be curved homeward by
+	# the patrol leash — the boundary is the harder bound.
+	if ship_data.get("orders", {}).get("flee_decision", "") == "committed":
+		return desired_heading
 	var assigned_area = ship_data.get("assigned_area")
 	if assigned_area == null or not assigned_area is Dictionary:
 		return desired_heading
@@ -234,6 +238,13 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 		if target.is_empty():
 			return apply_space_drift(ship_data, delta)
 		pilot_control = calculate_pilot_control(ship_data, target, nearby_ships, obstacles)
+
+	elif current_order == "flee":
+		# Escape-boundary flee — fighters and large ships alike steer to
+		# orders.flee_target (outward exit when committed, battlefield center
+		# when turning back). No target ship needed.
+		pilot_control = calculate_steer_to_point(
+			ship_data, ship_data.get("orders", {}).get("flee_target", ship_data.position))
 
 	elif current_order == "large_ship_engage":
 		# Large ship engage mode - corvette and capital maneuvers
@@ -876,6 +887,32 @@ static func calculate_return_to_area(ship_data: Dictionary) -> Dictionary:
 		"is_braking": false,
 		"engagement_range": 100.0,
 		"current_distance": to_target.length()
+	}
+
+## Steer straight to a world point at full main thrust, facing the travel
+## direction. Used by the escape-boundary flee (committed exit run / turn back).
+## When essentially on the point, coast so the ship doesn't overshoot.
+const STEER_ARRIVAL_DISTANCE = 50.0
+static func calculate_steer_to_point(ship_data: Dictionary, point: Vector2) -> Dictionary:
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var to_point: Vector2 = point - my_pos
+	var distance: float = to_point.length()
+	if distance < STEER_ARRIVAL_DISTANCE:
+		return {
+			"desired_heading": ship_data.get("rotation", 0.0),
+			"throttle": 0.0,
+			"thrust_active": false,
+			"is_braking": false,
+			"engagement_range": 100.0,
+			"current_distance": distance,
+		}
+	return {
+		"desired_heading": direction_to_heading(to_point),
+		"throttle": 1.0,
+		"thrust_active": true,
+		"is_braking": false,
+		"engagement_range": 100.0,
+		"current_distance": distance,
 	}
 
 ## Evasive retreat - get away from big ship

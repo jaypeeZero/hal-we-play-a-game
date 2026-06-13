@@ -85,7 +85,13 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 	var subtype = decision.get("subtype", "")
 
 	# Handle special non-fighter cases
-	if subtype == "evade":
+	if subtype == "flee_to_boundary" or subtype == "flee_turn_back":
+		# Escape-boundary flee — shared by fighters and large ships. Steers to
+		# orders.flee_target regardless of hull class (see MovementSystem).
+		updated.orders.current_order = "flee"
+		updated.orders.target_id = ""
+		updated.orders.maneuver_subtype = subtype
+	elif subtype == "evade":
 		updated.orders.current_order = "evade"
 		updated.orders.threat_id = decision.get("target_id", "")
 	elif subtype == "pursue":
@@ -110,8 +116,9 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		updated.orders.position_side = decision.get("position_side", 0)
 		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
 		# Survival-reflex flee mode ("retreat"/"evade", "" when not fleeing).
-		# SurrenderSystem reads this; defaulting to "" makes it self-clearing
-		# when the pilot's next decision is no longer a survival reflex.
+		# Read by FleeDecisionSystem as one flee-pressure input; defaulting to
+		# "" makes it self-clearing when the next decision is no longer a
+		# survival reflex.
 		updated.orders.survival_mode = decision.get("survival_mode", "")
 		# NEW: Skill-based approach data
 		updated.orders.approach_style = decision.get("approach_style", 0)  # 0 = DIRECT
@@ -125,6 +132,14 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		updated.orders.target_id = decision.get("target_id", "")
 		updated.orders.maneuver_subtype = subtype
 		updated.orders.skill_factor = decision.get("skill_factor", 0.5)
+
+	# Lock the flee decision into orders. A flee maneuver carries the new value
+	# (including "" to release the lock); any other maneuver preserves the
+	# current lock so a committed ship isn't un-committed before it exits.
+	updated.orders.flee_decision = decision.get("flee_decision",
+		ship_data.get("orders", {}).get("flee_decision", ""))
+	updated.orders.flee_target = decision.get("flee_target",
+		ship_data.get("orders", {}).get("flee_target", Vector2.ZERO))
 
 	# Apply crew skill modifiers to ship stats
 	if crew_data and crew_data.has("stats"):

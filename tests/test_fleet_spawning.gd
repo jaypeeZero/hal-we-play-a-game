@@ -82,3 +82,21 @@ func test_large_fleet_no_overlap():
 
 	assert_eq(positions.size(), 10, "Should have 10 ships")
 	_assert_no_overlaps(positions, "large fleet")
+
+
+# ============================================================================
+# TESTS - Escape boundary encloses every spawn position
+# ============================================================================
+
+const ARENA_SIZE := Vector2(5000, 3500)
+
+
+func test_escape_boundary_encloses_all_spawn_positions():
+	var team0 := {"fighter": 3, "corvette": 1, "capital": 1}
+	var team1 := {"fighter": 3, "corvette": 1, "capital": 1}
+	var plan := BattlePlanner.build_default_plan(team0, team1, ARENA_SIZE)
+
+	assert_gt(plan.size(), 0, "the default plan must place ships")
+	for entry in plan:
+		assert_false(FleeBoundarySystem.is_outside(entry["position"], ARENA_SIZE),
+			"every spawned ship must start inside the escape boundary")

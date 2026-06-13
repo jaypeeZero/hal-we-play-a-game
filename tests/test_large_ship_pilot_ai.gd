@@ -239,11 +239,13 @@ func test_capital_far_outside_leash_drops_fight_to_return():
 	# BEHAVIOR: A capital well beyond its assigned area drops the engagement
 	# and emits a closing maneuver pointed back toward home. The return marker
 	# is on the decision so the maneuver layer can prioritize it.
-	var ship = TestFactories.make_capital("c1", Vector2(10000, 0), 0)
-	ship["assigned_area"] = {"center": Vector2.ZERO, "radius": 1000.0}
-	# 10000 > 1.5 * 1000, so we're "far outside"
+	# Far outside the patrol area but still well inside the escape boundary, so
+	# this exercises the leash and not the (harder) boundary reflex.
+	var ship = TestFactories.make_capital("c1", Vector2(4500, 1750), 0)
+	ship["assigned_area"] = {"center": Vector2(2500, 1750), "radius": 1000.0}
+	# 2000 > 1.5 * 1000, so we're "far outside"
 	var pilot = _make_pilot("p1", "c1", 0.5)
-	var enemy = TestFactories.make_capital("e1", Vector2(11000, 0), 1)
+	var enemy = TestFactories.make_capital("e1", Vector2(4800, 1750), 1)
 
 	var result = LargeShipPilotAI.make_decision(pilot, ship, [ship, enemy], 0.0)
 

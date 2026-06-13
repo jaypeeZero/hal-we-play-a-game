@@ -33,6 +33,7 @@ var show_patrol_areas: bool = true
 var show_crew_stats: bool = false
 var show_wing_lines: bool = false
 var show_squadron_lines: bool = false
+var show_escape_boundary: bool = true
 
 func _ready() -> void:
 	load_settings()
@@ -107,6 +108,9 @@ func set_show_wing_lines(enabled: bool) -> void:
 func set_show_squadron_lines(enabled: bool) -> void:
 	show_squadron_lines = enabled
 
+func set_show_escape_boundary(enabled: bool) -> void:
+	show_escape_boundary = enabled
+
 # ============================================================================
 # PERSISTENCE
 # ============================================================================
@@ -134,6 +138,7 @@ func save_settings() -> void:
 	config.set_value("debug", "show_crew_stats", show_crew_stats)
 	config.set_value("debug", "show_wing_lines", show_wing_lines)
 	config.set_value("debug", "show_squadron_lines", show_squadron_lines)
+	config.set_value("debug", "show_escape_boundary", show_escape_boundary)
 
 	var err = config.save(SETTINGS_PATH)
 	if err != OK:
@@ -167,6 +172,7 @@ func load_settings() -> void:
 	show_crew_stats = config.get_value("debug", "show_crew_stats", show_crew_stats)
 	show_wing_lines = config.get_value("debug", "show_wing_lines", show_wing_lines)
 	show_squadron_lines = config.get_value("debug", "show_squadron_lines", show_squadron_lines)
+	show_escape_boundary = config.get_value("debug", "show_escape_boundary", show_escape_boundary)
 
 	# Apply loaded settings
 	_apply_audio_settings()
