@@ -510,3 +510,20 @@ const REPAIR_FRACTION_PER_STAR_DATE = 0.01
 
 ## R&R downtime multiplies the jump repair.
 const RNR_REPAIR_MULTIPLIER = 3.0
+
+# --- Crew progression (post-battle skill development) ---
+const USED_GAIN_MIN := 0.001          # floor for a skill the crew actually used
+const USED_GAIN_MAX := 0.015          # ceiling, extreme circumstances
+const USED_PRIMARY_WEIGHT := 1.0      # role's primary skill grows fastest
+const USED_SECONDARY_WEIGHT := 0.5    # supporting skills grow slower
+const TRICKLE_GAIN_MIN := 0.0001      # mentoring whisper from an exceptional shipmate
+const TRICKLE_GAIN_MAX := 0.0005
+const EXCEPTIONAL_SKILL_THRESHOLD := 0.85   # "exceptional ability" bar for mentoring
+const LEADER_MULT_MIN := 0.6          # coaching multiplier at commander tactics 0.0
+const LEADER_MULT_MAX := 1.4          # coaching multiplier at commander tactics 1.0
+const MASTERY_TAPER_START := 0.85     # gains taper above this skill value
+const MASTERY_TAPER_FLOOR := 0.25     # multiplier on gains at skill 1.0
+# aggression adversity response (composure decides direction, NOT coached/mentored)
+const AGGRESSION_SHIFT_MIN := 0.001   # shift after light adversity
+const AGGRESSION_SHIFT_MAX := 0.020   # shift after a mauling
+const COMPOSURE_PIVOT := 0.5          # composure >= pivot -> aggression up, else down

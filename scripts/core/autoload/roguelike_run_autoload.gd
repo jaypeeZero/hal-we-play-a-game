@@ -26,6 +26,8 @@ var fleet_hulls: Array = []
 ## Player standing instructions for this run (see DoctrineSystem).
 ## Run state: reset at run start, wiped at run end.
 var doctrine: Dictionary = DoctrineSystem.empty_doctrine()
+## The enemy fleet for the next/pending battle, set from the destination node
+## when a battle is launched (the campaign map sets it). Empty until a battle node is selected.
 var enemy_fleet: Dictionary = {}
 ## The multi-sector star chart (see CampaignGenerator.generate).
 var campaign: Dictionary = {}
@@ -54,6 +56,9 @@ var current_star_date: int = STAR_DATE_RUN_START
 var last_jump_repair_summary: Dictionary = {}
 ## Player-defined squadrons for this run (see SquadronSystem / SquadronData).
 var squadrons: Array = []
+## Per-crew skill-growth report from the most recent battle, for the post-battle
+## overview. Transient display data — never saved, reset in start_run/end_run/load.
+var last_battle_progression: Array = []
 
 ## Skill for throwaway template crews that only derive a hull's standard
 ## complement (slot roles + weapon bindings); template members are never
@@ -76,9 +81,8 @@ func start_run(initial_fleet: Dictionary) -> void:
 	_next_hull_id = 0
 	fleet_hulls = _create_fleet_roster(initial_fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
-	campaign = CampaignGenerator.generate(_new_rng())
-	enemy_fleet = CampaignSystem.scaled_enemy_fleet(
-		FleetDataManager.load_fleet(1), campaign["current_sector"])
+	campaign = CampaignGenerator.generate(_new_rng(), FleetDataManager.load_fleet(1))
+	enemy_fleet = {}
 	money = EconomySystem.roll_starting_money(fleet_hulls, _new_rng())
 	last_battle_summary = {}
 	pending_battle_node_id = ""
@@ -89,6 +93,7 @@ func start_run(initial_fleet: Dictionary) -> void:
 	current_star_date = STAR_DATE_RUN_START
 	last_jump_repair_summary = {}
 	squadrons = []
+	last_battle_progression = []
 
 
 func end_run() -> void:
@@ -110,6 +115,7 @@ func end_run() -> void:
 	squadrons = []
 	hired_roster_ids = []
 	_next_hull_id = 0
+	last_battle_progression = []
 
 
 ## A freshly seeded RNG for economy rolls. Centralized so all run-economy
@@ -263,12 +269,15 @@ func apply_battle_outcome(surviving_ships: Array) -> void:
 	var new_hulls: Array = []
 	var dropped_crew_ids: Array = []
 	var death_count: int = 0
+	var ship_deltas: Array = []
 	for hull in fleet_hulls:
 		var sortied: bool = not hull.get("iced", false) and _has_pilot(hull)
 		if not sortied:
 			new_hulls.append(hull)
 			continue
 		var hull_id: String = hull.get("hull_id", "")
+		# Capture the sortie-time ship state before any mutation.
+		var before_ship: Dictionary = hull.get("ship", {}).duplicate(true)
 		if survivors_by_id.has(hull_id):
 			var survivor: Dictionary = survivors_by_id[hull_id]
 			var after: Dictionary = _strip_crew(survivor)
@@ -283,11 +292,13 @@ func apply_battle_outcome(surviving_ships: Array) -> void:
 				dropped_crew_ids.append(dead.get("crew_id", ""))
 			death_count += casualties.deaths.size()
 			new_hulls.append(hull)
+			ship_deltas.append(_hull_delta_record(hull, before_ship, after, false))
 		else:
 			# A hull lost with all hands: everyone aboard is a casualty.
 			for member in hull.get("crew", []):
 				dropped_crew_ids.append(member.get("crew_id", ""))
 				death_count += 1
+			ship_deltas.append(_hull_delta_record(hull, before_ship, {}, true))
 
 	var surviving_ids: Dictionary = {}
 	for h in new_hulls:
@@ -300,9 +311,24 @@ func apply_battle_outcome(surviving_ships: Array) -> void:
 	fleet_hulls = new_hulls
 	var insurance: int = EconomySystem.insurance_total(death_count)
 	money -= insurance
-	last_battle_summary = {"casualties": death_count, "insurance": insurance}
+	last_battle_summary = {"casualties": death_count, "insurance": insurance, "ship_deltas": ship_deltas}
 	_prune_doctrine_for_roster(dropped_crew_ids, fleet_counts())
 	squadrons = SquadronSystem.prune_for_roster(squadrons, lost_hull_ids)
+
+
+func _hull_delta_record(hull: Dictionary, before_ship: Dictionary, after_ship: Dictionary, destroyed: bool) -> Dictionary:
+	var before := HullConditionSystem.condition({"ship": before_ship})
+	var after := {"armor": 0.0, "systems": 0.0} if destroyed \
+		else HullConditionSystem.condition({"ship": after_ship})
+	return {
+		"hull_id": hull.get("hull_id", ""),
+		"ship_type": hull.get("ship_type", ""),
+		"armor_before": before.armor,
+		"armor_after": after.armor,
+		"systems_before": before.systems,
+		"systems_after": after.systems,
+		"destroyed": destroyed,
+	}
 
 
 ## A survivor ship dict as it persists between battles: crew is stored on the
@@ -809,6 +835,7 @@ func load_campaign_from_disk() -> bool:
 	lost_fleet_final_ships = []
 	lost_fleet_final_crew = []
 	last_jump_repair_summary = {}
+	last_battle_progression = []
 	started_first_battle = not fleet_hulls.is_empty()
 	active = true
 	return true

@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3 uid="uid://post_battle_overview"]
+
+[ext_resource type="Script" path="res://scripts/ui/post_battle/post_battle.gd" id="1_post_battle"]
+
+[node name="PostBattleOverview" type="Control"]
+layout_mode = 3
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
+script = ExtResource("1_post_battle")
