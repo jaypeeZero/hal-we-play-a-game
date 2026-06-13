@@ -1,0 +1,195 @@
+class_name SteeringBlender
+extends RefCounted
+
+## Pure brain-side logic: converts resolved tactics + live situation into a
+## directive dict on ship.orders (the frozen Phase-1 contract).
+##
+## Contract fields produced (02b-directive-contract.md):
+##   engagement_target  : String   — ship_id to fight; "" = none
+##   goal_weights       : Dictionary — {pursue, keep_range, evade, formation} ≥ 0
+##   preferred_range    : float    — desired distance to engagement_target
+##   formation_slot     : Vector2  — offset from anchor (Phase 2; always ZERO here)
+##   anchor_position    : Vector2  — fleet anchor world point (Phase 2; ZERO here)
+##
+## All inputs are read-only. Nothing here mutates ship or tactics state.
+
+# ---------------------------------------------------------------------------
+# Preferred-range mapping (range_scalar 0..1 → world-unit range)
+# ---------------------------------------------------------------------------
+
+## At range_scalar = 0 (knife), desired range is this multiplier × weapon_optimal.
+## Short so the brawler physically dives inside the enemy's comfort zone.
+const KNIFE_RANGE_MULTIPLIER := 0.3
+
+## At range_scalar = 1 (kite), desired range is this multiplier × weapon_optimal.
+## Long so the kiter stays outside optimal range and forces the enemy to close
+## under fire — the core geometry of the standoff trade-off.
+const KITE_RANGE_MULTIPLIER := 2.5
+
+## Minimum preferred_range floor regardless of weapon_optimal or scalar.
+## Prevents a degenerate 0-range goal when weapon_optimal is very small.
+const MIN_PREFERRED_RANGE := 200.0
+
+# ---------------------------------------------------------------------------
+# Weight bases and situational scales
+# ---------------------------------------------------------------------------
+
+## Base pursue weight when mentality_scalar = 0 (fully defensive).
+## Even a defensive ship nudges toward its target so it doesn't flee passively.
+const PURSUE_WEIGHT_AT_ZERO_MENTALITY := 0.05
+
+## How much extra pursue weight a fully aggressive ship (mentality_scalar=1) adds.
+## Total pursue = BASE + mentality_scalar × SCALE.
+const PURSUE_WEIGHT_MENTALITY_SCALE := 0.95
+
+## keep_range weight is constant — orbit geometry is always active.
+## This is intentional: both brawl (short range) and kite (long range) emerge
+## from preferred_range, not from changing this weight.
+const KEEP_RANGE_WEIGHT := 0.4
+
+## Evade base weight: minimum evasion even in calm situations.
+const EVADE_WEIGHT_BASE := 0.05
+
+## Extra evade added when the ship is actively being targeted by an enemy.
+## "Targeted" = ship_id appears in at least one threat's targeting list.
+const EVADE_WEIGHT_TARGETED := 0.25
+
+## Extra evade added when hull condition is critical (below HULL_CRITICAL_THRESHOLD).
+const EVADE_WEIGHT_LOW_HULL := 0.35
+
+## Hull fraction below which the ship is treated as "low hull."
+## Using fraction so it works regardless of absolute hull values.
+const HULL_CRITICAL_THRESHOLD := 0.3
+
+## Extra evade added per outnumbering enemy beyond parity.
+## Caps at EVADE_OUTNUMBER_CAP_ENEMIES excess enemies to avoid runaway weight.
+const EVADE_WEIGHT_PER_EXTRA_ENEMY := 0.08
+const EVADE_OUTNUMBER_CAP_ENEMIES := 3
+
+## Formation weight is zero in Phase 1 — formation goal computed in Phase 2.
+const FORMATION_WEIGHT_PHASE1 := 0.0
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+## Build a directive dict from the current ship state, resolved tactics, and
+## the live target/threat picture.
+##
+## Parameters
+##   ship               : Dictionary — ship_data with at least .ship_id, .stats,
+##                        and optionally .internals for hull fraction
+##   tactics            : Dictionary — resolved tactics block (from TacticsSystem);
+##                        must contain mentality_scalar and range_scalar
+##   target             : Dictionary — target ship_data (may be {})
+##   threats            : Array[Dictionary] — threat entries from awareness;
+##                        each may carry .target_id for "is this ship targeted?" checks
+##   weapon_optimal_range : float — preferred firing range for this ship's weapons
+##
+## Returns all six Phase-1 contract fields.
+static func build_directive(
+	ship: Dictionary,
+	tactics: Dictionary,
+	target: Dictionary,
+	threats: Array,
+	weapon_optimal_range: float
+) -> Dictionary:
+	var mentality_scalar: float = tactics.get("mentality_scalar", 0.5)
+	var range_scalar: float     = tactics.get("range_scalar",     0.5)
+
+	var engagement_target: String = target.get("ship_id", "")
+
+	var preferred_range: float = _compute_preferred_range(range_scalar, weapon_optimal_range)
+	var goal_weights: Dictionary = _compute_goal_weights(ship, mentality_scalar, threats)
+
+	return {
+		"engagement_target": engagement_target,
+		"goal_weights":      goal_weights,
+		"preferred_range":   preferred_range,
+		# Phase 2 fields: zero-valued placeholders so callers can read safely
+		"formation_slot":    Vector2.ZERO,
+		"anchor_position":   Vector2.ZERO,
+	}
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+## Map range_scalar [0..1] onto preferred_range in world units.
+## 0 (knife) → KNIFE_RANGE_MULTIPLIER × optimal  (short — brawl)
+## 1 (kite)  → KITE_RANGE_MULTIPLIER  × optimal  (long  — standoff)
+## Lerp gives a continuous dial; extremes have physical meaning.
+static func _compute_preferred_range(range_scalar: float, weapon_optimal_range: float) -> float:
+	var multiplier: float = lerp(KNIFE_RANGE_MULTIPLIER, KITE_RANGE_MULTIPLIER, range_scalar)
+	return maxf(weapon_optimal_range * multiplier, MIN_PREFERRED_RANGE)
+
+
+## Compute goal_weights from mentality and live situation.
+##
+## pursue:     rises with mentality_scalar — aggressive ships chase hard
+## keep_range: constant — orbit geometry is always in play
+## evade:      floor + situational bumps (targeted, low hull, outnumbered)
+## formation:  0.0 — Phase 2
+##
+## Weights are not normalized here; the converter normalizes on use.
+static func _compute_goal_weights(
+	ship: Dictionary,
+	mentality_scalar: float,
+	threats: Array
+) -> Dictionary:
+	# pursue: scales linearly from near-zero (defensive) to near-full (all_out)
+	var pursue: float = PURSUE_WEIGHT_AT_ZERO_MENTALITY + mentality_scalar * PURSUE_WEIGHT_MENTALITY_SCALE
+
+	var evade: float = EVADE_WEIGHT_BASE
+
+	# Situational bump: is this ship explicitly being targeted by an enemy?
+	if _is_ship_targeted(ship, threats):
+		evade += EVADE_WEIGHT_TARGETED
+
+	# Situational bump: low hull — survival starts mattering more than offence
+	if _hull_fraction(ship) < HULL_CRITICAL_THRESHOLD:
+		evade += EVADE_WEIGHT_LOW_HULL
+
+	# Situational bump: outnumbered — each extra enemy above parity adds pressure
+	var extra_enemies: int = mini(threats.size() - 1, EVADE_OUTNUMBER_CAP_ENEMIES)
+	if extra_enemies > 0:
+		evade += extra_enemies * EVADE_WEIGHT_PER_EXTRA_ENEMY
+
+	return {
+		"pursue":     pursue,
+		"keep_range": KEEP_RANGE_WEIGHT,
+		"evade":      evade,
+		"formation":  FORMATION_WEIGHT_PHASE1,
+	}
+
+
+## True if any threat's target_id matches this ship's ship_id.
+## Threats that don't carry target_id are ignored (conservative — avoids
+## false positives from non-targeting threats like area effects).
+static func _is_ship_targeted(ship: Dictionary, threats: Array) -> bool:
+	var my_id: String = ship.get("ship_id", "")
+	if my_id.is_empty():
+		return false
+	for threat in threats:
+		if threat.get("target_id", "") == my_id:
+			return true
+	return false
+
+
+## Hull fraction: ratio of surviving internal health to total max health.
+## Falls back to 1.0 (healthy) when no internals are present so that ships
+## without health data are not treated as critically damaged.
+static func _hull_fraction(ship: Dictionary) -> float:
+	var internals: Array = ship.get("internals", [])
+	if internals.is_empty():
+		return 1.0
+	var total_max: float = 0.0
+	var total_cur: float = 0.0
+	for comp in internals:
+		total_max += float(comp.get("max_health", 0))
+		total_cur += float(comp.get("current_health", 0))
+	if total_max <= 0.0:
+		return 1.0
+	return total_cur / total_max

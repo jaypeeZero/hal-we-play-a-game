@@ -255,6 +255,20 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 		var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "large_ship_close_to_broadside")
 		pilot_control = _calculate_large_ship_control(ship_data, target, maneuver_subtype)
 
+	elif current_order == "tactical":
+		# Blended steering directive (Phase 1b). The directive was stamped onto
+		# ship.orders by CrewIntegrationSystem at decision time; re-blend each frame
+		# from LIVE positions so the ship responds to movement between decisions.
+		var tgt_id: String = ship_data.get("orders", {}).get("engagement_target", "")
+		if tgt_id.is_empty():
+			tgt_id = ship_data.get("orders", {}).get("target_id", "")
+		var tactical_target: Dictionary = find_ship_by_id(targets, tgt_id) if tgt_id else {}
+		if tactical_target.is_empty():
+			tactical_target = find_nearest_enemy(ship_data, targets)
+		# Build a lightweight threat list for the converter (position only is enough)
+		var tactical_threats: Array = _gather_enemy_positions(ship_data, targets)
+		pilot_control = calculate_blended_control(ship_data, tactical_target, tactical_threats, delta)
+
 	else:
 		# No orders or unknown order - use default behavior (find nearest enemy)
 		var target = find_nearest_enemy(ship_data, targets)
@@ -2607,3 +2621,203 @@ static func update_all_obstacles(obstacles: Array, delta: float) -> Array:
 	return obstacles \
 		.filter(func(obstacle): return obstacle != null) \
 		.map(func(obstacle): return update_obstacle_movement(obstacle, delta))
+
+
+# ---------------------------------------------------------------------------
+# BLENDED STEERING CONVERTER  (Phase 1 — not yet wired into update_ship_movement)
+# ---------------------------------------------------------------------------
+#
+# Reads the directive written by SteeringBlender onto ship_data.orders and
+# converts it into a pilot_control struct each frame from LIVE positions.
+#
+# Contract fields consumed (02b-directive-contract.md):
+#   orders.goal_weights      : {pursue, keep_range, evade, formation}
+#   orders.preferred_range   : float
+#   orders.formation_slot    : Vector2  (zero-weighted in Phase 1)
+#   orders.anchor_position   : Vector2  (zero-weighted in Phase 1)
+#   orders.engagement_target : String   (ship_id; resolved by caller to target dict)
+
+## Deadband around preferred_range — within this fraction of preferred_range
+## the keep_range goal produces zero force (neither push nor pull).
+## Avoids oscillation when the ship is already near its desired orbit radius.
+const BLENDED_RANGE_DEADBAND_FRACTION := 0.15
+
+## Throttle used when closing distance at far range (facing move direction).
+const BLENDED_APPROACH_THROTTLE := 0.5
+
+## Throttle used while in close-range combat (facing target, using lateral thrust).
+const BLENDED_COMBAT_THROTTLE := 0.3
+
+## When the blended move vector is this short we treat it as "no meaningful
+## intent" and emit zero throttle rather than picking a random heading.
+const BLENDED_MOVE_MIN_LENGTH := 0.01
+
+## Convert a directive on ship_data.orders into a per-frame pilot_control struct.
+##
+## Parameters
+##   ship_data : Dictionary — full ship dict; orders.goal_weights etc. must be set
+##   target    : Dictionary — target ship_data (may be {} when no target)
+##   threats   : Array      — threat dicts; each must carry .position for nearest-threat calc
+##   delta     : float      — frame time (unused in geometry — kept for future speed hints)
+##
+## Returns
+##   {desired_heading, throttle, thrust_active, is_braking, lateral_thrust}
+##
+## Not yet routed into update_ship_movement — that is Phase 1b.
+static func calculate_blended_control(
+	ship_data: Dictionary,
+	target: Dictionary,
+	threats: Array,
+	_delta: float
+) -> Dictionary:
+	var orders: Dictionary  = ship_data.get("orders", {})
+	var weights: Dictionary = orders.get("goal_weights", {})
+	var preferred_range: float = orders.get("preferred_range", get_engagement_range(ship_data))
+
+	var w_pursue: float    = weights.get("pursue",     0.0)
+	var w_range: float     = weights.get("keep_range", 0.0)
+	var w_evade: float     = weights.get("evade",      0.0)
+	var w_form: float      = weights.get("formation",  0.0)
+
+	var my_pos: Vector2    = ship_data.get("position", Vector2.ZERO)
+	var has_target: bool   = not target.is_empty() and target.has("position")
+
+	# --- 1. Build unit desired-vector per goal ---
+
+	# pursue: toward target (zero when no target)
+	var goal_pursue: Vector2 = Vector2.ZERO
+	var dist_to_target: float = 0.0
+	if has_target:
+		var to_target: Vector2 = target.position - my_pos
+		dist_to_target = to_target.length()
+		if dist_to_target > BLENDED_MOVE_MIN_LENGTH:
+			goal_pursue = to_target.normalized()
+
+	# keep_range: radial in/out around preferred_range, deadband in the middle.
+	# Combined with pursue this yields orbit-at-range:
+	#   small preferred_range → constant inward push → brawl
+	#   large preferred_range → outward push when close → kite
+	var goal_keep_range: Vector2 = Vector2.ZERO
+	if has_target and dist_to_target > BLENDED_MOVE_MIN_LENGTH:
+		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
+		var radial_err: float = dist_to_target - preferred_range
+		if abs(radial_err) > deadband:
+			# Positive error → too far → move toward target (same direction as pursue)
+			# Negative error → too close → move away from target
+			var radial_dir: Vector2 = (target.position - my_pos).normalized()
+			goal_keep_range = radial_dir if radial_err > 0.0 else -radial_dir
+
+	# evade: away from nearest threat
+	var goal_evade: Vector2 = Vector2.ZERO
+	if not threats.is_empty():
+		var nearest: Dictionary = _nearest_threat(my_pos, threats)
+		if nearest.has("position"):
+			var away: Vector2 = my_pos - nearest.position
+			if away.length() > BLENDED_MOVE_MIN_LENGTH:
+				goal_evade = away.normalized()
+
+	# formation: toward anchor_position + formation_slot (zero-weighted in Phase 1)
+	var goal_formation: Vector2 = Vector2.ZERO
+	var anchor: Vector2  = orders.get("anchor_position", Vector2.ZERO)
+	var slot: Vector2    = orders.get("formation_slot",  Vector2.ZERO)
+	if w_form > 0.0:
+		var to_slot: Vector2 = (anchor + slot) - my_pos
+		if to_slot.length() > BLENDED_MOVE_MIN_LENGTH:
+			goal_formation = to_slot.normalized()
+
+	# --- 2. Blend ---
+	var move: Vector2 = (
+		goal_pursue    * w_pursue  +
+		goal_keep_range * w_range  +
+		goal_evade     * w_evade   +
+		goal_formation * w_form
+	)
+
+	# Normalize to a unit direction; if effectively zero, hold current heading.
+	if move.length() > BLENDED_MOVE_MIN_LENGTH:
+		move = move.normalized()
+	else:
+		# No intent: hold heading, no thrust
+		return {
+			"desired_heading": ship_data.get("rotation", 0.0),
+			"throttle": 0.0,
+			"thrust_active": false,
+			"is_braking": false,
+			"lateral_thrust": 0.0,
+		}
+
+	# --- 3. Facing rule (mirrors calculate_pilot_control close/far logic) ---
+	#
+	# Close to target → face target, use lateral_thrust for all positioning.
+	# Far from target  → face move direction, use main throttle.
+	#
+	# "Close" is defined as within LATERAL_THRUST_RANGE (inherited const).
+
+	var desired_heading: float
+	var throttle: float
+	var is_braking: bool = false
+	var lateral_thrust: float = 0.0
+
+	var at_close_range: bool = has_target and dist_to_target < LATERAL_THRUST_RANGE
+
+	if at_close_range:
+		# Face the target; express positioning as lateral (strafe) thrust.
+		var to_target: Vector2 = target.position - my_pos
+		desired_heading = direction_to_heading(to_target.normalized())
+		throttle = BLENDED_COMBAT_THROTTLE
+
+		# Project move direction onto the lateral axis (perpendicular to facing).
+		var facing: Vector2 = get_visual_forward(desired_heading)
+		var right: Vector2  = Vector2(facing.y, -facing.x)  # 90° clockwise = strafe right
+		var lateral_component: float = move.dot(right)
+		lateral_thrust = clampf(lateral_component, -1.0, 1.0)
+
+		# Brake if inside preferred_range — keep_range is pushing us out but we
+		# overshot; the physical brake stops the inward drift.
+		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
+		if has_target and dist_to_target < preferred_range - deadband:
+			is_braking = true
+			throttle = 0.0
+
+	else:
+		# Face the blended move direction; use main throttle to close.
+		desired_heading = direction_to_heading(move)
+		throttle = BLENDED_APPROACH_THROTTLE
+		lateral_thrust = 0.0
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle":        throttle,
+		"thrust_active":   throttle > 0.1,
+		"is_braking":      is_braking,
+		"lateral_thrust":  lateral_thrust,
+	}
+
+
+## Collect enemy ship positions as lightweight threat dicts for calculate_blended_control.
+## Each entry carries .position; target_id is omitted because the is-targeted check
+## inside SteeringBlender uses the threats built at decision time, not this per-frame list.
+## This list only drives the evade-direction goal in the converter.
+static func _gather_enemy_positions(ship_data: Dictionary, all_ships: Array) -> Array:
+	var my_team: int = ship_data.get("team", -1)
+	var result: Array = []
+	for s in all_ships:
+		if s.get("team", -1) == my_team: continue
+		if s.get("status", "") != "operational": continue
+		result.append({ "position": s.get("position", Vector2.ZERO) })
+	return result
+
+
+## Return the threat dict whose position is closest to pos.
+## Skips threats without a position key.
+static func _nearest_threat(pos: Vector2, threats: Array) -> Dictionary:
+	var nearest: Dictionary = {}
+	var best_dist: float = INF
+	for t in threats:
+		if not t.has("position"):
+			continue
+		var d: float = pos.distance_to(t.position)
+		if d < best_dist:
+			best_dist = d
+			nearest = t
+	return nearest

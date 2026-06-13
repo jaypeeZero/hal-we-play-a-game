@@ -77,6 +77,14 @@ var _crew_mailboxes: Dictionary = {}  # crew_id -> Array[event] for the schedule
 var _crew_index: Dictionary = {}  # crew_id -> crew_data (O(1) lookup)
 const ENABLE_CREW_AI = true  # Re-enabled with proper event architecture
 
+## DEV HOOK — per-team tactics presets for non-roguelike launches (Phase 1b).
+## Gives team 0 alpha_strike (knife-range brawl) and team 1 phalanx (standoff kite)
+## so a plain `godot scenes/space_battle.tscn` visibly shows contrasting tactics.
+## Replace this in Phase 5 with the pre-battle UI when player-facing setup lands.
+## To change the presets, edit the values here; valid preset ids are the keys in
+## data/tactics/doctrine_presets.json: "alpha_strike", "phalanx", "hammer_and_anvil".
+const DEBUG_TEAM_PRESETS := { 0: "alpha_strike", 1: "phalanx" }
+
 # Wing formation state
 var _previous_wings: Array = []  # Previous frame's wings for loyalty preservation
 var _wings_last_formed_at: float = -1.0  # game_time of last form_wings() call
@@ -1209,9 +1217,10 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 	# Compile the run's doctrine (player standing instructions) into each
 	# crew member's knowledge set, then stamp the squadron mission so the
 	# AI can read it from crew_data without touching the squadrons array.
-	# Also resolve and attach the combat tactics block (Phase 0: data only,
-	# no consumer yet — Phase 1 will read crew["tactics"]).
+	# Also resolve and attach the combat tactics block so Phase 1b can read
+	# crew["tactics"] in AttackAction → SteeringBlender on every decision tick.
 	if team == 0 and RoguelikeRun.active:
+		# Roguelike path: use the player's saved doctrine + tactics.
 		var squadron: Dictionary = SquadronSystem.get_squadron_for_hull(RoguelikeRun.squadrons, hull_id)
 		var squadron_id: String = squadron.get("squadron_id", "")
 		var mission_info: Dictionary = SquadronSystem.get_mission(RoguelikeRun.squadrons, hull_id)
@@ -1220,6 +1229,16 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 			new_crew[i] = TacticsSystem.compile_for_crew(new_crew[i], ship_type, squadron_id, RoguelikeRun.tactics)
 			new_crew[i]["squadron_mission"] = mission_info.get("mission", SquadronData.Mission.FREE)
 			new_crew[i]["squadron_mission_params"] = mission_info.get("params", {})
+	else:
+		# Non-roguelike path (DEV / skirmish / enemy teams): resolve tactics from
+		# the debug preset for this team so every ship has a crew["tactics"] block
+		# and AttackAction → SteeringBlender produces contrasting behaviour.
+		# DEBUG_TEAM_PRESETS is the single place to change which preset each team uses.
+		var preset_id: String = DEBUG_TEAM_PRESETS.get(team, "alpha_strike")
+		var dev_tactics: Dictionary = TacticsSystem.resolve_from_preset(preset_id, "", "", {})
+		for i in range(new_crew.size()):
+			new_crew[i] = new_crew[i].duplicate(true)
+			new_crew[i]["tactics"] = dev_tactics
 
 	# Assign crew to ship and add to index
 	for crew_member in new_crew:
