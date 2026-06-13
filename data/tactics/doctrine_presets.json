@@ -1,0 +1,76 @@
+{
+  "phalanx": {
+    "display_name": "Phalanx",
+    "description": "Tight wall formation, defensive standoff. Wins by attrition and cohesion; cedes ground and initiative.",
+    "fleet": {
+      "shape": "wall",
+      "spacing": 0.2,
+      "depth": 0.3,
+      "anchor": "enemy_centroid",
+      "mentality": "defensive",
+      "engagement_range": "standoff",
+      "line_height": 0.3,
+      "concentration": 0.2,
+      "priority": "weakest_first",
+      "sector_focus": "none",
+      "duty": "hold",
+      "pursuit_discipline": 0.1
+    },
+    "squadrons": {},
+    "ship_overrides": {}
+  },
+
+  "alpha_strike": {
+    "display_name": "Alpha Strike",
+    "description": "Wedge, all-out assault, knife range, focus-fire on command targets. Decapitation doctrine — catastrophic if it whiffs and overextends.",
+    "fleet": {
+      "shape": "wedge",
+      "spacing": 0.5,
+      "depth": 0.4,
+      "anchor": "enemy_centroid",
+      "mentality": "all_out",
+      "engagement_range": "knife",
+      "line_height": 0.9,
+      "concentration": 1.0,
+      "priority": "command_first",
+      "sector_focus": "none",
+      "duty": "press",
+      "pursuit_discipline": 0.9
+    },
+    "squadrons": {},
+    "ship_overrides": {}
+  },
+
+  "hammer_and_anvil": {
+    "display_name": "Hammer & Anvil",
+    "description": "Capital ships hold the center (anvil); fighters flank-press right (hammer). Classic FM split-role doctrine.",
+    "fleet": {
+      "shape": "wall",
+      "mentality": "balanced",
+      "anchor": "enemy_centroid",
+      "line_height": 0.5
+    },
+    "squadrons": {
+      "anvil": {
+        "role": "anchor",
+        "duty": "hold",
+        "engagement_range": "optimal",
+        "mentality": "cautious",
+        "concentration": 0.6,
+        "priority": "capitals_first",
+        "pursuit_discipline": 0.2
+      },
+      "hammer": {
+        "role": "flanker",
+        "duty": "press",
+        "sector_focus": "right",
+        "mentality": "attacking",
+        "engagement_range": "close",
+        "concentration": 0.8,
+        "priority": "weakest_first",
+        "pursuit_discipline": 0.8
+      }
+    },
+    "ship_overrides": {}
+  }
+}

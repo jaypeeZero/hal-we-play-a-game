@@ -1209,10 +1209,15 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 	# Compile the run's doctrine (player standing instructions) into each
 	# crew member's knowledge set, then stamp the squadron mission so the
 	# AI can read it from crew_data without touching the squadrons array.
+	# Also resolve and attach the combat tactics block (Phase 0: data only,
+	# no consumer yet — Phase 1 will read crew["tactics"]).
 	if team == 0 and RoguelikeRun.active:
+		var squadron: Dictionary = SquadronSystem.get_squadron_for_hull(RoguelikeRun.squadrons, hull_id)
+		var squadron_id: String = squadron.get("squadron_id", "")
 		var mission_info: Dictionary = SquadronSystem.get_mission(RoguelikeRun.squadrons, hull_id)
 		for i in range(new_crew.size()):
 			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, RoguelikeRun.doctrine)
+			new_crew[i] = TacticsSystem.compile_for_crew(new_crew[i], ship_type, squadron_id, RoguelikeRun.tactics)
 			new_crew[i]["squadron_mission"] = mission_info.get("mission", SquadronData.Mission.FREE)
 			new_crew[i]["squadron_mission_params"] = mission_info.get("params", {})
 
