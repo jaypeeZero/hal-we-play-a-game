@@ -1212,6 +1212,32 @@ static func calculate_rejoin_wingman(ship_data: Dictionary, target: Dictionary, 
 
 # ============================================================================
 # LARGE SHIP MANEUVERS - Corvette and Capital tactics
+
+## Shared broadside-heading helper used by both _calculate_large_ship_hold_broadside
+## and calculate_blended_control (when facing_mode == "broadside").
+##
+## Returns the heading (radians) perpendicular to the bearing to `target_pos`,
+## picking whichever of the two perpendicular options is closer to
+## `current_rotation` — so the ship commits to one orbit side instead of
+## flip-flopping every frame.
+##
+## Extracted here so the math lives once; callers get the heading and decide
+## how to set throttle/lateral independently.
+static func _broadside_heading_toward(
+	my_pos: Vector2,
+	target_pos: Vector2,
+	current_rotation: float
+) -> float:
+	var to_target: Vector2 = (target_pos - my_pos).normalized()
+	# Two perpendicular options (port / starboard)
+	var perp_left:  Vector2 = Vector2(-to_target.y,  to_target.x)
+	var perp_right: Vector2 = Vector2( to_target.y, -to_target.x)
+	var heading_left:  float = direction_to_heading(perp_left)
+	var heading_right: float = direction_to_heading(perp_right)
+	# Pick the side closer to current rotation to avoid flip-flopping.
+	if abs(angle_difference(current_rotation, heading_left)) <= abs(angle_difference(current_rotation, heading_right)):
+		return heading_left
+	return heading_right
 # ============================================================================
 
 ## Calculate large ship pilot control - returns pilot_control dictionary for apply_space_physics
@@ -1288,16 +1314,13 @@ static func _calculate_large_ship_hold_broadside(ship_data: Dictionary, target: 
 	var to_target = (target_pos - my_pos).normalized()
 	var distance = my_pos.distance_to(target_pos)
 
-	# Two perpendicular options; pick whichever is closer to our current
-	# rotation so we commit to one orbit direction instead of flip-flopping.
-	var perpendicular_left = Vector2(-to_target.y, to_target.x)
-	var perpendicular_right = Vector2(to_target.y, -to_target.x)
-	var heading_left = direction_to_heading(perpendicular_left)
-	var heading_right = direction_to_heading(perpendicular_right)
-	var diff_left = abs(angle_difference(current_rotation, heading_left))
-	var diff_right = abs(angle_difference(current_rotation, heading_right))
-	var presenting_port = diff_left < diff_right
-	var desired_heading = heading_left if presenting_port else heading_right
+	# Shared helper picks the perpendicular side closer to current rotation.
+	var desired_heading: float = _broadside_heading_toward(my_pos, target_pos, current_rotation)
+	# Determine which side we committed to so lateral thrust signs correctly.
+	var perp_left = Vector2(-to_target.y, to_target.x)
+	var heading_left = direction_to_heading(perp_left)
+	var presenting_port = abs(angle_difference(current_rotation, heading_left)) <= \
+		abs(angle_difference(current_rotation, direction_to_heading(Vector2(to_target.y, -to_target.x))))
 
 	# Lateral thrust always crabs in the direction that keeps us perpendicular
 	# while traversing AROUND the target. The sign convention matches the
@@ -2746,12 +2769,18 @@ static func calculate_blended_control(
 			"lateral_thrust": 0.0,
 		}
 
-	# --- 3. Facing rule (mirrors calculate_pilot_control close/far logic) ---
+	# --- 3. Facing rule ---
 	#
-	# Close to target → face target, use lateral_thrust for all positioning.
-	# Far from target  → face move direction, use main throttle.
+	# facing_mode (Phase 2b) decouples WHERE the ship POINTS from WHERE it MOVES.
+	# Movement (throttle/lateral) always comes from the blended goal vector above.
 	#
-	# "Close" is defined as within LATERAL_THRUST_RANGE (inherited const).
+	# "auto"      — original rule: close → face target; far → face move direction.
+	# "nose_on"   — always face the target (anchor/brawler/screen: bow armor forward).
+	# "broadside" — always face perpendicular to the target bearing (artillery orbit).
+	#
+	# When no target exists, all modes fall back to facing the move direction.
+
+	var facing_mode: String = ship_data.get("orders", {}).get("facing_mode", "auto")
 
 	var desired_heading: float
 	var throttle: float
@@ -2760,8 +2789,40 @@ static func calculate_blended_control(
 
 	var at_close_range: bool = has_target and dist_to_target < LATERAL_THRUST_RANGE
 
-	if at_close_range:
-		# Face the target; express positioning as lateral (strafe) thrust.
+	if facing_mode == "broadside" and has_target:
+		# Artillery orbit: face perpendicular to the target bearing so side
+		# batteries bear. Movement (throttle/lateral) still comes from blended
+		# goals, so the ship orbits at preferred_range with its side to the enemy.
+		var current_rot: float = ship_data.get("rotation", 0.0)
+		desired_heading = _broadside_heading_toward(my_pos, target.position, current_rot)
+		# Express the blended move as lateral + throttle relative to the broadside facing.
+		var facing_vec: Vector2 = get_visual_forward(desired_heading)
+		var right_vec: Vector2  = Vector2(facing_vec.y, -facing_vec.x)
+		lateral_thrust = clampf(move.dot(right_vec), -1.0, 1.0)
+		# Forward component drives range-keeping (nose is perpendicular, so
+		# forward motion is tangential — helps the orbit, not a charge).
+		var fwd_component: float = move.dot(facing_vec)
+		throttle = clampf(fwd_component, 0.0, 1.0)
+		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
+		if has_target and dist_to_target < preferred_range - deadband:
+			is_braking = true
+			throttle   = 0.0
+
+	elif facing_mode == "nose_on" and has_target:
+		# Anchor/brawler/screen: always point bow at the target regardless of range.
+		var to_target: Vector2 = target.position - my_pos
+		desired_heading = direction_to_heading(to_target.normalized())
+		throttle = BLENDED_COMBAT_THROTTLE
+		var facing_vec: Vector2 = get_visual_forward(desired_heading)
+		var right_vec: Vector2  = Vector2(facing_vec.y, -facing_vec.x)
+		lateral_thrust = clampf(move.dot(right_vec), -1.0, 1.0)
+		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
+		if dist_to_target < preferred_range - deadband:
+			is_braking = true
+			throttle   = 0.0
+
+	elif at_close_range:
+		# "auto" close-range: face the target, use lateral thrust for positioning.
 		var to_target: Vector2 = target.position - my_pos
 		desired_heading = direction_to_heading(to_target.normalized())
 		throttle = BLENDED_COMBAT_THROTTLE
@@ -2780,7 +2841,7 @@ static func calculate_blended_control(
 			throttle = 0.0
 
 	else:
-		# Face the blended move direction; use main throttle to close.
+		# "auto" far-range (or no target): face the blended move direction, main throttle.
 		desired_heading = direction_to_heading(move)
 		throttle = BLENDED_APPROACH_THROTTLE
 		lateral_thrust = 0.0

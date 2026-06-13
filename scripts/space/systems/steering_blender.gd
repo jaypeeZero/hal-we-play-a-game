@@ -8,6 +8,7 @@ extends RefCounted
 ##   engagement_target  : String   — ship_id to fight; "" = none
 ##   goal_weights       : Dictionary — {pursue, keep_range, evade, formation} ≥ 0
 ##   preferred_range    : float    — desired distance to engagement_target
+##   facing_mode        : String   — "auto" / "nose_on" / "broadside" (Phase 2b)
 ##
 ## formation_slot and anchor_position are NOT set here — FormationSystem stamps
 ## them each frame with live positions (the enemy centroid moves every tick).
@@ -76,6 +77,22 @@ const FORMATION_WEIGHT_HOLD    := 0.6
 const FORMATION_WEIGHT_SUPPORT := 0.3
 const FORMATION_WEIGHT_PRESS   := 0.05
 
+# facing_mode per role (Phase 2b)
+## Maps a ship role to the Phase-2b facing_mode string.
+## artillery presents broadside so its side batteries bear on the target.
+## anchor/brawler/screen go nose-on to tank bow armor and bring forward guns.
+## skirmisher/interceptor/flanker use the inherited fighter "auto" rule.
+## Any unknown role falls back to "auto" — safest default, preserves prior behavior.
+const FACING_MODE_BY_ROLE := {
+	"artillery":   "broadside",
+	"anchor":      "nose_on",
+	"brawler":     "nose_on",
+	"screen":      "nose_on",
+	"skirmisher":  "auto",
+	"interceptor": "auto",
+	"flanker":     "auto",
+}
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -110,11 +127,13 @@ static func build_directive(
 
 	var preferred_range: float = _compute_preferred_range(range_scalar, weapon_optimal_range)
 	var goal_weights: Dictionary = _compute_goal_weights(ship, mentality_scalar, tactics, threats)
+	var facing_mode: String = _compute_facing_mode(tactics)
 
 	return {
 		"engagement_target": engagement_target,
 		"goal_weights":      goal_weights,
 		"preferred_range":   preferred_range,
+		"facing_mode":       facing_mode,
 		# FormationSystem owns these; zero here so callers can read safely
 		# without a null check before MovementSystem runs.
 		"formation_slot":    Vector2.ZERO,
@@ -197,6 +216,16 @@ static func _is_ship_targeted(ship: Dictionary, threats: Array) -> bool:
 		if threat.get("target_id", "") == my_id:
 			return true
 	return false
+
+
+## Derive facing_mode from the ship's resolved role.
+## The role encodes the ship's combat identity, which directly determines how
+## it should orient: artillery keeps its side batteries on the enemy (broadside),
+## tanks/screens keep their bow armor forward (nose_on), and fast movers defer
+## to the existing auto rule so their dogfighting logic is undisturbed.
+static func _compute_facing_mode(tactics: Dictionary) -> String:
+	var role: String = tactics.get("role", "")
+	return FACING_MODE_BY_ROLE.get(role, "auto")
 
 
 ## Hull fraction: ratio of surviving internal health to total max health.
