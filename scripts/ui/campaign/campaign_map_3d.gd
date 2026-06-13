@@ -66,8 +66,8 @@ const GAME_OVER_BANNER_TEXT := "GAME OVER\nYour fleet was lost in Sector E."
 @onready var _lines: MeshInstance3D = $ConnectionLines
 @onready var _sector_label: Label = $UI/SectorLabel
 @onready var _info_label: Label = $UI/InfoLabel
-@onready var _fleet_label: Label = $UI/FleetStatusLabel
 @onready var _banner_label: Label = $UI/BannerLabel
+@onready var _ui_layer: CanvasLayer = $UI
 
 var _star_materials: Dictionary = {}  # node_id -> StandardMaterial3D
 var _star_areas: Dictionary = {}      # node_id -> Area3D
@@ -79,11 +79,24 @@ var _campaign_over := false
 ## standing "select your destination" prompt on the next refresh.
 var _status_message := ""
 
+var _fleet_panel: FleetConditionPanel
+var _destination_panel: DestinationPanel
+
 
 func _ready() -> void:
 	if not RoguelikeRun.active or RoguelikeRun.campaign.is_empty():
 		# Direct scene launch (developer preview) starts a fresh campaign.
 		RoguelikeRun.start_run(FleetDataManager.load_fleet(0))
+
+	_fleet_panel = FleetConditionPanel.new()
+	_fleet_panel.hull_selected.connect(func(hull: Dictionary):
+		ShipViewModal.open(_ui_layer, hull))
+	_ui_layer.add_child(_fleet_panel)
+
+	_destination_panel = DestinationPanel.new()
+	_destination_panel.launch_requested.connect(_travel_to_node)
+	_ui_layer.add_child(_destination_panel)
+
 	_build_stars()
 	_build_line_mesh()
 	_set_zoom(_current_shell_radius() + CAMERA_SHELL_MARGIN)
@@ -134,7 +147,6 @@ func _resolve_battle_victory(node_id: String) -> void:
 			return
 		var from_sector: String = campaign["current_sector"]
 		CampaignSystem.promote(campaign)
-		_rescale_enemy_fleet()
 		sector_changed.emit(from_sector, campaign["current_sector"])
 		_tween_camera_to_current_shell()
 		_status_message = "Sector %s secured! Promoted to Sector %s." % [
@@ -156,7 +168,6 @@ func _resolve_battle_defeat() -> void:
 
 	var from_sector: String = campaign["current_sector"]
 	CampaignSystem.demote(campaign)
-	_rescale_enemy_fleet()
 	sector_changed.emit(from_sector, campaign["current_sector"])
 	_tween_camera_to_current_shell()
 	_status_message = "Fleet lost in Sector %s. Demoted to Sector %s; %d battered ship(s) limped home." % [
@@ -164,13 +175,9 @@ func _resolve_battle_defeat() -> void:
 	RoguelikeRun.save_campaign_to_disk()
 
 
-func _rescale_enemy_fleet() -> void:
-	RoguelikeRun.enemy_fleet = CampaignSystem.scaled_enemy_fleet(
-		FleetDataManager.load_fleet(1), RoguelikeRun.campaign["current_sector"])
-
-
 func _end_campaign(banner_text: String, result: String) -> void:
 	_campaign_over = true
+	_destination_panel.dismiss()
 	_refresh_map()
 	_banner_label.text = banner_text
 	_banner_label.visible = true
@@ -191,7 +198,20 @@ func _on_star_input_event(_camera: Node, event: InputEvent, _position: Vector3,
 		_on_node_clicked(node_id)
 
 
+## Open the destination side panel for the clicked star. All pickable stars
+## (current-sector only) are selectable; travel happens via Launch.
 func _on_node_clicked(node_id: String) -> void:
+	if _campaign_over:
+		return
+	var node := CampaignSystem.node_by_id(RoguelikeRun.campaign, node_id)
+	if node.is_empty():
+		return
+	_destination_panel.show_node(node, node_id == RoguelikeRun.campaign.get("current_node_id", ""))
+
+
+## Execute the jump: apply repairs, then branch into battle/shop/R&R flow.
+## Connected to DestinationPanel.launch_requested.
+func _travel_to_node(node_id: String) -> void:
 	if _campaign_over:
 		return
 	var node := CampaignSystem.node_by_id(RoguelikeRun.campaign, node_id)
@@ -239,11 +259,12 @@ func _open_shop(node: Dictionary, repair_summary: Dictionary) -> void:
 	var shop := ShopScreen.new()
 	add_child(shop)
 	# The shop carries per-hull condition in its roster headers, so the
-	# standalone fleet overlay is redundant (and would show through) while open.
-	_fleet_label.visible = false
+	# fleet panel is redundant (and would show through) while open.
+	_fleet_panel.visible = false
+	_destination_panel.dismiss()
 	shop.closed.connect(func():
 		shop.queue_free()
-		_fleet_label.visible = true
+		_fleet_panel.visible = true
 		_complete_node_visit(node, repair_summary))
 	shop.setup(node)
 
@@ -306,15 +327,16 @@ func _lose_run_to_bankruptcy() -> void:
 func _launch_battle(node: Dictionary) -> void:
 	RoguelikeRun.started_first_battle = true
 	RoguelikeRun.pending_battle_node_id = node["id"]
+	# Store the per-node enemy fleet so the battle pipeline can read it.
+	RoguelikeRun.enemy_fleet = node.get("enemy_fleet", {}).duplicate(true)
 	RoguelikeRun.save_campaign_to_disk()
 	node_selected.emit(node)
 	get_tree().change_scene_to_file(PRE_BATTLE_SCENE)
 
 
 func _on_star_mouse_entered(node_id: String) -> void:
-	var node := CampaignSystem.node_by_id(RoguelikeRun.campaign, node_id)
-	if node.get("accessible", false):
-		_star_areas[node_id].scale = Vector3.ONE * HOVERED_STAR_SCALE
+	# All pickable stars (current-sector only) respond to hover.
+	_star_areas[node_id].scale = Vector3.ONE * HOVERED_STAR_SCALE
 
 
 func _on_star_mouse_exited(node_id: String) -> void:
@@ -403,7 +425,8 @@ func _create_star(node: Dictionary) -> Area3D:
 	area.add_child(mesh_instance)
 
 	var label := Label3D.new()
-	label.text = "%s  +%d" % [NODE_TYPE_NAMES[node["type"]], int(node["star_date_gap"])]
+	# Node name on top line; type + jump cost below.
+	label.text = "%s\n%s  +%d" % [node["name"], NODE_TYPE_NAMES[node["type"]], int(node["star_date_gap"])]
 	label.position = STAR_LABEL_OFFSET
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	# Constant on-screen size so labels stay readable at any orbit distance.
@@ -542,48 +565,6 @@ func _show_battle_summary(summary: Dictionary) -> void:
 		_info_label.text += "\nInsurance paid out: -%d credits." % insurance
 
 
-## Hull-by-hull condition panel (credits, then each hull's armor/systems/crew),
-## so repairs and the run economy are visible between battles.
+## Delegate fleet condition rendering to FleetConditionPanel.
 func _update_fleet_status() -> void:
-	var lines := ["Credits: %d" % RoguelikeRun.money]
-	if RoguelikeRun.fleet_hulls.is_empty():
-		lines.append("Fleet: no hulls")
-	else:
-		lines.append("Fleet condition:")
-		for hull in RoguelikeRun.fleet_hulls:
-			lines.append(_hull_condition_line(hull))
-	_fleet_label.text = "\n".join(lines)
-
-
-func _hull_condition_line(hull: Dictionary) -> String:
-	var crew: Array = hull.get("crew", [])
-	var engineers: int = crew.filter(
-		func(c): return c.get("role", -1) == CrewData.Role.ENGINEER).size()
-	var iced_tag := "  [on ice]" if hull.get("iced", false) else ""
-
-	var ship: Dictionary = hull.get("ship", {})
-	if ship.is_empty():
-		return "%s  undamaged  crew %d  engineers %d%s" % [
-			hull.get("ship_type", "ship"), crew.size(), engineers, iced_tag]
-
-	var armor_current := 0
-	var armor_max := 0
-	for section in ship.get("armor_sections", []):
-		armor_current += int(section.get("current_armor", 0))
-		armor_max += int(section.get("max_armor", 0))
-
-	var systems_current := 0
-	var systems_max := 0
-	for component in ship.get("internals", []):
-		systems_current += int(component.get("current_health", 0))
-		systems_max += int(component.get("max_health", 0))
-
-	return "%s  armor %d%%  systems %d%%  crew %d  engineers %d%s" % [
-		hull.get("ship_type", "ship"), _percent(armor_current, armor_max),
-		_percent(systems_current, systems_max), crew.size(), engineers, iced_tag]
-
-
-func _percent(current: int, maximum: int) -> int:
-	if maximum <= 0:
-		return 100
-	return int(round(100.0 * current / maximum))
+	_fleet_panel.refresh(RoguelikeRun.money, RoguelikeRun.fleet_hulls)

@@ -5,6 +5,7 @@ extends GutTest
 ## shells, regardless of the tuning values in play.
 
 const TEST_SEED := 1234
+const TEST_ENEMY_FLEET := {"fighter": 4, "capital": 1}
 
 
 func _rng(seed_value: int = TEST_SEED) -> RandomNumberGenerator:
@@ -14,7 +15,7 @@ func _rng(seed_value: int = TEST_SEED) -> RandomNumberGenerator:
 
 
 func _generate(seed_value: int = TEST_SEED) -> Dictionary:
-	return CampaignGenerator.generate(_rng(seed_value))
+	return CampaignGenerator.generate(_rng(seed_value), TEST_ENEMY_FLEET)
 
 
 func _sector_nodes(campaign: Dictionary, sector: String) -> Array:
@@ -167,3 +168,56 @@ func test_json_round_trip_preserves_reachability():
 		for node in _sector_nodes(restored, sector):
 			assert_true(reached.has(node["id"]),
 				"Round trip should keep node %s reachable" % node["id"])
+
+
+func test_every_node_has_a_non_empty_name():
+	var campaign := _generate()
+	for node in campaign["nodes"].values():
+		assert_true(node.has("name"), "Every node should have a name key")
+		assert_gt(node["name"].length(), 0, "Every node name should be non-empty")
+
+
+func test_all_node_names_are_unique():
+	var campaign := _generate()
+	var seen := {}
+	for node in campaign["nodes"].values():
+		var name: String = node.get("name", "")
+		assert_false(seen.has(name), "Node name '%s' must be unique" % name)
+		seen[name] = true
+
+
+func test_battle_nodes_have_enemy_fleet_with_at_least_one_ship():
+	var campaign := _generate()
+	for node in campaign["nodes"].values():
+		if node["type"] == CampaignSystem.NODE_TYPE_BATTLE:
+			assert_true(node.has("enemy_fleet"),
+				"Battle node %s should have enemy_fleet" % node["id"])
+			var total := 0
+			for count in node["enemy_fleet"].values():
+				total += count
+			assert_gte(total, 1,
+				"Battle node %s enemy_fleet should have >= 1 ship" % node["id"])
+
+
+func test_battle_node_enemy_fleet_count_within_jitter():
+	var campaign := _generate()
+	for node in campaign["nodes"].values():
+		if node["type"] != CampaignSystem.NODE_TYPE_BATTLE:
+			continue
+		var scaled := CampaignSystem.scaled_enemy_fleet(TEST_ENEMY_FLEET, node["sector"])
+		for ship_type in scaled:
+			var scaled_count: int = scaled[ship_type]
+			var actual_count: int = node["enemy_fleet"].get(ship_type, 0)
+			# jitter is clamped to 0; actual may be 1 if the fleet was rescued
+			assert_gte(actual_count, maxi(0, scaled_count - CampaignGenerator.ENEMY_COUNT_JITTER),
+				"Fleet count for %s on %s should be within jitter" % [ship_type, node["id"]])
+			assert_lte(actual_count, scaled_count + CampaignGenerator.ENEMY_COUNT_JITTER,
+				"Fleet count for %s on %s should be within jitter" % [ship_type, node["id"]])
+
+
+func test_non_battle_nodes_have_no_enemy_fleet():
+	var campaign := _generate()
+	for node in campaign["nodes"].values():
+		if node["type"] != CampaignSystem.NODE_TYPE_BATTLE:
+			assert_false(node.has("enemy_fleet"),
+				"Non-battle node %s must not have enemy_fleet" % node["id"])

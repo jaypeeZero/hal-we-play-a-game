@@ -7,10 +7,13 @@ extends GutTest
 const TEST_SEED := 99
 
 
+const TEST_ENEMY_FLEET := {"fighter": 2, "capital": 1}
+
+
 func _campaign() -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = TEST_SEED
-	return CampaignGenerator.generate(rng)
+	return CampaignGenerator.generate(rng, TEST_ENEMY_FLEET)
 
 
 func _sector_node_with_flag(campaign: Dictionary, sector: String, flag: String) -> Dictionary:
