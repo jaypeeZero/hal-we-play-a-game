@@ -1,11 +1,17 @@
 class_name FormationSystem
 extends RefCounted
 
-## Per-frame formation slot stamper.
+## Formation slot resolver — pure per-frame geometry execution.
 ##
-## Owns formation_slot (absolute world position) and anchor_position on
-## ship.orders. Called once per frame before MovementSystem so the formation
-## goal is always live, even though crew decisions are event-driven.
+## The squadron leader's crew decision (in CrewAISystem) issues formation_slot
+## orders down the command chain.  Each pilot absorbs the order into
+## crew["formation_assignment"] and stamps it onto ship.orders.  This system
+## then resolves those assignments into live world positions each frame,
+## because the lead ship and enemy centroid move continuously.
+##
+## assign_slots() reads ship.orders.formation_assignment (set by the pilot's
+## absorbed order) and writes ship.orders.formation_slot + anchor_position.
+## Ships with no formation_assignment get their slot/anchor cleared.
 ##
 ## All functions are static pure: inputs are never mutated; the returned
 ## Array contains duplicate ships with updated orders.
@@ -57,100 +63,108 @@ const RESERVE_REAR := 350.0
 
 const OPERATIONAL_STATUS := "operational"
 
+# ── Facing axis ───────────────────────────────────────────────────────────────
+## Minimum speed for the lead ship's velocity to count as a heading hint.
+const MIN_LEAD_SPEED_FOR_HEADING := 10.0
+
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-## Stamp formation_slot (absolute world pos) and anchor_position onto each
-## ship's orders. Returns a NEW Array of ship dicts; inputs are not mutated.
-##
-## Steps:
-##   1. Group operational ships by team.
-##   2. Compute enemy centroid for each team (the anchor — formation faces it).
-##   3. Compute own centroid; build axis (toward enemy) and perp.
-##   4. Read shape/spacing/depth from the first ship's crew["tactics"] if present.
-##   5. Sort ships by ship_id for deterministic slot assignment.
-##   6. Stamp each ship's orders with formation_slot and anchor_position.
+## Resolve formation slots for every ship that has a formation_assignment.
+## Reads ship.orders.formation_assignment (stamped by the pilot's absorbed
+## formation_slot order) and writes formation_slot + anchor_position.
+## Ships with no assignment get their formation_slot/anchor_position cleared.
+## Returns a NEW Array of ship dicts; inputs are not mutated.
 static func assign_slots(ships: Array) -> Array:
-	# Group by team (operational only)
-	var by_team: Dictionary = _group_by_team(ships)
-	var team_centroids: Dictionary = {}
-	for team in by_team:
-		team_centroids[team] = _centroid(by_team[team])
-
-	# Pre-build updated orders dict keyed by ship_id
-	var slot_map: Dictionary = {}   # ship_id -> {formation_slot, anchor_position}
-
-	for team in by_team:
-		var own_ships: Array = by_team[team]
-		if own_ships.is_empty():
+	# Build ship_id → ship lookup for fast lead-ship resolution.
+	var ship_lookup: Dictionary = {}
+	for ship in ships:
+		if ship == null:
 			continue
+		ship_lookup[ship.get("ship_id", "")] = ship
 
-		# Anchor = centroid of ALL enemy teams (operational)
-		var enemy_positions: Array = []
-		for other_team in by_team:
-			if other_team != team:
-				for s in by_team[other_team]:
-					enemy_positions.append(s.get("position", Vector2.ZERO))
-		if enemy_positions.is_empty():
-			# No enemies — leave existing slots untouched for this team
-			continue
-
-		var anchor: Vector2 = _centroid_of_positions(enemy_positions)
-		var own_centroid: Vector2 = team_centroids[team]
-
-		# Axis toward enemy; perp is the lateral spread axis.
-		var axis: Vector2  = Vector2.ZERO
-		var to_enemy: Vector2 = anchor - own_centroid
-		if to_enemy.length() > 1.0:
-			axis = to_enemy.normalized()
-		else:
-			axis = Vector2(1.0, 0.0)   # arbitrary when fleets overlap
-		var perp: Vector2 = axis.rotated(PI / 2.0)
-
-		# Read formation dials from the first ship's tactics block.
-		var tactics: Dictionary = _read_tactics(own_ships[0])
-		var shape:   String  = tactics.get("shape",   "line_abreast")
-		var spacing: float   = tactics.get("spacing", 0.5)
-		var depth:   float   = tactics.get("depth",   0.5)
-
-		# Sort ships by ship_id for deterministic assignment.
-		var sorted_ships: Array = own_ships.duplicate()
-		sorted_ships.sort_custom(func(a, b): return a.get("ship_id", "") < b.get("ship_id", ""))
-		var count: int = sorted_ships.count(sorted_ships[0]) if false else sorted_ships.size()
-
-		for i in range(sorted_ships.size()):
-			var s: Dictionary = sorted_ships[i]
-			var role: String  = _read_tactics(s).get("role", "brawler")
-
-			# Offset in axis/perp basis
-			var local_offset: Vector2 = slot_offset(shape, i, sorted_ships.size(), spacing, depth, role)
-
-			# Convert to world coordinates: centroid + axis*local.y + perp*local.x
-			# local.x → spread along perp; local.y → depth along axis
-			var world_slot: Vector2 = own_centroid + axis * local_offset.y + perp * local_offset.x
-
-			slot_map[s.get("ship_id", "")] = {
-				"formation_slot":  world_slot,
-				"anchor_position": anchor,
-			}
-
-	# Rebuild the array with stamped orders; non-operational ships pass through unchanged.
 	var result: Array = []
 	for ship in ships:
 		if ship == null:
 			result.append(ship)
 			continue
-		var sid: String = ship.get("ship_id", "")
-		if slot_map.has(sid):
-			var updated: Dictionary = ship.duplicate(true)
-			var orders: Dictionary  = updated.get("orders", {}).duplicate(true)
-			orders["formation_slot"]  = slot_map[sid]["formation_slot"]
-			orders["anchor_position"] = slot_map[sid]["anchor_position"]
-			updated["orders"] = orders
-			result.append(updated)
-		else:
+
+		var orders: Dictionary = ship.get("orders", {})
+		var fa: Variant = orders.get("formation_assignment", null)
+
+		if fa == null or not fa is Dictionary:
+			# No assignment — clear stale formation pull and pass through.
+			var cleared: Dictionary = ship.duplicate(true)
+			var cleared_orders: Dictionary = cleared.get("orders", {}).duplicate(true)
+			cleared_orders.erase("formation_slot")
+			cleared_orders.erase("anchor_position")
+			cleared["orders"] = cleared_orders
+			result.append(cleared)
+			continue
+
+		var lead_ship: Variant = ship_lookup.get(fa.get("lead_ship_id", ""), null)
+		if lead_ship == null:
 			result.append(ship)
+			continue
+
+		# Facing axis: lead → enemy centroid, or lead velocity heading.
+		var axis_angle: float = _compute_facing_axis(lead_ship, ships)
+		var axis: Vector2 = Vector2(cos(axis_angle), sin(axis_angle))
+		var perp: Vector2 = axis.rotated(PI / 2.0)
+
+		var local_offset: Vector2 = slot_offset(
+			fa.get("shape", "line_abreast"),
+			fa.get("slot_index", 0),
+			fa.get("slot_count", 1),
+			fa.get("spacing", 0.5),
+			0.5,  # depth — leader may extend this in a future step
+			"wingman"
+		)
+
+		# Convert to world coordinates: lead_pos + axis*local.y + perp*local.x
+		# local.x → spread along perp; local.y → depth along axis
+		var lead_pos: Vector2 = lead_ship.get("position", Vector2.ZERO)
+		var world_slot: Vector2 = lead_pos + axis * local_offset.y + perp * local_offset.x
+
+		var updated: Dictionary = ship.duplicate(true)
+		var updated_orders: Dictionary = updated.get("orders", {}).duplicate(true)
+		updated_orders["formation_slot"]  = world_slot
+		updated_orders["anchor_position"] = lead_pos
+		updated["orders"] = updated_orders
+		result.append(updated)
+
 	return result
+
+
+## Compute the facing angle (radians) from lead ship toward nearest enemy centroid.
+## Falls back to lead velocity heading, then to 0.0 if stationary.
+static func _compute_facing_axis(lead_ship: Dictionary, all_ships: Array) -> float:
+	var lead_team: int = lead_ship.get("team", -1)
+	var lead_pos: Vector2 = lead_ship.get("position", Vector2.ZERO)
+
+	# Collect enemy positions.
+	var enemy_positions: Array = []
+	for ship in all_ships:
+		if ship == null:
+			continue
+		if ship.get("team", -1) == lead_team or ship.get("team", -1) < 0:
+			continue
+		if ship.get("status", "") != OPERATIONAL_STATUS:
+			continue
+		enemy_positions.append(ship.get("position", Vector2.ZERO))
+
+	if not enemy_positions.is_empty():
+		var centroid: Vector2 = _centroid_of_positions(enemy_positions)
+		var to_enemy: Vector2 = centroid - lead_pos
+		if to_enemy.length() > 1.0:
+			return to_enemy.angle()
+
+	# Fallback: lead ship velocity heading.
+	var vel: Vector2 = lead_ship.get("velocity", Vector2.ZERO)
+	if vel.length() > MIN_LEAD_SPEED_FOR_HEADING:
+		return vel.angle()
+
+	return 0.0
 
 
 ## Return a 2D offset for a ship's formation slot in the (perp, axis) basis.
@@ -262,31 +276,6 @@ static func _vanguard_reserve_offset(index: int, count: int, sep: float) -> Vect
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-## Group operational ships by team int.
-static func _group_by_team(ships: Array) -> Dictionary:
-	var result: Dictionary = {}
-	for s in ships:
-		if s == null:
-			continue
-		if s.get("status", "") != OPERATIONAL_STATUS:
-			continue
-		var team: int = s.get("team", -1)
-		if not result.has(team):
-			result[team] = []
-		result[team].append(s)
-	return result
-
-
-## Centroid (average position) of a list of ship dicts.
-static func _centroid(ship_list: Array) -> Vector2:
-	if ship_list.is_empty():
-		return Vector2.ZERO
-	var total: Vector2 = Vector2.ZERO
-	for s in ship_list:
-		total += s.get("position", Vector2.ZERO)
-	return total / float(ship_list.size())
-
-
 ## Centroid of a bare list of Vector2 positions.
 static func _centroid_of_positions(positions: Array) -> Vector2:
 	if positions.is_empty():
@@ -295,12 +284,3 @@ static func _centroid_of_positions(positions: Array) -> Vector2:
 	for p in positions:
 		total += p
 	return total / float(positions.size())
-
-
-## Read the tactics dict from the first crew member of a ship, if present.
-## Returns {} when no crew or no tactics block exists.
-static func _read_tactics(ship: Dictionary) -> Dictionary:
-	var crew: Array = ship.get("crew", [])
-	if crew.is_empty():
-		return {}
-	return crew[0].get("tactics", {})

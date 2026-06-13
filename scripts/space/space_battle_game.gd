@@ -163,9 +163,9 @@ func _process(delta: float) -> void:
 	if ENABLE_CREW_AI:
 		_commit_pending_intents()
 
-	# 1. FORMATION SYSTEM - Stamp live formation slots onto orders before movement.
-	# FormationSystem owns formation_slot and anchor_position; they must be
-	# recomputed every frame because the enemy centroid (the anchor) moves.
+	# 1. FORMATION SYSTEM - Resolve live world positions from formation_assignment.
+	# Slot specs were issued by squadron leaders (crew decisions); this resolves
+	# them each frame against live lead-ship and enemy positions.
 	_ships = FormationSystem.assign_slots(_ships)
 
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance

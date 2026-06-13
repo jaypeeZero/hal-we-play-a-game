@@ -7,6 +7,19 @@ extends RefCounted
 ##   FighterBrain (fighters), LargeShipPilotAI (large-ship engagement FSM).
 ## Following functional programming principles — all data is immutable.
 
+# ── Formation command constants ───────────────────────────────────────────────
+
+## Base interval (seconds) between formation-slot orders from a squadron leader.
+## High-skill leaders issue on this cadence; low-skill leaders wait longer.
+const FORMATION_COMMAND_CADENCE_BASE: float = 2.0
+
+## Low-skill leaders add up to this many extra seconds to the cadence.
+const FORMATION_COMMAND_CADENCE_SKILL_SCALE: float = 3.0
+
+## Leadership skill below this threshold produces sloppy slot assignments
+## (shuffled wingman order and jittered spacing).
+const FORMATION_SKILL_JITTER_THRESHOLD: float = 0.5
+
 # ============================================================================
 # MAIN API - Process crew decisions
 # ============================================================================
@@ -112,6 +125,12 @@ static func calculate_decision_delay(crew_data: Dictionary) -> float:
 
 ## Pilot makes tactical maneuvering decisions
 static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = [], wings: Array = []) -> Dictionary:
+	# Formation-slot orders: lift into crew["formation_assignment"] and stamp
+	# onto ship.orders so FormationSystem can resolve the live world position.
+	# Must run BEFORE _absorb_play_order; clearing orders.received here
+	# prevents execute_pilot_order from short-circuiting into discrete mode.
+	crew_data = _absorb_formation_order(crew_data, ships)
+
 	# Squadron-play orders are persistent constraints, not one-shot orders.
 	# Lift them off `orders.received` into `play_assignment` so the pilot's
 	# normal decision flow can read them as a navigation hint without the
@@ -175,6 +194,109 @@ static func _absorb_play_order(crew_data: Dictionary) -> Dictionary:
 	}
 	updated.orders.received = null
 	return updated
+
+## Absorb a received formation_slot order into crew["formation_assignment"].
+##
+## If orders.received is a formation_slot order, copies the formation_assignment
+## block into crew["formation_assignment"], stamps it onto the ship's orders
+## dict (so FormationSystem's resolver can read it), and clears orders.received
+## so execute_pilot_order does NOT short-circuit into discrete pursue mode.
+## Returns the (possibly mutated) crew dict and updated ship (via ships lookup).
+static func _absorb_formation_order(crew_data: Dictionary, ships: Array) -> Dictionary:
+	var received: Variant = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+	if received.get("type", "") != "formation_slot":
+		return crew_data
+
+	var fa: Dictionary = received.get("formation_assignment", {})
+	if fa.is_empty():
+		return crew_data
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated["formation_assignment"] = fa.duplicate(true)
+	updated.orders.received = null
+
+	# Also stamp formation_assignment onto the ship's orders dict so the
+	# per-frame FormationSystem resolver can read it without going through crew.
+	var ship_id: String = updated.get("assigned_to", "")
+	for i in range(ships.size()):
+		if ships[i] != null and ships[i].get("ship_id", "") == ship_id:
+			# Mutate in place — ships is an array of dicts owned by the caller
+			# and stamping formation_assignment is single-owner per frame.
+			ships[i]["orders"]["formation_assignment"] = fa.duplicate(true)
+			break
+
+	return updated
+
+
+## Issue formation-slot orders to all wingmen in the command chain.
+##
+## Called from make_fighter_pilot_decision when the crew holds the
+## "squadron_leader" command hat.  Throttled on FORMATION_COMMAND_CADENCE_BASE;
+## low-skill leaders wait longer and produce sloppier assignments.
+## Returns the (possibly mutated) crew dict with orders.issued populated.
+static func _issue_formation_commands(
+		crew_data: Dictionary, ship_data: Dictionary, game_time: float) -> Dictionary:
+	# Throttle: only issue if enough time has passed since last command.
+	var last_cmd_time: float = crew_data.get("last_formation_command_time", -INF)
+	var leadership_skill: float = crew_data.get("stats", {}).get("skills", {}).get(
+		"leadership", crew_data.get("stats", {}).get("skills", {}).get("tactics", 0.5))
+	# Low skill → longer cadence (add up to FORMATION_COMMAND_CADENCE_SKILL_SCALE extra seconds).
+	var cadence: float = FORMATION_COMMAND_CADENCE_BASE \
+		+ FORMATION_COMMAND_CADENCE_SKILL_SCALE * (1.0 - clampf(leadership_skill, 0.0, 1.0))
+	if game_time - last_cmd_time < cadence:
+		return crew_data
+
+	var subordinates: Array = crew_data.get("command_chain", {}).get("subordinates", [])
+	if subordinates.is_empty():
+		return crew_data
+
+	# Read formation shape/spacing from the leader's resolved tactics block.
+	var tactics: Dictionary = crew_data.get("tactics", {})
+	var shape: String   = tactics.get("shape",   "line_abreast")
+	var spacing: float  = tactics.get("spacing", 0.5)
+	var lead_ship_id: String = ship_data.get("ship_id", "")
+	var wingman_count: int = subordinates.size()
+
+	# Build wingman slot list (0-based).  Low-skill leaders shuffle assignments.
+	var slot_indices: Array = []
+	for i in range(wingman_count):
+		slot_indices.append(i)
+
+	if leadership_skill < FORMATION_SKILL_JITTER_THRESHOLD:
+		# Shuffle slot assignments so low-skill leaders are inconsistent.
+		slot_indices.shuffle()
+
+	# Optionally jitter spacing for low-skill leaders.
+	var effective_spacing: float = spacing
+	if leadership_skill < FORMATION_SKILL_JITTER_THRESHOLD:
+		effective_spacing = clampf(
+			spacing + randf_range(-0.15, 0.15) * (1.0 - leadership_skill * 2.0),
+			0.0, 1.0)
+
+	var issued_orders: Array = []
+	for i in range(wingman_count):
+		issued_orders.append({
+			"to": subordinates[i],
+			"type": "formation_slot",
+			"formation_assignment": {
+				"shape":        shape,
+				"slot_index":   slot_indices[i],
+				"slot_count":   wingman_count,
+				"spacing":      effective_spacing,
+				"lead_ship_id": lead_ship_id,
+			},
+		})
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated["last_formation_command_time"] = game_time
+	# Merge with any existing issued orders (plays may already populate this).
+	var existing_issued: Array = updated.orders.get("issued", []).duplicate()
+	existing_issued.append_array(issued_orders)
+	updated.orders.issued = existing_issued
+	return updated
+
 
 ## Execute order from captain
 static func execute_pilot_order(crew_data: Dictionary, game_time: float) -> Dictionary:
@@ -305,6 +427,12 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 	# system here so the leader can issue per-fighter play orders to the rest
 	# of the squadron alongside its own combat decision.
 	crew_data = _maybe_run_fighter_squadron_play(crew_data, ship_data, all_ships, game_time)
+
+	# Squadron-leader hat: issue formation-slot orders to wingmen (skill-gated,
+	# throttled on FORMATION_COMMAND_CADENCE_BASE).  This is additive to the
+	# leader's own blended flight decision — the leader still flies normally.
+	if crew_data.get("command_hat", "") == "squadron_leader":
+		crew_data = _issue_formation_commands(crew_data, ship_data, game_time)
 
 	# Check whether the current target just died (before calling make_decision,
 	# so we can shorten the next delay for elite pilots who spot the kill fast).
