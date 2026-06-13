@@ -49,6 +49,10 @@ var lead_phase: String     # lead's engagement phase, wingman only
 # Area
 var is_far_outside_area: bool
 
+# Combat posture (Layer A/B/C)
+var press_attack: bool          # true while a valid press_attack posture is active
+var posture_target_id: String   # concentrate-fire target from posture; "" if none
+
 
 static func build(
 	p_crew: Dictionary,
@@ -161,6 +165,27 @@ static func build(
 
 	# Area leash
 	ws.is_far_outside_area = _far_outside_area(p_ship)
+
+	# Combat posture (Layer A/B/C) — read from persistent crew_data.combat_posture slot.
+	var posture: Dictionary = p_crew.get("combat_posture", {})
+	var posture_subtype: String = posture.get("subtype", "")
+	var player_override: bool   = posture.get("player_override", false)
+	ws.press_attack = (
+		posture_subtype == "press_attack"
+		and (player_override or p_game_time < posture.get("expires_at", 0.0))
+	)
+	ws.posture_target_id = posture.get("target_id", "") if ws.press_attack else ""
+
+	# Honor posture concentrate-fire target: override the resolved target when the
+	# posture specifies one and the ship is still valid.
+	if ws.press_attack and ws.posture_target_id != "" \
+			and _ship_valid(ws.posture_target_id, p_all_ships):
+		ws.target_id   = ws.posture_target_id
+		ws.target_ship = get_ship(ws.target_id, p_all_ships)
+		ws.target_is_capital = (
+			not ws.target_ship.is_empty()
+			and FleetDataManager.is_large_ship(ws.target_ship.get("type", ""))
+		)
 
 	return ws
 

@@ -527,3 +527,29 @@ const MASTERY_TAPER_FLOOR := 0.25     # multiplier on gains at skill 1.0
 const AGGRESSION_SHIFT_MIN := 0.001   # shift after light adversity
 const AGGRESSION_SHIFT_MAX := 0.020   # shift after a mauling
 const COMPOSURE_PIVOT := 0.5          # composure >= pivot -> aggression up, else down
+
+# --- Repair parts pool (Layer D) ---
+## Pool as a fraction of total max armor + total max internal health.
+## A ship can repair at most this fraction of its total health across a full battle.
+## Lower = battles end faster. Start at 0.5 (half total health).
+const REPAIR_POOL_FRACTION_OF_MAX_HEALTH := 0.5
+
+# --- Press-attack maneuver (Layer A) ---
+## Desired distance when a fighter presses a capital under press_attack posture.
+const PRESS_ATTACK_RANGE := 700.0
+## Tolerance band around PRESS_ATTACK_RANGE; no thrust when within this band.
+const PRESS_ATTACK_RANGE_TOLERANCE := 150.0
+
+# --- Commit decisions (Layers B & C) ---
+## Operational enemy count considered "few" — triggers few-enemies commit.
+const COMMIT_ENEMY_COUNT_THRESHOLD := 2
+## Minimum engagement duration (seconds) before few-enemies trigger fires.
+const COMMIT_ENGAGEMENT_SECONDS := 45.0
+## Window over which damage progress is sampled for the stalemate detector.
+const COMMIT_STALL_WINDOW_SECONDS := 20.0
+## Net hull delta (damage - repair) at or below which we declare stalemate.
+const COMMIT_STALL_NET_DAMAGE_EPSILON := 5.0
+## How long a press_attack posture lasts. Must exceed captain re-decide interval.
+const COMMIT_POSTURE_DURATION := 15.0
+## GOAP cost for a commit/press-attack action — must beat hold/standoff.
+const COMMIT_COST := 0.2
