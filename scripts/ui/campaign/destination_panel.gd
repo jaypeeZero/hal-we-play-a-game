@@ -11,6 +11,9 @@ signal closed
 const PANEL_WIDTH := 320
 const SCREEN_MARGIN := 20
 
+const COLLAPSE_GLYPH := "▾"
+const EXPAND_GLYPH := "▸"
+
 const TYPE_LABELS := {
 	"battle": "Battle",
 	"shop":   "Shop",
@@ -18,7 +21,10 @@ const TYPE_LABELS := {
 }
 
 var _launch_button: Button
-var _content_box: VBoxContainer
+var _body: VBoxContainer
+var _toggle_btn: Button
+var _title_label: Label
+var _collapsed := false
 var _current_node_id: String
 
 
@@ -30,21 +36,39 @@ func _ready() -> void:
 	offset_left = offset_right - PANEL_WIDTH
 	visible = false
 
-
-## Rebuild content for the given node dict and show the panel.
-func show_node(node: Dictionary, is_current_position: bool) -> void:
-	_current_node_id = str(node.get("id", ""))
-
-	# Clear previous content
-	for child in get_children():
-		child.queue_free()
-
+	# Permanent outer container
 	var outer := VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 8)
 	add_child(outer)
 
-	# Title
-	outer.add_child(UiKit.section_title(str(node.get("name", ""))))
+	# Permanent header row
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 6)
+	outer.add_child(header)
+
+	_toggle_btn = Button.new()
+	_toggle_btn.text = COLLAPSE_GLYPH
+	UiKit.style_button(_toggle_btn, "ghost")
+	_toggle_btn.pressed.connect(_on_toggle)
+	header.add_child(_toggle_btn)
+
+	_title_label = UiKit.label("", UiKit.INK)
+	header.add_child(_title_label)
+
+	# Permanent body container — cleared and refilled on each show_node
+	_body = VBoxContainer.new()
+	_body.add_theme_constant_override("separation", 8)
+	outer.add_child(_body)
+
+
+## Rebuild content for the given node dict and show the panel.
+func show_node(node: Dictionary, is_current_position: bool) -> void:
+	_current_node_id = str(node.get("id", ""))
+	_title_label.text = str(node.get("name", ""))
+
+	# Clear body only — header row persists
+	for child in _body.get_children():
+		child.queue_free()
 
 	# Type badge
 	var node_type: String = node.get("type", "")
@@ -54,11 +78,11 @@ func show_node(node: Dictionary, is_current_position: bool) -> void:
 		"battle": badge_color = UiKit.BAD
 		"shop":   badge_color = UiKit.ACCENT
 		_:         badge_color = UiKit.GOOD
-	outer.add_child(UiKit.badge(type_label, badge_color))
+	_body.add_child(UiKit.badge(type_label, badge_color))
 
 	# Jump cost
 	var gap: int = node.get("star_date_gap", 0)
-	outer.add_child(UiKit.label("Jump: +%d star dates" % gap, UiKit.DIM))
+	_body.add_child(UiKit.label("Jump: +%d star dates" % gap, UiKit.DIM))
 
 	# Status line
 	var status_text: String
@@ -75,7 +99,7 @@ func show_node(node: Dictionary, is_current_position: bool) -> void:
 	else:
 		status_text = "Out of jump range"
 		status_color = UiKit.DIM
-	outer.add_child(UiKit.label(status_text, status_color))
+	_body.add_child(UiKit.label(status_text, status_color))
 
 	# Type-specific details
 	match node_type:
@@ -88,13 +112,13 @@ func show_node(node: Dictionary, is_current_position: bool) -> void:
 			var enemy_fleet: Dictionary = node.get("enemy_fleet", {})
 			for line in ScoutReportSystem.report_lines(enemy_fleet):
 				card_box.add_child(UiKit.label(line, UiKit.DIM))
-			outer.add_child(scout_card)
+			_body.add_child(scout_card)
 		"shop":
-			outer.add_child(UiKit.label("Trading post — hulls for sale, crew for hire.", UiKit.DIM))
+			_body.add_child(UiKit.label("Trading post — hulls for sale, crew for hire.", UiKit.DIM))
 		"randr":
-			outer.add_child(UiKit.label("Rest stop — extended shore leave and repairs.", UiKit.DIM))
+			_body.add_child(UiKit.label("Rest stop — extended shore leave and repairs.", UiKit.DIM))
 
-	# Footer
+	# Footer (part of body — hidden when collapsed)
 	var footer := HBoxContainer.new()
 	footer.alignment = BoxContainer.ALIGNMENT_END
 	footer.add_theme_constant_override("separation", 8)
@@ -112,7 +136,11 @@ func show_node(node: Dictionary, is_current_position: bool) -> void:
 	_launch_button.pressed.connect(_on_launch)
 	footer.add_child(_launch_button)
 
-	outer.add_child(footer)
+	_body.add_child(footer)
+
+	# Apply current collapse state
+	_body.visible = not _collapsed
+	_toggle_btn.text = EXPAND_GLYPH if _collapsed else COLLAPSE_GLYPH
 
 	visible = true
 
@@ -120,6 +148,12 @@ func show_node(node: Dictionary, is_current_position: bool) -> void:
 ## Hide the panel without emitting signals.
 func dismiss() -> void:
 	visible = false
+
+
+func _on_toggle() -> void:
+	_collapsed = not _collapsed
+	_body.visible = not _collapsed
+	_toggle_btn.text = EXPAND_GLYPH if _collapsed else COLLAPSE_GLYPH
 
 
 func _on_close() -> void:
