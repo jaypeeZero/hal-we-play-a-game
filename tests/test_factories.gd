@@ -73,6 +73,10 @@ static func make_ship(id: String, type: String = "fighter", team: int = 0, pos: 
 		"internals": [make_component("cockpit", "cockpit")],
 		"weapons": [],
 		"orders": {"current_order": "", "target_id": "", "maneuver_subtype": ""},
+		# Generous battle repair pool so existing tests are unaffected.
+		# Tests that exercise pool-exhaustion set this explicitly to 0.
+		"repair_pool": 9999,
+		"repair_pool_max": 9999,
 	}
 	for key in overrides:
 		ship[key] = overrides[key]

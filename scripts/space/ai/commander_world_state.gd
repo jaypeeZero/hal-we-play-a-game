@@ -17,6 +17,12 @@ var subordinate_count: int
 var knowledge_actions: Array     # suggested actions from query_commander_knowledge
 var best_target: Dictionary      # CrewAIShared.select_best_tactical_target result
 
+# Commit-decision inputs (Layer B)
+var enemy_count: int
+var engagement_elapsed: float
+var has_focus_target: bool
+var focus_target_net_delta: float
+
 
 static func build(crew_data: Dictionary, game_time: float) -> CommanderWorldState:
 	var ws := CommanderWorldState.new()
@@ -43,5 +49,14 @@ static func build(crew_data: Dictionary, game_time: float) -> CommanderWorldStat
 			ws.knowledge_actions.append(act)
 
 	ws.best_target = CrewAIShared.select_best_tactical_target(crew_data)
+
+	# Commit-decision inputs (Layer B)
+	ws.enemy_count        = TacticalProgressSystem.operational_enemy_count(crew_data)
+	ws.engagement_elapsed = TacticalProgressSystem.engagement_elapsed(crew_data, game_time)
+	var focus_id: String  = ws.best_target.get("id", "")
+	ws.has_focus_target   = focus_id != ""
+	ws.focus_target_net_delta = TacticalProgressSystem.net_hull_delta(
+		focus_id, WingConstants.COMMIT_STALL_WINDOW_SECONDS, game_time
+	) if ws.has_focus_target else 0.0
 
 	return ws

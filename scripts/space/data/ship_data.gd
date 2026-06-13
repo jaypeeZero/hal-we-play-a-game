@@ -172,6 +172,15 @@ static func create_crew_for_ship(ship_data: Dictionary, skill_level: float = 0.5
 		member.assigned_to = ship_data.ship_id
 	return crew
 
+## Compute the battle-scoped repair pool for a freshly spawned ship.
+## Derived from total max armor + total max internal health so it scales
+## automatically with ship class. No per-template magic numbers needed.
+static func compute_repair_pool(ship: Dictionary) -> int:
+	var total: int = DamageResolver.calculate_total_armor(ship) \
+		+ DamageResolver.calculate_total_internal_health(ship)
+	return int(float(total) * WingConstants.REPAIR_POOL_FRACTION_OF_MAX_HEALTH)
+
+
 ## Validate ship data structure
 static func validate_ship_data(data: Dictionary) -> bool:
 	if not data.has("ship_id"): return false

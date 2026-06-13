@@ -87,13 +87,17 @@ func _vs_capital(ws: FighterWorldState) -> Dictionary:
 		"disadvantaged": false,
 		"nearby_fighters": ws.nearby_friends,
 	}
-	var maneuver := FighterAction.query_knowledge(ws.my_ship, ws.target_ship, ctx, ws.crew_data)
-
-	if maneuver == "" or maneuver == "idle":
-		if ws.nearby_friends >= FighterAction.GROUP_RUN_THRESHOLD:
-			maneuver = "fight_group_run_approach"
-		else:
-			maneuver = "fight_dodge_and_weave"
+	# Press-attack posture overrides knowledge — the commit order means "close now".
+	var maneuver: String
+	if ws.press_attack:
+		maneuver = "fight_press_attack"
+	else:
+		maneuver = FighterAction.query_knowledge(ws.my_ship, ws.target_ship, ctx, ws.crew_data)
+		if maneuver == "" or maneuver == "idle":
+			if ws.nearby_friends >= FighterAction.GROUP_RUN_THRESHOLD:
+				maneuver = "fight_group_run_approach"
+			else:
+				maneuver = "fight_dodge_and_weave"
 
 	return {
 		"type": "maneuver",

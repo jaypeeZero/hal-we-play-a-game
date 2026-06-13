@@ -504,6 +504,8 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 			return calculate_cautious_approach(ship_data, target, nearby_ships, obstacles)
 		"fight_dodge_and_weave":
 			return calculate_dodge_and_weave(ship_data, target, nearby_ships, obstacles, game_time)
+		"fight_press_attack":
+			return calculate_press_attack(ship_data, target, game_time)
 		"fight_rejoin_wingman":
 			return calculate_rejoin_wingman(ship_data, target, nearby_ships, obstacles)
 		"fight_wing_rejoin":
@@ -1084,6 +1086,43 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		"engagement_range": 1400.0,
 		"current_distance": distance
 	}
+
+## Press-attack maneuver — used when a fighter has press_attack posture vs a capital.
+## Priority is distance closure, not evasion. Fighter faces the target and burns
+## main thrust until within PRESS_ATTACK_RANGE, then holds the band with light lateral jink.
+static func calculate_press_attack(ship_data: Dictionary, target: Dictionary, game_time: float) -> Dictionary:
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+	var t_pos: Vector2  = target.get("position", Vector2.ZERO)
+	var to_target := t_pos - my_pos
+	var distance := to_target.length()
+
+	# Always face the target for aiming.
+	var desired_heading := direction_to_heading(to_target)
+
+	var throttle := 0.0
+	var should_brake := false
+	var dist_error := distance - WingConstants.PRESS_ATTACK_RANGE
+
+	if dist_error > WingConstants.PRESS_ATTACK_RANGE_TOLERANCE:
+		# Too far — close hard.
+		throttle = 1.0
+	elif dist_error < -WingConstants.PRESS_ATTACK_RANGE_TOLERANCE:
+		# Too close — back off.
+		should_brake = true
+
+	# Light lateral jink so the fighter isn't a stationary target.
+	var lateral_thrust: float = committed_strafe_direction(ship_data, DOGFIGHT_STRAFE_HOLD_MS, game_time) * 0.35
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle": throttle,
+		"thrust_active": throttle > 0.1,
+		"is_braking": should_brake,
+		"lateral_thrust": lateral_thrust,
+		"engagement_range": WingConstants.PRESS_ATTACK_RANGE,
+		"current_distance": distance,
+	}
+
 
 ## Squadron-play waypoint — fly toward a tactical offset assigned by the
 ## squadron leader's active play. The pilot aims at `formation_position` at

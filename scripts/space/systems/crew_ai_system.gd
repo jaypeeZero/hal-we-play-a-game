@@ -118,6 +118,10 @@ static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: 
 	# generic "execute order" path consuming them as a one-time movement.
 	crew_data = _absorb_play_order(crew_data)
 
+	# Posture orders (press_attack) are also persistent — lift into combat_posture
+	# so they survive across multiple decision ticks without being consumed once.
+	crew_data = _absorb_posture_order(crew_data)
+
 	# Check for orders from captain - ALWAYS respect superior orders
 	if crew_data.orders.received != null:
 		return execute_pilot_order(crew_data, game_time)
@@ -152,6 +156,29 @@ static func infer_ship_type(crew_data: Dictionary) -> String:
 	else:
 		# Solo pilot = fighter
 		return "fighter"
+
+## Lift incoming "posture" orders into the persistent `combat_posture` slot,
+## clearing them from `orders.received`. Postures persist across ticks (they
+## expire via `expires_at` or a player_override flag) so they need their own
+## storage separate from consume-once received orders.
+## Returns the (possibly mutated) crew dict.
+static func _absorb_posture_order(crew_data: Dictionary) -> Dictionary:
+	var received = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+	if received.get("type", "") != "posture":
+		return crew_data
+	var updated := crew_data.duplicate(true)
+	updated["combat_posture"] = {
+		"subtype":        received.get("subtype", ""),
+		"target_id":      received.get("target_id", ""),
+		"expires_at":     received.get("expires_at", 0.0),
+		"player_override": received.get("player_override", false),
+		"received_at":    received.get("timestamp", 0.0),
+	}
+	updated.orders.received = null
+	return updated
+
 
 ## Lift incoming "play" orders into the persistent `play_assignment` slot,
 ## clearing them from `orders.received`. Plays span multiple decision ticks

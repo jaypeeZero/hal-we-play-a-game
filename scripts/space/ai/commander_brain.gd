@@ -41,6 +41,7 @@ static func decide(ws: CommanderWorldState, game_time: float) -> Dictionary:
 static func _get_actions() -> Array:
 	return [
 		StrategicWithdrawalAction.new(),
+		CommanderCommitAction.new(),       # Layer B commit
 		ConcentrateForceAction.new(),
 		ShiftFocusAction.new(),
 		HoldLineAction.new(),
