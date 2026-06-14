@@ -21,7 +21,7 @@ func test_get_effective_range_returns_max_weapon_range():
 
 func test_get_effective_range_returns_max_when_multiple_weapons():
 	# Torpedo launcher has a longer range than gatling_gun; effective range = torpedo's.
-	var ship := TestFactories.make_torpedo_boat("tp1")
+	var ship := TestFactories.make_torpedo_boat()
 	var torpedo_range: float = float(TestFactories.WEAPON_CLASS_STATS["torpedo_launcher"]["range"])
 	var effective := WeaponSystem.get_effective_range(ship)
 	assert_eq(effective, torpedo_range,
@@ -85,8 +85,9 @@ func test_fighter_at_kite_preferred_range_can_fire():
 
 	var kite_dist := _kite_preferred_range(fighter)
 
-	# Place enemy directly in front (within forward arc: -45..+45 degrees)
-	var enemy := TestFactories.make_fighter("e1", Vector2(kite_dist, 0.0), 1)
+	# A ship at rotation 0 faces -Y (visual_forward = (sin r, -cos r) = (0,-1)),
+	# so "directly ahead, in the forward arc" is -Y, not +X.
+	var enemy := TestFactories.make_fighter("e1", Vector2(0.0, -kite_dist), 1)
 	enemy["velocity"] = Vector2.ZERO
 
 	var result := WeaponSystem.update_weapons(fighter, [fighter, enemy], 1.0)
@@ -105,7 +106,8 @@ func test_fighter_at_three_times_weapon_range_cannot_fire():
 	var weapon_range := WeaponSystem.get_effective_range(fighter)
 	var far_dist := weapon_range * 3.0
 
-	var enemy := TestFactories.make_fighter("e1", Vector2(far_dist, 0.0), 1)
+	# Directly ahead (-Y), but far beyond weapon range → must not fire.
+	var enemy := TestFactories.make_fighter("e1", Vector2(0.0, -far_dist), 1)
 	enemy["velocity"] = Vector2.ZERO
 
 	var result := WeaponSystem.update_weapons(fighter, [fighter, enemy], 1.0)

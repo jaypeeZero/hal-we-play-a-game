@@ -91,18 +91,21 @@ static func _apply_base_stats(data: Dictionary) -> Dictionary:
 			weapons.append(BaseStats.apply_weapon_base_stats(weapon))
 		data.weapons = weapons
 
-	# Apply base stats to internals (engines), then synthesize one destroyable
-	# weapon mount per weapon. Mounts are derived from the weapons array (not
-	# authored in the template) so weapon placement data is never duplicated;
-	# the step is idempotent, skipping any mount already present.
+	# Apply base stats to internals (engines), then — for LARGE SHIPS ONLY —
+	# synthesize one destroyable weapon mount per weapon. Corvette/capital guns
+	# sit in turrets that can be knocked out individually; fighter-class guns are
+	# integral to the hull and are never destroyed on their own (the fighter dies
+	# first). Mounts are derived from the weapons array (not authored in the
+	# template) so placement data is never duplicated; the step is idempotent.
 	if data.has("internals"):
 		var internals := []
 		for internal in data.internals:
 			internals.append(BaseStats.apply_internal_base_stats(internal))
-		for weapon in data.get("weapons", []):
-			var mount := _weapon_mount_for(weapon)
-			if not _has_component(internals, mount.component_id):
-				internals.append(BaseStats.apply_internal_base_stats(mount))
+		if FleetDataManager.is_large_ship(data.get("type", "")):
+			for weapon in data.get("weapons", []):
+				var mount := _weapon_mount_for(weapon)
+				if not _has_component(internals, mount.component_id):
+					internals.append(BaseStats.apply_internal_base_stats(mount))
 		data.internals = internals
 
 	return data
