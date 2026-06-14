@@ -271,8 +271,8 @@ func _complete_node_visit(node: Dictionary, repair_summary: Dictionary) -> void:
 ## Open the crew management overlay from the campaign map fleet panel.
 func _open_manage_crew() -> void:
 	_fleet_panel.visible = false
-	var screen := CrewManagementScreen.open(_ui_layer)
-	screen.closed.connect(func():
+	var screen := FleetCommandScreen.open_overlay(_ui_layer)
+	screen.done.connect(func() -> void:
 		_fleet_panel.visible = true
 		_update_fleet_status())
 
@@ -282,15 +282,12 @@ func _open_manage_crew() -> void:
 ## (called above in _travel_to_node), so this screen is purely interactive
 ## crew/fleet management on top of those passive repairs.
 func _open_rest(node: Dictionary, repair_summary: Dictionary) -> void:
-	var rest := RestScreen.new()
-	add_child(rest)
 	_fleet_panel.visible = false
 	_destination_panel.dismiss()
-	rest.closed.connect(func():
-		rest.queue_free()
+	var screen := FleetCommandScreen.open_overlay(self)
+	screen.done.connect(func() -> void:
 		_fleet_panel.visible = true
 		_complete_node_visit(node, repair_summary))
-	rest.setup()
 
 
 ## Open the shop overlay for a shop node, completing the node visit once the

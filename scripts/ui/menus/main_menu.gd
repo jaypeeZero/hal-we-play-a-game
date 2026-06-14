@@ -12,7 +12,10 @@ func _on_new_game_pressed() -> void:
 
 
 func _on_edit_fleets_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/fleet_editor.tscn")
+	var screen := FleetCommandScreen.new()
+	screen.setup(SkirmishSource.new(0), "save")
+	screen.done.connect(func() -> void: screen.queue_free())
+	get_tree().get_root().add_child(screen)
 
 
 func _on_roguelite_pressed() -> void:

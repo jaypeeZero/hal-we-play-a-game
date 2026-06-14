@@ -82,7 +82,15 @@ const OFF_ROLE_PERFORMANCE_MULTIPLIER := 0.7
 ## qualified for whatever they are assigned to.
 static func is_off_role(crew: Dictionary) -> bool:
 	var qualified: Array = crew.get("qualified_roles", [])
-	return not qualified.is_empty() and not qualified.has(int(crew.get("role", -1)))
+	if qualified.is_empty():
+		return false
+	# Compare as ints: JSON-loaded crew encode role ids as floats (2.0), so a
+	# raw Array.has(int) membership test would spuriously report off-role.
+	var role: int = int(crew.get("role", -1))
+	for q in qualified:
+		if int(q) == role:
+			return false
+	return true
 
 ## The performance multiplier this crew member's assignment earns: the
 ## off-role penalty, or full performance when serving in a qualified role.

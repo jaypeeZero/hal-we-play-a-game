@@ -159,13 +159,16 @@ static func effective_instructions(doctrine: Dictionary, crew: Dictionary, ship_
 	return entries
 
 
-## The instructions visible when editing a scope directly (fleet or class
-## selection in the UI): the scope's own entries plus inherited ones, no
-## role filtering and no per-crew disables.
+## The instructions visible when editing a scope directly (fleet, class, or crew
+## selection in the UI): the scope's own entries plus inherited ones, no role
+## filtering and no per-crew disables. scope_key is the class (ship_type) or the
+## crew_id for the CLASS / CREW scopes respectively.
 static func scope_view(doctrine: Dictionary, scope: String, scope_key: String = "") -> Array:
 	var layers := [{"scope": SCOPE_FLEET, "instances": doctrine.get(SCOPE_FLEET, {})}]
 	if scope == SCOPE_CLASS:
 		layers.append({"scope": SCOPE_CLASS, "instances": doctrine.get(SCOPE_CLASS, {}).get(scope_key, {})})
+	elif scope == SCOPE_CREW:
+		layers.append({"scope": SCOPE_CREW, "instances": doctrine.get(SCOPE_CREW, {}).get(scope_key, {})})
 	return _layered_entries(layers, -1)
 
 
