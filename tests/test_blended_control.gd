@@ -74,7 +74,7 @@ func _heading_to_dir(h: float) -> Vector2:
 func test_blended_control_always_returns_all_pilot_control_keys():
 	var ship   := _make_ship(Vector2.ZERO, OPTIMAL_RANGE, _balanced_weights())
 	var target := _make_target(Vector2(2000, 0))
-	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	assert_true(ctrl.has("desired_heading"), "must have desired_heading")
 	assert_true(ctrl.has("throttle"),        "must have throttle")
 	assert_true(ctrl.has("thrust_active"),   "must have thrust_active")
@@ -84,7 +84,7 @@ func test_blended_control_always_returns_all_pilot_control_keys():
 
 func test_blended_control_with_no_target_still_returns_all_keys():
 	var ship := _make_ship(Vector2.ZERO, OPTIMAL_RANGE, _balanced_weights())
-	var ctrl := MovementSystem.calculate_blended_control(ship, {}, [], 0.016)
+	var ctrl := MovementSystem.calculate_blended_control(ship, {}, [], [], [], 0.016)
 	assert_true(ctrl.has("desired_heading"), "no-target: must have desired_heading")
 	assert_true(ctrl.has("throttle"),        "no-target: must have throttle")
 	assert_true(ctrl.has("thrust_active"),   "no-target: must have thrust_active")
@@ -101,7 +101,7 @@ func test_distant_target_with_short_preferred_range_applies_throttle():
 	# Pursuit + keep_range both push the ship toward target → throttle > 0.
 	var ship   := _make_ship(Vector2.ZERO, 200.0, _chase_weights())
 	var target := _make_target(Vector2(5000, 0))
-	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	assert_gt(ctrl["throttle"], 0.0,
 		"With a distant target and short preferred_range the ship must apply positive throttle")
 
@@ -109,7 +109,7 @@ func test_distant_target_with_short_preferred_range_applies_throttle():
 func test_distant_target_is_not_braking():
 	var ship   := _make_ship(Vector2.ZERO, 200.0, _chase_weights())
 	var target := _make_target(Vector2(5000, 0))
-	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	assert_false(ctrl["is_braking"],
 		"A ship closing on a distant target must not be braking")
 
@@ -126,7 +126,7 @@ func test_target_inside_preferred_range_triggers_braking_or_backoff():
 	var close_pos: Vector2 = Vector2(100, 0)   # well inside preferred_range
 	var ship := _make_ship(Vector2.ZERO, large_range, _balanced_weights())
 	var target := _make_target(close_pos)
-	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	# At close range (inside LATERAL_THRUST_RANGE) braking or lateral correction
 	# must apply. Either is acceptable — both express "back off."
 	assert_true(ctrl["is_braking"] or ctrl["throttle"] == 0.0,
@@ -145,7 +145,7 @@ func test_dominant_evade_weight_faces_away_from_threat():
 	# Place target very far so threat dominates and we're outside LATERAL_THRUST_RANGE
 	var target := _make_target(Vector2(50000, 0))
 	var threats := [_make_threat(threat_pos)]
-	var ctrl := MovementSystem.calculate_blended_control(ship, target, threats, 0.016)
+	var ctrl := MovementSystem.calculate_blended_control(ship, target, threats, [], [], 0.016)
 	# The heading should have a leftward (−X) component, i.e. facing away from threat.
 	var facing: Vector2 = _heading_to_dir(ctrl["desired_heading"])
 	assert_lt(facing.x, 0.0,
@@ -162,7 +162,7 @@ func test_close_range_target_produces_heading_toward_target():
 	var target_pos: Vector2 = Vector2(500, 0)   # close range
 	var ship   := _make_ship(Vector2.ZERO, OPTIMAL_RANGE, _balanced_weights())
 	var target := _make_target(target_pos)
-	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	var facing: Vector2 = _heading_to_dir(ctrl["desired_heading"])
 	assert_gt(facing.x, 0.0,
 		"At close range the ship must face the target (rightward heading) regardless of move blend")
@@ -177,7 +177,7 @@ func test_close_range_can_produce_nonzero_lateral_thrust():
 	var ship   := _make_ship(Vector2.ZERO, OPTIMAL_RANGE, _balanced_weights())
 	var target := _make_target(target_pos)
 	var threats := [_make_threat(threat_pos)]
-	var ctrl := MovementSystem.calculate_blended_control(ship, target, threats, 0.016)
+	var ctrl := MovementSystem.calculate_blended_control(ship, target, threats, [], [], 0.016)
 	# When the ship faces the target (right) and evade pushes up, the perpendicular
 	# component is non-zero → lateral_thrust should be non-zero.
 	assert_ne(ctrl["lateral_thrust"], 0.0,
@@ -202,7 +202,7 @@ func test_no_orders_does_not_crash():
 	}
 	var target := _make_target(Vector2(2000, 0))
 	# Must not crash — just return a valid struct.
-	var ctrl := MovementSystem.calculate_blended_control(ship_no_orders, target, [], 0.016)
+	var ctrl := MovementSystem.calculate_blended_control(ship_no_orders, target, [], [], [], 0.016)
 	assert_true(ctrl.has("desired_heading"), "bare orders: must still return desired_heading")
 
 
@@ -213,7 +213,7 @@ func test_no_orders_does_not_crash():
 func test_thrust_active_true_when_throttle_above_threshold():
 	var ship   := _make_ship(Vector2.ZERO, 200.0, _chase_weights())
 	var target := _make_target(Vector2(5000, 0))
-	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	assert_eq(ctrl["thrust_active"], ctrl["throttle"] > 0.1,
 		"thrust_active must equal (throttle > 0.1)")
 
@@ -266,7 +266,7 @@ func test_dominant_formation_weight_steers_toward_far_slot():
 	var target_pos: Vector2   = Vector2(5000.0, 0.0)   # far right
 	var ship   := _make_ship_with_slot(ship_pos, OPTIMAL_RANGE, _formation_weights(), slot_pos)
 	var target := _make_target(target_pos)
-	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	var facing: Vector2 = _heading_to_dir(ctrl["desired_heading"])
 	assert_gt(facing.y, 0.0,
 		"With dominant formation weight and slot above, ship must have upward (+Y) heading component")
@@ -280,7 +280,7 @@ func test_formation_slot_at_ship_position_does_not_override_pursuit():
 	var target_pos: Vector2 = Vector2(5000.0, 0.0)
 	var ship   := _make_ship_with_slot(ship_pos, 200.0, _formation_weights(), slot_pos)
 	var target := _make_target(target_pos)
-	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	# Slot is zero-distance → formation goal vanishes; pursue takes over.
 	assert_gt(ctrl["throttle"], 0.0,
 		"With formation slot at ship position, the ship must still apply throttle toward the distant target")

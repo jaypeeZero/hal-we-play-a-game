@@ -384,7 +384,7 @@ func test_broadside_facing_mode_perpendicular_to_target():
 	}
 	var target := {"ship_id": "e1", "position": Vector2(3000, 0)}
 
-	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	var facing: Vector2 = _heading_to_dir(ctrl.desired_heading)
 	# to_target is (1,0). Perpendicular is (0,±1). So facing.x should be near 0.
 	assert_lt(absf(facing.x), 0.3,
@@ -416,7 +416,7 @@ func test_nose_on_facing_mode_faces_target():
 	# "auto" would face the move direction at far range, "nose_on" must always face target.
 	var target := {"ship_id": "e1", "position": Vector2(5000, 0)}
 
-	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], 0.016)
+	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	var facing: Vector2 = _heading_to_dir(ctrl.desired_heading)
 	# Target is at +X → facing must have positive X component.
 	assert_gt(facing.x, 0.5,

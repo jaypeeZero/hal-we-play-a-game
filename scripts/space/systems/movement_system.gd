@@ -259,7 +259,8 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 			tactical_target = find_nearest_enemy(ship_data, targets)
 		# Build a lightweight threat list for the converter (position only is enough)
 		var tactical_threats: Array = _gather_enemy_positions(ship_data, targets)
-		pilot_control = calculate_blended_control(ship_data, tactical_target, tactical_threats, delta)
+		# Pass nearby_ships + obstacles so blended steering can separate from friendlies
+		pilot_control = calculate_blended_control(ship_data, tactical_target, tactical_threats, nearby_ships, obstacles, delta)
 
 	else:
 		# No orders or unknown order - use default behavior (find nearest enemy)
@@ -2046,10 +2047,34 @@ const BLENDED_MOVE_MIN_LENGTH := 0.01
 ##   {desired_heading, throttle, thrust_active, is_braking, lateral_thrust}
 ##
 ## Not yet routed into update_ship_movement — that is Phase 1b.
+## Multiplier on combined_radii that defines the zone inside which separation
+## becomes active. 3.0 means a ship reacts when friendlies are within 3× the
+## summed hull sizes — roughly one ship-length of breathing room.
+const SEPARATION_RADIUS_FACTOR    := 3.0
+
+## Base weight of the separation goal in the blend.  At the edge of the
+## separation zone the goal is effectively zero; it ramps steeply to
+## SEPARATION_WEIGHT at contact (inverse-square curve).  Set high enough
+## that a single near-contact neighbor dominates a full formation+pursue
+## stack (0.7 + 0.8 = 1.5), but the curve fades quickly so ships can still
+## close to normal formation spacing without resistance.
+const SEPARATION_WEIGHT           := 5.0
+
+## Detection lookahead distance for obstacle avoidance in blended mode.
+## Ships start reacting to obstacles within this many pixels of their centre.
+const OBSTACLE_AVOID_MARGIN       := 200.0
+
+## Weight of the obstacle-avoidance goal when an obstacle is detected.
+## Lower than SEPARATION_WEIGHT (5.0) because obstacles don't move — a ship
+## steering away at moderate weight will clear them without jittering.
+const OBSTACLE_AVOID_WEIGHT       := 2.0
+
 static func calculate_blended_control(
 	ship_data: Dictionary,
 	target: Dictionary,
 	threats: Array,
+	nearby_ships: Array,
+	obstacles: Array,
 	_delta: float
 ) -> Dictionary:
 	var orders: Dictionary  = ship_data.get("orders", {})
@@ -2089,7 +2114,7 @@ static func calculate_blended_control(
 			var radial_dir: Vector2 = (target.position - my_pos).normalized()
 			goal_keep_range = radial_dir if radial_err > 0.0 else -radial_dir
 
-	# evade: away from nearest threat
+	# evade: away from nearest enemy threat
 	var goal_evade: Vector2 = Vector2.ZERO
 	if not threats.is_empty():
 		var nearest: Dictionary = _nearest_threat(my_pos, threats)
@@ -2098,21 +2123,102 @@ static func calculate_blended_control(
 			if away.length() > BLENDED_MOVE_MIN_LENGTH:
 				goal_evade = away.normalized()
 
+	# separation: boids-style push away from nearby same-team ships.
+	# Inverse-square curve: rises steeply near hull-touch, fades at zone edge
+	# so ships form up normally at spacing > combined_radii but are strongly
+	# repelled when about to clip.
+	#
+	# Each neighbor contributes a push vector scaled by (strength * SEPARATION_WEIGHT).
+	# We accumulate WITHOUT normalizing so that N neighbors each push independently
+	# and the total magnitude grows with crowd density.
+	# separation_effective_weight is fixed at 1.0 because the scaling is already
+	# baked into goal_separation's magnitude.
+	var goal_separation: Vector2 = Vector2.ZERO
+	var separation_effective_weight: float = 1.0
+	var my_col_radius: float = ship_data.get("collision_radius", 15.0)
+	# Track the closest neighbor and how deep we are inside its safety margin
+	# so we can suppress convergence goals that would pull us closer.
+	var min_neighbor_dist: float = INF
+	var min_neighbor_combined_radii: float = 0.0
+	for other in nearby_ships:
+		if other == null or other.get("ship_id","") == ship_data.get("ship_id",""):
+			continue
+		var to_other: Vector2 = other.get("position", Vector2.ZERO) - my_pos
+		var dist: float = to_other.length()
+		var other_col_radius: float = other.get("collision_radius", my_col_radius)
+		var combined_radii: float = my_col_radius + other_col_radius
+		var sep_radius: float = combined_radii * SEPARATION_RADIUS_FACTOR
+		if dist < min_neighbor_dist:
+			min_neighbor_dist = dist
+			min_neighbor_combined_radii = combined_radii
+		if dist < sep_radius and dist > BLENDED_MOVE_MIN_LENGTH:
+			# t = 0 at zone edge, 1 at contact. Squared gives inverse-square curve.
+			var t: float = 1.0 - (dist / sep_radius)
+			var strength: float = t * t * SEPARATION_WEIGHT
+			goal_separation -= to_other.normalized() * strength
+	# No normalize: accumulated magnitude is the influence signal.
+
+	# Convergence-goal suppression: when a neighbor is inside the SEPARATION zone
+	# (closer than combined_radii × SEPARATION_RADIUS_FACTOR), scale down any goals
+	# that would pull this ship TOWARD that neighbor (formation, pursue, keep_range
+	# if pointing inward).  This prevents the vector-cancellation problem where
+	# symmetric piles zero out separation and formation wins by default.
+	# suppress_t = 0 at zone edge → 1 at contact; convergence goals are scaled by (1 - suppress_t).
+	var convergence_suppress: float = 0.0
+	if min_neighbor_dist < INF:
+		var inner_sep_radius: float = min_neighbor_combined_radii * SEPARATION_RADIUS_FACTOR
+		if min_neighbor_dist < inner_sep_radius:
+			var t: float = 1.0 - (min_neighbor_dist / inner_sep_radius)
+			convergence_suppress = t * t   # 0 at edge, 1 at contact — same curve as separation
+
+	# Apply suppression: scale formation and pursuit down as neighbors get close.
+	# At contact (suppress=1) formation is fully zeroed; at zone edge (suppress=0) it's unchanged.
+	var effective_w_form: float   = w_form   * (1.0 - convergence_suppress)
+	var effective_w_pursue: float = w_pursue * (1.0 - convergence_suppress)
+	var effective_w_range: float  = w_range  * (1.0 - convergence_suppress)
+
 	# formation: toward formation_slot, which is an ABSOLUTE world position
 	# stamped by FormationSystem each frame (not an offset from anchor_position).
 	var goal_formation: Vector2 = Vector2.ZERO
 	var slot: Vector2    = orders.get("formation_slot",  Vector2.ZERO)
-	if w_form > 0.0:
+	if effective_w_form > 0.0:
 		var to_slot: Vector2 = slot - my_pos
 		if to_slot.length() > BLENDED_MOVE_MIN_LENGTH:
 			goal_formation = to_slot.normalized()
 
+	# obstacle avoidance: steer away from blocking obstacles within lookahead margin.
+	# Works identically to separation but uses the obstacle's radius for the zone.
+	var goal_obstacle: Vector2 = Vector2.ZERO
+	var obstacle_effective_weight: float = 0.0
+	for obs in obstacles:
+		if obs == null or obs.get("status","operational") == "destroyed":
+			continue
+		if not obs.get("blocks_movement", true):
+			continue
+		var to_obs: Vector2 = obs.get("position", Vector2.ZERO) - my_pos
+		var dist: float = to_obs.length()
+		var combined: float = my_col_radius + obs.get("radius", 0.0)
+		var detect_dist: float = combined + OBSTACLE_AVOID_MARGIN
+		if dist < detect_dist and dist > BLENDED_MOVE_MIN_LENGTH:
+			var strength: float = 1.0 - ((dist - combined) / OBSTACLE_AVOID_MARGIN)
+			strength = clampf(strength, 0.0, 1.0)
+			goal_obstacle -= to_obs.normalized() * strength
+			obstacle_effective_weight += strength * OBSTACLE_AVOID_WEIGHT
+
+	if goal_obstacle.length() > BLENDED_MOVE_MIN_LENGTH:
+		goal_obstacle = goal_obstacle.normalized()
+
 	# --- 2. Blend ---
+	# Separation uses its accumulated magnitude directly (weight=1.0).
+	# Convergence goals (pursue, keep_range, formation) use suppressed weights
+	# so that proximity pressure fades them out as neighbors approach hull-touch.
 	var move: Vector2 = (
-		goal_pursue    * w_pursue  +
-		goal_keep_range * w_range  +
-		goal_evade     * w_evade   +
-		goal_formation * w_form
+		goal_pursue     * effective_w_pursue +
+		goal_keep_range * effective_w_range  +
+		goal_evade      * w_evade            +
+		goal_formation  * effective_w_form   +
+		goal_separation * separation_effective_weight +
+		goal_obstacle   * obstacle_effective_weight
 	)
 
 	# Normalize to a unit direction; if effectively zero, hold current heading.
