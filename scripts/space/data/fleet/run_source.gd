@@ -31,10 +31,17 @@ func squadrons() -> Array:
 	return RoguelikeRun.squadrons
 
 
-## Crew pool in a run is the entire available roster minus already-hired ids.
-## Returns roster entries not yet consumed this run (same pool the shop shows).
+## Crew pool in a run is the hire roster (entries not yet consumed), rendered as
+## crew dicts so the Fleet Command pool shows role/skills and drag works. Each
+## member's crew_id carries its roster id; dragging onto a vacancy hires them
+## (see assign / can_assign below).
 func crew_pool() -> Array:
-	return RoguelikeRun.available_crew()
+	var pool: Array = []
+	for entry in RoguelikeRun.available_crew():
+		var member := CrewData.from_roster_entry(entry)
+		member["crew_id"] = str(entry.get("id", ""))
+		pool.append(member)
+	return pool
 
 
 ## Add a bare hull of ship_type to the run fleet (no crew aboard — use assign to staff it).
@@ -47,14 +54,21 @@ func remove_ship(hull_id: String) -> void:
 	RoguelikeRun.dismiss_hull(hull_id)
 
 
-## Whether crew_id can move to a matching vacancy on hull_id.
+## Whether the dragged crew can land on hull_id: a pool candidate hires into a
+## matching vacancy; an owned crew member transfers.
 func can_assign(crew_id: String, hull_id: String) -> bool:
+	if RoguelikeRun.is_pool_candidate(crew_id):
+		return RoguelikeRun.can_hire_to_hull(crew_id, hull_id)
 	return RoguelikeRun.can_transfer(crew_id, hull_id)
 
 
-## Move crew_id to the matching vacancy on hull_id.
+## Land the dragged crew on hull_id: hire a pool candidate, or transfer an
+## owned crew member to the matching vacancy.
 func assign(crew_id: String, hull_id: String) -> void:
-	RoguelikeRun.transfer_crew(crew_id, hull_id)
+	if RoguelikeRun.is_pool_candidate(crew_id):
+		RoguelikeRun.hire_to_hull(crew_id, hull_id)
+	else:
+		RoguelikeRun.transfer_crew(crew_id, hull_id)
 
 
 ## Remove crew_id from their hull. In the run context, dismissing a crew member

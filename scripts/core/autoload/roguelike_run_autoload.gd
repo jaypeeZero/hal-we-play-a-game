@@ -174,6 +174,49 @@ func crew_entry_by_id(roster_id: String) -> Dictionary:
 	return CrewRosterManager.entry_by_id(roster_id)
 
 
+## True when `id` names an unhired hire candidate in this run's pool (vs an
+## owned crew member's crew_id). Lets the Fleet Command pool tell hire from
+## transfer when crew are dragged onto a hull.
+func is_pool_candidate(id: String) -> bool:
+	if hired_roster_ids.has(id):
+		return false
+	for entry in run_roster:
+		if str(entry.get("id", "")) == id:
+			return true
+	return false
+
+
+## Whether pool candidate `roster_id` could be hired onto `dest_hull_id` —
+## i.e. the hull has a vacant slot for a role the candidate qualifies for.
+func can_hire_to_hull(roster_id: String, dest_hull_id: String) -> bool:
+	return not _matching_hire_vacancy(roster_id, dest_hull_id).is_empty()
+
+
+## Hire pool candidate `roster_id` into its first matching vacancy on
+## `dest_hull_id`. Returns false when no matching vacancy exists.
+func hire_to_hull(roster_id: String, dest_hull_id: String) -> bool:
+	var slot := _matching_hire_vacancy(roster_id, dest_hull_id)
+	if slot.is_empty():
+		return false
+	return fill_vacancy(dest_hull_id, slot, roster_id)
+
+
+## The first vacant slot on `dest_hull_id` whose role the pool candidate
+## `roster_id` qualifies for, or {} if none.
+func _matching_hire_vacancy(roster_id: String, dest_hull_id: String) -> Dictionary:
+	var entry := crew_entry_by_id(roster_id)
+	if entry.is_empty():
+		return {}
+	var hull := hull_by_id(dest_hull_id)
+	if hull.is_empty():
+		return {}
+	var wanted: Array = CrewData.roles_of(entry)
+	for slot in hull_vacancies(hull):
+		if wanted.has(int(slot.get("role", -1))):
+			return slot
+	return {}
+
+
 ## A freshly seeded RNG for economy rolls. Centralized so all run-economy
 ## randomness flows through one place.
 func _new_rng() -> RandomNumberGenerator:

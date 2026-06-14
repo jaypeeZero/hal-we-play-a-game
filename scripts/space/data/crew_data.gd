@@ -68,6 +68,35 @@ static func qualified_roles_from_entry(entry: Dictionary) -> Array:
 		roles.append(Role.PILOT)
 	return roles
 
+## The serving role of any crew-ish dict, as a Role int — the ONE place role is
+## read off a dict. Handles every shape that has bitten us:
+##   • a live crew dict   → its `role` int
+##   • a JSON-loaded crew → `role` as a float (2.0) — int()-coerced
+##   • a roster entry     → first of its `roles` name array (no `role` key)
+## Never returns an out-of-range value: an unknown/missing role falls back to
+## PILOT, so callers never render "Unknown" or compare against a stray -1.
+## Prefer this over `int(member.get("role", -1))` everywhere.
+static func role_of(member: Dictionary) -> int:
+	if member.has("role") and member["role"] != null:
+		var role := int(member["role"])
+		return role if ROLE_NAMES.has(role) else Role.PILOT
+	var roles: Array = member.get("roles", [])
+	if not roles.is_empty():
+		return role_from_name(str(roles[0]))
+	return Role.PILOT
+
+## The qualified roles of any crew-ish dict, as Role ints. Reads `qualified_roles`
+## (live crew) or `roles` names (roster entry); defaults to [serving role].
+static func roles_of(member: Dictionary) -> Array:
+	if member.has("qualified_roles") and not member["qualified_roles"].is_empty():
+		var ints: Array = []
+		for q in member["qualified_roles"]:
+			ints.append(int(q))
+		return ints
+	if not member.get("roles", []).is_empty():
+		return qualified_roles_from_entry(member)
+	return [role_of(member)]
+
 ## Whether the crew member is qualified to serve in `role`.
 static func is_qualified_for(crew: Dictionary, role: int) -> bool:
 	return crew.get("qualified_roles", []).has(role)

@@ -20,20 +20,12 @@ const MAX_NAME_RETRIES := 20
 static func generate_run_roster(base: Array, size: int, rng: RandomNumberGenerator) -> Array:
 	var role_means := _role_skill_means(base)
 	var name_banks := _load_name_banks()
-	var role_keys: Array = CrewData.ROLE_NAMES.keys()
 
-	# Build a role sequence by repeating shuffled decks until we have `size` roles.
-	var role_sequence: Array = []
-	while role_sequence.size() < size:
-		var deck: Array = role_keys.duplicate()
-		# Fisher-Yates shuffle using the seeded rng.
-		for j in range(deck.size() - 1, 0, -1):
-			var k: int = rng.randi_range(0, j)
-			var tmp = deck[j]
-			deck[j] = deck[k]
-			deck[k] = tmp
-		role_sequence.append_array(deck)
-	role_sequence = role_sequence.slice(0, size)
+	# Role mix mirrors fleet DEMAND: the base roster is weighted toward the roles
+	# ships actually need (many pilots/gunners, few commanders), so a generated
+	# pool stays craftable. An even split would starve pilots and leave hulls
+	# unflyable.
+	var role_sequence := _demand_weighted_role_sequence(base, size, rng)
 
 	var used_callsigns: Dictionary = {}
 	var result: Array = []
@@ -62,6 +54,52 @@ static func generate_run_roster(base: Array, size: int, rng: RandomNumberGenerat
 		})
 
 	return result
+
+
+## Build a length-`size` sequence of role ints whose proportions mirror the
+## base roster's primary-role frequencies (fleet demand). Shortfalls from
+## rounding are padded with the most-needed role so a pool never under-crews
+## the fleet's pilots. Shuffled so role order doesn't bias which hull gets whom.
+static func _demand_weighted_role_sequence(base: Array, size: int, rng: RandomNumberGenerator) -> Array:
+	# Count primary roles in the base; fall back to an even mix if base is empty.
+	var counts: Dictionary = {}
+	for role_int in CrewData.ROLE_NAMES.keys():
+		counts[role_int] = 0
+	var total: int = 0
+	for entry in base:
+		var roles: Array = entry.get("roles", [])
+		if roles.is_empty():
+			continue
+		counts[CrewData.role_from_name(str(roles[0]))] += 1
+		total += 1
+	if total == 0:
+		for role_int in CrewData.ROLE_NAMES.keys():
+			counts[role_int] = 1
+			total += 1
+
+	# Allocate proportional slots, then pad any shortfall with the highest-demand
+	# role (the one with the largest base share — pilots/gunners in practice).
+	var sequence: Array = []
+	var top_role: int = CrewData.Role.PILOT
+	var top_count: int = -1
+	for role_int in counts:
+		if counts[role_int] > top_count:
+			top_count = counts[role_int]
+			top_role = role_int
+		var allotment: int = int(round(float(counts[role_int]) / float(total) * float(size)))
+		for _j in range(allotment):
+			sequence.append(role_int)
+	while sequence.size() < size:
+		sequence.append(top_role)
+	sequence = sequence.slice(0, size)
+
+	# Fisher-Yates shuffle using the seeded rng.
+	for j in range(sequence.size() - 1, 0, -1):
+		var k: int = rng.randi_range(0, j)
+		var tmp = sequence[j]
+		sequence[j] = sequence[k]
+		sequence[k] = tmp
+	return sequence
 
 
 ## Precompute role → {skill → mean} from the base roster entries.

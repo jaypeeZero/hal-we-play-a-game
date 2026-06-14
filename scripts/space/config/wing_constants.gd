@@ -575,8 +575,9 @@ const ATTRIBUTE_NEGATIVE_QUIRK_CHANCE := 0.35
 const CLOSE_RANGE_OPTIMAL_FRACTION := 0.5
 
 # --- Run roster ---
-## Target crew pool size generated at run start.
-const RUN_ROSTER_SIZE := 30
+## Target crew pool size generated at run start. Sized to crew a large starting
+## fleet (every fighter needs its own pilot) and still leave hires/replacements.
+const RUN_ROSTER_SIZE := 50
 ## Gaussian noise (sigma) applied to skill values during procedural generation.
 const GEN_SKILL_NOISE := 0.08
 

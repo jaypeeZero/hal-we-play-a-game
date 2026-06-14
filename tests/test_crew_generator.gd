@@ -337,3 +337,69 @@ func test_v2_shaped_save_loads_without_error():
 		"A v2-shaped save loads without error")
 	assert_eq(RoguelikeRun.run_roster, [],
 		"run_roster defaults to [] when absent from save")
+
+
+# ── Demand-weighted role mix + full-fleet crewing (pilot-starvation regression) ──
+
+func test_generated_role_mix_favours_high_demand_roles() -> void:
+	# The base roster is weighted toward pilots/gunners (fleets need many of them)
+	# and few commanders. A generated pool must mirror that demand, not split
+	# roles evenly — an even split starves pilots.
+	var roster := CrewGenerator.generate_run_roster(
+		CrewRosterManager.load_roster(), 60, _make_rng(7))
+	var counts := {}
+	for entry in roster:
+		var r: int = CrewData.role_of(entry)
+		counts[r] = int(counts.get(r, 0)) + 1
+	assert_gt(int(counts.get(CrewData.Role.PILOT, 0)),
+		int(counts.get(CrewData.Role.FLEET_COMMANDER, 0)),
+		"pilots should far outnumber fleet commanders in a generated pool")
+
+
+func test_fighter_heavy_fleet_is_fully_crewed_with_pilots() -> void:
+	# Regression: every fighter needs its own pilot. A demand-matched pool must
+	# leave no hull pilotless, so the fleet can actually launch.
+	RoguelikeRun.start_run(_counts({"fighter": 8, "corvette": 2}))
+	for hull in RoguelikeRun.fleet_hulls:
+		assert_true(RoguelikeRun._has_pilot(hull),
+			"%s hull should have a pilot" % str(hull.get("ship_type")))
+	assert_eq(RoguelikeRun.sortieable_hulls().size(), RoguelikeRun.fleet_hulls.size(),
+		"all hulls sortie (none grounded for want of a pilot)")
+	RoguelikeRun.end_run()
+
+
+# ── Fleet Command crew pool: shape + drag-to-hire ──
+
+func test_crew_pool_members_render_as_crew_with_resolvable_roles() -> void:
+	# The pool must hand the UI crew dicts (role resolvable, crew_id present),
+	# never raw roster entries that render as "Unknown" and can't be dragged.
+	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	var source := RunSource.new()
+	var pool := source.crew_pool()
+	assert_gt(pool.size(), 0, "a fresh run has hire candidates in the pool")
+	for member in pool:
+		assert_ne(CrewData.get_role_name(CrewData.role_of(member)), "Unknown",
+			"pool member resolves to a known role")
+		assert_ne(str(member.get("crew_id", "")), "", "pool member carries a crew_id for dragging")
+	RoguelikeRun.end_run()
+
+
+func test_pool_candidate_hires_into_a_matching_vacancy() -> void:
+	# Dragging a pool candidate onto a hull with a matching vacancy hires them.
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var hull: Dictionary = RoguelikeRun.add_purchased_hull("fighter")  # bare, needs a pilot
+	var hull_id: String = str(hull.get("hull_id", ""))
+	var source := RunSource.new()
+	# Find a pilot-qualified candidate in the pool.
+	var candidate := {}
+	for member in source.crew_pool():
+		if CrewData.roles_of(member).has(CrewData.Role.PILOT):
+			candidate = member
+			break
+	assert_false(candidate.is_empty(), "pool has a pilot-qualified candidate")
+	var crew_id: String = str(candidate.get("crew_id", ""))
+	assert_true(source.can_assign(crew_id, hull_id), "candidate can be hired onto the bare hull")
+	source.assign(crew_id, hull_id)
+	assert_true(RoguelikeRun._has_pilot(RoguelikeRun.hull_by_id(hull_id)),
+		"the hull has a pilot after the hire")
+	RoguelikeRun.end_run()
