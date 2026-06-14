@@ -66,8 +66,10 @@ func _on_fleet_launch_pressed() -> void:
 
 
 func _on_edit_fleet_pressed() -> void:
-	RoguelikeRun.editor_return_scene = "res://scenes/fleet_management.tscn"
-	get_tree().change_scene_to_file("res://scenes/fleet_editor.tscn")
+	var screen := FleetCommandScreen.new()
+	screen.setup(RunSource.new(), "done")
+	screen.done.connect(func() -> void: screen.queue_free())
+	get_tree().get_root().add_child(screen)
 
 
 func _on_manage_crew_pressed() -> void:

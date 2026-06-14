@@ -30,23 +30,49 @@ const BOX_BORDER_WIDTH: float = 2.0
 
 var _input: PreBattleInput
 var _preview_entities: Dictionary = {}
-var _squadron_manager: SquadronManager = null
+var _fleet_command: FleetCommandScreen = null
 
 
 func _ready() -> void:
+	_open_fleet_command()
+
+
+func _open_fleet_command() -> void:
+	var source: FleetSource
+	if RoguelikeRun.active:
+		source = RunSource.new()
+	else:
+		source = SkirmishSource.new(0)
+	_fleet_command = FleetCommandScreen.new()
+	_fleet_command.setup(source, "launch")
+	_fleet_command.done.connect(_on_fleet_command_done)
+	$UI.add_child(_fleet_command)
+
+
+func _on_fleet_command_done() -> void:
+	if _fleet_command != null:
+		_fleet_command.queue_free()
+		_fleet_command = null
+	_build_battle_plan()
+	_on_start_battle_pressed()
+
+
+func _build_battle_plan() -> void:
 	var team0_fleet: Dictionary
 	var team1_fleet: Dictionary
 	if RoguelikeRun.active:
 		team0_fleet = RoguelikeRun.fleet_counts(true)
 		team1_fleet = RoguelikeRun.enemy_fleet
 	else:
-		team0_fleet = FleetDataManager.load_fleet(0)
+		team0_fleet = SkirmishFleet.fleet_counts(0)
 		team1_fleet = FleetDataManager.load_fleet(1)
 
 	BattlePlan.battlefield_size = BATTLEFIELD_SIZE
 	BattlePlan.entries = BattlePlanner.build_default_plan(team0_fleet, team1_fleet, BATTLEFIELD_SIZE)
 	if RoguelikeRun.active:
 		BattlePlan.entries = BattlePlanner.assign_hull_ids(BattlePlan.entries, RoguelikeRun.sortieable_hulls())
+	else:
+		BattlePlan.entries = BattlePlanner.assign_hull_ids(BattlePlan.entries, SkirmishFleet.get_fleet(0))
 
 	for i in range(BattlePlan.entries.size()):
 		_preview_entities[i] = _spawn_preview_ship(BattlePlan.entries[i])
@@ -58,32 +84,7 @@ func _ready() -> void:
 	)
 	_input = PreBattleInput.new(BattlePlan.entries, bounds)
 
-	_squadron_manager = SquadronManager.new()
-	$UI.add_child(_squadron_manager)
-	if RoguelikeRun.active:
-		_squadron_manager.setup(RoguelikeRun.fleet_hulls, RoguelikeRun.squadrons)
-	else:
-		_squadron_manager.setup(_fleet_hulls_from_plan())
-	_squadron_manager.done.connect(_on_start_battle_pressed)
-
 	queue_redraw()
-
-
-## Build a minimal hull list from team-0 plan entries for non-roguelike battles.
-## Also stamps synthetic hull_ids onto those entries so SquadronSystem can key on them.
-func _fleet_hulls_from_plan() -> Array:
-	var hulls: Array = []
-	var counters: Dictionary = {}
-	for entry in BattlePlan.entries:
-		if int(entry.get("team", -1)) != 0:
-			continue
-		var st: String = entry.get("ship_type", "unknown")
-		var n: int = counters.get(st, 0)
-		var hull_id := "%s_%d" % [st, n]
-		entry["hull_id"] = hull_id
-		hulls.append({"hull_id": hull_id, "ship_type": st})
-		counters[st] = n + 1
-	return hulls
 
 
 func _spawn_preview_ship(entry: Dictionary) -> ShipEntity:
@@ -139,6 +140,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
+	if _input == null:
+		return
 	for i in range(BattlePlan.entries.size()):
 		var entry: Dictionary = BattlePlan.entries[i]
 		var team: int = int(entry.get("team", 0))

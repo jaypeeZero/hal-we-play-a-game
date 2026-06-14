@@ -15,9 +15,9 @@ func action_id() -> String: return "flank"
 
 func cost(ws: FighterWorldState) -> float:
 	# Cheaper when more allies are already engaging (clearer flanking opportunity)
-	var ally_bonus := clamp(ws.allies_engaging_target * 0.08, 0.0, 0.20)
+	var ally_bonus: float = clamp(ws.allies_engaging_target * 0.08, 0.0, 0.20)
 	# Cheaper with higher skill (better execution)
-	var skill_bonus := clamp((ws.skill - MIN_SKILL) * 0.1, 0.0, 0.06)
+	var skill_bonus: float = clamp((ws.skill - MIN_SKILL) * 0.1, 0.0, 0.06)
 	return BASE_COST - ally_bonus - skill_bonus
 
 
