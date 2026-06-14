@@ -34,6 +34,7 @@ var hesitate_roll: bool            # REACTIVE captain hesitates on opportunity
 # Commit-decision inputs (Layer B)
 var enemy_count: int               # operational enemies known via awareness
 var engagement_elapsed: float      # seconds since first contact
+var fleet_aggression: float        # resolved doctrine mentality 0..1 — gates commit-to-press
 var has_focus_target: bool
 var focus_target_net_delta: float  # net hull damage over COMMIT_STALL_WINDOW_SECONDS
 
@@ -76,6 +77,9 @@ static func build(crew_data: Dictionary, game_time: float) -> CaptainWorldState:
 	# Commit-decision inputs (Layer B)
 	ws.enemy_count         = TacticalProgressSystem.operational_enemy_count(crew_data)
 	ws.engagement_elapsed  = TacticalProgressSystem.engagement_elapsed(crew_data, game_time)
+	# Doctrine aggression gates commit-to-press: a defensive/kiting fleet keeps
+	# its identity instead of auto-charging. Default 0.5 → below the gate.
+	ws.fleet_aggression    = float(crew_data.get("tactics", {}).get("mentality_scalar", 0.5))
 	var focus_id: String   = ws.mission_target.get("id", "")
 	ws.has_focus_target    = focus_id != ""
 	ws.focus_target_net_delta = TacticalProgressSystem.net_hull_delta(

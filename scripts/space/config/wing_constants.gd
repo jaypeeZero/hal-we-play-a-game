@@ -553,3 +553,8 @@ const COMMIT_STALL_NET_DAMAGE_EPSILON := 5.0
 const COMMIT_POSTURE_DURATION := 15.0
 ## GOAP cost for a commit/press-attack action — must beat hold/standoff.
 const COMMIT_COST := 0.2
+## Minimum doctrine aggression (resolved mentality_scalar, 0..1) for the
+## commit-to-press escalation to fire. Below this, defensive/balanced fleets
+## hold their tactics (a kiting doctrine never auto-charges) — preserves the
+## emergent variety between aggressive and defensive doctrines.
+const COMMIT_MIN_AGGRESSION := 0.6

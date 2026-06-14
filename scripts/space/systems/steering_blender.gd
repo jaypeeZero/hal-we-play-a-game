@@ -112,10 +112,10 @@ const POSTURE_HOLD := {
 ## pursue dominant, keep_range/evade minimal so the ship dives inside firing
 ## range and stays there rather than orbiting or peeling off.
 const POSTURE_PRESS := {
-	"pursue":     0.9,    # dominant — drive straight in
-	"keep_range": 0.1,    # minimal — don't hold at range, close to brawl
-	"evade":      0.05,   # near-zero — commit despite incoming fire
-	"formation":  0.02,   # low — break formation to press the attack
+	"pursue":     0.7,    # dominant — drive in and close
+	"keep_range": 0.3,    # retained — still respects weapon range, avoids piling onto one point
+	"evade":      0.1,    # low — commits, but not blind to incoming fire
+	"formation":  0.15,   # some cohesion kept so a pressing wing doesn't fully clump
 }
 
 # facing_mode per role (Phase 2b)

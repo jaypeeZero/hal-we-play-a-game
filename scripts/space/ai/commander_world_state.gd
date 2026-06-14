@@ -20,6 +20,7 @@ var best_target: Dictionary      # CrewAIShared.select_best_tactical_target resu
 # Commit-decision inputs (Layer B)
 var enemy_count: int
 var engagement_elapsed: float
+var fleet_aggression: float  # resolved doctrine mentality 0..1 — gates commit-to-press
 var has_focus_target: bool
 var focus_target_net_delta: float
 
@@ -53,6 +54,8 @@ static func build(crew_data: Dictionary, game_time: float) -> CommanderWorldStat
 	# Commit-decision inputs (Layer B)
 	ws.enemy_count        = TacticalProgressSystem.operational_enemy_count(crew_data)
 	ws.engagement_elapsed = TacticalProgressSystem.engagement_elapsed(crew_data, game_time)
+	# Only aggressive doctrines escalate to a fleet-wide press; defensive hold.
+	ws.fleet_aggression   = float(crew_data.get("tactics", {}).get("mentality_scalar", 0.5))
 	var focus_id: String  = ws.best_target.get("id", "")
 	ws.has_focus_target   = focus_id != ""
 	ws.focus_target_net_delta = TacticalProgressSystem.net_hull_delta(

@@ -31,6 +31,9 @@ func _captain_ws_with(
 	has_focus: bool = true
 ) -> CaptainWorldState:
 	var crew := _make_captain()
+	# Default to an aggressive doctrine so the commit gate (COMMIT_MIN_AGGRESSION)
+	# is satisfied — these cases exercise the trigger logic, not the doctrine gate.
+	crew["tactics"] = {"mentality_scalar": 1.0}
 	# Seed engagement_started_at so elapsed is correct.
 	if not crew.has("combat_state"):
 		crew["combat_state"] = {}
@@ -62,6 +65,7 @@ func _commander_ws_with(
 	net_delta: float
 ) -> CommanderWorldState:
 	var crew := _make_commander()
+	crew["tactics"] = {"mentality_scalar": 1.0}  # aggressive — satisfies the commit gate
 	if not crew.has("combat_state"):
 		crew["combat_state"] = {}
 	crew["combat_state"]["engagement_started_at"] = GAME_TIME - engagement_secs
@@ -198,6 +202,30 @@ func test_commander_does_not_commit_when_progress_is_positive():
 
 	assert_false(action.precondition(ws),
 		"Commander must not commit when net progress is being made")
+
+
+# ---------------------------------------------------------------------------
+# Doctrine gate: defensive fleets do NOT commit (preserves doctrine variety)
+# ---------------------------------------------------------------------------
+
+func test_captain_does_not_commit_when_doctrine_defensive():
+	# All commit triggers satisfied, but a defensive doctrine must hold its
+	# tactics rather than charge — this is what keeps a kiting fleet kiting.
+	var ws := _captain_ws_with(1, WingConstants.COMMIT_ENGAGEMENT_SECONDS + 10.0, 0.0)
+	ws.fleet_aggression = 0.2
+	var action := CaptainPressAttackAction.new()
+
+	assert_false(action.precondition(ws),
+		"A defensive doctrine must not commit to an all-out press even when triggers fire")
+
+
+func test_commander_does_not_commit_when_doctrine_defensive():
+	var ws := _commander_ws_with(1, WingConstants.COMMIT_ENGAGEMENT_SECONDS + 10.0, 0.0)
+	ws.fleet_aggression = 0.2
+	var action := CommanderCommitAction.new()
+
+	assert_false(action.precondition(ws),
+		"A defensive commander must not escalate the fleet to an all-out press")
 
 
 # ---------------------------------------------------------------------------

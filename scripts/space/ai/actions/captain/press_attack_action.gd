@@ -28,6 +28,11 @@ func precondition(ws: CaptainWorldState) -> bool:
 		and ws.engagement_elapsed >= WingConstants.COMMIT_STALL_WINDOW_SECONDS
 		and ws.focus_target_net_delta <= WingConstants.COMMIT_STALL_NET_DAMAGE_EPSILON
 	)
+	# Doctrine gate: only aggressive fleets commit to an all-out press. Defensive
+	# or balanced doctrines hold their tactics — this keeps a kiting fleet from
+	# devolving into a charge once the stalemate/elapsed timer fires.
+	if ws.fleet_aggression < WingConstants.COMMIT_MIN_AGGRESSION:
+		return false
 	return few_enemies_trigger or stalemate_trigger
 
 
