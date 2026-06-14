@@ -329,6 +329,29 @@ static func resolve_from_preset(
 	return resolve_tactics(fleet_tactics, squadron_tactics, ship_role, ship_override)
 
 
+## Resolve a player hull's combat tactics from its fleet preset + per-hull
+## Role/overrides (the Fleet Command player-facing model). Empty-string
+## overrides mean "inherit" and are dropped so they don't clobber the chain.
+## Delegates to resolve_from_preset — no parallel resolution path.
+##
+## hull["tactics"] shape: {role: String, overrides: {mentality, engagement_range}}
+## (role "" = class/preset default; each override "" = inherit).
+static func compile_player_tactics(
+		hull: Dictionary,
+		fleet_preset: String,
+		squadron_id: String
+) -> Dictionary:
+	var hull_tactics: Dictionary = hull.get("tactics", {})
+	var ship_role: String = str(hull_tactics.get("role", ""))
+	var raw_overrides: Dictionary = hull_tactics.get("overrides", {})
+	var overrides: Dictionary = {}
+	for key in raw_overrides:
+		var value: String = str(raw_overrides[key])
+		if not value.is_empty():
+			overrides[key] = value
+	return resolve_from_preset(fleet_preset, squadron_id, ship_role, overrides)
+
+
 ## Compute the mentality scalar for a resolved tactics dict.
 ## Convenience so callers don't import the const table.
 static func mentality_scalar(resolved: Dictionary) -> float:

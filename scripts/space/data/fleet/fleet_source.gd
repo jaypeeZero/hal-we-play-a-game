@@ -62,6 +62,22 @@ func set_tactics(hull_id: String, tactics: Dictionary) -> void:
 	push_error("FleetSource.set_tactics() not implemented for hull: %s" % hull_id)
 
 
+## Set the fleet-wide combat-tactics preset id (a doctrine_presets.json key).
+func set_fleet_preset(preset_id: String) -> void:
+	push_error("FleetSource.set_fleet_preset() not implemented for preset: %s" % preset_id)
+
+
+## The fleet-wide combat-tactics preset id currently configured.
+func get_fleet_preset() -> String:
+	push_error("FleetSource.get_fleet_preset() not implemented")
+	return ""
+
+
+## Set the manual command-hat mark for a hull ("" | "squadron_leader" | "commander").
+func set_command_role(hull_id: String, role: String) -> void:
+	push_error("FleetSource.set_command_role() not implemented hull=%s role=%s" % [hull_id, role])
+
+
 ## Set the mission for a squadron (roguelite only; no-op on sources that lack squadrons).
 func set_squadron_mission(squadron_id: String, mission: String, params: Dictionary) -> void:
 	push_error("FleetSource.set_squadron_mission() not implemented squad=%s mission=%s" % [squadron_id, mission])

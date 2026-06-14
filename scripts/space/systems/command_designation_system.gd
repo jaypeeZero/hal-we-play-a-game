@@ -81,6 +81,8 @@ static func _designate_team(
 
 	# ── Squadron Leader hats ─────────────────────────────────────────────────
 	# Each wing lead gets the hat; its subordinates are the wingmen crew_ids.
+	# Manual override: a crew member marked command_role == "squadron_leader" is
+	# forced to lead its wing (the auto-chosen lead is demoted to wingman).
 	var wing_lead_crew_ids: Array = []
 
 	for wing in wings:
@@ -96,6 +98,13 @@ static func _designate_team(
 			var wm_id: String = wm.get("crew_id", "")
 			if wm_id != "":
 				wingmen_ids.append(wm_id)
+
+		# Honor a manual squadron-leader mark on any wing member.
+		var marked_lead: String = _marked_lead_in_wing(lead_id, wingmen_ids, crew, crew_index)
+		if marked_lead != "" and marked_lead != lead_id:
+			wingmen_ids.erase(marked_lead)
+			wingmen_ids.append(lead_id)
+			lead_id = marked_lead
 
 		if crew_index.has(lead_id):
 			var c = crew[crew_index[lead_id]]
@@ -128,7 +137,20 @@ static func _designate_team(
 	var commander_crew_id: String = ""
 	var is_pilot_commander: bool = false
 
-	if not flagship.is_empty():
+	# Manual override: a captain marked command_role == "commander" on this team
+	# takes the commander hat, bypassing the auto flagship-captain pick.
+	for c in crew:
+		if c.get("command_role", "") != "commander":
+			continue
+		if c.get("role", -1) != CrewData.Role.CAPTAIN:
+			continue
+		var c_team_ship: Dictionary = _ship_by_id(c.get("assigned_to", ""), team_ships)
+		if c_team_ship.is_empty():
+			continue
+		commander_crew_id = c.get("crew_id", "")
+		break
+
+	if commander_crew_id == "" and not flagship.is_empty():
 		# Find the captain assigned to the flagship.
 		for c in crew:
 			if c.get("assigned_to", "") == flagship.get("ship_id", "") \
@@ -205,6 +227,20 @@ static func _ship_integrity(ship: Dictionary) -> float:
 	for section in ship.get("armor_sections", []):
 		total += float(section.get("current_armor", 0))
 	return total
+
+
+## Among a wing (lead + wingmen), return the crew_id manually marked as
+## squadron_leader, or "" if none. Prefers the existing lead so a single
+## forced mark resolves deterministically.
+static func _marked_lead_in_wing(
+		lead_id: String, wingmen_ids: Array,
+		crew: Array, crew_index: Dictionary) -> String:
+	if crew_index.has(lead_id) and crew[crew_index[lead_id]].get("command_role", "") == "squadron_leader":
+		return lead_id
+	for wm_id in wingmen_ids:
+		if crew_index.has(wm_id) and crew[crew_index[wm_id]].get("command_role", "") == "squadron_leader":
+			return wm_id
+	return ""
 
 
 ## Return the crew_id with the highest piloting skill among a list of ids.

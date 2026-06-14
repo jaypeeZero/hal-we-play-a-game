@@ -193,3 +193,50 @@ func test_designate_does_not_mutate_input_crew_list():
 	var subs_after: Array = crew[0].get("command_chain", {}).get("subordinates", [])
 	assert_eq(subs_after, original_subs_p1,
 		"designate must not mutate command_chain.subordinates on input crew")
+
+
+# ── Manual command-role override tests ────────────────────────────────────────
+
+func test_marked_commander_beats_auto_flagship_captain():
+	# Auto pick would be the capital's captain; a manual "commander" mark on the
+	# corvette's captain must win instead.
+	var ships := [
+		make_ship("s_cap", "capital",  0),
+		make_ship("s_cor", "corvette", 0),
+	]
+	var auto_captain := make_captain("auto_cap", "s_cap")
+	var marked_captain := make_captain("marked_cor", "s_cor")
+	marked_captain["command_role"] = "commander"
+	var crew := [auto_captain, marked_captain]
+	var wings: Array = []
+
+	var result := CommandDesignationSystem.designate(crew, ships, wings)
+
+	var marked := find_crew(result, "marked_cor")
+	assert_eq(marked.get("command_hat", ""), "commander",
+		"Manually-marked commander should hold the commander hat")
+	var auto := find_crew(result, "auto_cap")
+	assert_ne(auto.get("command_hat", ""), "commander",
+		"Auto flagship captain must not get commander when another is marked")
+
+
+func test_marked_squadron_leader_forced_as_wing_lead():
+	# Auto wing lead is p1; a manual squadron_leader mark on wingman p2 must
+	# promote p2 to lead.
+	var ships := [make_fighter("s1", 0), make_fighter("s2", 0)]
+	var p1 := make_pilot("p1", "s1", 0.9)
+	var p2 := make_pilot("p2", "s2", 0.3)
+	p2["command_role"] = "squadron_leader"
+	var crew := [p1, p2]
+	var wings := [make_wing("p1", "s1", 0, [make_wingman("p2", "s2")])]
+
+	var result := CommandDesignationSystem.designate(crew, ships, wings)
+
+	var marked := find_crew(result, "p2")
+	assert_eq(marked.get("command_hat", ""), "squadron_leader",
+		"Manually-marked pilot should be forced as the wing's squadron leader")
+	assert_true(marked.get("command_chain", {}).get("subordinates", []).has("p1"),
+		"Forced leader's subordinates should include the demoted auto-lead")
+	var demoted := find_crew(result, "p1")
+	assert_eq(demoted.get("command_hat", ""), "",
+		"The demoted auto-lead should no longer hold the squadron_leader hat")

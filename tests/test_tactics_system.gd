@@ -280,6 +280,61 @@ func test_unknown_preset_returns_engine_defaults():
 			"Unknown preset fallback must still populate dial '%s'" % dial)
 
 
+func test_preset_plus_role_plus_override_all_apply_with_override_winning():
+	# The v1 player-facing path: fleet preset base + per-ship role bundle + a
+	# per-ship override. The override must win for its dial; the role bundle must
+	# show through for a dial it sets but the override does not.
+	var resolved := TacticsSystem.resolve_from_preset(
+		"phalanx", "", "artillery", {"mentality": "all_out"})
+	# Override wins for mentality (phalanx=defensive, artillery=defensive → all_out).
+	assert_eq(resolved["mentality"], "all_out",
+		"Per-ship mentality override must win over preset and role")
+	# Role bundle shows through for a dial the override does not set.
+	assert_eq(resolved["engagement_range"], TacticsSystem.ROLE_ARTILLERY["engagement_range"],
+		"Artillery role bundle must supply engagement_range when not overridden")
+
+
+func test_compile_player_tactics_reflects_hull_config_not_debug_preset():
+	# Spawn-path integration: a player hull configured with preset + role +
+	# override resolves to a tactics block reflecting that config — independent
+	# of any debug preset.
+	var hull := {
+		"hull_id": "hull_0",
+		"ship_type": "fighter",
+		"tactics": {
+			"mission": "free", "mission_params": {},
+			"role": "artillery",
+			"overrides": {"mentality": "all_out", "engagement_range": ""},
+		},
+	}
+	var resolved := TacticsSystem.compile_player_tactics(hull, "phalanx", "")
+	assert_eq(resolved["mentality"], "all_out",
+		"Configured per-hull mentality override must win at spawn")
+	assert_eq(resolved["engagement_range"], TacticsSystem.ROLE_ARTILLERY["engagement_range"],
+		"Configured role bundle supplies engagement_range when override is inherit")
+
+
+func test_compile_player_tactics_inherit_overrides_do_not_clobber():
+	# Empty-string ("inherit") overrides must be dropped so the role/preset
+	# chain shows through — a hull with all-inherit overrides matches the plain
+	# preset+role resolution.
+	var hull := {
+		"hull_id": "hull_1",
+		"ship_type": "corvette",
+		"tactics": {
+			"mission": "free", "mission_params": {},
+			"role": "anchor",
+			"overrides": {"mentality": "", "engagement_range": ""},
+		},
+	}
+	var via_compile := TacticsSystem.compile_player_tactics(hull, "phalanx", "")
+	var via_resolve := TacticsSystem.resolve_from_preset("phalanx", "", "anchor", {})
+	assert_eq(via_compile["mentality"], via_resolve["mentality"],
+		"All-inherit overrides must not clobber the resolved mentality")
+	assert_eq(via_compile["engagement_range"], via_resolve["engagement_range"],
+		"All-inherit overrides must not clobber the resolved engagement_range")
+
+
 func test_empty_squadron_id_uses_fleet_level_only():
 	# Passing squadron_id="" skips squadron lookup.
 	# Phalanx has no squadron block, so this should be identical to explicit empty.

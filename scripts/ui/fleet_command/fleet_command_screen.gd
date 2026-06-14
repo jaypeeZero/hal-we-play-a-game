@@ -57,6 +57,20 @@ const MISSION_ORDER := [
 
 const SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat", "corvette", "capital"]
 
+# Tactics dropdown sentinels. The empty-string value ("" = class default /
+# inherit preset) is surfaced to the player as a friendly label.
+const ROLE_AUTO_LABEL := "Auto (class default)"
+const OVERRIDE_INHERIT_LABEL := "Inherit"
+const COMMAND_NONE_LABEL := "None"
+
+# Command-role option values (mirror hull["command_role"] domain).
+const COMMAND_ROLE_VALUES := ["", "squadron_leader", "commander"]
+const COMMAND_ROLE_LABELS := {
+	"": COMMAND_NONE_LABEL,
+	"squadron_leader": "Squadron Leader",
+	"commander": "Commander",
+}
+
 # State
 var _source: FleetSource
 var _mode: String = "save"
@@ -148,6 +162,10 @@ func _build_left_panel() -> Control:
 
 	var header := _padded(UiKit.section_title("Fleet Roster"), 12, 8)
 	vbox.add_child(header)
+
+	# Fleet-wide combat-tactics preset selector. Sets the whole fleet's tactical
+	# identity in one click; per-ship Role/overrides refine it.
+	vbox.add_child(_padded(_build_fleet_preset_row(), 12, 4))
 
 	_roster_scroll = ScrollContainer.new()
 	_roster_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -528,32 +546,138 @@ func _build_position_row(hull: Dictionary, slot: Dictionary, assigned_member: Di
 	return row
 
 
+## Fleet-wide preset dropdown. Options from TacticsSystem.get_all_presets()
+## (no hardcoded preset strings); writes back via _source.set_fleet_preset.
+func _build_fleet_preset_row() -> Control:
+	var presets: Dictionary = TacticsSystem.get_all_presets()
+	var preset_ids: Array = presets.keys()
+	var current: String = _source.get_fleet_preset()
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.add_child(UiKit.label("Fleet doctrine", UiKit.DIM, 12))
+
+	var drop := OptionButton.new()
+	for pid in preset_ids:
+		var label: String = str(presets[pid].get("display_name", pid))
+		drop.add_item(label)
+	var sel: int = preset_ids.find(current)
+	drop.selected = max(0, sel)
+	drop.item_selected.connect(func(idx: int) -> void:
+		_source.set_fleet_preset(str(preset_ids[idx]))
+		_rebuild_right_panel()
+	)
+	row.add_child(drop)
+	return row
+
+
+## Build a labelled OptionButton row. `values` is the option domain (Array);
+## `labels` maps value→display text; `current` is the selected value; `on_pick`
+## receives the chosen value. Mirrors the Mission dropdown pattern.
+func _build_option_row(
+		label_text: String,
+		values: Array,
+		labels: Dictionary,
+		current: Variant,
+		on_pick: Callable) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.add_child(UiKit.label(label_text, UiKit.DIM, 12))
+
+	var drop := OptionButton.new()
+	for v in values:
+		drop.add_item(str(labels.get(v, v)))
+	var sel: int = values.find(current)
+	drop.selected = max(0, sel)
+	drop.item_selected.connect(func(idx: int) -> void:
+		on_pick.call(values[idx])
+	)
+	row.add_child(drop)
+	return row
+
+
 func _build_tactics_panel(hull: Dictionary) -> Control:
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
 
 	var hull_id: String = str(hull.get("hull_id", ""))
 	var tactics: Dictionary = hull.get("tactics", {})
+
+	# ── Mission (unchanged — orthogonal "what to do") ────────────────────────
 	var current_mission: String = tactics.get("mission", SquadronData.Mission.FREE)
+	vbox.add_child(_build_option_row(
+		"Mission", MISSION_ORDER, MISSION_LABELS, current_mission,
+		func(value: Variant) -> void:
+			var new_tactics: Dictionary = tactics.duplicate(true)
+			new_tactics["mission"] = str(value)
+			new_tactics["mission_params"] = {}
+			_source.set_tactics(hull_id, new_tactics)
+			_rebuild_right_panel()
+	))
 
-	var mission_row := HBoxContainer.new()
-	mission_row.add_theme_constant_override("separation", 8)
-	mission_row.add_child(UiKit.label("Mission", UiKit.DIM, 12))
+	# ── Role ("" = class default) ────────────────────────────────────────────
+	var role_values: Array = [""]
+	role_values.append_array(TacticsSystem.ROLE_BUNDLES.keys())
+	var role_labels: Dictionary = {"": ROLE_AUTO_LABEL}
+	for r in TacticsSystem.ROLE_BUNDLES.keys():
+		role_labels[r] = str(r).capitalize()
+	vbox.add_child(_build_option_row(
+		"Role", role_values, role_labels, str(tactics.get("role", "")),
+		func(value: Variant) -> void:
+			var new_tactics: Dictionary = tactics.duplicate(true)
+			new_tactics["role"] = str(value)
+			_source.set_tactics(hull_id, new_tactics)
+			_rebuild_right_panel()
+	))
 
-	var mission_drop := OptionButton.new()
-	for m in MISSION_ORDER:
-		mission_drop.add_item(MISSION_LABELS.get(m, m))
-	mission_drop.selected = max(0, MISSION_ORDER.find(current_mission))
-	mission_drop.item_selected.connect(func(idx: int) -> void:
-		var new_mission: String = MISSION_ORDER[idx]
-		var new_tactics: Dictionary = {"mission": new_mission, "mission_params": {}}
-		_source.set_tactics(hull_id, new_tactics)
-		_rebuild_right_panel()
-	)
-	mission_row.add_child(mission_drop)
-	vbox.add_child(mission_row)
+	# ── Mentality / Engagement-range overrides ("" = inherit preset) ─────────
+	var overrides: Dictionary = tactics.get("overrides", {})
+
+	var mentality_values: Array = [""]
+	mentality_values.append_array(TacticsSystem.MENTALITY_SCALE.keys())
+	var mentality_labels: Dictionary = {"": OVERRIDE_INHERIT_LABEL}
+	for m in TacticsSystem.MENTALITY_SCALE.keys():
+		mentality_labels[m] = str(m).capitalize()
+	vbox.add_child(_build_option_row(
+		"Mentality", mentality_values, mentality_labels,
+		str(overrides.get("mentality", "")),
+		func(value: Variant) -> void:
+			_source.set_tactics(hull_id, _with_override(tactics, "mentality", str(value)))
+			_rebuild_right_panel()
+	))
+
+	var range_values: Array = [""]
+	range_values.append_array(TacticsSystem.ENGAGEMENT_RANGE_SCALE.keys())
+	var range_labels: Dictionary = {"": OVERRIDE_INHERIT_LABEL}
+	for er in TacticsSystem.ENGAGEMENT_RANGE_SCALE.keys():
+		range_labels[er] = str(er).capitalize()
+	vbox.add_child(_build_option_row(
+		"Engagement range", range_values, range_labels,
+		str(overrides.get("engagement_range", "")),
+		func(value: Variant) -> void:
+			_source.set_tactics(hull_id, _with_override(tactics, "engagement_range", str(value)))
+			_rebuild_right_panel()
+	))
+
+	# ── Command role (manual command hat) ────────────────────────────────────
+	vbox.add_child(_build_option_row(
+		"Command role", COMMAND_ROLE_VALUES, COMMAND_ROLE_LABELS,
+		str(hull.get("command_role", "")),
+		func(value: Variant) -> void:
+			_source.set_command_role(hull_id, str(value))
+			_rebuild_right_panel()
+	))
 
 	return vbox
+
+
+## Return a copy of `tactics` with overrides[key] set to value (immutable input).
+func _with_override(tactics: Dictionary, key: String, value: String) -> Dictionary:
+	var updated: Dictionary = tactics.duplicate(true)
+	var overrides: Dictionary = updated.get("overrides", {}).duplicate(true)
+	overrides[key] = value
+	updated["overrides"] = overrides
+	return updated
 
 
 func _rebuild_pool() -> void:

@@ -85,6 +85,9 @@ const ENABLE_CREW_AI = true  # Re-enabled with proper event architecture
 ## data/tactics/doctrine_presets.json: "alpha_strike", "phalanx", "hammer_and_anvil".
 const DEBUG_TEAM_PRESETS := { 0: "alpha_strike", 1: "phalanx" }
 
+## Fallback combat-tactics preset when a fleet has no configured preset id.
+const DEFAULT_PLAYER_PRESET := "alpha_strike"
+
 # Wing formation state
 var _previous_wings: Array = []  # Previous frame's wings for loyalty preservation
 var _wings_last_formed_at: float = -1.0  # game_time of last form_wings() call
@@ -1308,42 +1311,49 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 		new_crew = CrewData.bind_gunners_to_weapons(new_crew, ship_data.get("weapons", []))
 
 	# Compile per-ship orders for player crew. Roguelike uses the run's saved
-	# doctrine + combat tactics + squadron mission; skirmish (Fleet Command) uses
-	# its doctrine + the hull's chosen mission. Every non-roguelike ship then gets
-	# a combat-tactics block from the dev preset hook below.
+	# doctrine + squadron mission; skirmish (Fleet Command) uses its doctrine +
+	# the hull's chosen mission. Both then resolve combat tactics from the
+	# player's chosen fleet preset + per-hull Role/overrides (set in Fleet
+	# Command), replacing the old debug-preset hook. The enemy fleet still uses
+	# DEBUG_TEAM_PRESETS so a contrasting opponent doctrine survives.
+	var player_configured: bool = false
 	if team == 0 and RoguelikeRun.active:
 		var squadron: Dictionary = SquadronSystem.get_squadron_for_hull(RoguelikeRun.squadrons, hull_id)
 		var squadron_id: String = squadron.get("squadron_id", "")
 		var mission_info: Dictionary = SquadronSystem.get_mission(RoguelikeRun.squadrons, hull_id)
+		var run_hull: Dictionary = RoguelikeRun.hull_by_id(hull_id)
+		var fleet_preset: String = str(RoguelikeRun.tactics.get("preset", DEFAULT_PLAYER_PRESET))
 		for i in range(new_crew.size()):
 			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, RoguelikeRun.doctrine)
-			new_crew[i] = TacticsSystem.compile_for_crew(new_crew[i], ship_type, squadron_id, RoguelikeRun.tactics)
 			new_crew[i]["squadron_mission"] = mission_info.get("mission", SquadronData.Mission.FREE)
 			new_crew[i]["squadron_mission_params"] = mission_info.get("params", {})
+		new_crew = _attach_player_tactics(new_crew, run_hull, fleet_preset, squadron_id)
+		player_configured = true
 	elif team == 0 and not hull_id.is_empty():
-		# Skirmish: Fleet Command doctrine + the hull's per-ship mission.
-		var skirmish_mission: String = SquadronData.Mission.FREE
-		var skirmish_params: Dictionary = {}
+		# Skirmish: Fleet Command doctrine + the hull's per-ship mission + tactics.
+		var skirmish_hull: Dictionary = {}
 		var skirmish_hulls: Array = SkirmishFleet.get_fleet(0)
 		for hull in skirmish_hulls:
 			if str(hull.get("hull_id", "")) == hull_id:
-				var hull_tactics: Dictionary = hull.get("tactics", {})
-				skirmish_mission = hull_tactics.get("mission", SquadronData.Mission.FREE)
-				skirmish_params = hull_tactics.get("mission_params", {})
+				skirmish_hull = hull
 				break
+		var hull_tactics: Dictionary = skirmish_hull.get("tactics", {})
+		var skirmish_mission: String = hull_tactics.get("mission", SquadronData.Mission.FREE)
+		var skirmish_params: Dictionary = hull_tactics.get("mission_params", {})
 		var skirmish_doctrine: Dictionary = SkirmishFleet.get_doctrine()
 		for i in range(new_crew.size()):
 			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, skirmish_doctrine)
 			new_crew[i]["squadron_mission"] = skirmish_mission
 			new_crew[i]["squadron_mission_params"] = skirmish_params
+		new_crew = _attach_player_tactics(
+			new_crew, skirmish_hull, SkirmishFleet.get_fleet_preset(0), "")
+		player_configured = true
 
-	# Combat-tactics hook: every non-roguelike ship (skirmish + enemy) gets a
-	# preset's combat tactics block (mentality/range/formation/role dials) so the
-	# steering blender has contrasting doctrines to play. DEBUG_TEAM_PRESETS is
-	# the single place to pick presets; it gives way to real per-hull dials once
-	# the Fleet Command tactics panel feeds them.
-	if not (team == 0 and RoguelikeRun.active):
-		var preset_id: String = DEBUG_TEAM_PRESETS.get(team, "alpha_strike")
+	# Enemy / unconfigured ships: combat-tactics block from a preset constant so
+	# the steering blender always has a coherent doctrine (and a contrasting
+	# opponent for the player's chosen fleet doctrine).
+	if not player_configured:
+		var preset_id: String = DEBUG_TEAM_PRESETS.get(team, DEFAULT_PLAYER_PRESET)
 		var dev_tactics: Dictionary = TacticsSystem.resolve_from_preset(preset_id, "", "", {})
 		for i in range(new_crew.size()):
 			new_crew[i] = new_crew[i].duplicate(true)
@@ -1356,6 +1366,25 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 		_crew_index[crew_member.crew_id] = crew_member
 
 	BattleEventLoggerAutoload.log_event("crew_created", {"ship_id": ship_id, "ship_type": ship_type, "count": new_crew.size()})
+
+## Resolve a player hull's combat-tactics block from its fleet preset + per-hull
+## Role/overrides (set in Fleet Command) and attach it to every crew member.
+## Also stamps the hull's manual command_role onto each crew dict so
+## CommandDesignationSystem can honor it. Pure: returns a new crew list.
+func _attach_player_tactics(
+		crew: Array, hull: Dictionary, fleet_preset: String, squadron_id: String) -> Array:
+	var preset_id: String = fleet_preset if not fleet_preset.is_empty() else DEFAULT_PLAYER_PRESET
+	var command_role: String = str(hull.get("command_role", ""))
+	var resolved: Dictionary = TacticsSystem.compile_player_tactics(hull, preset_id, squadron_id)
+
+	var out: Array = []
+	for member in crew:
+		var updated: Dictionary = member.duplicate(true)
+		updated["tactics"] = resolved.duplicate(true)
+		updated["command_role"] = command_role
+		out.append(updated)
+	return out
+
 
 ## Remove crew assigned to a ship
 func _remove_crew_for_ship(ship_id: String) -> void:
