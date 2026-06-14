@@ -209,7 +209,7 @@ static func _roll_one_event(run_state: Dictionary, rng) -> Dictionary:
 			chosen = entry
 			break
 
-	return _resolve_event(chosen.tmpl, chosen.target, run_state)
+	return _resolve_event(chosen.tmpl, chosen.target, run_state, rng)
 
 
 ## Build candidate pool: all templates whose requires pass for run_state.
@@ -321,7 +321,7 @@ static func _attribute_bias(event_id: String, bound_target: Dictionary, run_stat
 
 
 ## Build the resolved event record from a template + bound target.
-static func _resolve_event(tmpl: Dictionary, bound_target: Dictionary, run_state: Dictionary) -> Dictionary:
+static func _resolve_event(tmpl: Dictionary, bound_target: Dictionary, run_state: Dictionary, rng) -> Dictionary:
 	"""Resolve tokens and build the final event record."""
 	var id: String = str(tmpl.get("id", ""))
 	var headline: String = str(tmpl.get("headline", ""))
@@ -341,7 +341,7 @@ static func _resolve_event(tmpl: Dictionary, bound_target: Dictionary, run_state
 
 	# Resolve {place}
 	if headline.contains("{place}") or body.contains("{place}"):
-		var place_name: String = _resolve_place(run_state)
+		var place_name: String = _resolve_place(run_state, rng)
 		headline = headline.replace("{place}", place_name)
 		body = body.replace("{place}", place_name)
 
@@ -369,12 +369,12 @@ static func _resolve_ship_name(bound_target: Dictionary, run_state: Dictionary) 
 	return "unknown"
 
 
-static func _resolve_place(run_state: Dictionary) -> String:
+static func _resolve_place(run_state: Dictionary, rng) -> String:
 	"""Pick a random place name from the places list, or fallback."""
 	var places: Array = run_state.get("places", [])
 	if places.is_empty():
 		return "an unknown sector"
-	var idx: int = randi() % places.size()
+	var idx: int = rng.randi() % places.size()
 	return str(places[idx])
 
 

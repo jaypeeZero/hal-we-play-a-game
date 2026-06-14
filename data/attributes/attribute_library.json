@@ -201,5 +201,208 @@
 		"rarity": 1.0,
 		"combat": { "kind": "turn_rate", "value": 0.10 },
 		"event_weights": { "bar_fight": 1.8, "overslept_muster": 1.3 }
+	},
+	"decorated": {
+		"display_name": "Decorated",
+		"blurb": "They pinned something on them at the last port. Crew noticed. Command noticed.",
+		"category": "mixed",
+		"polarity": "positive",
+		"roles": [],
+		"rarity": 0.0,
+		"combat": { "kind": "composure_factor", "value": 0.08 },
+		"event_weights": { "commendation_ceremony": 0.2, "bar_fight": 0.6 },
+		"grantable_by_events_only": true
+	},
+	"superstitious_after_scare": {
+		"display_name": "Superstitious After Scare",
+		"blurb": "Knocked three times on the hull before the last jump. Probably a coincidence.",
+		"category": "personality",
+		"polarity": "negative",
+		"roles": [],
+		"rarity": 0.0,
+		"combat": null,
+		"event_weights": { "close_call_jinx": 2.5, "breakdown": 1.3 },
+		"grantable_by_events_only": true
+	},
+	"knife_fighter": {
+		"display_name": "Knife Fighter",
+		"blurb": "Doesn't bother with the long game. Gets in close and keeps it ugly.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["gunner"],
+		"rarity": 0.8,
+		"combat": { "kind": "close_range_fire_rate", "value": 0.15 },
+		"event_weights": {}
+	},
+	"nervous_trigger": {
+		"display_name": "Nervous Trigger",
+		"blurb": "Fires early in the engagement. Sometimes hits; always wastes ammunition.",
+		"category": "combat",
+		"polarity": "negative",
+		"roles": ["gunner"],
+		"rarity": 1.0,
+		"combat": { "kind": "lead_accuracy", "value": -0.10 },
+		"event_weights": { "friendly_fire_incident": 2.0, "breakdown": 1.2 }
+	},
+	"brawler": {
+		"display_name": "Brawler",
+		"blurb": "Likes the turning fights. The tighter the merge, the better.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["pilot"],
+		"rarity": 0.8,
+		"combat": { "kind": "turn_rate", "value": 0.14 },
+		"event_weights": { "bar_fight": 1.6 }
+	},
+	"throttle_jockey": {
+		"display_name": "Throttle Jockey",
+		"blurb": "Full power, then worry about the consequences.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["pilot"],
+		"rarity": 0.9,
+		"combat": { "kind": "accel", "value": 0.15 },
+		"event_weights": { "engineers_botched_repair": 1.2 }
+	},
+	"blood_in_the_water": {
+		"display_name": "Blood In The Water",
+		"blurb": "Smells weakness. Presses the attack long past the point of caution.",
+		"category": "combat",
+		"polarity": "negative",
+		"roles": ["pilot"],
+		"rarity": 0.9,
+		"combat": { "kind": "aggression", "value": 0.20 },
+		"event_weights": { "bar_fight": 1.4, "friendly_fire_incident": 1.5 }
+	},
+	"iron_nerve": {
+		"display_name": "Iron Nerve",
+		"blurb": "Systems failing, crew screaming, and still making corrections. Rare.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["pilot", "captain"],
+		"rarity": 0.6,
+		"combat": { "kind": "last_stand", "value": 0.22 },
+		"event_weights": {}
+	},
+	"methodical": {
+		"display_name": "Methodical",
+		"blurb": "Checklists, procedures, no shortcuts. Some find it maddening. The ship doesn't.",
+		"category": "personality",
+		"polarity": "positive",
+		"roles": ["engineer", "captain"],
+		"rarity": 0.8,
+		"combat": null,
+		"event_weights": { "engineers_botched_repair": 0.3, "tactical_insight": 1.4 }
+	},
+	"square_peg": {
+		"display_name": "Square Peg",
+		"blurb": "Doesn't quite fit any role. Somehow useful in all of them.",
+		"category": "personality",
+		"polarity": "neutral",
+		"roles": [],
+		"rarity": 0.8,
+		"combat": null,
+		"event_weights": { "shore_leave_morale": 1.2, "breakdown": 0.9 }
+	},
+	"debt_collector": {
+		"display_name": "Debt Collector",
+		"blurb": "Has 'arrangements' in most ports. Good for the purse; bad for the questions it raises.",
+		"category": "personality",
+		"polarity": "neutral",
+		"roles": [],
+		"rarity": 0.7,
+		"combat": null,
+		"event_weights": { "old_debt_collected": 2.5, "port_side_trouble": 1.8 }
+	},
+	"superstitious": {
+		"display_name": "Superstitious",
+		"blurb": "Won't jump on the 13th. Won't fly without the lucky bolt. Somehow it works.",
+		"category": "personality",
+		"polarity": "neutral",
+		"roles": [],
+		"rarity": 0.9,
+		"combat": null,
+		"event_weights": { "breakdown": 0.8, "close_call_jinx": 1.8 }
+	},
+	"firebrand": {
+		"display_name": "Firebrand",
+		"blurb": "Opinionated, loud, and usually right. Morale goes both ways with this one.",
+		"category": "personality",
+		"polarity": "neutral",
+		"roles": [],
+		"rarity": 1.0,
+		"combat": null,
+		"event_weights": { "bar_fight": 1.6, "crew_grievance": 2.0, "shore_leave_morale": 1.3 }
+	},
+	"cool_under_pressure": {
+		"display_name": "Cool Under Pressure",
+		"blurb": "Crisis sharpens them. The worse it gets, the cleaner the decisions.",
+		"category": "mixed",
+		"polarity": "positive",
+		"roles": ["captain", "squadron_leader"],
+		"rarity": 0.6,
+		"combat": { "kind": "composure_factor", "value": 0.15 },
+		"event_weights": {}
+	},
+	"burnout": {
+		"display_name": "Burnout",
+		"blurb": "Running on fumes. Still fighting, but the edge is gone.",
+		"category": "personality",
+		"polarity": "negative",
+		"roles": [],
+		"rarity": 0.0,
+		"combat": { "kind": "accel", "value": -0.12 },
+		"event_weights": { "breakdown": 2.2, "redemption_arc": 1.8 },
+		"grantable_by_events_only": true
+	},
+	"quick_reflexes": {
+		"display_name": "Quick Reflexes",
+		"blurb": "Reacts before the threat resolves. The difference between a graze and a kill shot.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["pilot", "gunner"],
+		"rarity": 0.8,
+		"combat": { "kind": "turn_rate", "value": 0.12 },
+		"event_weights": {}
+	},
+	"cautious": {
+		"display_name": "Cautious",
+		"blurb": "Never commits to a fight without a way out. Lives longer than the heroes.",
+		"category": "combat",
+		"polarity": "negative",
+		"roles": ["pilot"],
+		"rarity": 1.0,
+		"combat": { "kind": "aggression", "value": -0.15 },
+		"event_weights": { "breakdown": 0.5 }
+	},
+	"scrapper": {
+		"display_name": "Scrapper",
+		"blurb": "Grew up fixing whatever was lying around. Makes do. Makes it work.",
+		"category": "personality",
+		"polarity": "positive",
+		"roles": ["engineer"],
+		"rarity": 0.9,
+		"combat": null,
+		"event_weights": { "engineers_botched_repair": 0.5, "salvage_windfall": 1.8 }
+	},
+	"fortune_favours": {
+		"display_name": "Fortune Favours",
+		"blurb": "Luck follows them around like a stray dog. Crew would rather have them aboard than not.",
+		"category": "personality",
+		"polarity": "positive",
+		"roles": [],
+		"rarity": 0.5,
+		"combat": null,
+		"event_weights": { "prize_salvage": 1.8, "old_debt_collected": 1.6, "bar_fight": 0.6 }
+	},
+	"tunnel_vision": {
+		"display_name": "Tunnel Vision",
+		"blurb": "Locked onto a target, the rest of the battle ceases to exist. Brilliant and dangerous.",
+		"category": "mixed",
+		"polarity": "negative",
+		"roles": ["gunner", "pilot"],
+		"rarity": 1.1,
+		"combat": { "kind": "lead_accuracy", "value": 0.08 },
+		"event_weights": { "friendly_fire_incident": 1.8, "overslept_muster": 0.7 }
 	}
 }
