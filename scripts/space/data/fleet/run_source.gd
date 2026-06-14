@@ -34,7 +34,7 @@ func squadrons() -> Array:
 ## Crew pool in a run is the entire available roster minus already-hired ids.
 ## Returns roster entries not yet consumed this run (same pool the shop shows).
 func crew_pool() -> Array:
-	return CrewRosterManager.available_entries(RoguelikeRun.hired_roster_ids, -1)
+	return RoguelikeRun.available_crew()
 
 
 ## Add a bare hull of ship_type to the run fleet (no crew aboard — use assign to staff it).

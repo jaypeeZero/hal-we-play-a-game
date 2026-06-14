@@ -76,6 +76,10 @@ const COMPLEMENT_TEMPLATE_SKILL := 0.5
 ## to the pool, even when the crew member dies or is dismissed. Reset when a
 ## run starts or ends; persisted with the campaign save.
 var hired_roster_ids: Array = []
+## Generated roster entries for THIS run; the live hiring pool while a run
+## is active. Replaces the static shipped roster as the hiring source.
+## Generated at run start, persisted in the campaign save, cleared at run end.
+var run_roster: Array = []
 ## Monotonic source of unique hull ids for the run.
 var _next_hull_id: int = 0
 
@@ -85,6 +89,8 @@ func start_run(initial_fleet: Dictionary) -> void:
 	started_first_battle = false
 	hired_roster_ids = []
 	_next_hull_id = 0
+	run_roster = CrewGenerator.generate_run_roster(
+		CrewRosterManager.load_roster(), WingConstants.RUN_ROSTER_SIZE, _new_rng())
 	fleet_hulls = _create_fleet_roster(initial_fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
 	tactics = TacticsSystem.empty_tactics()
@@ -122,8 +128,33 @@ func end_run() -> void:
 	last_jump_repair_summary = {}
 	squadrons = []
 	hired_roster_ids = []
+	run_roster = []
 	_next_hull_id = 0
 	last_battle_progression = []
+
+
+## The live hiring pool for this run: run_roster entries not yet consumed,
+## optionally filtered to candidates qualified for one role.
+## Mirrors CrewRosterManager.available_entries; use this during an active run.
+func available_crew(role: int = -1) -> Array:
+	var role_name: String = CrewData.role_to_name(role) if role >= 0 else ""
+	var available: Array = []
+	for entry in run_roster:
+		if hired_roster_ids.has(entry.id):
+			continue
+		if role_name != "" and not entry.roles.has(role_name):
+			continue
+		available.append(entry)
+	return available
+
+
+## Find one run-roster entry by id; falls back to CrewRosterManager so
+## legacy or empty-roster saves still resolve.
+func crew_entry_by_id(roster_id: String) -> Dictionary:
+	for entry in run_roster:
+		if entry.id == roster_id:
+			return entry
+	return CrewRosterManager.entry_by_id(roster_id)
 
 
 ## A freshly seeded RNG for economy rolls. Centralized so all run-economy
@@ -185,7 +216,7 @@ func _crew_from_pool(template_crew: Array) -> Array:
 ## Draw one random available roster entry of `role` and consume it from the
 ## run's pool. {} when the pool has no one of that role left.
 func _draw_from_pool(role: int, rng: RandomNumberGenerator) -> Dictionary:
-	var candidates := CrewRosterManager.available_entries(hired_roster_ids, role)
+	var candidates := available_crew(role)
 	if candidates.is_empty():
 		return {}
 	var entry: Dictionary = candidates[rng.randi_range(0, candidates.size() - 1)]
@@ -446,7 +477,7 @@ func fill_vacancy(hull_id: String, slot: Dictionary, roster_id: String) -> bool:
 		return false
 	if hired_roster_ids.has(roster_id):
 		return false
-	var entry := CrewRosterManager.entry_by_id(roster_id)
+	var entry := crew_entry_by_id(roster_id)
 	if entry.is_empty():
 		return false
 	var slot_role: int = slot.get("role", CrewData.Role.PILOT)
@@ -844,6 +875,7 @@ func save_campaign_to_disk() -> bool:
 		"money": money,
 		"current_star_date": current_star_date,
 		"hired_roster_ids": hired_roster_ids,
+		"run_roster": run_roster,
 		"next_hull_id": _next_hull_id,
 		"squadrons": squadrons,
 	})
@@ -865,6 +897,9 @@ func load_campaign_from_disk() -> bool:
 	# Older saves have no consumed-pool list: an unconsumed pool is correct
 	# for them, since their crews predate roster hiring.
 	hired_roster_ids = data.get("hired_roster_ids", [])
+	# v2 saves have no run_roster; default to [] so the fallback to
+	# CrewRosterManager in crew_entry_by_id still resolves legacy hires.
+	run_roster = data.get("run_roster", [])
 	_next_hull_id = data.get("next_hull_id", fleet_hulls.size())
 	squadrons = data.get("squadrons", [])
 	last_battle_summary = {}
