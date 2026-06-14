@@ -288,6 +288,11 @@ const GUNNER_AIM_WORST_SPREAD_RAD = PI / 24.0
 ## to assert "almost never miss at one patrol diameter" for elite crew.
 const GUNNER_AIM_TARGET_RADIUS = 15.0
 
+## Hull-integrity fraction below which the `last_stand` attribute's
+## `low_hp_aim_bonus` kicks in — wounded ships' gunners bear down and tighten
+## their aim cone.
+const LAST_STAND_HP_FRACTION = 0.4
+
 ## Minimum range_factor a skilled gunner requires before firing. Scales with aim_skill.
 ## At skill 1.0: threshold 0.90 → fires only within 33% of max weapon range.
 ## Below skill ~0.78 the threshold falls under 0.70 (already guaranteed within range).

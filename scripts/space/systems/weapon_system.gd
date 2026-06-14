@@ -489,7 +489,30 @@ static func calculate_aim_spread_angle(ship_data: Dictionary) -> float:
 	var aim_skill: float = clamp(float(modifiers.get("aim_skill", 0.0)), 0.0, 1.0)
 	var captain_factor: float = clamp(float(modifiers.get("captain_coordination", 1.0)), COORDINATION_CLAMP_MIN, COORDINATION_CLAMP_MAX)
 	var effective: float = clamp(aim_skill * captain_factor, 0.0, 1.0)
+
+	# Last stand (low_hp_aim_bonus attribute): a wounded hull's gunners bear down,
+	# tightening the cone once integrity drops below the threshold.
+	var low_hp_bonus: float = float(modifiers.get("low_hp_aim_bonus", 0.0))
+	if low_hp_bonus > 0.0 and _hull_integrity_fraction(ship_data) < WingConstants.LAST_STAND_HP_FRACTION:
+		effective = clamp(effective + low_hp_bonus, 0.0, 1.0)
+
 	return WingConstants.GUNNER_AIM_WORST_SPREAD_RAD * (1.0 - effective)
+
+
+## Current armor+internals as a fraction of their maxima (1.0 = pristine).
+## Returns 1.0 when no max data exists, so the bonus never fires on a hull
+## that can't report its capacity.
+static func _hull_integrity_fraction(ship_data: Dictionary) -> float:
+	var current: int = DamageResolver.calculate_total_armor(ship_data) \
+		+ DamageResolver.calculate_total_internal_health(ship_data)
+	var max_total: int = 0
+	for sec in ship_data.get("armor_sections", []):
+		max_total += int(sec.get("max_armor", sec.get("current_armor", 0)))
+	for internal in ship_data.get("internals", []):
+		max_total += int(internal.get("max_health", internal.get("current_health", 0)))
+	if max_total <= 0:
+		return 1.0
+	return float(current) / float(max_total)
 
 static func generate_random_spread(max_spread: float) -> float:
 	return randf_range(-max_spread, max_spread)

@@ -169,3 +169,28 @@ func test_close_range_killer_attribute_wires_through_apply_for_crew():
 	var result := AttributeModifierSystem.apply_for_crew(ship, crew)
 	assert_gt(float(result.crew_modifiers.get("close_range_fire_bonus", 0.0)), 0.0,
 		"close_range_killer attribute sets a positive close_range_fire_bonus on crew_modifiers")
+
+
+func _ship_with_hull(current_armor: int, max_armor: int) -> Dictionary:
+	var ship := _make_ship()
+	ship["armor_sections"] = [{"section": "body", "current_armor": current_armor, "max_armor": max_armor}]
+	return ship
+
+
+func test_last_stand_tightens_aim_only_when_hull_is_low():
+	# last_stand (low_hp_aim_bonus): a wounded ship's gunners aim tighter; at
+	# full hull the bonus does not fire. Smaller spread angle == tighter aim.
+	var crew := _make_crew(["last_stand_fighter"])
+
+	var low := AttributeModifierSystem.apply_for_crew(_ship_with_hull(5, 100), crew)
+	var low_plain := _ship_with_hull(5, 100)                              # wounded, no attribute
+	var full := AttributeModifierSystem.apply_for_crew(_ship_with_hull(100, 100), crew)
+
+	var spread_low := WeaponSystem.calculate_aim_spread_angle(low)
+	var spread_low_plain := WeaponSystem.calculate_aim_spread_angle(low_plain)
+	var spread_full := WeaponSystem.calculate_aim_spread_angle(full)
+
+	assert_lt(spread_low, spread_low_plain,
+		"last_stand tightens the aim cone on a wounded hull")
+	assert_almost_eq(spread_full, spread_low_plain, 0.0001,
+		"last_stand gives no aim bonus while the hull is healthy")
