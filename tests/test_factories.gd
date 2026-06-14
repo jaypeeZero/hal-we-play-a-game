@@ -2,7 +2,7 @@ class_name TestFactories
 extends GutTest
 
 ## Shared static factories for the ship/crew/weapon/projectile dictionaries
-## used across the test suite (see DOCS/plans/03_test_consolidation.md).
+## used across the test suite.
 ## Defines no tests; it extends GutTest only so GUT's collector accepts the
 ## file living in tests/ without logging a warning.
 ##

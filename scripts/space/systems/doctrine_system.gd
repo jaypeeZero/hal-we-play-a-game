@@ -1,8 +1,7 @@
 class_name DoctrineSystem
 extends RefCounted
 
-## Fleet doctrine: player standing instructions for a roguelike run
-## (DOCS/plans/06, increment 2b).
+## Fleet doctrine: player standing instructions for a roguelike run.
 ##
 ## Doctrine is run state (RoguelikeRun.doctrine). Players never author
 ## pattern text: they pick parameterized templates from the catalog in

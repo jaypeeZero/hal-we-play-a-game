@@ -37,7 +37,9 @@ Squadron-spawned fighters share a command chain (Alpha leads, Beta–Zeta
 follow); single-spawn fighters fly solo.
 
 ### Debug Visualization
-- **F1** - Toggle debug visualizer (shows armor sections, internals, weapon arcs, velocity)
+- **F1** - Toggle debug visualizer (armor sections, internals, weapon arcs, velocity,
+  crew stats, formation links, and the Tactics State / Tactics Telemetry layers showing
+  each ship's resolved doctrine and steering blend). Layers are individually gated in settings.
 
 ## Ship Types
 
@@ -112,6 +114,7 @@ This creates realistic engagement times and allows for tactical maneuvering.
 2. **Data-Driven**: Ships defined by JSON-like dictionaries
 3. **Functional**: Pure functions process state (DamageResolver, WeaponSystem, CrewSchedulerSystem, ...)
 4. **Event-driven NPCs**: Crew don't tick every frame — they wake on schedule or when an event lands in their mailbox
+5. **Blended combat**: Engagement is a weighted steering blend driven by resolved tactics, not discrete engage modes
 
 ### Crew AI flow
 
@@ -120,7 +123,7 @@ event-driven scheduler.  A crew member is only updated when:
 
 - their `next_decision_time` has been reached, **or**
 - their mailbox has pending events posted by another system
-  (`sensor_contact`, `target_lost`, `ship_damaged`, `missile_locked`, ...)
+  (`sensor_contact`, `target_lost`, `ship_damaged`, `threat_appeared`, ...)
 
 Per tick, the scheduler drains a waking crew's events, applies the
 side effects (tactical-memory recording, current-target clearing, order
@@ -128,9 +131,24 @@ processing), refreshes their awareness against the current world, and
 runs the role-specific decision (pilot / gunner / captain / squadron
 leader).  Sleeping crew with no events cost essentially nothing.
 
-Urgent events (missile lock, fresh threat, damage taken) for a pilot
-with known threats short-circuit to an evasive maneuver, so reactions
-don't wait for the next scheduled wake.
+Urgent events (fresh threat, damage taken) for a pilot with known
+threats short-circuit to an evasive maneuver, so reactions don't wait
+for the next scheduled wake.
+
+### Combat AI
+
+Engagement behaviour is a continuous steering blend rather than fixed
+modes. `TacticsSystem` resolves fleet → squadron → ship/role doctrine
+into a per-crew `tactics` block; `SteeringBlender` turns it plus the
+live situation into weighted goals (pursue / keep_range / evade /
+formation / separation / support) with a preferred range and facing
+mode; `MovementSystem` re-blends those goals each frame from current
+positions. Reflexes (evasion, collision, area leash) stay hard
+overrides. Command roles are hats on existing crew — the best ship's
+captain is also Commander, the best wing pilot is also Squadron Leader —
+and they issue posture (withdraw / hold / press), formation, and
+focus-fire orders that are absorbed into subordinates' blends rather
+than forcing discrete moves.
 
 ### Key Classes
 
@@ -146,7 +164,10 @@ don't wait for the next scheduled wake.
 - `MovementSystem` — Ship motion and obstacle avoidance
 - `InformationSystem` — Per-crew awareness (visible entities, threats, opportunities)
 - `CommandChainSystem` — Order distribution down the chain, awareness merge up
-- `CrewAISystem` — Role-specific decision functions (pilot, gunner, captain, squadron leader)
+- `CrewAISystem` — Role-specific decision functions (pilot, gunner, captain, squadron leader); dispatches command brains via crew hats
+- `TacticsSystem` — Resolves fleet/squadron/ship doctrine into each crew's `tactics` block
+- `SteeringBlender` — Builds the weighted steering directive from tactics + live situation
+- `CommandDesignationSystem` — Stamps Commander / Squadron Leader hats onto the best-fit crew each tick
 - `CrewMailboxSystem` — Per-crew event queue (10-event cap, oldest dropped)
 - `CrewSchedulerSystem` — Wakes crew on time-or-event, applies event side effects, drives the decision
 - `WingFormationSystem` — Dynamic wing pairing for fighters

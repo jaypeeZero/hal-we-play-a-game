@@ -16,12 +16,12 @@ const SQUADRON_COLORS: Array = [
 	Color(1.0, 0.65, 0.2, 0.65), # team 1 — orange
 ]
 
-# Six stats in column order. The plan locks this order (01_overview.md §3).
+# Six crew stats in fixed column order for the overlay.
 const STAT_NAMES: Array = [
 	"aim", "piloting", "awareness", "tactics", "composure", "aggression"
 ]
 
-# Which stats each role actually reads (per 01_overview.md §3.4). Other
+# Which stats each role actually reads in its decision logic. Other
 # stats render dimmed gray to distinguish "high but unused" from "high and
 # used."
 const ROLE_READ_STATS: Dictionary = {

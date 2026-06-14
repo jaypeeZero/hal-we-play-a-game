@@ -1,6 +1,6 @@
 extends GutTest
 
-## Phase 3a: tactics-driven targeting weight.
+## Tactics-driven targeting weight.
 ##
 ## Verifies that a crew's resolved tactics dict (priority + sector_focus) reshapes
 ## the threat/opportunity ranking produced by InformationSystem so that doctrine

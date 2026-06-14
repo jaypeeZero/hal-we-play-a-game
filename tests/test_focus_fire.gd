@@ -1,6 +1,6 @@
 extends GutTest
 
-## Phase 3b: focus-fire command layer.
+## Focus-fire command layer.
 ##
 ## Tests cover three behaviours:
 ##   1. Leader decision — squadron_leader with high concentration issues

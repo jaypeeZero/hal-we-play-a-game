@@ -1,6 +1,6 @@
 extends GutTest
 
-## Energy-bleed flight model (DOCS/plans/07): swinging the nose costs speed,
+## Energy-bleed flight model: swinging the nose costs speed,
 ## making speed an energy budget. Behavior-only — asserts the tradeoff
 ## exists and converges, not specific values.
 

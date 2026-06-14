@@ -1,6 +1,6 @@
 extends GutTest
 
-## Tests for Layer B — Captain/Commander commit decisions.
+## Tests for Captain/Commander commit decisions.
 ## Asserts BEHAVIOR: posture issued when triggers fire, not when progress is
 ## being made, posture absorption, concentrate-fire targeting.
 

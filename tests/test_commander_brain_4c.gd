@@ -1,6 +1,6 @@
 extends GutTest
 
-## Phase 4c — Commander brain activation + captain blended consumption.
+## Commander brain activation + captain blended consumption.
 ##
 ## Covers:
 ##   1. Commander (hatted captain) issues orders to subordinates; idle commander

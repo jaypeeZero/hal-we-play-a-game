@@ -87,8 +87,7 @@ static func can_make_decisions(crew_data: Dictionary) -> bool:
 	return crew_data.assigned_to != null
 
 ## Calculate effective skill with stress/fatigue penalties.
-## Reads the role-appropriate primary stat (Phase 03 default).  Phase 07
-## replaces this with per-stat decay rates.
+## Reads the role-appropriate primary stat.
 ## When a PILOT holds command_hat == "squadron_leader", coordination quality is
 ## governed by tactics/leadership skill, not piloting — the hat changes what
 ## the skill gates (coordination tier, brain action preconditions).
@@ -164,11 +163,11 @@ static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: 
 	# continues to the blended path below.
 	crew_data = _absorb_command_order(crew_data)
 
-	# Press-attack posture (#79 captain/commander commit + all-out) is persistent
+	# Press-attack posture (captain/commander commit or fleet all-out) is persistent
 	# too — lift into combat_posture so FighterWorldState surfaces ws.press_attack
-	# across ticks. Blended: AttackAction maps an active press into the "press"
-	# steering posture (no discrete short-circuit; the old execute_pilot_order
-	# path was removed when fighters moved onto the blender).
+	# across ticks. AttackAction maps an active press into the "press" steering
+	# posture, which the blender weights toward closing in; it never short-circuits
+	# the blend.
 	crew_data = _absorb_posture_order(crew_data)
 
 	# Analyze tactical context (include wings for fighter coordination)
@@ -536,7 +535,7 @@ static func _issue_formation_commands(
 ## Make evasive maneuver decision.
 ##
 ## Evasion is a *reactive* decision and goes through the pending-intent
-## buffer (Phase 04): we mark the decision with `intent_type` / `commit_at`
+## buffer: we mark the decision with `intent_type` / `commit_at`
 ## so `_apply_crew_decisions` stashes it on the ship and PendingIntentSystem
 ## applies it once game time crosses commit_at. Elite pilots commit in
 ## ~80 ms; rookies in ~700 ms. Stress beyond the composure buffer adds

@@ -77,10 +77,10 @@ var _crew_mailboxes: Dictionary = {}  # crew_id -> Array[event] for the schedule
 var _crew_index: Dictionary = {}  # crew_id -> crew_data (O(1) lookup)
 const ENABLE_CREW_AI = true  # Re-enabled with proper event architecture
 
-## DEV HOOK — per-team tactics presets for non-roguelike launches (Phase 1b).
+## DEV HOOK — per-team tactics presets for non-roguelike launches.
 ## Gives team 0 alpha_strike (knife-range brawl) and team 1 phalanx (standoff kite)
 ## so a plain `godot scenes/space_battle.tscn` visibly shows contrasting tactics.
-## Replace this in Phase 5 with the pre-battle UI when player-facing setup lands.
+## A future pre-battle UI will supersede this once player-facing setup lands.
 ## To change the presets, edit the values here; valid preset ids are the keys in
 ## data/tactics/doctrine_presets.json: "alpha_strike", "phalanx", "hammer_and_anvil".
 const DEBUG_TEAM_PRESETS := { 0: "alpha_strike", 1: "phalanx" }
@@ -93,7 +93,7 @@ var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 var _debug_overlay: DebugOverlay
 var _debug_panel_layer: CanvasLayer = null
 
-# On-screen player command buttons (Layer C — all-out attack)
+# On-screen player command buttons (all-out attack / stand down)
 var _command_panel_layer: CanvasLayer = null
 var _allout_button: Button = null
 var _standdown_button: Button = null
@@ -991,7 +991,7 @@ func _on_debug_option_toggled(setting_name: String, value: bool) -> void:
 
 
 ## Build the bottom-centre player command bar (always visible).
-## Hosts the all-out-attack / stand-down order buttons (Layer C) so the order
+## Hosts the all-out-attack / stand-down order buttons so the order
 ## is issued by clicking, not a hidden keybind.
 func _create_command_panel() -> void:
 	const MARGIN := 12.0
@@ -1095,8 +1095,8 @@ func _update_crew_ai_systems(delta: float, ship_grid: Dictionary, projectile_gri
 		_wings_dirty = false
 	var wings = _previous_wings
 	# Stamp command hats (squadron_leader / commander) onto crew immediately
-	# after fresh wings are available.  Pure data pass — nothing consumes the
-	# hats yet; behavior is unchanged until Step B wires up command dispatch.
+	# after fresh wings are available.  Pure data pass; CrewAISystem reads the
+	# hats to dispatch the command brains.
 	_crew_list = CommandDesignationSystem.designate(_crew_list, _ships, wings)
 	_update_ship_wing_colors(wings)
 	_update_ship_debug_data(wings)
@@ -1297,8 +1297,8 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 	# Compile the run's doctrine (player standing instructions) into each
 	# crew member's knowledge set, then stamp the squadron mission so the
 	# AI can read it from crew_data without touching the squadrons array.
-	# Also resolve and attach the combat tactics block so Phase 1b can read
-	# crew["tactics"] in AttackAction → SteeringBlender on every decision tick.
+	# Also resolve and attach the combat tactics block so AttackAction →
+	# SteeringBlender can read crew["tactics"] on every decision tick.
 	if team == 0 and RoguelikeRun.active:
 		# Roguelike path: use the player's saved doctrine + tactics.
 		var squadron: Dictionary = SquadronSystem.get_squadron_for_hull(RoguelikeRun.squadrons, hull_id)
@@ -1485,10 +1485,10 @@ func _check_squadron_leadership_succession() -> void:
 						"crew_id": crew.crew_id, "callsign": crew.get("callsign", "Unknown")})
 
 
-## Layer C — Player "All-Out Attack" order.
+## Player "All-Out Attack" order.
 ## Sets a sticky (player_override=true) press_attack posture on every player-team
-## pilot/captain. Uses the same posture channel as AI commit decisions (Layer B)
-## so A/B/C all converge on one read path in FighterWorldState.
+## pilot/captain. Uses the same posture channel as AI commit decisions so the
+## player order and AI escalation converge on one read path in FighterWorldState.
 func _issue_allout_attack() -> void:
 	var game_time := Time.get_ticks_msec() / 1000.0
 	var focus_target_id: String = ""   # TODO: wire to player target selection

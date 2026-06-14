@@ -372,8 +372,8 @@ const DEFAULT_ROLE := "brawler"
 ## Pure: returns a duplicate of crew with tactics block attached; input is never mutated.
 ##
 ## Why this exists: mirrors DoctrineSystem.compile_for_crew() for the tactics system.
-## Called at battle spawn for team-0 roguelike crew so Phase 1 can consume the block
-## without re-resolving it every tick. Nothing reads crew["tactics"] yet (Phase 0).
+## Called at battle spawn so the resolved tactics block is attached once and read
+## by the steering blender every decision, without re-resolving it each tick.
 ##
 ## Role resolution order:
 ##   ship_overrides[hull_id].role  (per-ship override in the tactics doctrine)

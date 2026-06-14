@@ -1,6 +1,6 @@
 extends GutTest
 
-## Phase 03: threat prioritization quality scales with crew skill.
+## Threat prioritization quality scales with crew skill.
 ##
 ## Awareness gates how many threats the crew can hold on their list at all;
 ## tactics shapes whether they are correctly *ordered* by urgency. Elite

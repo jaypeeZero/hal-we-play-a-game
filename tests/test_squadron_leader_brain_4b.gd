@@ -1,6 +1,6 @@
 extends GutTest
 
-## Phase 4b — Squadron-leader brain activation tests.
+## Squadron-leader brain activation tests.
 ##
 ## Covers:
 ##   1. CallMutualSupport fires when a subordinate is damaged (LOOSE+).

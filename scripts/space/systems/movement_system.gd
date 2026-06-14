@@ -248,7 +248,7 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 		pilot_control = _calculate_large_ship_control(ship_data, target, maneuver_subtype)
 
 	elif current_order == "tactical":
-		# Blended steering directive (Phase 1b). The directive was stamped onto
+		# Blended steering directive. The directive was stamped onto
 		# ship.orders by CrewIntegrationSystem at decision time; re-blend each frame
 		# from LIVE positions so the ship responds to movement between decisions.
 		var tgt_id: String = ship_data.get("orders", {}).get("engagement_target", "")
@@ -1717,7 +1717,7 @@ static func _apply_overspeed_decay(ship_data: Dictionary, velocity: Vector2, del
 	var decayed_excess: float = (speed - max_speed) * exp(-OVERSPEED_DECAY_RATE * delta)
 	return velocity / speed * (max_speed + decayed_excess)
 
-## TURN BLEED (energy-fight model, DOCS/plans/07) — swinging the nose costs
+## TURN BLEED (energy-fight model) — swinging the nose costs
 ## speed, proportional to how many radians were turned this frame. Per
 ## radian, a fraction `1 - exp(-turn_speed_bleed)` of speed is lost, so a
 ## 180° max-rate reversal at `turn_speed_bleed` 0.15 costs ~37% of current
@@ -2007,17 +2007,17 @@ static func update_all_obstacles(obstacles: Array, delta: float) -> Array:
 
 
 # ---------------------------------------------------------------------------
-# BLENDED STEERING CONVERTER  (Phase 1 — not yet wired into update_ship_movement)
+# BLENDED STEERING CONVERTER  (live tactical steering path for "tactical" orders)
 # ---------------------------------------------------------------------------
 #
 # Reads the directive written by SteeringBlender onto ship_data.orders and
 # converts it into a pilot_control struct each frame from LIVE positions.
 #
-# Contract fields consumed (02b-directive-contract.md):
+# Directive fields consumed:
 #   orders.goal_weights      : {pursue, keep_range, evade, formation}
 #   orders.preferred_range   : float
-#   orders.formation_slot    : Vector2  (zero-weighted in Phase 1)
-#   orders.anchor_position   : Vector2  (zero-weighted in Phase 1)
+#   orders.formation_slot    : Vector2  (formation goal target)
+#   orders.anchor_position   : Vector2  (hold/anchor goal target)
 #   orders.engagement_target : String   (ship_id; resolved by caller to target dict)
 
 ## Deadband around preferred_range — within this fraction of preferred_range
@@ -2046,7 +2046,7 @@ const BLENDED_MOVE_MIN_LENGTH := 0.01
 ## Returns
 ##   {desired_heading, throttle, thrust_active, is_braking, lateral_thrust}
 ##
-## Not yet routed into update_ship_movement — that is Phase 1b.
+## This is the live steering path for ships carrying a "tactical" order.
 ## Multiplier on combined_radii that defines the zone inside which separation
 ## becomes active. 3.0 means a ship reacts when friendlies are within 3× the
 ## summed hull sizes — roughly one ship-length of breathing room.
@@ -2236,10 +2236,10 @@ static func calculate_blended_control(
 
 	# --- 3. Facing rule ---
 	#
-	# facing_mode (Phase 2b) decouples WHERE the ship POINTS from WHERE it MOVES.
+	# facing_mode decouples WHERE the ship POINTS from WHERE it MOVES.
 	# Movement (throttle/lateral) always comes from the blended goal vector above.
 	#
-	# "auto"      — original rule: close → face target; far → face move direction.
+	# "auto"      — close → face target; far → face move direction.
 	# "nose_on"   — always face the target (anchor/brawler/screen: bow armor forward).
 	# "broadside" — always face perpendicular to the target bearing (artillery orbit).
 	#

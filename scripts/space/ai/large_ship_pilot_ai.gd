@@ -278,8 +278,8 @@ static func _compute_next_phase(
 static func _read_aggression(crew_data: Dictionary) -> float:
 	return clamp(float(crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)), 0.0, 1.0)
 
-## Capital pilots are read for `tactics` (broadside warfare is range/arc
-## management, not fly-by-wire). See 01_overview.md role-stat table.
+## Capital pilots read the `tactics` skill (broadside warfare is range/arc
+## management, not fly-by-wire), unlike fighter pilots who read `piloting`.
 static func _read_skill(crew_data: Dictionary) -> float:
 	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
 	return clamp(float(skills.get("tactics", 0.5)), 0.0, 1.0)

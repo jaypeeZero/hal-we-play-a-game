@@ -2,7 +2,7 @@ extends GutTest
 
 ## Tests for CaptainBrain GOAP planner — behavior only, no specific data values.
 ##
-## Phase 4c update: command orders (engage/withdraw/hold) are now BLENDED —
+## Command orders (engage/withdraw/hold) are BLENDED —
 ## they set ship.orders.posture / ship.orders.focus_target and let CaptainBrain
 ## run normally, rather than short-circuiting into discrete sub-orders.
 
@@ -18,7 +18,7 @@ func _make_captain(skill: float = HIGH_SKILL, ship_id: String = "ship_1") -> Dic
 # BLENDED COMMAND ORDER ABSORPTION (replaces old short-circuit tests)
 
 func test_engage_order_absorbed_and_clears_received():
-	## Phase 4c: engage order is ABSORBED (not short-circuited). orders.received
+	## Engage order is ABSORBED (not short-circuited). orders.received
 	## must be null after the call; ship.orders.focus_target must be set.
 	var captain := _make_captain()
 	captain.orders.received = {"type": "engage", "subtype": "pursue", "target_id": "enemy_1"}

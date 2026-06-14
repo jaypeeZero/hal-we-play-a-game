@@ -327,7 +327,7 @@ static func calculate_opportunity_score(entity: Dictionary, own_ship: Dictionary
 	return score
 
 # ============================================================================
-# TACTICS-DRIVEN TARGETING WEIGHT  (Phase 3a)
+# TACTICS-DRIVEN TARGETING WEIGHT
 # ============================================================================
 
 ## Boost magnitudes for priority dials. Named constants so tuning is one-place.
@@ -428,7 +428,7 @@ static func targeting_weight(
 		if lateral_sector == sector_focus:
 			weight *= SECTOR_BOOST
 
-	# --- Focus-fire boost (Phase 3b) ---
+	# --- Focus-fire boost ---
 	# When the leader has designated a focus target, multiply its weight by
 	# lerp(1.0, FOCUS_MAX_BOOST, concentration). crew with no focus_assignment
 	# or concentration=0 are unaffected (multiplier stays 1.0 exactly).

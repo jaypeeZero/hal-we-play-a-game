@@ -1,9 +1,9 @@
 extends GutTest
 
-## Phase 03: perceived time of `threat_appeared` is strictly ordered by
-## awareness — a high-awareness pilot's mailbox releases the event almost
-## immediately, while a rookie's stays queued for hundreds of ms. This is
-## the latency layer the reaction model in Phase 04 builds on.
+## Perceived time of `threat_appeared` is strictly ordered by awareness — a
+## high-awareness pilot's mailbox releases the event almost immediately, while a
+## rookie's stays queued for hundreds of ms. This is the latency layer the
+## reaction commit-delay model builds on.
 
 const CREW := "crew_x"
 

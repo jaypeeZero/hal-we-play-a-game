@@ -2,13 +2,13 @@ class_name SteeringBlender
 extends RefCounted
 
 ## Pure brain-side logic: converts resolved tactics + live situation into a
-## directive dict on ship.orders (the frozen Phase-2 contract).
+## directive dict on ship.orders.
 ##
-## Contract fields produced (02b-directive-contract.md):
+## Directive fields produced:
 ##   engagement_target  : String   — ship_id to fight; "" = none
 ##   goal_weights       : Dictionary — {pursue, keep_range, evade, formation, support} ≥ 0
 ##   preferred_range    : float    — desired distance to engagement_target
-##   facing_mode        : String   — "auto" / "nose_on" / "broadside" (Phase 2b)
+##   facing_mode        : String   — "auto" / "nose_on" / "broadside"
 ##
 ## formation_slot and anchor_position are NOT set here — FormationSystem stamps
 ## them each frame with live positions (the enemy centroid moves every tick).
@@ -107,8 +107,8 @@ const POSTURE_HOLD := {
 	"formation":  0.7,    # dominant — anchor the line
 }
 
-## press: commanded all-out commit (#79 captain/commander press-attack / fleet
-## all-out). Close NOW and brawl — the aggressive counterpart to withdraw.
+## press: an active press-attack posture (captain/commander press-attack, or a
+## fleet all-out order). Close NOW and brawl — the aggressive counterpart to withdraw.
 ## pursue dominant, keep_range/evade minimal so the ship dives inside firing
 ## range and stays there rather than orbiting or peeling off.
 const POSTURE_PRESS := {
@@ -118,8 +118,8 @@ const POSTURE_PRESS := {
 	"formation":  0.15,   # some cohesion kept so a pressing wing doesn't fully clump
 }
 
-# facing_mode per role (Phase 2b)
-## Maps a ship role to the Phase-2b facing_mode string.
+# facing_mode per role
+## Maps a ship role to its facing_mode string.
 ## artillery presents broadside so its side batteries bear on the target.
 ## anchor/brawler/screen go nose-on to tank bow armor and bring forward guns.
 ## skirmisher/interceptor/flanker use the inherited fighter "auto" rule.

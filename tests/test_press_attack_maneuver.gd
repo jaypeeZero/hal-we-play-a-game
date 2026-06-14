@@ -1,6 +1,6 @@
 extends GutTest
 
-## Tests for Layer A — press-to-effective-range maneuver vs capitals.
+## Tests for the press-to-effective-range maneuver vs capitals.
 ## Asserts BEHAVIOR: posture selects closing maneuver, movement system closes,
 ## no regression when posture is absent.
 

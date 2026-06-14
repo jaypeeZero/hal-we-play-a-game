@@ -1,6 +1,6 @@
 extends GutTest
 
-## Tests for LargeShipPilotAI behavior — Phase 2b conversion.
+## Tests for LargeShipPilotAI behavior.
 ##
 ## The non-reflex engage tail now emits subtype "tactical" (a SteeringBlender
 ## directive) instead of FSM-specific large_ship_* subtypes. Tests below
@@ -352,7 +352,7 @@ func test_movement_system_executes_tactical_order_for_large_ship():
 	assert_gt(updated.velocity.x, 0.0, "Corvette should be closing on enemy to the right")
 
 # ============================================================================
-# CONVERTER — facing_mode produces correct headings (Phase 2b)
+# CONVERTER — facing_mode produces correct headings
 # ============================================================================
 
 func _heading_to_dir(h: float) -> Vector2:

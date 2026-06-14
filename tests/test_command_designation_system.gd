@@ -1,6 +1,6 @@
 extends GutTest
 
-## Tests for CommandDesignationSystem — command hat designation (Step A).
+## Tests for CommandDesignationSystem — command hat designation.
 ##
 ## Tests cover behavior only: hat assignment, subordinate lists, immutability.
 ## No specific data values are asserted; all assertions are structural.

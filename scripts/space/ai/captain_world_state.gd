@@ -26,12 +26,12 @@ var mission_target: Dictionary     # _select_mission_target result
 var damaged_target: Dictionary     # first damaged/critical opportunity; empty if none
 var top_threat_priority: float     # threats[0]._threat_priority, or 0.0
 
-# REACTIVE style rolls — computed once so actions are deterministic (overview §5)
+# REACTIVE style rolls — computed once per decision so actions are deterministic
 var panic_withdraw_roll: bool      # REACTIVE captain panics and may withdraw
 var hold_instead_roll: bool        # REACTIVE captain holds instead of engaging
 var hesitate_roll: bool            # REACTIVE captain hesitates on opportunity
 
-# Commit-decision inputs (Layer B)
+# Commit-decision inputs (commit-to-press escalation)
 var enemy_count: int               # operational enemies known via awareness
 var engagement_elapsed: float      # seconds since first contact
 var fleet_aggression: float        # resolved doctrine mentality 0..1 — gates commit-to-press
@@ -69,12 +69,12 @@ static func build(crew_data: Dictionary, game_time: float) -> CaptainWorldState:
 	ws.mission_target      = _select_mission_target(crew_data)
 	ws.damaged_target      = _select_damaged_target(crew_data)
 
-	# Roll probabilistic REACTIVE choices once per decision (overview §5)
+	# Roll probabilistic REACTIVE choices once per decision
 	ws.panic_withdraw_roll = randf() < CaptainAction.REACTIVE_PANIC_WITHDRAW_CHANCE
 	ws.hold_instead_roll   = randf() < CaptainAction.REACTIVE_HOLD_INSTEAD_OF_ENGAGE_CHANCE
 	ws.hesitate_roll       = randf() < CaptainAction.REACTIVE_HESITATE_ON_OPPORTUNITY_CHANCE
 
-	# Commit-decision inputs (Layer B)
+	# Commit-decision inputs (commit-to-press escalation)
 	ws.enemy_count         = TacticalProgressSystem.operational_enemy_count(crew_data)
 	ws.engagement_elapsed  = TacticalProgressSystem.engagement_elapsed(crew_data, game_time)
 	# Doctrine aggression gates commit-to-press: a defensive/kiting fleet keeps

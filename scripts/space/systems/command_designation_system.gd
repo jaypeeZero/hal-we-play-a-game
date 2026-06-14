@@ -9,8 +9,8 @@ extends RefCounted
 ## mutated; a modified copy is returned.
 ##
 ## Designed to run immediately after WingFormationSystem.form_wings() each tick
-## so it always reflects fresh wing membership.  Nothing consumes the hats yet
-## (Step B wires up command-brain dispatch).
+## so it always reflects fresh wing membership.  The hats it stamps drive
+## command-brain dispatch in CrewAISystem (CommanderBrain / SquadronLeaderBrain).
 
 
 ## Hull-class rank: higher = better.  Used as the primary sort key when

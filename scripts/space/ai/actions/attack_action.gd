@@ -2,9 +2,9 @@ class_name AttackAction
 extends FighterAction
 
 ## Standard attack action — the dominant non-reflex engage action.
-## Converted in Phase 1b to emit a blended directive (subtype:"tactical") instead
-## of a discrete fight_* maneuver, so combat becomes continuous brawl-vs-kite
-## driven by each ship's resolved tactics block.
+## Emits a blended steering directive (subtype:"tactical") instead of a discrete
+## fight_* maneuver, so combat is continuous brawl-vs-kite driven by each ship's
+## resolved tactics block rather than switching between fixed engage modes.
 ##
 ## Reflexes still emit fight_* subtypes (they run before FighterBrain.decide).
 ## This action is only reachable AFTER all reflexes have declined to fire.
@@ -50,9 +50,9 @@ func execute(ws: FighterWorldState) -> Dictionary:
 	# when a support_ally order is active.  Null when no escort assignment.
 	var support_pos: Variant = ws.my_ship.get("orders", {}).get("support_pos", null)
 
-	# A live press-attack posture (#79 commit / all-out, surfaced as ws.press_attack)
-	# maps to the aggressive "press" steering posture. Otherwise use any
-	# commander-set posture (withdraw/hold) on the crew.
+	# An active press-attack posture (surfaced as ws.press_attack) maps to the
+	# aggressive "press" steering posture. Otherwise use any commander-set
+	# posture (withdraw/hold) on the crew.
 	var posture: String = "press" if ws.press_attack else ws.crew_data.get("posture", "")
 
 	var directive: Dictionary = SteeringBlender.build_directive(

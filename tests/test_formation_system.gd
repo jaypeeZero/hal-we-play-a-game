@@ -1,6 +1,6 @@
 extends GutTest
 
-## Behavior tests for FormationSystem — command-layer contract (Step B).
+## Behavior tests for FormationSystem — command-layer contract.
 ##
 ## Formation assignments now come from the squadron leader's crew decision,
 ## not from crew["tactics"].  Tests cover:

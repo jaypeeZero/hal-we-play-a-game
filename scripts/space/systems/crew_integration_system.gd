@@ -101,8 +101,8 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		updated.orders.current_order = ""
 		updated.orders.target_id = ""
 	elif subtype == "tactical":
-		# Blended steering directive from AttackAction / LargeShipPilotAI (Phase 1b+).
-		# Copies all contract fields onto orders so MovementSystem can
+		# Blended steering directive from AttackAction / LargeShipPilotAI.
+		# Copies all directive fields onto orders so MovementSystem can
 		# re-blend them live each frame from current positions.
 		updated.orders.current_order = "tactical"
 		updated.orders.engagement_target = decision.get("engagement_target", "")
@@ -110,7 +110,7 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 		updated.orders.preferred_range   = decision.get("preferred_range", 0.0)
 		updated.orders.formation_slot    = decision.get("formation_slot",  Vector2.ZERO)
 		updated.orders.anchor_position   = decision.get("anchor_position", Vector2.ZERO)
-		# facing_mode: "auto"/"nose_on"/"broadside" — role-derived by SteeringBlender (Phase 2b)
+		# facing_mode: "auto"/"nose_on"/"broadside" — role-derived by SteeringBlender
 		updated.orders.facing_mode       = decision.get("facing_mode", "auto")
 		# Mirror target_id so leash / other systems that read orders.target_id still work
 		updated.orders.target_id         = decision.get("target_id", "")

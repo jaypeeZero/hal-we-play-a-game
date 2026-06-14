@@ -90,7 +90,7 @@ func test_formation_slot_and_anchor_are_zero_from_blender():
 	assert_eq(d["anchor_position"], Vector2.ZERO, "blender must not set anchor_position — FormationSystem owns it")
 
 
-# 1b. Formation weight — duty-driven (Phase 2)
+# 1b. Formation weight — duty-driven
 
 func test_hold_duty_has_higher_formation_weight_than_press():
 	var ship   := _make_ship()
@@ -344,7 +344,7 @@ func test_kite_preferred_range_less_than_knife_preferred_range_still_in_order():
 		"kite preferred_range must be ≤ weapon_optimal_range (kiter fights at far edge, not beyond)")
 
 
-# 9. Posture weight sets (Phase 4a)
+# 9. Posture weight sets
 
 ## Helper: build a directive with an explicit posture string.
 func _build_with_posture(posture: String, mentality_scalar: float = 0.7) -> Dictionary:
@@ -396,7 +396,7 @@ func test_empty_posture_goal_weights_identical_to_no_posture_baseline():
 		"empty posture must produce identical goal_weights to the no-posture call")
 
 
-# 10. _absorb_command_order behaviour (Phase 4a)
+# 10. _absorb_command_order behaviour
 
 ## Minimal crew dict that satisfies _absorb_command_order's guards.
 func _make_crew_with_order(order: Dictionary) -> Dictionary:

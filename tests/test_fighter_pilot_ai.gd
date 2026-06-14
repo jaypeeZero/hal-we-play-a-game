@@ -14,7 +14,7 @@ var game_time: float = 0.0
 func test_full_speed_pursuit_when_far_away():
 	# BEHAVIOR: When target is far away, AttackAction produces a tactical directive
 	# with a non-zero pursue weight so the blended control closes the distance.
-	# (Phase 1b: AttackAction now returns subtype "tactical" + goal_weights.)
+	# AttackAction returns subtype "tactical" with goal_weights.
 	var far_distance = FighterPilotAI.FAR_RANGE * 1.5  # Well beyond far range
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var target = TestFactories.make_fighter("enemy1", Vector2(far_distance, 0), 1)
@@ -31,7 +31,7 @@ func test_full_speed_pursuit_when_far_away():
 func test_slows_approach_at_mid_range():
 	# BEHAVIOR: At mid range, AttackAction produces a tactical directive.
 	# The blended control converges to preferred_range rather than a discrete mode.
-	# (Phase 1b: subtype is now "tactical" for all AttackAction outputs.)
+	# Subtype is "tactical" for all AttackAction outputs.
 	var mid_distance = (FighterPilotAI.MID_RANGE + FighterPilotAI.FAR_RANGE) / 2.0  # Middle of mid range
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var target = TestFactories.make_fighter("enemy1", Vector2(mid_distance, 0), 1)
@@ -49,7 +49,7 @@ func test_tight_maneuvering_at_close_range():
 	# BEHAVIOR: At close range AttackAction still produces a tactical directive.
 	# Close-range brawl emerges from the blender (keep_range pushes back out,
 	# pursue keeps closing) — not from a discrete tight-maneuver mode.
-	# (Phase 1b: subtype is "tactical" regardless of distance to target.)
+	# Subtype is "tactical" regardless of distance to target.
 	var close_distance = FighterPilotAI.MIN_COMBAT_RANGE * 0.8  # Inside minimum combat range
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var target = TestFactories.make_fighter("enemy1", Vector2(close_distance, 0), 1)
@@ -71,7 +71,7 @@ func test_tries_to_get_behind_enemy_fighter():
 	# BEHAVIOR: When fighting a fighter, AttackAction emits a tactical directive.
 	# Flanking/positioning intent is now expressed through goal_weights (pursue +
 	# keep_range blend), not a discrete subtype. The directive targets the enemy.
-	# (Phase 1b: behind-position geometry is handled by the blender/converter.)
+	# Behind-position geometry is handled by the blender/converter.
 	var close_distance = FighterPilotAI.CLOSE_RANGE * 0.5  # Well inside close range
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var enemy = TestFactories.make_fighter("enemy1", Vector2(close_distance, 0), 1)
@@ -87,7 +87,7 @@ func test_tries_to_get_behind_enemy_fighter():
 
 func test_formation_flying_with_wingmates():
 	# BEHAVIOR: When fighting with wingmates, AttackAction emits a tactical directive.
-	# The directive carries all contract fields; formation_slot (Phase 2) is Vector2.ZERO.
+	# The directive carries all contract fields; formation_slot is Vector2.ZERO when no formation goal is active.
 	# The key behavior: the decision is still type "maneuver" and targets the enemy.
 	var formation_spacing = FighterPilotAI.FORMATION_SPACING
 	var combat_distance = FighterPilotAI.CLOSE_RANGE * 0.8
@@ -102,8 +102,8 @@ func test_formation_flying_with_wingmates():
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
 	assert_eq(decision.subtype, "tactical", "AttackAction emits tactical directive")
-	# Phase-1 formation_slot is always ZERO; formation goal is Phase 2
-	assert_true(decision.has("formation_slot"), "Directive should carry formation_slot (Phase 2 placeholder)")
+	# AttackAction leaves formation_slot at ZERO; FormationSystem stamps live positions later.
+	assert_true(decision.has("formation_slot"), "Directive should carry formation_slot")
 
 # ============================================================================
 # BEHAVIOR TESTS - Fighter vs Capital/Corvette combat
@@ -113,7 +113,7 @@ func test_stays_at_distance_vs_capital_ships():
 	# BEHAVIOR: When fighting a capital, AttackAction emits a tactical directive.
 	# Standoff distance is set via preferred_range (range_scalar from tactics) rather
 	# than a discrete defensive subtype. The blender's keep_range goal handles the geometry.
-	# (Phase 1b: all AttackAction paths return subtype "tactical".)
+	# All AttackAction paths return subtype "tactical".
 	var too_close_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.5  # Too close to capital
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var capital = TestFactories.make_capital("capital1", Vector2(too_close_distance, 0), 1)
@@ -231,7 +231,7 @@ func test_movement_system_handles_fighter_engage():
 
 func test_full_integration_fighter_vs_fighter():
 	# BEHAVIOR: Full integration — AttackAction → CrewIntegrationSystem → MovementSystem.
-	# Phase 1b: AttackAction emits subtype "tactical"; CrewIntegrationSystem sets
+	# AttackAction emits subtype "tactical"; CrewIntegrationSystem sets
 	# current_order "tactical"; MovementSystem routes through calculate_blended_control.
 	# Ships are placed at FAR_RANGE so no collision/pre-commit reflexes fire.
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
@@ -248,7 +248,7 @@ func test_full_integration_fighter_vs_fighter():
 	var updated_ship = CrewIntegrationSystem.apply_decision_to_ship(my_ship, decision, crew)
 
 	# 3. Verify ship orders were updated with blended directive
-	assert_eq(updated_ship.orders.current_order, "tactical", "Should set tactical order (Phase 1b)")
+	assert_eq(updated_ship.orders.current_order, "tactical", "Should set tactical order")
 	assert_eq(updated_ship.orders.target_id, "enemy1", "Should mirror target_id onto orders")
 	assert_true(updated_ship.orders.has("goal_weights"), "Orders should carry goal_weights")
 
@@ -261,7 +261,7 @@ func test_full_integration_fighter_vs_fighter():
 
 func test_full_integration_group_run():
 	# BEHAVIOR: Multiple fighters vs a capital all emit tactical directives and move.
-	# Phase 1b: group-run coordination emerges from high pursue weight in the blended
+	# Group-run coordination emerges from high pursue weight in the blended
 	# directive rather than a discrete "fight_group_run" subtype.
 	var formation_spacing = FighterPilotAI.FORMATION_SPACING
 	var attack_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.8
@@ -1022,7 +1022,7 @@ func test_leash_pull_ramps_with_distance():
 		"Ship further outside the zone should be pulled more strongly back home")
 
 
-# ── PHASE 1b: Tactics-driven AttackAction behaviour ───────────────────────────
+# ── Tactics-driven AttackAction behaviour ─────────────────────────────────────
 # These tests verify that the goal_weights/preferred_range produced by AttackAction
 # vary predictably with different tactics presets. They test the PIPELINE, not
 # internal SteeringBlender constants (those are covered in test_steering_blender.gd).
@@ -1114,8 +1114,8 @@ func test_tactical_order_applied_to_ship_orders():
 	assert_true(updated_ship.orders.has("goal_weights"),   "Orders should carry goal_weights")
 	assert_true(updated_ship.orders.has("preferred_range"),"Orders should carry preferred_range")
 	assert_true(updated_ship.orders.has("engagement_target"), "Orders should carry engagement_target")
-	assert_true(updated_ship.orders.has("formation_slot"), "Orders should carry formation_slot (Phase 2 placeholder)")
-	assert_true(updated_ship.orders.has("anchor_position"),"Orders should carry anchor_position (Phase 2 placeholder)")
+	assert_true(updated_ship.orders.has("formation_slot"), "Orders should carry formation_slot")
+	assert_true(updated_ship.orders.has("anchor_position"),"Orders should carry anchor_position")
 
 func test_tactical_order_drives_movement():
 	# BEHAVIOR: A ship with current_order "tactical" and valid goal_weights should

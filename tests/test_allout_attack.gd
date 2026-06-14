@@ -1,6 +1,6 @@
 extends GutTest
 
-## Tests for Layer C — Player "All-Out Attack" order.
+## Tests for the player "All-Out Attack" order.
 ## Verifies that issuing the order stamps press_attack posture on every
 ## player-team pilot/captain and that cancelling strips it again.
 ## Uses minimal mocks — we test the pure posture-writing logic, not the
