@@ -3,9 +3,10 @@ class_name CampaignMap3D
 
 ## 3D star-chart campaign map. Each sector is a concentric shell of star
 ## nodes (sector E outermost, sector A the core); winning a sector's exit
-## battle promotes the player one shell inward, losing a run demotes one
-## shell outward. This scene owns all campaign-flow branching: battle
-## results land here via RoguelikeRun.pending_battle_result.
+## battle promotes the player one shell inward. A total-loss defeat ends the
+## run or resets the sector to a rebuild shop — the player never moves back a
+## shell. This scene owns all campaign-flow branching: battle results land
+## here via RoguelikeRun.pending_battle_result.
 
 signal node_selected(node: Dictionary)
 signal sector_changed(from_sector: String, to_sector: String)
@@ -58,7 +59,7 @@ const CAMERA_TWEEN_SECONDS := 1.2
 
 const END_BANNER_SECONDS := 3.0
 const WINNER_BANNER_TEXT := "WINNER!\nSector A is yours, Commander."
-const GAME_OVER_BANNER_TEXT := "GAME OVER\nYour fleet was lost in Sector E."
+const GAME_OVER_BANNER_TEXT := "GAME OVER\nYour fleet was destroyed and you cannot afford to rebuild."
 
 @onready var _camera_rig: Node3D = $CameraRig
 @onready var _camera: Camera3D = $CameraRig/Camera3D
@@ -75,8 +76,8 @@ var _star_labels: Dictionary = {}     # node_id -> Label3D
 var _dragging := false
 var _zoom_distance := ZOOM_MAX
 var _campaign_over := false
-## One-shot transition report (promotion/demotion) shown above the
-## standing "select your destination" prompt on the next refresh.
+## One-shot transition report (promotion, revisit, sector reset) shown above
+## the standing "select your destination" prompt on the next refresh.
 var _status_message := ""
 
 var _fleet_panel: FleetConditionPanel
@@ -117,12 +118,12 @@ func _process(_delta: float) -> void:
 
 
 # ============================================================================
-# CAMPAIGN FLOW - battle results, promotion, demotion, campaign end
+# CAMPAIGN FLOW - battle results, promotion, defeat, campaign end
 # ============================================================================
 
 ## The campaign-flow brain: consume the battle result stashed by the
-## battle scene and branch into plain progress, promotion, demotion,
-## game over, or campaign victory.
+## battle scene and branch into plain progress, promotion, defeat
+## (sector reset or game over), or campaign victory.
 func _resolve_pending_battle() -> void:
 	var node_id: String = RoguelikeRun.pending_battle_node_id
 	var result: String = RoguelikeRun.pending_battle_result
@@ -133,7 +134,7 @@ func _resolve_pending_battle() -> void:
 	if result == CampaignSystem.RESULT_VICTORY:
 		await _resolve_battle_victory(node_id)
 	elif RoguelikeRun.pending_battle_fled:
-		# Lost the engagement but ships escaped — takes precedence over demotion.
+		# Lost the engagement but ships escaped — takes precedence over a total loss.
 		await _resolve_battle_fled_retreat()
 	else:
 		await _resolve_battle_defeat()
@@ -161,28 +162,19 @@ func _resolve_battle_victory(node_id: String) -> void:
 
 func _resolve_battle_defeat() -> void:
 	var campaign: Dictionary = RoguelikeRun.campaign
-	if CampaignSystem.is_bottom_sector(campaign):
+	if not RoguelikeRun.can_afford_rebuild():
 		await _end_campaign(GAME_OVER_BANNER_TEXT, CampaignSystem.RESULT_DEFEAT)
 		return
 
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	var survivors := DemotionFleetBuilder.pick_survivors(
-		RoguelikeRun.lost_fleet_final_ships, RoguelikeRun.lost_fleet_final_crew, rng)
-	RoguelikeRun.apply_demotion(survivors, FleetDataManager.load_fleet(0))
-
-	var from_sector: String = campaign["current_sector"]
-	CampaignSystem.demote(campaign)
-	sector_changed.emit(from_sector, campaign["current_sector"])
-	_tween_camera_to_current_shell()
-	_status_message = "Fleet lost in Sector %s. Demoted to Sector %s; %d battered ship(s) limped home." % [
-		from_sector, campaign["current_sector"], survivors["ships"].size()]
+	var sector: String = campaign["current_sector"]
+	CampaignSystem.reset_sector_to_shop(campaign, sector)
+	_status_message = "Fleet lost in Sector %s. The sector entry has been converted to a shop — rebuild before re-engaging." % sector
 	RoguelikeRun.save_campaign_to_disk()
 
 
-## Lost the engagement but ships escaped: no demotion, no game-over (even in the
-## bottom sector). The fled fleet regroups in place; the node is NOT marked
-## visited (the battle wasn't won) so the player re-attempts or picks another.
+## Lost the engagement but ships escaped: no sector reset, no game-over. The
+## fled fleet regroups in place; the node is NOT marked visited (the battle
+## wasn't won) so the player re-attempts or picks another.
 ## Fleeing is the deliberate escape hatch from a total loss.
 func _resolve_battle_fled_retreat() -> void:
 	_status_message = "Engagement lost — %d ship(s) escaped and regrouped." % \
@@ -239,6 +231,10 @@ func _travel_to_node(node_id: String) -> void:
 	var repair_summary: Dictionary = RoguelikeRun.apply_jump_repairs(
 		destination, node["type"] == CampaignSystem.NODE_TYPE_RANDR)
 
+	if node.get("visited", false):
+		_complete_revisit(node, repair_summary)
+		return
+
 	if node["type"] == CampaignSystem.NODE_TYPE_BATTLE:
 		_enter_battle_node(node)
 		return
@@ -264,6 +260,18 @@ func _complete_node_visit(node: Dictionary, repair_summary: Dictionary) -> void:
 	node_selected.emit(node)
 	RoguelikeRun.save_campaign_to_disk()
 	_refresh_map()
+	_show_repair_summary(repair_summary)
+	RoguelikeRun.last_jump_repair_summary = {}
+
+
+## Handle a jump to a node the player has already visited: reposition without
+## triggering events again. Repair time still passes; the visit is idempotent.
+func _complete_revisit(node: Dictionary, repair_summary: Dictionary) -> void:
+	CampaignSystem.visit_node(RoguelikeRun.campaign, node["id"])
+	RoguelikeRun.save_campaign_to_disk()
+	_refresh_map()
+	_status_message = "Returned to %s — %d star dates passed. No new events." % [
+		node.get("name", node["id"]), repair_summary.get("date_delta", 0)]
 	_show_repair_summary(repair_summary)
 	RoguelikeRun.last_jump_repair_summary = {}
 
@@ -419,7 +427,7 @@ func _current_shell_radius() -> float:
 		+ (CampaignSystem.SECTORS.size() - 1 - sector_index) * CampaignGenerator.SHELL_RADIUS_STEP
 
 
-## Promotion burrows the camera inward, demotion pulls it back out.
+## Promotion burrows the camera inward to the next shell.
 func _tween_camera_to_current_shell() -> void:
 	create_tween().tween_method(_set_zoom, _zoom_distance,
 		_current_shell_radius() + CAMERA_SHELL_MARGIN, CAMERA_TWEEN_SECONDS) \
@@ -516,6 +524,8 @@ func _update_star_visuals() -> void:
 		_star_areas[node_id].input_ray_pickable = in_current_sector
 		_star_labels[node_id].modulate = Color(1, 1, 1,
 			1.0 if in_current_sector else DIMMED_SECTOR_ALPHA)
+		_star_labels[node_id].text = "%s\n%s  +%d" % [
+			node["name"], NODE_TYPE_NAMES[node["type"]], int(node["star_date_gap"])]
 
 
 func _star_color(node: Dictionary, campaign: Dictionary) -> Color:

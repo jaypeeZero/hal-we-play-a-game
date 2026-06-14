@@ -18,7 +18,7 @@ extends RefCounted
 ##
 ## `star_date_gap` is the gap rolled for the node's row, not an absolute
 ## date: the destination date is computed at jump time, so re-running a
-## sector after a demotion keeps star dates flowing forward.
+## sector after a reset keeps star dates flowing forward.
 
 const MIN_ROWS_PER_SECTOR := 4
 const MAX_ROWS_PER_SECTOR := 6
@@ -35,8 +35,17 @@ const MAX_OUTGOING_CONNECTIONS := 2
 const CLOSEST_TARGET_BIAS := 0.7
 
 ## Battle-node enemy fleets vary by up to this much (per ship type) around
-## the sector-scaled base fleet.
+## the sector base fleet.
 const ENEMY_COUNT_JITTER := 1
+
+## Per-sector enemy fleet compositions (ship type → base count).
+const SECTOR_FLEET_COUNTS := {
+	"E": {"fighter": 3},
+	"D": {"fighter": 3, "heavy_fighter": 2},
+	"C": {"fighter": 4, "heavy_fighter": 2, "torpedo_boat": 2, "corvette": 1},
+	"B": {"fighter": 4, "heavy_fighter": 3, "torpedo_boat": 2, "corvette": 2, "capital": 1},
+	"A": {"fighter": 5, "heavy_fighter": 4, "torpedo_boat": 3, "corvette": 2, "capital": 2},
+}
 
 ## Concentric shell layout: sector E is the outermost shell, sector A the
 ## core, so winning burrows the camera inward.
@@ -51,7 +60,7 @@ const BRIDGE_AZIMUTH_GAP := 0.2
 const POSITION_JITTER := 0.07
 
 
-static func generate(rng: RandomNumberGenerator, enemy_base_fleet: Dictionary) -> Dictionary:
+static func generate(rng: RandomNumberGenerator) -> Dictionary:
 	var campaign := {
 		"current_sector": CampaignSystem.SECTORS[0],
 		"current_node_id": "",
@@ -64,7 +73,7 @@ static func generate(rng: RandomNumberGenerator, enemy_base_fleet: Dictionary) -
 	var previous_exit_id := ""
 	for sector_index in CampaignSystem.SECTORS.size():
 		var sector: String = CampaignSystem.SECTORS[sector_index]
-		var rows := _generate_sector_rows(campaign, sector, sector_index, sector_start_azimuth, rng, enemy_base_fleet, used_names)
+		var rows := _generate_sector_rows(campaign, sector, sector_index, sector_start_azimuth, rng, used_names)
 		_connect_sector_rows(campaign, rows, rng)
 
 		var entry_id: String = rows[0][0]
@@ -74,10 +83,8 @@ static func generate(rng: RandomNumberGenerator, enemy_base_fleet: Dictionary) -
 		previous_exit_id = rows[rows.size() - 1][0]
 		sector_start_azimuth += rows.size() * ROW_AZIMUTH_STEP + BRIDGE_AZIMUTH_GAP
 
-	# The journey begins at the bottom sector's entry node.
-	var first_entry := CampaignSystem.node_by_id(
-		campaign, "%s_0_0" % CampaignSystem.SECTORS[0])
-	first_entry["accessible"] = true
+	# Expose the bottom sector's entry via the standard accessibility rule.
+	CampaignSystem._recompute_accessibility_from_current(campaign)
 	return campaign
 
 
@@ -85,7 +92,7 @@ static func generate(rng: RandomNumberGenerator, enemy_base_fleet: Dictionary) -
 ## Arrays of node ids (the connection pass works row to row).
 static func _generate_sector_rows(campaign: Dictionary, sector: String,
 		sector_index: int, start_azimuth: float, rng: RandomNumberGenerator,
-		enemy_base_fleet: Dictionary, used_names: Dictionary) -> Array:
+		used_names: Dictionary) -> Array:
 	var row_count := rng.randi_range(MIN_ROWS_PER_SECTOR, MAX_ROWS_PER_SECTOR)
 	var rows: Array = []
 	for row in row_count:
@@ -112,29 +119,27 @@ static func _generate_sector_rows(campaign: Dictionary, sector: String,
 				"name": DestinationNamer.roll_name(node_type, rng, used_names),
 			}
 			if node_type == CampaignSystem.NODE_TYPE_BATTLE:
-				node["enemy_fleet"] = _roll_enemy_fleet(enemy_base_fleet, sector, rng)
+				node["enemy_fleet"] = _roll_enemy_fleet(sector, rng)
 			campaign["nodes"][node["id"]] = node
 			row_ids.append(node["id"])
 		rows.append(row_ids)
 	return rows
 
 
-## Roll a jittered enemy fleet for a battle node, scaled to the sector's
-## difficulty. Each ship type count is randomly nudged by ±ENEMY_COUNT_JITTER.
-## If the result is empty but the scaled fleet is non-empty, the first ship
+## Roll a jittered enemy fleet for a battle node from the sector's base
+## composition. Each ship type count is randomly nudged by ±ENEMY_COUNT_JITTER
+## (clamped to 0). If the result is empty but the base was non-empty, the first
 ## type is set to 1 — a battle node always has someone to fight.
-static func _roll_enemy_fleet(base_fleet: Dictionary, sector: String,
-		rng: RandomNumberGenerator) -> Dictionary:
-	var scaled := CampaignSystem.scaled_enemy_fleet(base_fleet, sector)
+static func _roll_enemy_fleet(sector: String, rng: RandomNumberGenerator) -> Dictionary:
+	var base: Dictionary = SECTOR_FLEET_COUNTS.get(sector, {})
 	var result := {}
-	for ship_type in scaled:
-		result[ship_type] = maxi(0, scaled[ship_type] + rng.randi_range(-ENEMY_COUNT_JITTER, ENEMY_COUNT_JITTER))
-	# Guarantee at least one combatant when the scaled fleet was non-empty.
+	for ship_type in base:
+		result[ship_type] = maxi(0, int(base[ship_type]) + rng.randi_range(-ENEMY_COUNT_JITTER, ENEMY_COUNT_JITTER))
 	var total := 0
 	for ship_type in result:
 		total += result[ship_type]
-	if total == 0 and not scaled.is_empty():
-		var first_type: String = scaled.keys()[0]
+	if total == 0 and not base.is_empty():
+		var first_type: String = base.keys()[0]
 		result[first_type] = 1
 	return result
 

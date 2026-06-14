@@ -400,7 +400,7 @@ func _despawn_ship(ship_id: String) -> void:
 		_remove_crew_for_ship(ship_id)
 
 ## Remove a destroyed ship, capturing it as a fallen player ship for the
-## Roguelike demotion roll first.
+## Roguelike post-battle fleet summary first.
 func _remove_ship(ship_id: String) -> void:
 	var ship = _find_ship_by_id(ship_id)
 	if not ship.is_empty() and RoguelikeRun.active and ship.get("team", -1) == 0:

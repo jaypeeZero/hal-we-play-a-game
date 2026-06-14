@@ -15,9 +15,6 @@ const NODE_TYPE_SHOP := "shop"
 const RESULT_VICTORY := "victory"
 const RESULT_DEFEAT := "defeat"
 
-## Enemy fleet counts scale with the sector's league position.
-const SECTOR_DIFFICULTY_MULTIPLIERS := {"E": 1.0, "D": 1.3, "C": 1.6, "B": 2.0, "A": 2.5}
-
 
 static func node_by_id(campaign: Dictionary, node_id: String) -> Dictionary:
 	return campaign.get("nodes", {}).get(node_id, {})
@@ -29,8 +26,8 @@ static func node_position(node: Dictionary) -> Vector3:
 
 
 ## Mark a node visited and make it the player's position. Accessibility
-## narrows to the node's unvisited successors (callers gate on
-## `accessible` before visiting; this function trusts them).
+## opens to the current row and the next row in the same sector (visited
+## nodes remain accessible so the player can revisit them).
 static func visit_node(campaign: Dictionary, node_id: String) -> void:
 	var node := node_by_id(campaign, node_id)
 	if node.is_empty():
@@ -62,47 +59,31 @@ static func is_top_sector(campaign: Dictionary) -> bool:
 	return campaign.get("current_sector", "") == SECTORS[SECTORS.size() - 1]
 
 
-static func is_bottom_sector(campaign: Dictionary) -> bool:
-	return campaign.get("current_sector", "") == SECTORS[0]
-
-
-## Winning a sector moves the player one shell inward. The bridge from the
-## just-won exit node already points at the next sector's entry, so the
-## fresh accessibility recompute exposes exactly that entry node.
+## Winning a sector moves the player one shell inward. Visits are cleared for
+## the new sector and current_node_id is reset so the empty-current branch
+## of _recompute_accessibility_from_current exposes exactly the entry node.
 static func promote(campaign: Dictionary) -> void:
 	var next_index := _sector_index(campaign) + 1
 	if next_index >= SECTORS.size():
 		return
 	campaign["current_sector"] = SECTORS[next_index]
 	_reset_sector_visits(campaign, SECTORS[next_index])
+	campaign["current_node_id"] = ""
 	_recompute_accessibility_from_current(campaign)
 
 
-## Losing a run drops the player one shell outward for a fresh attempt at
-## the lower sector: same layout, visited flags cleared, entry accessible.
-## (Star dates are stored as relative gaps, so re-running a sector keeps
-## time flowing forward.)
-static func demote(campaign: Dictionary) -> void:
-	var lower_index := _sector_index(campaign) - 1
-	if lower_index < 0:
-		return
-	var lower_sector: String = SECTORS[lower_index]
-	campaign["current_sector"] = lower_sector
+## Reset the given sector for a fresh attempt, turning its entry node into
+## a shop so the player can rebuild before re-engaging. Used after a defeat
+## when the player can still afford to rebuild.
+static func reset_sector_to_shop(campaign: Dictionary, sector: String) -> void:
+	_reset_sector_visits(campaign, sector)
 	campaign["current_node_id"] = ""
-	_reset_sector_visits(campaign, lower_sector)
-	for node in campaign["nodes"].values():
-		node["accessible"] = node.get("sector", "") == lower_sector \
-			and node.get("is_sector_entry", false)
-
-
-## Enemy fleet for a sector: each ship count scaled up by the sector's
-## difficulty multiplier, rounded up so any present type stays present.
-static func scaled_enemy_fleet(base_fleet: Dictionary, sector: String) -> Dictionary:
-	var multiplier: float = SECTOR_DIFFICULTY_MULTIPLIERS.get(sector, 1.0)
-	var scaled := {}
-	for ship_type in base_fleet:
-		scaled[ship_type] = ceili(int(base_fleet[ship_type]) * multiplier)
-	return scaled
+	campaign["current_sector"] = sector
+	var entry := _sector_entry_node(campaign, sector)
+	if not entry.is_empty():
+		entry["type"] = NODE_TYPE_SHOP
+		entry.erase("enemy_fleet")
+	_recompute_accessibility_from_current(campaign)
 
 
 static func _sector_index(campaign: Dictionary) -> int:
@@ -115,13 +96,33 @@ static func _reset_sector_visits(campaign: Dictionary, sector: String) -> void:
 			node["visited"] = false
 
 
+static func _sector_entry_node(campaign: Dictionary, sector: String) -> Dictionary:
+	for node in campaign["nodes"].values():
+		if node.get("sector", "") == sector and node.get("is_sector_entry", false):
+			return node
+	return {}
+
+
+## Row-based reachability:
+##   current_node_id == "": only the sector's entry node is accessible.
+##   Otherwise: every node on the current row AND the next row is accessible
+##   (including visited nodes — players can revisit freely).
 static func _recompute_accessibility_from_current(campaign: Dictionary) -> void:
 	for node in campaign["nodes"].values():
 		node["accessible"] = false
 	var current_id: String = campaign.get("current_node_id", "")
-	for connection in campaign.get("connections", []):
-		if connection["from_id"] != current_id:
+	var current_sector: String = campaign.get("current_sector", "")
+	if current_id == "":
+		for node in campaign["nodes"].values():
+			if node.get("sector", "") == current_sector and node.get("is_sector_entry", false):
+				node["accessible"] = true
+		return
+	var current := node_by_id(campaign, current_id)
+	if current.is_empty():
+		return
+	var current_row: int = current.get("row", 0)
+	for node in campaign["nodes"].values():
+		if node.get("sector", "") != current_sector:
 			continue
-		var successor := node_by_id(campaign, connection["to_id"])
-		if not successor.is_empty() and not successor.get("visited", false):
-			successor["accessible"] = true
+		var row: int = node.get("row", -1)
+		node["accessible"] = (row == current_row or row == current_row + 1)

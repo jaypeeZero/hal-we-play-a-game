@@ -5,7 +5,6 @@ extends GutTest
 ## shells, regardless of the tuning values in play.
 
 const TEST_SEED := 1234
-const TEST_ENEMY_FLEET := {"fighter": 4, "capital": 1}
 
 
 func _rng(seed_value: int = TEST_SEED) -> RandomNumberGenerator:
@@ -15,7 +14,7 @@ func _rng(seed_value: int = TEST_SEED) -> RandomNumberGenerator:
 
 
 func _generate(seed_value: int = TEST_SEED) -> Dictionary:
-	return CampaignGenerator.generate(_rng(seed_value), TEST_ENEMY_FLEET)
+	return CampaignGenerator.generate(_rng(seed_value))
 
 
 func _sector_nodes(campaign: Dictionary, sector: String) -> Array:
@@ -204,14 +203,13 @@ func test_battle_node_enemy_fleet_count_within_jitter():
 	for node in campaign["nodes"].values():
 		if node["type"] != CampaignSystem.NODE_TYPE_BATTLE:
 			continue
-		var scaled := CampaignSystem.scaled_enemy_fleet(TEST_ENEMY_FLEET, node["sector"])
-		for ship_type in scaled:
-			var scaled_count: int = scaled[ship_type]
+		var base: Dictionary = CampaignGenerator.SECTOR_FLEET_COUNTS.get(node["sector"], {})
+		for ship_type in base:
+			var base_count: int = int(base[ship_type])
 			var actual_count: int = node["enemy_fleet"].get(ship_type, 0)
-			# jitter is clamped to 0; actual may be 1 if the fleet was rescued
-			assert_gte(actual_count, maxi(0, scaled_count - CampaignGenerator.ENEMY_COUNT_JITTER),
+			assert_gte(actual_count, maxi(0, base_count - CampaignGenerator.ENEMY_COUNT_JITTER),
 				"Fleet count for %s on %s should be within jitter" % [ship_type, node["id"]])
-			assert_lte(actual_count, scaled_count + CampaignGenerator.ENEMY_COUNT_JITTER,
+			assert_lte(actual_count, base_count + CampaignGenerator.ENEMY_COUNT_JITTER,
 				"Fleet count for %s on %s should be within jitter" % [ship_type, node["id"]])
 
 
@@ -221,3 +219,42 @@ func test_non_battle_nodes_have_no_enemy_fleet():
 		if node["type"] != CampaignSystem.NODE_TYPE_BATTLE:
 			assert_false(node.has("enemy_fleet"),
 				"Non-battle node %s must not have enemy_fleet" % node["id"])
+
+
+func test_sector_e_battle_nodes_have_only_fighters():
+	var campaign := _generate()
+	var checked := 0
+	for node in campaign["nodes"].values():
+		if node["sector"] != "E" or node["type"] != CampaignSystem.NODE_TYPE_BATTLE:
+			continue
+		checked += 1
+		for ship_type in node["enemy_fleet"]:
+			assert_eq(ship_type, "fighter",
+				"Sector E should only contain fighters, not %s" % ship_type)
+	assert_gt(checked, 0, "Expected at least one Sector E battle node")
+
+
+func test_capital_ships_first_appear_at_sector_b():
+	# Sectors before B must have 0 base capitals; B and A must have >=1.
+	var sectors_before_b := ["E", "D", "C"]
+	var sectors_from_b := ["B", "A"]
+	for sector in sectors_before_b:
+		var base: Dictionary = CampaignGenerator.SECTOR_FLEET_COUNTS.get(sector, {})
+		assert_eq(base.get("capital", 0), 0,
+			"Sector %s should have no capital ships in its base fleet" % sector)
+	for sector in sectors_from_b:
+		var base: Dictionary = CampaignGenerator.SECTOR_FLEET_COUNTS.get(sector, {})
+		assert_gt(base.get("capital", 0), 0,
+			"Sector %s should have at least one capital ship in its base fleet" % sector)
+
+
+func test_total_base_fleet_counts_trend_nondecreasing_with_depth():
+	var previous_total := 0
+	for sector in CampaignSystem.SECTORS:
+		var base: Dictionary = CampaignGenerator.SECTOR_FLEET_COUNTS.get(sector, {})
+		var total := 0
+		for count in base.values():
+			total += int(count)
+		assert_gte(total, previous_total,
+			"Sector %s total base fleet (%d) must be >= previous sector (%d)" % [sector, total, previous_total])
+		previous_total = total
