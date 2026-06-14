@@ -11,6 +11,7 @@ const CONDITION_LOW_RATIO := 0.4
 const SCROLL_MAX_HEIGHT := 600
 const SECTION_SEPARATION := 12
 const ROW_SEPARATION := 8
+const CREW_ROW_PORTRAIT_SIZE := Vector2(36, 42)
 
 
 func _ready() -> void:
@@ -210,6 +211,14 @@ func _crew_dev_row(rec: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 
+	# Portrait face: keyed off the crew's stable id (or callsign) so a given
+	# crew member always shows the same face here as elsewhere.
+	var portrait := CrewPortrait.new()
+	portrait.custom_minimum_size = CREW_ROW_PORTRAIT_SIZE
+	portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	portrait.setup(_portrait_entry(rec))
+	row.add_child(portrait)
+
 	var role_name := CrewData.get_role_name(int(rec.get("role", CrewData.Role.PILOT)))
 	row.add_child(UiKit.label(role_name, UiKit.DIM, 11))
 	row.add_child(UiKit.label(str(rec.get("callsign", "")), UiKit.INK))
@@ -256,6 +265,16 @@ func _crew_dev_row(rec: Dictionary) -> Control:
 	row.add_child(drill_btn)
 
 	return row
+
+
+## Build a minimal roster-shaped entry for CrewPortrait from a progression
+## record. CrewPortrait keys the face off `id` (crew_id) then `callsign`, so a
+## crew member's face stays stable across screens.
+func _portrait_entry(rec: Dictionary) -> Dictionary:
+	return {
+		"id": str(rec.get("crew_id", "")),
+		"callsign": str(rec.get("callsign", "")),
+	}
 
 
 func _build_footer() -> Control:

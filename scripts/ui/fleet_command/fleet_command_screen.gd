@@ -303,7 +303,7 @@ func _build_roster_card(hull: Dictionary) -> Control:
 	# Small ship card (sprite)
 	var small_card := ShipCard.new()
 	small_card.setup(ship_type, {"team": 0})
-	small_card.custom_minimum_size = SHIP_CARD_SMALL_SIZE
+	small_card.set_card_size(SHIP_CARD_SMALL_SIZE)
 	row.add_child(small_card)
 
 	# Ship info
@@ -312,10 +312,10 @@ func _build_roster_card(hull: Dictionary) -> Control:
 	info.add_theme_constant_override("separation", 4)
 	row.add_child(info)
 
-	var ship_name: String = str(hull.get("name", hull_id))
+	var explicit_name: String = str(hull.get("name", "")).strip_edges()
 	var name_edit := LineEdit.new()
-	name_edit.text = ship_name
-	name_edit.placeholder_text = "Ship name"
+	name_edit.text = explicit_name
+	name_edit.placeholder_text = _ship_display_name(hull)
 	name_edit.add_theme_stylebox_override("normal", UiKit.panel_box(UiKit.PANEL_2, UiKit.LINE, 4, 4))
 	name_edit.add_theme_color_override("font_color", UiKit.INK)
 	name_edit.add_theme_color_override("caret_color", UiKit.ACCENT)
@@ -384,7 +384,9 @@ func _rebuild_right_panel() -> void:
 
 	var big_card := ShipCard.new()
 	big_card.setup(str(hull.get("ship_type", "fighter")), {"team": 0})
-	big_card.custom_minimum_size = SHIP_CARD_BIG_SIZE
+	big_card.set_card_size(SHIP_CARD_BIG_SIZE)
+	big_card.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	big_card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	header_row.add_child(big_card)
 
 	var header_info := VBoxContainer.new()
@@ -392,9 +394,10 @@ func _rebuild_right_panel() -> void:
 	header_info.add_theme_constant_override("separation", 6)
 	header_row.add_child(header_info)
 
-	var hull_name: String = str(hull.get("name", _selected_hull_id))
+	var explicit_name: String = str(hull.get("name", "")).strip_edges()
 	var name_edit := LineEdit.new()
-	name_edit.text = hull_name
+	name_edit.text = explicit_name
+	name_edit.placeholder_text = _ship_display_name(hull)
 	name_edit.add_theme_stylebox_override("normal", UiKit.panel_box(UiKit.PANEL_2, UiKit.LINE, 4, 6))
 	name_edit.add_theme_color_override("font_color", UiKit.INK)
 	name_edit.add_theme_color_override("caret_color", UiKit.ACCENT)
@@ -620,6 +623,26 @@ func on_assign_changed() -> void:
 	_rebuild_right_panel()
 	_rebuild_pool()
 	_rebuild_roster()
+
+
+## Human-readable ship name. Uses the hull's explicit `name` when the player has
+## set one; otherwise derives a real-sounding label from the ship type and the
+## hull number, e.g. hull_0 fighter → "Fighter 1" (1-based). Never "Ship name".
+func _ship_display_name(hull: Dictionary) -> String:
+	var explicit: String = str(hull.get("name", "")).strip_edges()
+	if not explicit.is_empty():
+		return explicit
+	var type_label: String = str(hull.get("ship_type", "ship")).replace("_", " ").capitalize()
+	var hull_id: String = str(hull.get("hull_id", ""))
+	var digits: String = ""
+	for i in range(hull_id.length() - 1, -1, -1):
+		if hull_id[i] >= "0" and hull_id[i] <= "9":
+			digits = hull_id[i] + digits
+		elif not digits.is_empty():
+			break
+	if digits.is_empty():
+		return type_label
+	return "%s %d" % [type_label, int(digits) + 1]
 
 
 func _hull_by_id(hull_id: String) -> Dictionary:

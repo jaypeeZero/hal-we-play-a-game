@@ -7,15 +7,19 @@ extends OverlayScreen
 ## override); Reset deletes the override so the shipped roster applies again.
 ## Lifecycle: standalone scene — Back calls change_scene_to_file.
 
-const LIST_WIDTH := 300
+const LIST_WIDTH := 320
+const CARD_PORTRAIT_SIZE := Vector2(72, 84)
+const CARD_MIN_SIZE := Vector2(140, 0)
+const GALLERY_COLUMNS := 2
+const GALLERY_GAP := 8
 
 var _entries: Array = []
 var _selected_index := -1
 var _dirty := false
-var _list: VBoxContainer
+var _gallery: GridContainer
 var _detail: CrewMemberView
 var _subtitle: Label
-var _row_buttons: Array = []
+var _cards: Array = []
 
 
 func _ready() -> void:
@@ -50,9 +54,13 @@ func _build_body() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(LIST_WIDTH, 0)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_list = VBoxContainer.new()
-	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_list)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_gallery = GridContainer.new()
+	_gallery.columns = GALLERY_COLUMNS
+	_gallery.add_theme_constant_override("h_separation", GALLERY_GAP)
+	_gallery.add_theme_constant_override("v_separation", GALLERY_GAP)
+	_gallery.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_gallery)
 	body_node.add_child(scroll)
 
 	_detail = CrewMemberView.new()
@@ -78,17 +86,16 @@ func _build_footer_buttons() -> void:
 
 
 func _rebuild_list() -> void:
-	for child in _list.get_children():
-		_list.remove_child(child)
+	for child in _gallery.get_children():
+		_gallery.remove_child(child)
 		child.free()
-	_row_buttons = []
+	_cards = []
 	for i in _entries.size():
-		var btn := UiKit.style_button(_make_button(_row_text(_entries[i])), "ghost")
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		var index := i
-		btn.pressed.connect(func(): _select(index))
-		_row_buttons.append(btn)
-		_list.add_child(btn)
+		var card: _CrewCard = _CrewCard.new()
+		var index: int = i
+		card.setup(_entries[i], func() -> void: _select(index))
+		_cards.append(card)
+		_gallery.add_child(card)
 
 
 # SELECTION & EDITS
@@ -98,15 +105,15 @@ func _select(index: int) -> void:
 		return
 	_selected_index = index
 	_detail.setup(_entries[index], true)
-	for i in _row_buttons.size():
-		UiKit.style_button(_row_buttons[i], "primary" if i == index else "ghost")
+	for i in _cards.size():
+		(_cards[i] as _CrewCard).set_selected(i == index)
 
 
 func _on_entry_changed(entry: Dictionary) -> void:
 	if _selected_index < 0:
 		return
 	_entries[_selected_index] = entry
-	_row_buttons[_selected_index].text = _row_text(entry)
+	(_cards[_selected_index] as _CrewCard).refresh(entry)
 	_dirty = true
 	_refresh_subtitle()
 
@@ -140,12 +147,67 @@ func _refresh_subtitle() -> void:
 		_entries.size(), source, " · unsaved changes" if _dirty else ""]
 
 
-func _row_text(entry: Dictionary) -> String:
-	return "%s · %s" % [
-		entry.get("callsign", "?"), CrewData.display_role_names(entry.get("roles", []))]
-
-
 func _make_button(text: String) -> Button:
 	var btn := Button.new()
 	btn.text = text
 	return btn
+
+
+# ── Inner classes ─────────────────────────────────────────────────────────────
+
+## A clickable crew card: portrait face + callsign + role badge(s). Clicking
+## anywhere on the card selects this crew member (drives the dossier).
+class _CrewCard extends PanelContainer:
+	var _portrait: CrewPortrait
+	var _callsign: Label
+	var _roles: Label
+	var _on_click: Callable
+
+	func setup(entry: Dictionary, on_click: Callable) -> void:
+		_on_click = on_click
+		custom_minimum_size = CARD_MIN_SIZE
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		set_selected(false)
+
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 4)
+		col.mouse_filter = Control.MOUSE_FILTER_PASS
+		add_child(col)
+
+		_portrait = CrewPortrait.new()
+		_portrait.custom_minimum_size = CARD_PORTRAIT_SIZE
+		_portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_portrait.mouse_filter = Control.MOUSE_FILTER_PASS
+		col.add_child(_portrait)
+
+		_callsign = UiKit.label("", UiKit.INK, 12)
+		_callsign.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_callsign.clip_contents = true
+		_callsign.mouse_filter = Control.MOUSE_FILTER_PASS
+		col.add_child(_callsign)
+
+		_roles = UiKit.label("", UiKit.DIM, 10)
+		_roles.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_roles.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_roles.mouse_filter = Control.MOUSE_FILTER_PASS
+		col.add_child(_roles)
+
+		refresh(entry)
+
+	## Update portrait + text from a (possibly edited) roster entry.
+	func refresh(entry: Dictionary) -> void:
+		_portrait.setup(entry)
+		_callsign.text = str(entry.get("callsign", "?"))
+		_roles.text = CrewData.display_role_names(entry.get("roles", []))
+
+	## Highlight when this card is the selected crew member.
+	func set_selected(selected: bool) -> void:
+		var bg: Color = UiKit.PANEL_2 if selected else UiKit.PANEL
+		var border: Color = UiKit.ACCENT if selected else UiKit.LINE
+		add_theme_stylebox_override("panel", UiKit.panel_box(bg, border, 6, 8))
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton \
+				and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
+				and (event as InputEventMouseButton).pressed:
+			_on_click.call()

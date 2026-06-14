@@ -51,16 +51,69 @@ func _find_sliders(node: Node, acc: Array) -> Array:
 	return acc
 
 
-func test_screen_lists_the_whole_roster():
+func _find_gallery(node: Node) -> GridContainer:
+	# The crew gallery is the GridContainer whose direct children are the
+	# clickable crew cards (each a PanelContainer holding a CrewPortrait).
+	for child in node.get_children():
+		if child is GridContainer:
+			return child as GridContainer
+		var found := _find_gallery(child)
+		if found != null:
+			return found
+	return null
+
+
+func _find_crew_cards(node: Node, _acc: Array) -> Array:
+	# Crew cards are the direct PanelContainer children of the gallery grid.
+	var gallery := _find_gallery(node)
+	var cards: Array = []
+	if gallery == null:
+		return cards
+	for child in gallery.get_children():
+		if child is PanelContainer:
+			cards.append(child)
+	return cards
+
+
+func test_gallery_has_one_selectable_card_per_roster_entry():
 	var screen := _screen()
 	var roster_size := CrewRosterManager.load_roster().size()
+	assert_gt(roster_size, 0, "Sanity: roster is non-empty")
 
-	# One list row per entry plus the three footer buttons.
-	var buttons: Array = []
-	for child in screen.find_children("*", "Button", true, false):
-		buttons.append(child)
-	assert_gte(buttons.size(), roster_size,
-		"Every roster entry gets a selectable row")
+	var cards := _find_crew_cards(screen, [])
+	assert_eq(cards.size(), roster_size,
+		"Every roster entry produces exactly one crew card")
+
+
+func test_selecting_a_card_updates_the_shown_crew():
+	var screen := _screen()
+	var roster: Array = CrewRosterManager.load_roster()
+	if roster.size() < 2:
+		pass_test("Need at least two crew to verify selection changes")
+		return
+
+	var cards := _find_crew_cards(screen, [])
+	# Selecting the second card should drive the dossier to the second entry's
+	# callsign. The dossier (CrewMemberView) shows the selected callsign somewhere.
+	var second_callsign: String = str(roster[1].get("callsign", ""))
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	cards[1]._gui_input(click)
+
+	var shown := _label_texts_contain(screen, second_callsign)
+	assert_true(shown, "Clicking a card shows that crew member in the dossier")
+
+
+func _label_texts_contain(node: Node, needle: String) -> bool:
+	for child in node.get_children():
+		if child is LineEdit and (child as LineEdit).text == needle:
+			return true
+		if child is Label and (child as Label).text.find(needle) != -1:
+			return true
+		if _label_texts_contain(child, needle):
+			return true
+	return false
 
 
 func test_editing_and_saving_writes_the_user_override():

@@ -14,6 +14,9 @@ const CARD_SIZE := Vector2(96, 120)
 const SPRITE_SIZE := Vector2(80, 96)
 const LABEL_FONT_SIZE := 11
 
+## Fraction of the card the sprite occupies (rest is padding + label row).
+const SPRITE_FRACTION := Vector2(0.83, 0.8)
+
 ## Internal nodes (read-only after setup).
 var _sprite: TextureRect
 var _label: Label
@@ -42,6 +45,15 @@ func _init() -> void:
 	_label.add_theme_color_override("font_color", UiKit.DIM)
 	_label.visible = false
 	vbox.add_child(_label)
+
+
+## Resize the whole card. Grows BOTH the panel and the inner sprite so a "big"
+## detail card renders visibly larger than the default/small roster cards
+## (setting only the PanelContainer's min size leaves the sprite at SPRITE_SIZE).
+func set_card_size(size: Vector2) -> void:
+	custom_minimum_size = size
+	_sprite.custom_minimum_size = Vector2(
+		size.x * SPRITE_FRACTION.x, size.y * SPRITE_FRACTION.y)
 
 
 ## Configure the card. `opts` keys (all optional):
