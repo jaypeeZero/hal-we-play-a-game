@@ -552,9 +552,8 @@ func after_each() -> void:
 func _minimal_save_payload() -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1
-	var enemy_base := {"fighter": 2}
 	return {
-		"campaign": CampaignGenerator.generate(rng, enemy_base),
+		"campaign": CampaignGenerator.generate(rng),
 		"fleet_hulls": [],
 		"doctrine": DoctrineSystem.empty_doctrine(),
 		"tactics": TacticsSystem.empty_tactics(),
