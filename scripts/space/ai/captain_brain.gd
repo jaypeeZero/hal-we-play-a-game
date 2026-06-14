@@ -42,7 +42,7 @@ static func _get_actions() -> Array:
 	return [
 		CaptainWithdrawAction.new(),
 		DefensivePostureAction.new(),
-		CaptainPressAttackAction.new(),   # Layer B commit
+		CaptainPressAttackAction.new(),   # commit-to-press escalation
 		ConcentrateFireAction.new(),
 		AggressivePursuitAction.new(),
 		SupportAllyAction.new(),

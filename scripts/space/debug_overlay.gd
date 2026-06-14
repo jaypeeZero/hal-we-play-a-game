@@ -16,12 +16,12 @@ const SQUADRON_COLORS: Array = [
 	Color(1.0, 0.65, 0.2, 0.65), # team 1 — orange
 ]
 
-# Six stats in column order. The plan locks this order (01_overview.md §3).
+# Six crew stats in fixed column order for the overlay.
 const STAT_NAMES: Array = [
 	"aim", "piloting", "awareness", "tactics", "composure", "aggression"
 ]
 
-# Which stats each role actually reads (per 01_overview.md §3.4). Other
+# Which stats each role actually reads in its decision logic. Other
 # stats render dimmed gray to distinguish "high but unused" from "high and
 # used."
 const ROLE_READ_STATS: Dictionary = {
@@ -44,6 +44,31 @@ const TABLE_PADDING: int = 4
 const TABLE_BG_COLOR: Color = Color(0.0, 0.0, 0.0, 0.55)
 const TABLE_HEADER_COLOR: Color = Color(0.85, 0.85, 0.85, 1.0)
 const TABLE_ROLE_COLOR: Color = Color(0.85, 0.85, 0.85, 1.0)
+
+# Tactics state layer — per-ship block to the LEFT of the crew table.
+const TACTICS_FONT_SIZE: int = 10
+const TACTICS_LINE_HEIGHT: int = 12
+const TACTICS_BLOCK_WIDTH: int = 160
+const TACTICS_PADDING: int = 4
+const TACTICS_LEFT_OFFSET: int = 8  # Gap between tactics block right edge and crew table left edge
+const TACTICS_BG_COLOR: Color = Color(0.0, 0.0, 0.08, 0.6)
+const TACTICS_LABEL_COLOR: Color = Color(0.75, 0.75, 0.75, 1.0)
+const TACTICS_FIRE_OK_COLOR: Color = Color(0.35, 0.95, 0.35, 1.0)
+const TACTICS_FIRE_WARN_COLOR: Color = Color(0.95, 0.55, 0.2, 1.0)
+const TACTICS_FIRE_BAD_COLOR: Color = Color(0.95, 0.3, 0.3, 1.0)
+
+# Tactics telemetry HUD — fixed screen position (bottom-left corner).
+const TELEMETRY_FONT_SIZE: int = 10
+const TELEMETRY_LINE_HEIGHT: int = 12
+const TELEMETRY_PADDING: int = 6
+const TELEMETRY_SCREEN_MARGIN: int = 10
+const TELEMETRY_BG_COLOR: Color = Color(0.0, 0.0, 0.08, 0.65)
+const TELEMETRY_TEAM_COLORS: Array = [
+	Color(0.45, 0.75, 1.0, 1.0),   # team 0 — blue
+	Color(1.0, 0.5, 0.5, 1.0),     # team 1 — red
+]
+const TELEMETRY_VALUE_COLOR: Color = Color(0.9, 0.9, 0.9, 1.0)
+const TELEMETRY_SECTOR_COLOR: Color = Color(0.75, 0.85, 0.65, 1.0)
 
 var _game: Node = null  # SpaceBattleGame; set by parent on add_child
 var _font: Font = null
@@ -79,6 +104,11 @@ func _draw() -> void:
 			_draw_area_focus(ship, color)
 		if GameSettings.show_crew_stats:
 			_draw_crew_table(ship)
+		if GameSettings.show_tactics_state:
+			_draw_tactics_state(ship)
+
+	if GameSettings.show_tactics_telemetry:
+		_draw_tactics_telemetry()
 
 
 func _draw_enemy_focus(ship: Dictionary, color: Color) -> void:
@@ -314,6 +344,188 @@ func _role_key(role_int: int) -> String:
 		CrewData.Role.FLEET_COMMANDER: return "fleet_commander"
 		CrewData.Role.ENGINEER: return "engineer"
 		_: return ""
+
+
+# TACTICS STATE LAYER
+
+## Draw a compact per-ship tactics block anchored to the LEFT of the crew table.
+## Reads ship orders, pilot crew["tactics"] dials, and WeaponSystem.diagnose_firing.
+## Pure consumer — never mutates ship or crew.
+func _draw_tactics_state(ship: Dictionary) -> void:
+	if _game == null:
+		return
+
+	# Anchor to the LEFT of the crew table so they don't overlap.
+	# Crew table starts at _table_anchor(ship); our block ends just before it.
+	var crew_anchor: Vector2 = _table_anchor(ship)
+	var block_x: float = crew_anchor.x - TACTICS_LEFT_OFFSET - TACTICS_BLOCK_WIDTH
+	var block_y: float = crew_anchor.y
+
+	var orders: Dictionary = ship.get("orders", {})
+	var current_order: String = orders.get("current_order", "")
+	var maneuver_subtype: String = orders.get("maneuver_subtype", "")
+	var engagement_target: String = orders.get("engagement_target", orders.get("target_id", ""))
+
+	# Find pilot crew for this ship.
+	var pilot_tactics: Dictionary = {}
+	var command_hat: String = ""
+	var pilot_name: String = "—"
+	var pilot_posture: String = ""
+	var pilot_has_support: bool = false
+	var crew_list: Array = _game.get("_crew_list") if _game.get("_crew_list") is Array else []
+	var ship_id: String = ship.get("ship_id", "")
+	for crew in crew_list:
+		if crew.get("assigned_to") != ship_id:
+			continue
+		if int(crew.get("role", -1)) == CrewData.Role.PILOT:
+			pilot_tactics = crew.get("tactics", {})
+			command_hat = crew.get("command_hat", "")
+			pilot_name = str(crew.get("callsign", crew.get("crew_id", "—")))
+			pilot_posture = crew.get("posture", "")
+			pilot_has_support = crew.get("support_assignment", "") != ""
+			break
+
+	# Formation
+	var formation: Dictionary = orders.get("formation_assignment", {})
+	var formation_str: String
+	if formation.is_empty():
+		formation_str = "—"
+	else:
+		var shape: String = formation.get("shape", "")
+		var lead_id: String = formation.get("lead_ship_id", "")
+		formation_str = "%s [lead:%s]" % [shape, lead_id] if lead_id != "" else shape
+
+	# Firing diagnosis
+	var diag: Dictionary = WeaponSystem.diagnose_firing(ship, _game._ships)
+	var fire_label: String
+	var fire_color: Color
+	if diag.get("firing", false):
+		fire_label = "FIRE: yes"
+		fire_color = TACTICS_FIRE_OK_COLOR
+	else:
+		var reason: String = diag.get("reason", "")
+		fire_label = "FIRE: %s" % reason
+		match reason:
+			WeaponSystem.DIAG_OUT_OF_RANGE, WeaponSystem.DIAG_OUT_OF_ARC:
+				fire_color = TACTICS_FIRE_WARN_COLOR
+			_:
+				fire_color = TACTICS_FIRE_BAD_COLOR
+
+	# Build lines. Ships have no display name, so identify by type + id; the
+	# pilot is named by callsign (falls back to crew_id).
+	var ship_line: String = "%s  %s" % [ship.get("type", "ship"), ship_id]
+	var pilot_line: String = "Pilot: %s" % pilot_name
+	var intent_line: String = "Intent: %s" % current_order
+	if maneuver_subtype != "":
+		intent_line += " (%s)" % maneuver_subtype
+	var target_line: String = "Target: %s" % (engagement_target if engagement_target != "" else "none")
+	var formation_line: String = "Formation: %s" % formation_str
+	var dials_line: String = ""
+	if not pilot_tactics.is_empty():
+		var role_d: String = pilot_tactics.get("role", "?")
+		var duty_d: String = pilot_tactics.get("duty", "?")
+		var ment_d: String = pilot_tactics.get("mentality", "?")
+		var range_s: float  = float(pilot_tactics.get("range_scalar", pilot_tactics.get("mentality_scalar", 0.0)))
+		dials_line = "Dials: %s/%s/%s r:%.2f" % [role_d, duty_d, ment_d, range_s]
+		if command_hat == "commander":
+			dials_line += " [CMDR]"
+		elif command_hat == "squadron_leader":
+			dials_line += " [LEAD]"
+		# Posture and escort markers (4b: activated brain outputs)
+		if pilot_posture != "":
+			dials_line += " pos:%s" % pilot_posture
+		if pilot_has_support:
+			dials_line += " [SUP]"
+
+	var lines: Array = [ship_line, pilot_line, intent_line, target_line, fire_label, formation_line]
+	if dials_line != "":
+		lines.append(dials_line)
+
+	var block_height: float = TACTICS_LINE_HEIGHT * lines.size() + TACTICS_PADDING * 2
+	draw_rect(
+		Rect2(Vector2(block_x - TACTICS_PADDING, block_y - TACTICS_PADDING),
+		      Vector2(TACTICS_BLOCK_WIDTH + TACTICS_PADDING * 2, block_height)),
+		TACTICS_BG_COLOR, true
+	)
+
+	var row_y: float = block_y + TACTICS_LINE_HEIGHT - 2
+	for i in lines.size():
+		var line: String = lines[i]
+		var color: Color = fire_color if line.begins_with("FIRE:") else TACTICS_LABEL_COLOR
+		_draw_text_tactics(line, Vector2(block_x, row_y), color)
+		row_y += TACTICS_LINE_HEIGHT
+
+
+func _draw_text_tactics(text: String, pos: Vector2, color: Color) -> void:
+	if _font == null:
+		return
+	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, TACTICS_FONT_SIZE, color)
+
+
+# TACTICS TELEMETRY HUD
+
+## Draw a fixed-position telemetry panel in the bottom-left screen corner.
+## Shows snapshot metrics for each team. Pure consumer — never mutates anything.
+func _draw_tactics_telemetry() -> void:
+	if _game == null:
+		return
+
+	# Collect teams present in the battle.
+	var teams_seen: Dictionary = {}
+	for ship in _game._ships:
+		teams_seen[ship.get("team", 0)] = true
+	var teams: Array = teams_seen.keys()
+	teams.sort()
+
+	# Build all lines first so we can size the background.
+	var sections: Array = []  # Array of {team, lines: Array[{text, color}]}
+	for team in teams:
+		var snap: Dictionary = TacticsTelemetry.snapshot(_game._ships, team)
+		var smd: Dictionary = snap.get("sector_mass_distribution", {})
+		var tcolor: Color = TELEMETRY_TEAM_COLORS[team] if team < TELEMETRY_TEAM_COLORS.size() else TELEMETRY_VALUE_COLOR
+		var team_lines: Array = [
+			{"text": "— Team %d —" % team, "color": tcolor},
+			{"text": "  Eng range: %.0f" % snap.get("mean_engagement_range", 0.0), "color": TELEMETRY_VALUE_COLOR},
+			{"text": "  Dispersion: %.0f" % snap.get("formation_dispersion", 0.0),  "color": TELEMETRY_VALUE_COLOR},
+			{"text": "  Focus: %.2f" % snap.get("focus_concentration", 0.0),        "color": TELEMETRY_VALUE_COLOR},
+			{"text": "  Sector L/C/R: %.0f%%/%.0f%%/%.0f%%" % [
+				smd.get("left", 0.0) * 100.0,
+				smd.get("center", 0.0) * 100.0,
+				smd.get("right", 0.0) * 100.0,
+			], "color": TELEMETRY_SECTOR_COLOR},
+		]
+		sections.append({"team": team, "lines": team_lines})
+
+	if sections.is_empty():
+		return
+
+	var total_lines: int = 0
+	for sec in sections:
+		total_lines += sec.lines.size()
+	# Add one blank separator line between teams (except after last).
+	total_lines += maxi(sections.size() - 1, 0)
+
+	var panel_width: float = 200.0
+	var panel_height: float = float(total_lines) * TELEMETRY_LINE_HEIGHT + TELEMETRY_PADDING * 2
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var panel_pos: Vector2 = Vector2(
+		TELEMETRY_SCREEN_MARGIN,
+		viewport_size.y - TELEMETRY_SCREEN_MARGIN - panel_height
+	)
+
+	draw_rect(Rect2(panel_pos, Vector2(panel_width, panel_height)), TELEMETRY_BG_COLOR, true)
+
+	var row_y: float = panel_pos.y + TELEMETRY_PADDING + TELEMETRY_LINE_HEIGHT - 2
+	for s_idx in sections.size():
+		var sec: Dictionary = sections[s_idx]
+		for line_data in sec.lines:
+			draw_string(_font, Vector2(panel_pos.x + TELEMETRY_PADDING, row_y),
+				line_data.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+				TELEMETRY_FONT_SIZE, line_data.color)
+			row_y += TELEMETRY_LINE_HEIGHT
+		# Blank separator between teams.
+		if s_idx < sections.size() - 1:
+			row_y += TELEMETRY_LINE_HEIGHT
 
 
 func _draw_text(text: String, pos: Vector2, color: Color) -> void:

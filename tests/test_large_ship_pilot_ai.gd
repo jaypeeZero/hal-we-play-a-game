@@ -1,9 +1,38 @@
 extends GutTest
 
-## Tests for LargeShipPilotAI behavior — FSM transitions, personality
-## differentiation, self-preservation triggers, tactical-break interrupt,
-## plus CrewAISystem routing and decision-to-movement integration
-## (merged from test_large_ship_ai.gd).
+## Tests for LargeShipPilotAI behavior.
+##
+## The non-reflex engage tail now emits subtype "tactical" (a SteeringBlender
+## directive) instead of FSM-specific large_ship_* subtypes. Tests below
+## verify the new behavior for the engage path and preserve all reflex coverage
+## (tactical_break, fighting_withdrawal, area_leash, edge_boundary) unchanged.
+##
+## Migration summary vs. old file:
+##   CHANGED:  test_closing_transitions_to_broadside_when_optimal_range_reached
+##             test_broadside_transitions_to_repositioning_when_arc_lost
+##             test_broadside_transitions_to_kiting_when_fighter_enters_safe_range
+##             test_aggressive_and_cautious_captains_pick_different_phases_at_same_range
+##             test_aggressive_captain_holds_repositioning_longer_than_cautious
+##             test_large_ship_finds_enemy_target
+##             test_corvette_pilot_decision_routes_to_large_ship_ai
+##             test_decision_applies_to_ship_orders
+##             test_movement_system_executes_large_ship_maneuver
+##   KEPT:     test_critical_section_armor_forces_fighting_withdrawal
+##             test_engine_damage_forces_fighting_withdrawal
+##             test_outgunned_cautious_captain_withdraws
+##             test_tactical_break_interrupts_broadside_when_capital_has_nose_on_us
+##             test_no_tactical_break_when_threat_is_outside_break_range
+##             test_capital_far_outside_leash_drops_fight_to_return
+##             test_no_decision_without_enemies
+##             test_infer_ship_type_returns_corvette_for_multi_crew
+##             test_infer_ship_type_returns_fighter_for_solo
+##   ADDED:    test_engage_emits_tactical_subtype_with_required_directive_fields
+##             test_artillery_role_yields_broadside_facing_mode
+##             test_anchor_role_yields_nose_on_facing_mode
+##             test_large_preferred_range_for_kite_mentality
+##             test_broadside_facing_mode_perpendicular_to_target
+##             test_nose_on_facing_mode_faces_target
+##
 ## Behaviour-only per CLAUDE.md: assertions describe what the captain *does*,
 ## not the literal numbers tuning the decision.
 
@@ -13,74 +42,85 @@ const CORVETTE_PILOT_SKILL := 0.7
 func _make_pilot(id: String, ship_id: String, aggression: float = 0.5, skill: float = PILOT_SKILL) -> Dictionary:
 	return TestFactories.make_pilot(id, ship_id, skill, aggression, "captain1")
 
-func _phase(crew: Dictionary) -> String:
-	return str(crew.get("combat_state", {}).get("engagement_phase", ""))
+## Make a pilot whose crew["tactics"] has the given role, so build_directive
+## returns the matching facing_mode.
+func _make_pilot_with_role(id: String, ship_id: String, role: String) -> Dictionary:
+	var pilot := _make_pilot(id, ship_id)
+	pilot["tactics"] = {"role": role, "mentality_scalar": 0.5, "range_scalar": 0.5, "duty": "support"}
+	return pilot
+
+## Make a pilot with high range_scalar (kite mentality) to verify large preferred_range.
+func _make_pilot_kite(id: String, ship_id: String) -> Dictionary:
+	var pilot := _make_pilot(id, ship_id)
+	pilot["tactics"] = {"role": "artillery", "mentality_scalar": 0.3, "range_scalar": 1.0, "duty": "hold"}
+	return pilot
 
 # ============================================================================
-# FSM TRANSITIONS
+# NON-REFLEX ENGAGE TAIL — now emits "tactical"
 # ============================================================================
 
-func test_closing_transitions_to_broadside_when_optimal_range_reached():
-	# BEHAVIOR: A capital out at long range is closing, then commits to
-	# broadside once it crosses into the optimal band.
+func test_engage_emits_tactical_subtype_with_required_directive_fields():
+	# BEHAVIOR: The non-reflex engage path emits subtype "tactical" carrying
+	# all six contract fields so MovementSystem can re-blend them each frame.
+	# (Previously emitted large_ship_close_to_broadside / large_ship_hold_broadside
+	# depending on FSM phase — no longer the case for the engage tail.)
 	var ship = TestFactories.make_capital("c1", Vector2(0, 0), 0)
 	var pilot = _make_pilot("p1", "c1", 0.5)
-	var enemy_far = TestFactories.make_capital("e1", Vector2(0, 5000), 1)  # well past optimal
+	var enemy = TestFactories.make_capital("e1", Vector2(3000, 0), 1)
 
-	# First decision at far range — phase should be closing
-	var result_far = LargeShipPilotAI.make_decision(pilot, ship, [ship, enemy_far], 0.0)
-	assert_eq(result_far.decision.subtype, "large_ship_close_to_broadside",
-		"Far range capital should close to broadside")
+	var result = LargeShipPilotAI.make_decision(pilot, ship, [ship, enemy], 0.0)
 
-	# Bring the enemy into optimal range; reuse same crew so phase persists
-	var pilot2 = result_far.crew_data
-	var enemy_close = TestFactories.make_capital("e1", Vector2(0, 1000), 1)
-	var result_close = LargeShipPilotAI.make_decision(pilot2, ship, [ship, enemy_close], 0.5)
+	assert_true(result.has("decision"), "Should produce a decision")
+	var d: Dictionary = result.decision
+	assert_eq(d.get("type", ""), "maneuver", "type must be maneuver")
+	assert_eq(d.get("subtype", ""), "tactical", "Non-reflex engage must emit subtype 'tactical'")
+	assert_true(d.has("goal_weights"),    "directive must carry goal_weights")
+	assert_true(d.has("preferred_range"), "directive must carry preferred_range")
+	assert_true(d.has("facing_mode"),     "directive must carry facing_mode")
+	assert_true(d.has("engagement_target"), "directive must carry engagement_target")
+	assert_eq(d.get("target_id", ""), "e1", "target_id must be set to enemy ship_id")
 
-	assert_eq(result_close.decision.subtype, "large_ship_hold_broadside",
-		"Closing → broadside when range crosses optimal")
+func test_artillery_role_yields_broadside_facing_mode():
+	# BEHAVIOR: A ship whose resolved role is "artillery" must get facing_mode
+	# "broadside" so the converter keeps its side batteries on the enemy.
+	var ship = TestFactories.make_capital("c1", Vector2(0, 0), 0)
+	var pilot = _make_pilot_with_role("p1", "c1", "artillery")
+	var enemy = TestFactories.make_capital("e1", Vector2(3000, 0), 1)
 
-func test_broadside_transitions_to_repositioning_when_arc_lost():
-	# BEHAVIOR: Once committed to broadside, losing the perpendicular arc
-	# should drive the captain into a reposition-arc maneuver.
-	var ship = TestFactories.make_capital("c1", Vector2(0, 0), 0, 0.0)  # forward = (0,-1)
-	var pilot = _make_pilot("p1", "c1", 0.5)
-	var enemy = TestFactories.make_capital("e1", Vector2(1500, 0), 1)  # to the right → broadside arc
+	var result = LargeShipPilotAI.make_decision(pilot, ship, [ship, enemy], 0.0)
 
-	var step1 = LargeShipPilotAI.make_decision(pilot, ship, [ship, enemy], 0.0)
-	assert_eq(step1.decision.subtype, "large_ship_hold_broadside",
-		"Setup: should be in broadside")
+	assert_eq(result.decision.facing_mode, "broadside",
+		"Artillery role must yield facing_mode 'broadside'")
 
-	# Hold past PHASE_MIN_DURATION, then rotate so we point at the target
-	# (forward becomes ~(1, 0), aligning with to_target → arc lost)
-	var ship_rot = ship.duplicate(true)
-	ship_rot.rotation = PI / 2.0
-	var step2 = LargeShipPilotAI.make_decision(step1.crew_data, ship_rot, [ship_rot, enemy], 1.5)
+func test_anchor_role_yields_nose_on_facing_mode():
+	# BEHAVIOR: A ship whose resolved role is "anchor" must get facing_mode
+	# "nose_on" so it always presents its bow armor and forward guns.
+	var ship = TestFactories.make_capital("c1", Vector2(0, 0), 0)
+	var pilot = _make_pilot_with_role("p1", "c1", "anchor")
+	var enemy = TestFactories.make_capital("e1", Vector2(3000, 0), 1)
 
-	assert_eq(step2.decision.subtype, "large_ship_reposition_arc",
-		"Broadside → repositioning when arc lost: " + step2.decision.subtype)
+	var result = LargeShipPilotAI.make_decision(pilot, ship, [ship, enemy], 0.0)
 
-func test_broadside_transitions_to_kiting_when_fighter_enters_safe_range():
-	# BEHAVIOR: A fighter inside the safety bubble overrides everything else
-	# and forces the ship to kite (back away) regardless of phase.
-	var ship = TestFactories.make_capital("c1", Vector2(0, 0), 0, 0.0)
-	var pilot = _make_pilot("p1", "c1", 0.5)
-	var enemy_capital = TestFactories.make_capital("ec", Vector2(1500, 0), 1)
+	assert_eq(result.decision.facing_mode, "nose_on",
+		"Anchor role must yield facing_mode 'nose_on'")
 
-	# Frame 1: in broadside vs distant capital
-	var s1 = LargeShipPilotAI.make_decision(pilot, ship, [ship, enemy_capital], 0.0)
-	assert_eq(s1.decision.subtype, "large_ship_hold_broadside")
+func test_large_preferred_range_for_kite_mentality():
+	# BEHAVIOR: A capital with range_scalar=1.0 (kite) must produce a
+	# preferred_range larger than the default engagement range — it wants to
+	# stay far out. Tests that the range dial actually moves the blender output.
+	var ship = TestFactories.make_capital("c1", Vector2(0, 0), 0)
+	var pilot_kite = _make_pilot_kite("p1", "c1")
+	var pilot_mid  = _make_pilot("p2", "c1")           # no custom tactics → fallback mid
+	var enemy = TestFactories.make_capital("e1", Vector2(3000, 0), 1)
 
-	# Frame 2: a fighter materialises inside the safe range
-	var fighter_close = TestFactories.make_fighter("f1", Vector2(800, 0), 1)
-	var s2 = LargeShipPilotAI.make_decision(
-		s1.crew_data, ship, [ship, enemy_capital, fighter_close], 0.5)
+	var r_kite = LargeShipPilotAI.make_decision(pilot_kite, ship, [ship, enemy], 0.0)
+	var r_mid  = LargeShipPilotAI.make_decision(pilot_mid,  ship, [ship, enemy], 0.0)
 
-	assert_eq(s2.decision.subtype, "large_ship_kite",
-		"Fighter inside safe range should force kiting: " + s2.decision.subtype)
+	assert_gt(r_kite.decision.preferred_range, r_mid.decision.preferred_range,
+		"Kite tactics must yield larger preferred_range than balanced defaults")
 
 # ============================================================================
-# SELF-PRESERVATION
+# SELF-PRESERVATION REFLEXES — unchanged, still emit large_ship_*
 # ============================================================================
 
 func test_critical_section_armor_forces_fighting_withdrawal():
@@ -131,73 +171,13 @@ func test_outgunned_cautious_captain_withdraws():
 		"Heroic captain (high aggression) should not withdraw at the same odds")
 
 # ============================================================================
-# PERSONALITY DIFFERENTIATION
-# ============================================================================
-
-func test_aggressive_and_cautious_captains_pick_different_phases_at_same_range():
-	# BEHAVIOR: At a range that sits between the aggressive and cautious
-	# optimal-range thresholds, the cautious captain commits to broadside
-	# while the aggressive captain stays closing. Same skill, different doctrine.
-	# Use rotation that does NOT give us a broadside arc, so the fall-through
-	# is purely range-based.
-	var ship = TestFactories.make_capital("c1", Vector2(0, 0), 0, PI / 2.0)  # forward ~(1, 0)
-	# Distance 1300: between aggressive optimal (~960) and cautious optimal (~1440)
-	var enemy = TestFactories.make_capital("e1", Vector2(1300, 0), 1)
-	var ships = [ship, enemy]
-
-	var aggressive = _make_pilot("p_a", "c1", 1.0, 0.6)
-	var cautious = _make_pilot("p_c", "c1", 0.0, 0.6)
-
-	var r_a = LargeShipPilotAI.make_decision(aggressive, ship, ships, 0.0)
-	var r_c = LargeShipPilotAI.make_decision(cautious, ship, ships, 0.0)
-
-	assert_eq(r_a.decision.subtype, "large_ship_close_to_broadside",
-		"Aggressive captain should still be closing at this range (tighter optimal): " + r_a.decision.subtype)
-	assert_eq(r_c.decision.subtype, "large_ship_hold_broadside",
-		"Cautious captain should already be broadside (looser optimal): " + r_c.decision.subtype)
-
-func test_aggressive_captain_holds_repositioning_longer_than_cautious():
-	# BEHAVIOR: Once both captains are swinging for a new arc (repositioning),
-	# the aggressive one stays in that phase longer than the cautious one
-	# before timing out — same skill, different commitment timing.
-	var ship_initial = TestFactories.make_capital("c1", Vector2(0, 0), 0, 0.0)
-	var enemy = TestFactories.make_capital("e1", Vector2(1500, 0), 1)
-
-	var aggressive = _make_pilot("p_a", "c1", 1.0, 0.6)
-	var cautious = _make_pilot("p_c", "c1", 0.0, 0.6)
-
-	# Frame 1: enter broadside
-	var r1_a = LargeShipPilotAI.make_decision(aggressive, ship_initial, [ship_initial, enemy], 0.0)
-	var r1_c = LargeShipPilotAI.make_decision(cautious, ship_initial, [ship_initial, enemy], 0.0)
-	assert_eq(r1_a.decision.subtype, "large_ship_hold_broadside")
-	assert_eq(r1_c.decision.subtype, "large_ship_hold_broadside")
-
-	# Frame 2: rotate off broadside arc; past min commit duration → repositioning
-	var ship_rot = ship_initial.duplicate(true)
-	ship_rot.rotation = PI / 2.0  # forward (1,0), no broadside arc on target at (2000,0)
-	var r2_a = LargeShipPilotAI.make_decision(r1_a.crew_data, ship_rot, [ship_rot, enemy], 1.5)
-	var r2_c = LargeShipPilotAI.make_decision(r1_c.crew_data, ship_rot, [ship_rot, enemy], 1.5)
-	assert_eq(r2_a.decision.subtype, "large_ship_reposition_arc",
-		"Aggressive enters repositioning")
-	assert_eq(r2_c.decision.subtype, "large_ship_reposition_arc",
-		"Cautious enters repositioning")
-
-	# Frame 3: 5 seconds later (past cautious's reposition timeout, before
-	# aggressive's). Cautious gives up the swing; aggressive holds it.
-	var r3_a = LargeShipPilotAI.make_decision(r2_a.crew_data, ship_rot, [ship_rot, enemy], 6.5)
-	var r3_c = LargeShipPilotAI.make_decision(r2_c.crew_data, ship_rot, [ship_rot, enemy], 6.5)
-
-	assert_ne(r3_a.decision.subtype, r3_c.decision.subtype,
-		"Aggressive and cautious should diverge in phase commitment timing")
-
-# ============================================================================
-# TACTICAL BREAK
+# TACTICAL BREAK REFLEX — unchanged, still emits large_ship_present_thickest_armor
 # ============================================================================
 
 func test_tactical_break_interrupts_broadside_when_capital_has_nose_on_us():
 	# BEHAVIOR: An enemy capital inside tactical-break range with its nose on
-	# us interrupts the FSM and presents thickest armor instead of holding
-	# the prior phase.
+	# us interrupts the FSM and presents thickest armor instead of the engage
+	# directive.
 	var ship = TestFactories.make_capital("c1", Vector2(0, 0), 0, 0.0)  # forward (0,-1)
 	# Heroic captain so the survival overlay doesn't pre-empt the test setup
 	var pilot = _make_pilot("p1", "c1", 1.0)
@@ -208,14 +188,13 @@ func test_tactical_break_interrupts_broadside_when_capital_has_nose_on_us():
 	# from threat to me = (0, 0) - (0,-700) = (0, 700) → normalized (0, 1).
 	# nose dot = (0,1)·(0,1) = 1.0 ≥ TACTICAL_BREAK_ARC_DOT.
 
-	# Plus a separate broadside-engagement target so the FSM would otherwise
-	# be in broadside
+	# Plus a separate broadside-engagement target so the engage path would fire
 	var primary = TestFactories.make_capital("e1", Vector2(1500, 0), 1)
 
 	var result = LargeShipPilotAI.make_decision(pilot, ship, [ship, threat, primary], 0.0)
 
 	assert_eq(result.decision.subtype, "large_ship_present_thickest_armor",
-		"Tactical break should override phase: " + result.decision.subtype)
+		"Tactical break should override the engage directive: " + result.decision.subtype)
 
 func test_no_tactical_break_when_threat_is_outside_break_range():
 	# BEHAVIOR: A capital with a nose on us but at long range does NOT trigger
@@ -232,7 +211,7 @@ func test_no_tactical_break_when_threat_is_outside_break_range():
 		"Distant nose-on threat should NOT trigger break")
 
 # ============================================================================
-# AREA LEASH
+# AREA LEASH REFLEX — unchanged, still emits large_ship_*
 # ============================================================================
 
 func test_capital_far_outside_leash_drops_fight_to_return():
@@ -252,29 +231,28 @@ func test_capital_far_outside_leash_drops_fight_to_return():
 	assert_true(result.decision.has("return_to_area"),
 		"Decision should be tagged as return-to-area")
 	assert_true(result.decision.subtype.begins_with("large_ship_"),
-		"Maneuver should still be a large ship subtype")
+		"Leash-return maneuver should still be a large ship subtype (reflex path)")
 
 # ============================================================================
-# TARGET SELECTION AND IDLE (merged from test_large_ship_ai.gd)
+# TARGET SELECTION AND IDLE
 # ============================================================================
 
 func test_large_ship_finds_enemy_target():
-	# BEHAVIOR: LargeShipPilotAI should find enemy ships to target
+	# BEHAVIOR: LargeShipPilotAI produces a "tactical" decision with the enemy
+	# as target_id when an enemy is present.
 	var my_corvette = TestFactories.make_corvette("corvette1", Vector2(0, 0), 0)
 	var enemy_fighter = TestFactories.make_fighter("enemy1", Vector2(1000, 0), 1)
 	var crew = _make_pilot("pilot1", "corvette1", 0.5, CORVETTE_PILOT_SKILL)
 
-	var all_ships = [my_corvette, enemy_fighter]
+	var result = LargeShipPilotAI.make_decision(crew, my_corvette, [my_corvette, enemy_fighter], 1.0)
 
-	var result = LargeShipPilotAI.make_decision(crew, my_corvette, all_ships, 1.0)
-
-	# Should have a decision (not just crew_data update)
 	assert_true(result.has("decision"), "Should make a decision when enemy present")
 	if result.has("decision"):
 		assert_eq(result.decision.type, "maneuver", "Should be a maneuver decision")
 		assert_eq(result.decision.target_id, "enemy1", "Should target the enemy")
-		assert_true(result.decision.subtype.begins_with("large_ship_"),
-			"Maneuver should be a large ship maneuver: " + result.decision.get("subtype", ""))
+		# Non-reflex engage path now emits "tactical", not "large_ship_*"
+		assert_eq(result.decision.subtype, "tactical",
+			"Non-reflex engage decision must be 'tactical': " + result.decision.get("subtype", ""))
 
 func test_no_decision_without_enemies():
 	# BEHAVIOR: No enemies means idle
@@ -288,7 +266,7 @@ func test_no_decision_without_enemies():
 	assert_false(result.has("decision"), "Should not have decision without enemies")
 
 # ============================================================================
-# CREW AI SYSTEM ROUTING (merged from test_large_ship_ai.gd)
+# CREW AI SYSTEM ROUTING
 # ============================================================================
 
 func test_infer_ship_type_returns_corvette_for_multi_crew():
@@ -308,7 +286,8 @@ func test_infer_ship_type_returns_fighter_for_solo():
 	assert_eq(ship_type, "fighter", "Pilot without captain should be fighter type")
 
 func test_corvette_pilot_decision_routes_to_large_ship_ai():
-	# BEHAVIOR: make_corvette_pilot_decision should use LargeShipPilotAI
+	# BEHAVIOR: make_corvette_pilot_decision returns a "tactical" directive
+	# (the non-reflex engage path is now "tactical" not "large_ship_*").
 	var my_corvette = TestFactories.make_corvette("corvette1", Vector2(0, 0), 0)
 	var enemy = TestFactories.make_fighter("enemy1", Vector2(1000, 0), 1)
 	var crew = _make_pilot("pilot1", "corvette1", 0.5, CORVETTE_PILOT_SKILL)
@@ -323,52 +302,122 @@ func test_corvette_pilot_decision_routes_to_large_ship_ai():
 
 	assert_true(result.has("decision"), "Should return a decision")
 	if result.has("decision"):
-		assert_true(result.decision.subtype.begins_with("large_ship_"),
-			"Decision should be a large ship maneuver: " + result.decision.get("subtype", ""))
+		assert_eq(result.decision.subtype, "tactical",
+			"Non-reflex corvette engage must be 'tactical': " + result.decision.get("subtype", ""))
 
 # ============================================================================
-# INTEGRATION — decision-to-movement flow (merged from test_large_ship_ai.gd)
+# INTEGRATION — decision-to-movement flow
 # ============================================================================
 
 func test_decision_applies_to_ship_orders():
-	# BEHAVIOR: A large ship decision should set ship orders correctly
+	# BEHAVIOR: A tactical large-ship decision must set current_order="tactical"
+	# and copy all contract fields onto orders so MovementSystem can re-blend.
 	var my_corvette = TestFactories.make_corvette("corvette1", Vector2(0, 0), 0)
 	var enemy = TestFactories.make_fighter("enemy1", Vector2(1000, 0), 1)
 	var crew = _make_pilot("pilot1", "corvette1", 0.5, CORVETTE_PILOT_SKILL)
 
 	var result = LargeShipPilotAI.make_decision(crew, my_corvette, [my_corvette, enemy], 1.0)
-
 	assert_true(result.has("decision"), "Should have decision")
 
-	# Apply decision via CrewIntegrationSystem
 	var applied = CrewIntegrationSystem.apply_decision_to_ship(my_corvette, result.decision, crew)
 
-	# Verify orders are set
-	assert_eq(applied.orders.current_order, "large_ship_engage",
-		"Current order should be large_ship_engage: " + applied.orders.get("current_order", "EMPTY"))
-	assert_eq(applied.orders.target_id, "enemy1", "Target should be set")
-	assert_true(applied.orders.maneuver_subtype.begins_with("large_ship_"),
-		"Maneuver subtype should be set: " + applied.orders.get("maneuver_subtype", "EMPTY"))
+	assert_eq(applied.orders.current_order, "tactical",
+		"Current order must be 'tactical': " + applied.orders.get("current_order", "EMPTY"))
+	assert_eq(applied.orders.target_id, "enemy1", "target_id must be set")
+	assert_true(applied.orders.has("goal_weights"),    "orders must have goal_weights")
+	assert_true(applied.orders.has("preferred_range"), "orders must have preferred_range")
+	assert_true(applied.orders.has("facing_mode"),     "orders must have facing_mode")
 
-func test_movement_system_executes_large_ship_maneuver():
-	# BEHAVIOR: MovementSystem should execute large_ship_engage orders and actually move the ship
+func test_movement_system_executes_tactical_order_for_large_ship():
+	# BEHAVIOR: MovementSystem must move a corvette that has current_order="tactical"
+	# — the tactical path is now the normal large-ship engage path.
 	var my_corvette = TestFactories.make_corvette("corvette1", Vector2(0, 0), 0)
-	my_corvette.orders.current_order = "large_ship_engage"
+	my_corvette.orders.current_order = "tactical"
+	my_corvette.orders.engagement_target = "enemy1"
 	my_corvette.orders.target_id = "enemy1"
-	my_corvette.orders.maneuver_subtype = "large_ship_close_to_broadside"
+	my_corvette.orders.goal_weights = {"pursue": 1.0, "keep_range": 0.4, "evade": 0.05, "formation": 0.0}
+	my_corvette.orders.preferred_range = 1200.0
+	my_corvette.orders.facing_mode = "auto"
+	my_corvette.orders.formation_slot = Vector2.ZERO
+	my_corvette.orders.anchor_position = Vector2.ZERO
 
 	var enemy = TestFactories.make_fighter("enemy1", Vector2(2000, 0), 1)
 	var all_ships = [my_corvette, enemy]
 
-	# Run multiple movement updates to give ship time to turn and accelerate
 	var updated = my_corvette
 	for i in range(10):
 		updated = MovementSystem.update_ship_movement(updated, all_ships, 0.1, 0.0, [])
 
-	# Ship should have started moving toward enemy
-	# After approach maneuver, velocity should have positive x component (toward enemy)
-	assert_gt(updated.velocity.length(), 0.1, "Ship should be moving: velocity=" + str(updated.velocity))
+	assert_gt(updated.velocity.length(), 0.1, "Corvette on 'tactical' order should be moving")
+	assert_gt(updated.velocity.x, 0.0, "Corvette should be closing on enemy to the right")
 
-	# Ship should be turning toward target (enemy is at x=2000, so positive x direction)
-	# Visual heading uses a different convention, but velocity should be toward enemy
-	assert_gt(updated.velocity.x, 0.0, "Ship should be moving toward enemy (positive x direction)")
+# ============================================================================
+# CONVERTER — facing_mode produces correct headings
+# ============================================================================
+
+func _heading_to_dir(h: float) -> Vector2:
+	return Vector2(sin(h), -cos(h))
+
+func test_broadside_facing_mode_perpendicular_to_target():
+	# BEHAVIOR: With facing_mode "broadside", desired_heading must be roughly
+	# perpendicular to the bearing to the target (dot product near 0),
+	# regardless of distance. Side batteries need to bear.
+	# Target is directly to the right (+X). Perpendicular is (0,1) or (0,-1).
+	var ship := {
+		"ship_id": "c1",
+		"type": "capital",
+		"position": Vector2.ZERO,
+		"velocity": Vector2.ZERO,
+		"rotation": 0.0,
+		"status": "operational",
+		"stats": {"max_speed": 200.0, "acceleration": 50.0, "turn_rate": 1.5, "size": 40.0},
+		"orders": {
+			"current_order": "tactical",
+			"engagement_target": "e1",
+			"goal_weights": {"pursue": 0.5, "keep_range": 0.4, "evade": 0.05, "formation": 0.0},
+			"preferred_range": 1200.0,
+			"facing_mode": "broadside",
+			"formation_slot": Vector2.ZERO,
+			"anchor_position": Vector2.ZERO,
+		},
+		"crew_modifiers": {},
+	}
+	var target := {"ship_id": "e1", "position": Vector2(3000, 0)}
+
+	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
+	var facing: Vector2 = _heading_to_dir(ctrl.desired_heading)
+	# to_target is (1,0). Perpendicular is (0,±1). So facing.x should be near 0.
+	assert_lt(absf(facing.x), 0.3,
+		"Broadside facing must be roughly perpendicular to target bearing (|facing.x| < 0.3), got: " + str(facing))
+
+func test_nose_on_facing_mode_faces_target():
+	# BEHAVIOR: With facing_mode "nose_on", desired_heading must point toward
+	# the target at all ranges. Forward guns and bow armor face the enemy.
+	var ship := {
+		"ship_id": "c1",
+		"type": "capital",
+		"position": Vector2.ZERO,
+		"velocity": Vector2.ZERO,
+		"rotation": 0.0,
+		"status": "operational",
+		"stats": {"max_speed": 200.0, "acceleration": 50.0, "turn_rate": 1.5, "size": 40.0},
+		"orders": {
+			"current_order": "tactical",
+			"engagement_target": "e1",
+			"goal_weights": {"pursue": 0.5, "keep_range": 0.4, "evade": 0.05, "formation": 0.0},
+			"preferred_range": 1200.0,
+			"facing_mode": "nose_on",
+			"formation_slot": Vector2.ZERO,
+			"anchor_position": Vector2.ZERO,
+		},
+		"crew_modifiers": {},
+	}
+	# Target is far (> LATERAL_THRUST_RANGE) — this is the key test:
+	# "auto" would face the move direction at far range, "nose_on" must always face target.
+	var target := {"ship_id": "e1", "position": Vector2(5000, 0)}
+
+	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
+	var facing: Vector2 = _heading_to_dir(ctrl.desired_heading)
+	# Target is at +X → facing must have positive X component.
+	assert_gt(facing.x, 0.5,
+		"Nose-on at far range must face the target (+X), got: " + str(facing))

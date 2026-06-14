@@ -60,6 +60,14 @@ const DECISION_DELAY_IDLE_MAX = 2.0
 ## Composure stress impact (mirrors FighterPilotAI)
 const COMPOSURE_STRESS_DECAY = 0.5
 
+## Fallback tactics for un-configured crew (mirrors AttackAction.FALLBACK_TACTICS).
+## Produces coherent mid-range balanced behavior so a capital without a doctrine block
+## still drives through the blender rather than crashing.
+const FALLBACK_TACTICS := {
+	"mentality_scalar": 0.5,
+	"range_scalar":     0.5,
+}
+
 ## ---------------------------------------------------------------------------
 ## MAIN ENTRY
 ## ---------------------------------------------------------------------------
@@ -103,9 +111,23 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 ## ---------------------------------------------------------------------------
 ## TARGETING
 ## ---------------------------------------------------------------------------
+## When a commander/captain has set ship.orders.focus_target, honour it as the
+## designated enemy (concentrate-force cascade). Falls back to proximity scoring
+## if the pinned ship is gone or not in all_ships.
 static func _find_best_target(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array) -> Dictionary:
 	var my_team: int = ship_data.get("team", -1)
 	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+
+	# Honour a commander-designated focus target when one is set on the ship.
+	var focus_id: String = ship_data.get("orders", {}).get("focus_target", "")
+	if focus_id != "":
+		for ship in all_ships:
+			if str(ship.get("ship_id", "")) == focus_id:
+				var s := str(ship.get("status", ""))
+				if s != "destroyed" and s != "exploding" and s != "disabled":
+					return ship
+		# Pinned ship is gone — fall through to proximity scoring.
+
 	var best_target := {}
 	var best_score: float = -INF
 
@@ -246,23 +268,6 @@ static func _compute_next_phase(
 			return "closing"
 
 
-## Map a phase tag to a maneuver subtype consumed by MovementSystem.
-static func _phase_to_maneuver(phase: String) -> String:
-	match phase:
-		"closing":
-			return "large_ship_close_to_broadside"
-		"broadside":
-			return "large_ship_hold_broadside"
-		"kiting":
-			return "large_ship_kite"
-		"repositioning":
-			return "large_ship_reposition_arc"
-		"fighting_withdrawal":
-			return "large_ship_fighting_withdrawal"
-		_:
-			return "large_ship_close_to_broadside"
-
-
 ## ---------------------------------------------------------------------------
 ## PERSONALITY — skill / aggression / composure
 ## ---------------------------------------------------------------------------
@@ -273,8 +278,8 @@ static func _phase_to_maneuver(phase: String) -> String:
 static func _read_aggression(crew_data: Dictionary) -> float:
 	return clamp(float(crew_data.get("stats", {}).get("skills", {}).get("aggression", 0.5)), 0.0, 1.0)
 
-## Capital pilots are read for `tactics` (broadside warfare is range/arc
-## management, not fly-by-wire). See 01_overview.md role-stat table.
+## Capital pilots read the `tactics` skill (broadside warfare is range/arc
+## management, not fly-by-wire), unlike fighter pilots who read `piloting`.
 static func _read_skill(crew_data: Dictionary) -> float:
 	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
 	return clamp(float(skills.get("tactics", 0.5)), 0.0, 1.0)
@@ -494,6 +499,19 @@ static func _is_far_outside_area(ship_data: Dictionary) -> bool:
 ## ---------------------------------------------------------------------------
 ## DECISION EMISSION
 ## ---------------------------------------------------------------------------
+## Emit a decision for the current FSM phase.
+##
+## fighting_withdrawal is a survival reflex (driven by _assess_survival_state
+## through _step_engagement_phase) and still emits its large_ship_* subtype so
+## MovementSystem._calculate_large_ship_fighting_withdrawal handles it correctly.
+##
+## All other phases (closing, broadside, kiting, repositioning) are the
+## non-reflex engage tail and now emit a unified "tactical" directive so large
+## ships flow through SteeringBlender + calculate_blended_control, with
+## role-derived facing_mode preserving their identity:
+##   artillery  → broadside (side batteries on target, orbit at range)
+##   anchor/brawler/screen → nose_on (bow armor forward, forward guns)
+##   unknown    → auto (existing blended-control close/far rule)
 static func _emit_phase_maneuver(
 	crew_data: Dictionary,
 	ship_data: Dictionary,
@@ -501,11 +519,59 @@ static func _emit_phase_maneuver(
 	phase: String,
 	game_time: float
 ) -> Dictionary:
-	var maneuver: String = _phase_to_maneuver(phase)
-	var delay: float = DECISION_DELAY_URGENT if phase == "fighting_withdrawal" else randf_range(DECISION_DELAY_NORMAL_MIN, DECISION_DELAY_NORMAL_MAX)
-	return _build_decision(crew_data, ship_data, target.get("ship_id", ""), maneuver, game_time, delay, {
-		"engagement_phase": phase,
-	})
+	# fighting_withdrawal is a survival reflex — keep its large_ship_* subtype
+	# so the withdrawal movement function still runs (it drives away from the
+	# threat while facing roughly toward it for cover fire).
+	if phase == "fighting_withdrawal":
+		return _build_decision(crew_data, ship_data, target.get("ship_id", ""),
+			"large_ship_fighting_withdrawal", game_time, DECISION_DELAY_URGENT, {
+				"engagement_phase": phase,
+			})
+
+	# Non-reflex engage path: emit a blended tactical directive.
+	# Read the crew's resolved tactics block (set at spawn by TacticsSystem).
+	# Fall back to balanced defaults so un-configured crew are still coherent.
+	var tactics: Dictionary = crew_data.get("tactics", FALLBACK_TACTICS)
+
+	# Weapon optimal range: real max range over this ship's operational weapons.
+	# Same fix as the fighter path — hull-class heuristics put ships far beyond
+	# their actual weapon range; using real stats keeps preferred_range in-envelope.
+	var weapon_optimal: float = WeaponSystem.get_effective_range(ship_data)
+
+	# Threat list: all_ships is not available here so pass empty.
+	# The converter re-gathers enemy positions per-frame (_gather_enemy_positions),
+	# so evade direction stays live. The blender's is-targeted bump is a
+	# nice-to-have that costs nothing to omit at decision time.
+	var threats: Array = []
+
+	# Posture: read from ship.orders so a captain/commander order set on the ship
+	# reaches the pilot's blended directive even though captain ≠ pilot on large ships.
+	var posture: String = ship_data.get("orders", {}).get("posture", "")
+
+	var directive: Dictionary = SteeringBlender.build_directive(
+		ship_data, tactics, target, threats, weapon_optimal, posture
+	)
+
+	var delay: float = randf_range(DECISION_DELAY_NORMAL_MIN, DECISION_DELAY_NORMAL_MAX)
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated.next_decision_time = game_time + delay
+
+	var decision: Dictionary = {
+		"type":             "maneuver",
+		"subtype":          "tactical",
+		"engagement_target": directive.get("engagement_target", ""),
+		"goal_weights":     directive.get("goal_weights", {}),
+		"preferred_range":  directive.get("preferred_range", weapon_optimal),
+		"formation_slot":   directive.get("formation_slot",  Vector2.ZERO),
+		"anchor_position":  directive.get("anchor_position", Vector2.ZERO),
+		"facing_mode":      directive.get("facing_mode", "auto"),
+		"crew_id":          crew_data.get("crew_id", ""),
+		"entity_id":        ship_data.get("ship_id", ""),
+		"target_id":        target.get("ship_id", ""),
+		"skill_factor":     calculate_effective_skill(crew_data),
+		"timestamp":        game_time,
+	}
+	return {"crew_data": updated, "decision": decision}
 
 static func _make_tactical_break_decision(
 	crew_data: Dictionary,

@@ -48,16 +48,8 @@ const RETREAT_WEAVE_HOLD_MS = 1000.0
 const DODGE_STRAFE_HOLD_MS = 1200.0
 const DEFENSIVE_BREAK_HOLD_MS = 800.0
 
-## Period (ms) of the deliberately PREDICTABLE panic-turn flip — evasive_turn
-## is the unskilled escape, metronomic by design.
-const FLEE_TURN_FLIP_PERIOD_MS = 500.0
-
 ## Combat positioning distances.
 const DOGFIGHT_COMBAT_RANGE = 2400.0       # Strafe-fight standoff distance
-const FORMATION_COMBAT_RANGE = 2000.0      # Standoff while holding formation
-const CAUTIOUS_APPROACH_RANGE = 2000.0     # Careful approach standoff
-const ATTACK_RUN_SLOWDOWN_RANGE = 1600.0   # Throttle down inside this on attack runs
-const ANGLED_APPROACH_OFFSET = 1600.0      # Lateral offset for angled approaches
 const RETREAT_TARGET_DISTANCE = 2000.0     # How far ahead retreat waypoints are set
 const RETREAT_WEAVE_WIDTH = 600.0          # Side-to-side dodge width while retreating
 
@@ -254,6 +246,21 @@ static func update_ship_movement(ship_data: Dictionary, targets: Array, delta: f
 			return apply_space_drift(ship_data, delta)
 		var maneuver_subtype = ship_data.get("orders", {}).get("maneuver_subtype", "large_ship_close_to_broadside")
 		pilot_control = _calculate_large_ship_control(ship_data, target, maneuver_subtype)
+
+	elif current_order == "tactical":
+		# Blended steering directive. The directive was stamped onto
+		# ship.orders by CrewIntegrationSystem at decision time; re-blend each frame
+		# from LIVE positions so the ship responds to movement between decisions.
+		var tgt_id: String = ship_data.get("orders", {}).get("engagement_target", "")
+		if tgt_id.is_empty():
+			tgt_id = ship_data.get("orders", {}).get("target_id", "")
+		var tactical_target: Dictionary = find_ship_by_id(targets, tgt_id) if tgt_id else {}
+		if tactical_target.is_empty():
+			tactical_target = find_nearest_enemy(ship_data, targets)
+		# Build a lightweight threat list for the converter (position only is enough)
+		var tactical_threats: Array = _gather_enemy_positions(ship_data, targets)
+		# Pass nearby_ships + obstacles so blended steering can separate from friendlies
+		pilot_control = calculate_blended_control(ship_data, tactical_target, tactical_threats, nearby_ships, obstacles, delta)
 
 	else:
 		# No orders or unknown order - use default behavior (find nearest enemy)
@@ -477,43 +484,25 @@ static func calculate_fighter_pilot_control(ship_data: Dictionary, target: Dicti
 	# Route to appropriate maneuver calculation
 	# PURSUIT MANEUVERS now use skill-aware approach system
 	match maneuver_subtype:
-		"fight_pursue_full_speed", "fight_pursue_tactical", "fight_flank_behind", "fight_tight_pursuit", "fight_get_behind":
+		"fight_pursue_full_speed", "fight_pursue_tactical":
 			# Use skill-aware approach - routes based on approach_style from AI
 			return calculate_skill_aware_approach(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_dogfight_maneuver":
 			return calculate_dogfight_maneuver(ship_data, target, nearby_ships, obstacles, game_time)
-		"fight_evasive_turn":
-			return calculate_evasive_turn(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_defensive_break":
 			return calculate_defensive_break(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_lateral_break":
 			return calculate_lateral_break(ship_data, target, nearby_ships, obstacles)
 		"fight_friendly_avoid":
 			return calculate_friendly_avoid(ship_data, target, nearby_ships, obstacles)
-		"fight_group_run_approach":
-			return calculate_group_run_approach(ship_data, target, nearby_ships, obstacles)
-		"fight_group_run_attack":
-			return calculate_group_run_attack(ship_data, target, nearby_ships, obstacles)
-		"fight_group_run_swing_around":
-			return calculate_group_run_swing_around(ship_data, target, nearby_ships, obstacles)
 		"fight_evasive_retreat":
 			return calculate_evasive_retreat(ship_data, target, nearby_ships, obstacles, game_time)
 		"fight_return_to_area":
 			return calculate_return_to_area(ship_data)
-		"fight_cautious_approach":
-			return calculate_cautious_approach(ship_data, target, nearby_ships, obstacles)
 		"fight_dodge_and_weave":
 			return calculate_dodge_and_weave(ship_data, target, nearby_ships, obstacles, game_time)
-		"fight_press_attack":
-			return calculate_press_attack(ship_data, target, game_time)
-		"fight_rejoin_wingman":
-			return calculate_rejoin_wingman(ship_data, target, nearby_ships, obstacles)
 		"fight_wing_rejoin":
 			return calculate_wing_rejoin(ship_data, target, nearby_ships, obstacles)
-		"fight_wing_follow":
-			return calculate_wing_follow(ship_data, target, nearby_ships, obstacles)
-		"fight_wing_engage":
-			return calculate_wing_engage(ship_data, target, nearby_ships, obstacles)
 		"fight_play_waypoint":
 			return calculate_play_waypoint(ship_data, target, nearby_ships, obstacles)
 		_:
@@ -569,33 +558,6 @@ static func calculate_dogfight_maneuver(ship_data: Dictionary, target: Dictionar
 		"is_braking": should_brake,
 		"lateral_thrust": lateral_thrust,  # Maneuvering jets for ALL positioning
 		"engagement_range": 600.0,
-		"current_distance": distance
-	}
-
-## Evasive turn - hard turn in one direction (predictable panic evasion)
-static func calculate_evasive_turn(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array, game_time: float) -> Dictionary:
-	var to_target = target.position - ship_data.position
-	var distance = to_target.length()
-
-	# Hard turn away from target - 30° turn rate is predictable
-	var away_from_target = -to_target.normalized()
-	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-
-	# Always turn the same direction (predictable) - use sign of time for consistency
-	var turn_direction = 1 if fmod(game_time * 1000.0 / FLEE_TURN_FLIP_PERIOD_MS, 2.0) < 1.0 else -1
-	var evasion_direction = (away_from_target + perpendicular * turn_direction * 0.5).normalized()
-
-	var desired_heading = direction_to_heading(evasion_direction)
-
-	# Full throttle for evasion - this is fleeing
-	var throttle = calculate_intuitive_throttle(ship_data, distance, "fleeing")
-
-	return {
-		"desired_heading": desired_heading,
-		"throttle": throttle,
-		"thrust_active": true,
-		"is_braking": false,
-		"engagement_range": 300.0,
 		"current_distance": distance
 	}
 
@@ -688,152 +650,6 @@ static func calculate_friendly_avoid(ship_data: Dictionary, target: Dictionary, 
 		"lateral_thrust": evasion_dir,
 		"current_distance": to_target.length()
 	}
-
-## Group run approach - approach with other fighters
-## Distance-aware: Far uses main thrust, close uses lateral for formation keeping
-static func calculate_group_run_approach(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
-	var formation_offset = ship_data.get("orders", {}).get("formation_offset", Vector2.ZERO)
-	var to_target = target.position - ship_data.position
-	var distance = to_target.length()
-
-	if distance > LATERAL_THRUST_RANGE:
-		# FAR: Use main thrust to approach target with formation offset
-		var approach_target = to_target + formation_offset
-		var desired_heading = direction_to_heading(approach_target)
-
-		# DART AND DASH: Brake for formation adjustments
-		var needs_course_correction = check_needs_braking(ship_data, desired_heading)
-		if needs_course_correction:
-			return create_braking_control(ship_data, desired_heading, distance)
-
-		# Formation approach uses tactical throttle
-		var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": false,
-			"engagement_range": 400.0,
-			"current_distance": distance
-		}
-	else:
-		# CLOSE: Face target, use lateral thrust for formation offset
-		var desired_heading = direction_to_heading(to_target)
-
-		# Use lateral thrust to maintain formation offset while facing target
-		var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-		var lateral_offset = formation_offset.dot(perpendicular)
-		var lateral_thrust = clamp(lateral_offset / 200.0, -1.0, 1.0)
-
-		# Main thrust for distance control
-		var desired_combat_range = FORMATION_COMBAT_RANGE
-		var distance_error = distance - desired_combat_range
-		var throttle = 0.0
-		var should_brake = false
-
-		if distance_error > 500.0:
-			throttle = 0.4  # Close in
-		elif distance_error < -300.0:
-			should_brake = true  # Back off
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": should_brake,
-			"lateral_thrust": lateral_thrust,
-			"engagement_range": 400.0,
-			"current_distance": distance
-		}
-
-## Group run attack - execute attack run
-static func calculate_group_run_attack(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
-	var to_target = target.position - ship_data.position
-	var distance = to_target.length()
-	var desired_heading = direction_to_heading(to_target)
-
-	# DART AND DASH: Line up the attack run
-	var needs_course_correction = check_needs_braking(ship_data, desired_heading)
-	if needs_course_correction:
-		return create_braking_control(ship_data, desired_heading, distance)
-
-	# Attack run uses tactical throttle - controlled approach, not kamikaze
-	var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-
-	# Reduce throttle when very close to avoid collision (4x scaled)
-	if distance < ATTACK_RUN_SLOWDOWN_RANGE:
-		throttle = throttle * 0.5
-
-	return {
-		"desired_heading": desired_heading,
-		"throttle": throttle,
-		"thrust_active": throttle > 0.1,
-		"is_braking": false,
-		"engagement_range": 300.0,
-		"current_distance": distance
-	}
-
-## Group run swing around - swing around for another pass
-## Distance-aware: Far uses main thrust, close uses lateral to slide out
-static func calculate_group_run_swing_around(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
-	var to_target = target.position - ship_data.position
-	var distance = to_target.length()
-
-	# Swing out to the side then come back around - much wider arc for safety (4x scaled)
-	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var swing_out_pos = target.position + perpendicular * 4000.0
-	var to_swing = swing_out_pos - ship_data.position
-	var swing_distance = to_swing.length()
-
-	if distance > LATERAL_THRUST_RANGE:
-		# FAR: Use main thrust to swing out
-		var desired_heading = direction_to_heading(to_swing)
-
-		# DART AND DASH: Hard brake to swing around quickly
-		var needs_course_correction = check_needs_braking(ship_data, desired_heading)
-		if needs_course_correction:
-			return create_braking_control(ship_data, desired_heading, distance)
-
-		# Swing around uses flanking throttle - moderate speed for repositioning
-		var throttle = calculate_intuitive_throttle(ship_data, swing_distance, "flanking")
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": false,
-			"engagement_range": 500.0,
-			"current_distance": distance
-		}
-	else:
-		# CLOSE: Face target, use lateral thrust to slide out to swing position
-		var desired_heading = direction_to_heading(to_target)
-
-		# Calculate lateral thrust to slide toward swing position
-		var lateral_offset = to_swing.dot(perpendicular)
-		var lateral_thrust = clamp(lateral_offset / 600.0, -1.0, 1.0)
-
-		# Main thrust controls distance - back off while swinging
-		var desired_swing_distance = 3000.0
-		var distance_error = distance - desired_swing_distance
-		var throttle = 0.0
-		var should_brake = false
-
-		if distance_error < -500.0:
-			should_brake = true  # Too close, back off
-		elif distance_error > 500.0:
-			throttle = 0.2  # Close in slightly
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": should_brake,
-			"lateral_thrust": lateral_thrust,
-			"engagement_range": 500.0,
-			"current_distance": distance
-		}
 
 ## Return to assigned operating area — flies back into the patrol zone.
 ## Aims for a point INSIDE the zone (not the center) so 26 ships returning
@@ -952,81 +768,6 @@ static func calculate_evasive_retreat(ship_data: Dictionary, target: Dictionary,
 		"current_distance": distance
 	}
 
-## Cautious approach - close in slowly at an angle
-## Distance-aware: Far uses main thrust at angle, close uses lateral thrust
-static func calculate_cautious_approach(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
-	var to_target = target.position - ship_data.position
-	var distance = to_target.length()
-	var direction = to_target.normalized()
-
-	# Approach at an angle, not directly - stay further out (4x scaled)
-	var perpendicular = Vector2(-to_target.y, to_target.x).normalized()
-	var approach_offset = perpendicular * ANGLED_APPROACH_OFFSET
-
-	if distance > LATERAL_THRUST_RANGE:
-		# FAR: Use main thrust to approach at an angle
-		var approach_pos = target.position + approach_offset
-		var to_approach = approach_pos - ship_data.position
-		var desired_heading = direction_to_heading(to_approach)
-
-		# Cautious approach uses tactical throttle with safe approach check
-		var closing_speed = ship_data.velocity.dot(direction)
-		var context_throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-		var safe_throttle = calculate_safe_approach_throttle(ship_data, distance, closing_speed, 2000.0)
-
-		# Use the more conservative throttle
-		var throttle = min(context_throttle, safe_throttle) * 0.7  # Extra cautious
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": false,
-			"engagement_range": 400.0,
-			"current_distance": distance
-		}
-	else:
-		# CLOSE: Face target, use lateral thrust to approach at angle
-		var desired_heading = direction_to_heading(to_target)
-
-		# Use lateral thrust to slide at an angle while facing target
-		var to_approach = (target.position + approach_offset) - ship_data.position
-		var lateral_offset = to_approach.dot(perpendicular)
-		var lateral_thrust = clamp(lateral_offset / 400.0, -1.0, 1.0)
-
-		# Main thrust controls distance - slow cautious approach
-		var desired_approach_distance = CAUTIOUS_APPROACH_RANGE
-		var distance_error = distance - desired_approach_distance
-		var throttle = 0.0
-		var should_brake = false
-
-		if distance_error > 600.0:
-			var closing_speed = ship_data.velocity.dot(direction)
-			var context_throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-			var safe_throttle = calculate_safe_approach_throttle(ship_data, distance, closing_speed, 2000.0)
-			throttle = min(context_throttle, safe_throttle) * 0.5  # Extra cautious
-		elif distance_error > 0:
-			throttle = 0.15  # Very slow
-		else:
-			should_brake = distance_error < -300.0
-
-		# Brake if going too fast
-		var current_velocity = ship_data.get("velocity", Vector2.ZERO)
-		var max_cautious_speed = ship_data.stats.max_speed * 0.35
-		if current_velocity.length() > max_cautious_speed:
-			should_brake = true
-			throttle = 0.0
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": should_brake,
-			"lateral_thrust": lateral_thrust,
-			"engagement_range": 400.0,
-			"current_distance": distance
-		}
-
 ## Dodge and weave - stay at range, dodge
 ## Ship ALWAYS faces target for aiming
 ## Main thrust = distance control only (close in / back off)
@@ -1087,43 +828,6 @@ static func calculate_dodge_and_weave(ship_data: Dictionary, target: Dictionary,
 		"current_distance": distance
 	}
 
-## Press-attack maneuver — used when a fighter has press_attack posture vs a capital.
-## Priority is distance closure, not evasion. Fighter faces the target and burns
-## main thrust until within PRESS_ATTACK_RANGE, then holds the band with light lateral jink.
-static func calculate_press_attack(ship_data: Dictionary, target: Dictionary, game_time: float) -> Dictionary:
-	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
-	var t_pos: Vector2  = target.get("position", Vector2.ZERO)
-	var to_target := t_pos - my_pos
-	var distance := to_target.length()
-
-	# Always face the target for aiming.
-	var desired_heading := direction_to_heading(to_target)
-
-	var throttle := 0.0
-	var should_brake := false
-	var dist_error := distance - WingConstants.PRESS_ATTACK_RANGE
-
-	if dist_error > WingConstants.PRESS_ATTACK_RANGE_TOLERANCE:
-		# Too far — close hard.
-		throttle = 1.0
-	elif dist_error < -WingConstants.PRESS_ATTACK_RANGE_TOLERANCE:
-		# Too close — back off.
-		should_brake = true
-
-	# Light lateral jink so the fighter isn't a stationary target.
-	var lateral_thrust: float = committed_strafe_direction(ship_data, DOGFIGHT_STRAFE_HOLD_MS, game_time) * 0.35
-
-	return {
-		"desired_heading": desired_heading,
-		"throttle": throttle,
-		"thrust_active": throttle > 0.1,
-		"is_braking": should_brake,
-		"lateral_thrust": lateral_thrust,
-		"engagement_range": WingConstants.PRESS_ATTACK_RANGE,
-		"current_distance": distance,
-	}
-
-
 ## Squadron-play waypoint — fly toward a tactical offset assigned by the
 ## squadron leader's active play. The pilot aims at `formation_position` at
 ## tactical-pursuit throttle; once close, FighterPilotAI stops emitting this
@@ -1154,89 +858,33 @@ static func calculate_play_waypoint(ship_data: Dictionary, target: Dictionary, n
 	}
 
 
-## Rejoin wingman - return to formation position
-## Distance-aware: Far uses main thrust, close uses lateral to slide into formation
-static func calculate_rejoin_wingman(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
-	# Get formation position from orders
-	var formation_pos = ship_data.get("orders", {}).get("formation_position", Vector2.ZERO)
-
-	# If no formation position specified, use target position as fallback
-	if formation_pos == Vector2.ZERO:
-		formation_pos = target.get("position", Vector2.ZERO)
-
-	var my_pos = ship_data.get("position", Vector2.ZERO)
-	var to_formation = formation_pos - my_pos
-	var distance = to_formation.length()
-
-	# Get lead's velocity to match heading
-	var lead_velocity = target.get("velocity", Vector2.ZERO)
-
-	# Distance threshold for formation (shorter than combat - formation is tighter)
-	var formation_lateral_range = 300.0
-
-	if distance > formation_lateral_range:
-		# FAR: Use main thrust to approach formation position
-		var desired_heading = direction_to_heading(to_formation)
-
-		# DART AND DASH: Brake if we need to change direction significantly
-		var needs_course_correction = check_needs_braking(ship_data, desired_heading)
-		if needs_course_correction and distance > 50.0:
-			return create_braking_control(ship_data, desired_heading, distance)
-
-		# Use tactical throttle to rejoin quickly
-		var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": false,
-			"engagement_range": 80.0,
-			"current_distance": distance
-		}
-	else:
-		# CLOSE: Face lead's direction, use lateral thrust to slide into formation
-		var desired_heading: float
-		if lead_velocity.length() > 10.0:
-			desired_heading = direction_to_heading(lead_velocity)
-		else:
-			var to_lead = target.get("position", Vector2.ZERO) - my_pos
-			desired_heading = direction_to_heading(to_lead)
-
-		# Calculate lateral thrust to slide into formation position
-		var forward_dir = get_visual_forward(desired_heading)
-		var perpendicular = Vector2(-forward_dir.y, forward_dir.x)
-		var lateral_offset = to_formation.dot(perpendicular)
-		var lateral_thrust = clamp(lateral_offset / 150.0, -1.0, 1.0)
-
-		# Main thrust controls forward/back in formation
-		var forward_offset = to_formation.dot(forward_dir)
-		var throttle = 0.0
-		var should_brake = false
-
-		if forward_offset > 50.0:
-			throttle = 0.3
-		elif forward_offset < -50.0:
-			should_brake = true
-
-		# Match lead's speed
-		var speed_diff = ship_data.velocity.length() - lead_velocity.length()
-		if speed_diff > 20.0:
-			should_brake = true
-			throttle = 0.0
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle if not should_brake else 0.0,
-			"thrust_active": throttle > 0.1 and not should_brake,
-			"is_braking": should_brake,
-			"lateral_thrust": lateral_thrust,
-			"engagement_range": 80.0,
-			"current_distance": distance
-		}
-
 # ============================================================================
 # LARGE SHIP MANEUVERS - Corvette and Capital tactics
+
+## Shared broadside-heading helper used by calculate_blended_control (when facing_mode == "broadside").
+##
+## Returns the heading (radians) perpendicular to the bearing to `target_pos`,
+## picking whichever of the two perpendicular options is closer to
+## `current_rotation` — so the ship commits to one orbit side instead of
+## flip-flopping every frame.
+##
+## Extracted here so the math lives once; callers get the heading and decide
+## how to set throttle/lateral independently.
+static func _broadside_heading_toward(
+	my_pos: Vector2,
+	target_pos: Vector2,
+	current_rotation: float
+) -> float:
+	var to_target: Vector2 = (target_pos - my_pos).normalized()
+	# Two perpendicular options (port / starboard)
+	var perp_left:  Vector2 = Vector2(-to_target.y,  to_target.x)
+	var perp_right: Vector2 = Vector2( to_target.y, -to_target.x)
+	var heading_left:  float = direction_to_heading(perp_left)
+	var heading_right: float = direction_to_heading(perp_right)
+	# Pick the side closer to current rotation to avoid flip-flopping.
+	if abs(angle_difference(current_rotation, heading_left)) <= abs(angle_difference(current_rotation, heading_right)):
+		return heading_left
+	return heading_right
 # ============================================================================
 
 ## Calculate large ship pilot control - returns pilot_control dictionary for apply_space_physics
@@ -1246,12 +894,6 @@ static func _calculate_large_ship_control(ship_data: Dictionary, target: Diction
 	match maneuver:
 		"large_ship_close_to_broadside":
 			return _calculate_large_ship_close_to_broadside(ship_data, target)
-		"large_ship_hold_broadside":
-			return _calculate_large_ship_hold_broadside(ship_data, target)
-		"large_ship_kite":
-			return _calculate_large_ship_kite(ship_data, target)
-		"large_ship_reposition_arc":
-			return _calculate_large_ship_reposition_arc(ship_data, target)
 		"large_ship_fighting_withdrawal":
 			return _calculate_large_ship_fighting_withdrawal(ship_data, target)
 		"large_ship_present_thickest_armor":
@@ -1292,124 +934,6 @@ static func _calculate_large_ship_close_to_broadside(ship_data: Dictionary, targ
 		"thrust_active": true,
 		"is_braking": false,
 		"lateral_thrust": 0.0,
-		"current_distance": distance
-	}
-
-## BROADSIDE — actively orbit the target while keeping nose perpendicular.
-## A capital sitting still in broadside looks identical to a passive ship,
-## so we drive lateral thrust hard and modulate forward throttle to *crab*
-## around the enemy at the optimal range. Range-keeping is the single biggest
-## reason this maneuver should feel different from "approach and shoot".
-const LARGE_SHIP_BROADSIDE_OPTIMAL_RANGE = 1200.0
-const LARGE_SHIP_BROADSIDE_TOO_CLOSE = 500.0
-const LARGE_SHIP_BROADSIDE_LATERAL = 1.0          # full crab thrust — visible motion
-const LARGE_SHIP_BROADSIDE_FORWARD_PUSH = 0.6     # forward burn while too far
-const LARGE_SHIP_BROADSIDE_REVERSE_PUSH = -0.6    # reverse burn while too close
-static func _calculate_large_ship_hold_broadside(ship_data: Dictionary, target: Dictionary) -> Dictionary:
-	var my_pos = ship_data.get("position", Vector2.ZERO)
-	var target_pos = target.get("position", Vector2.ZERO)
-	var current_rotation = ship_data.get("rotation", 0.0)
-
-	var to_target = (target_pos - my_pos).normalized()
-	var distance = my_pos.distance_to(target_pos)
-
-	# Two perpendicular options; pick whichever is closer to our current
-	# rotation so we commit to one orbit direction instead of flip-flopping.
-	var perpendicular_left = Vector2(-to_target.y, to_target.x)
-	var perpendicular_right = Vector2(to_target.y, -to_target.x)
-	var heading_left = direction_to_heading(perpendicular_left)
-	var heading_right = direction_to_heading(perpendicular_right)
-	var diff_left = abs(angle_difference(current_rotation, heading_left))
-	var diff_right = abs(angle_difference(current_rotation, heading_right))
-	var presenting_port = diff_left < diff_right
-	var desired_heading = heading_left if presenting_port else heading_right
-
-	# Lateral thrust always crabs in the direction that keeps us perpendicular
-	# while traversing AROUND the target. The sign convention matches the
-	# perpendicular side we chose. Magnitude is full so the ship visibly orbits.
-	var lateral = LARGE_SHIP_BROADSIDE_LATERAL if presenting_port else -LARGE_SHIP_BROADSIDE_LATERAL
-
-	# Forward axis is range-keeping: forward when too far, brake/reverse when
-	# too close. (Our nose is perpendicular to target, so "forward" along the
-	# nose is tangential to the target — this also helps the orbit.)
-	var throttle: float
-	var is_braking: bool = false
-	if distance > LARGE_SHIP_BROADSIDE_OPTIMAL_RANGE:
-		throttle = LARGE_SHIP_BROADSIDE_FORWARD_PUSH
-	elif distance < LARGE_SHIP_BROADSIDE_TOO_CLOSE:
-		throttle = 0.0
-		is_braking = true
-	else:
-		# In the sweet spot — light tangential maintenance only.
-		throttle = 0.2
-
-	return {
-		"desired_heading": desired_heading,
-		"throttle": throttle,
-		"thrust_active": true,
-		"is_braking": is_braking,
-		"lateral_thrust": lateral,
-		"current_distance": distance
-	}
-
-## KITE — face the target (forward turrets on), reverse-thrust to open range,
-## and add lateral juke so we're not a straight-line target for fighters.
-const LARGE_SHIP_KITE_LATERAL = 0.7
-static func _calculate_large_ship_kite(ship_data: Dictionary, target: Dictionary) -> Dictionary:
-	var my_pos = ship_data.get("position", Vector2.ZERO)
-	var target_pos = target.get("position", Vector2.ZERO)
-	var current_rotation = ship_data.get("rotation", 0.0)
-
-	var to_target = (target_pos - my_pos).normalized()
-	var distance = my_pos.distance_to(target_pos)
-	var desired_heading = direction_to_heading(to_target)
-
-	# Pick a juke direction based on current rotation parity so ship commits
-	# to one side per kite session rather than oscillating.
-	var lateral = LARGE_SHIP_KITE_LATERAL if sin(current_rotation) >= 0.0 else -LARGE_SHIP_KITE_LATERAL
-
-	return {
-		"desired_heading": desired_heading,
-		"throttle": 0.0,
-		"thrust_active": false,
-		"is_braking": true,
-		"lateral_thrust": lateral,
-		"current_distance": distance
-	}
-
-## REPOSITIONING — broadside lost; swing hard for a fresh arc. Aim ~80° off
-## the target line and lean on lateral thrust so the ship visibly *swings*
-## rather than drifting back to broadside.
-const LARGE_SHIP_REPOSITION_OFFSET_DEG = 80.0
-const LARGE_SHIP_REPOSITION_THROTTLE = 0.7
-const LARGE_SHIP_REPOSITION_LATERAL = 1.0
-static func _calculate_large_ship_reposition_arc(ship_data: Dictionary, target: Dictionary) -> Dictionary:
-	var my_pos = ship_data.get("position", Vector2.ZERO)
-	var target_pos = target.get("position", Vector2.ZERO)
-
-	var to_target = (target_pos - my_pos).normalized()
-	var distance = my_pos.distance_to(target_pos)
-
-	var current_rotation = ship_data.get("rotation", 0.0)
-	var base_angle = to_target.angle()
-	var offset = deg_to_rad(LARGE_SHIP_REPOSITION_OFFSET_DEG)
-	var arc_left = Vector2(cos(base_angle + offset), sin(base_angle + offset))
-	var arc_right = Vector2(cos(base_angle - offset), sin(base_angle - offset))
-	var heading_left = direction_to_heading(arc_left)
-	var heading_right = direction_to_heading(arc_right)
-
-	var diff_left = abs(angle_difference(current_rotation, heading_left))
-	var diff_right = abs(angle_difference(current_rotation, heading_right))
-	var pick_left = diff_left < diff_right
-	var desired_heading = heading_left if pick_left else heading_right
-	var lateral = LARGE_SHIP_REPOSITION_LATERAL if pick_left else -LARGE_SHIP_REPOSITION_LATERAL
-
-	return {
-		"desired_heading": desired_heading,
-		"throttle": LARGE_SHIP_REPOSITION_THROTTLE,
-		"thrust_active": true,
-		"is_braking": false,
-		"lateral_thrust": lateral,
 		"current_distance": distance
 	}
 
@@ -1559,172 +1083,6 @@ static func _calculate_wing_rejoin_close(ship_data: Dictionary, target: Dictiona
 		"lateral_thrust": lateral_thrust,
 		"engagement_range": WingConstants.REJOIN_MATCH_HEADING_DISTANCE,
 		"current_distance": distance
-	}
-
-## Wing follow - Wingman maintains formation while Lead is idle/cruising
-## Distance-aware: Far uses main thrust, close uses lateral to maintain formation
-static func calculate_wing_follow(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
-	var formation_pos = ship_data.get("orders", {}).get("formation_position", Vector2.ZERO)
-	var skill_factor = ship_data.get("orders", {}).get("skill_factor", 0.5)
-	var position_side = ship_data.get("orders", {}).get("position_side", 1)
-
-	if formation_pos == Vector2.ZERO:
-		formation_pos = _calculate_default_wing_position(target, position_side, skill_factor)
-
-	var my_pos = ship_data.get("position", Vector2.ZERO)
-	var to_formation = formation_pos - my_pos
-	var distance = to_formation.length()
-	var lead_velocity = target.get("velocity", Vector2.ZERO)
-	var my_velocity = ship_data.get("velocity", Vector2.ZERO)
-
-	if distance > WingConstants.FOLLOW_HEAD_TOWARD_DISTANCE:
-		# FAR: Use main thrust to catch up to formation
-		var desired_heading = direction_to_heading(to_formation)
-		var throttle = calculate_intuitive_throttle(ship_data, distance, "pursuit_tactical")
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": false,
-			"engagement_range": WingConstants.FOLLOW_HEAD_TOWARD_DISTANCE,
-			"current_distance": distance
-		}
-	else:
-		# CLOSE: Match lead's heading, use lateral thrust for formation keeping
-		var desired_heading: float
-		if lead_velocity.length() > 10.0:
-			desired_heading = direction_to_heading(lead_velocity)
-		else:
-			var to_lead = target.get("position", Vector2.ZERO) - my_pos
-			if to_lead.length() > WingConstants.FOLLOW_FACE_FORMATION_DISTANCE:
-				desired_heading = direction_to_heading(to_lead)
-			else:
-				desired_heading = ship_data.get("rotation", 0.0)
-
-		# Calculate lateral thrust to maintain formation position
-		var forward_dir = get_visual_forward(desired_heading)
-		var perpendicular = Vector2(-forward_dir.y, forward_dir.x)
-		var lateral_offset = to_formation.dot(perpendicular)
-		var lateral_divisor = lerp(200.0, 100.0, skill_factor)
-		var lateral_thrust = clamp(lateral_offset / lateral_divisor, -1.0, 1.0)
-
-		# Main thrust controls forward/back position in formation
-		var forward_offset = to_formation.dot(forward_dir)
-		var speed_diff = my_velocity.length() - lead_velocity.length()
-		var throttle = 0.0
-		var should_brake = false
-
-		if forward_offset > 30.0 and speed_diff < 10.0:
-			throttle = 0.2
-		elif speed_diff > WingConstants.FOLLOW_SPEED_DIFF_BRAKE:
-			should_brake = true
-		elif distance < WingConstants.FOLLOW_TOO_CLOSE_DISTANCE and speed_diff > 15.0:
-			should_brake = true
-		else:
-			throttle = 0.1  # Cruise throttle
-
-		return {
-			"desired_heading": desired_heading,
-			"throttle": throttle,
-			"thrust_active": throttle > 0.1,
-			"is_braking": should_brake,
-			"lateral_thrust": lateral_thrust,
-			"engagement_range": WingConstants.FOLLOW_HEAD_TOWARD_DISTANCE,
-			"current_distance": distance
-		}
-
-## Wing engage - Wingman engages target while trying to maintain formation with Lead
-## This is the most complex maneuver - balance formation keeping with attacking
-static func calculate_wing_engage(ship_data: Dictionary, target: Dictionary, nearby_ships: Array, obstacles: Array) -> Dictionary:
-	var formation_pos = ship_data.get("orders", {}).get("formation_position", Vector2.ZERO)
-	var skill_factor = ship_data.get("orders", {}).get("skill_factor", 0.5)
-	var formation_priority = ship_data.get("orders", {}).get("formation_priority", 0.5)
-	var lead_ship_id = ship_data.get("orders", {}).get("lead_ship_id", "")
-	var position_side = ship_data.get("orders", {}).get("position_side", 1)
-
-	# Find lead ship for formation reference
-	var lead_ship = find_ship_by_id(nearby_ships, lead_ship_id)
-	if lead_ship.is_empty():
-		# Lead not in nearby ships, use target as lead (fallback)
-		lead_ship = target
-
-	if formation_pos == Vector2.ZERO:
-		formation_pos = _calculate_default_wing_position(lead_ship, position_side, skill_factor)
-
-	var my_pos = ship_data.get("position", Vector2.ZERO)
-	var target_pos = target.get("position", Vector2.ZERO)
-	var lead_pos = lead_ship.get("position", Vector2.ZERO)
-
-	var to_formation = formation_pos - my_pos
-	var to_target = target_pos - my_pos
-	var formation_distance = to_formation.length()
-	var target_distance = to_target.length()
-
-	# Blend between formation position and attack position based on:
-	# 1. Formation priority (skill-based)
-	# 2. Current formation distance (if too far, prioritize rejoining)
-	# 3. Target distance (if close enough to shoot, can break formation slightly)
-
-	var effective_formation_priority = formation_priority
-
-	# If way out of formation, increase formation priority
-	if formation_distance > WingConstants.ENGAGE_FORMATION_PRIORITY_INCREASE_DISTANCE:
-		effective_formation_priority = min(1.0, formation_priority + 0.3)
-
-	# If target is very close, can reduce formation priority slightly
-	if target_distance < WingConstants.ENGAGE_TARGET_CLOSE_DISTANCE and formation_distance < WingConstants.ENGAGE_FORMATION_CLOSE_DISTANCE:
-		effective_formation_priority = max(0.3, formation_priority - 0.2)
-
-	# Calculate blended desired position
-	# High skill/priority: Stay closer to formation
-	# Low skill/priority: Chase target more independently
-	var attack_offset = to_target.normalized() * min(target_distance * 0.5, WingConstants.ENGAGE_ATTACK_OFFSET_MAX)
-	var blended_target = formation_pos.lerp(my_pos + attack_offset, 1.0 - effective_formation_priority)
-
-	var to_blended = blended_target - my_pos
-	var desired_heading = direction_to_heading(to_blended) if to_blended.length() > 10.0 else direction_to_heading(to_target)
-
-	# For targeting, face the actual target when close enough
-	if target_distance < WingConstants.ENGAGE_FACE_TARGET_DISTANCE and formation_distance < WingConstants.ENGAGE_FACE_TARGET_FORMATION_DISTANCE:
-		desired_heading = direction_to_heading(to_target)
-
-	# Speed control - blend between formation and combat throttle
-	var lead_velocity = lead_ship.get("velocity", Vector2.ZERO)
-	var my_velocity = ship_data.get("velocity", Vector2.ZERO)
-
-	# Use combat throttle as base, scaled by formation priority
-	var combat_throttle = calculate_intuitive_throttle(ship_data, target_distance, "combat")
-	var formation_throttle = calculate_intuitive_throttle(ship_data, formation_distance, "formation")
-	var throttle = lerp(combat_throttle, formation_throttle, effective_formation_priority)
-
-	var should_brake = false
-
-	# Match lead's general speed when in formation
-	if formation_distance < WingConstants.ENGAGE_SPEED_MATCH_FORMATION_DISTANCE:
-		var speed_diff = my_velocity.length() - lead_velocity.length()
-		if speed_diff > 30.0:
-			should_brake = true
-			throttle = 0.0
-		elif speed_diff > 10.0:
-			throttle = throttle * 0.5  # Reduce throttle to catch up with lead
-
-	# DART AND DASH: Course corrections
-	if my_velocity.length() > 40.0:
-		var current_heading = direction_to_heading(my_velocity)
-		var heading_diff = abs(angle_difference(current_heading, desired_heading))
-		var brake_threshold = lerp(WingConstants.ENGAGE_BRAKE_ANGLE_LOW_SKILL, WingConstants.ENGAGE_BRAKE_ANGLE_HIGH_SKILL, skill_factor)
-		if heading_diff > brake_threshold:
-			return create_braking_control(ship_data, desired_heading, target_distance)
-
-	return {
-		"desired_heading": desired_heading,
-		"throttle": throttle,
-		"thrust_active": throttle > 0.1,
-		"is_braking": should_brake,
-		"engagement_range": WingConstants.ENGAGE_ATTACK_OFFSET_MAX,
-		"current_distance": target_distance,
-		"formation_distance": formation_distance
 	}
 
 ## Helper: Calculate default wing position relative to lead
@@ -2359,7 +1717,7 @@ static func _apply_overspeed_decay(ship_data: Dictionary, velocity: Vector2, del
 	var decayed_excess: float = (speed - max_speed) * exp(-OVERSPEED_DECAY_RATE * delta)
 	return velocity / speed * (max_speed + decayed_excess)
 
-## TURN BLEED (energy-fight model, DOCS/plans/07) — swinging the nose costs
+## TURN BLEED (energy-fight model) — swinging the nose costs
 ## speed, proportional to how many radians were turned this frame. Per
 ## radian, a fraction `1 - exp(-turn_speed_bleed)` of speed is lost, so a
 ## 180° max-rate reversal at `turn_speed_bleed` 0.15 costs ~37% of current
@@ -2646,3 +2004,346 @@ static func update_all_obstacles(obstacles: Array, delta: float) -> Array:
 	return obstacles \
 		.filter(func(obstacle): return obstacle != null) \
 		.map(func(obstacle): return update_obstacle_movement(obstacle, delta))
+
+
+# ---------------------------------------------------------------------------
+# BLENDED STEERING CONVERTER  (live tactical steering path for "tactical" orders)
+# ---------------------------------------------------------------------------
+#
+# Reads the directive written by SteeringBlender onto ship_data.orders and
+# converts it into a pilot_control struct each frame from LIVE positions.
+#
+# Directive fields consumed:
+#   orders.goal_weights      : {pursue, keep_range, evade, formation}
+#   orders.preferred_range   : float
+#   orders.formation_slot    : Vector2  (formation goal target)
+#   orders.anchor_position   : Vector2  (hold/anchor goal target)
+#   orders.engagement_target : String   (ship_id; resolved by caller to target dict)
+
+## Deadband around preferred_range — within this fraction of preferred_range
+## the keep_range goal produces zero force (neither push nor pull).
+## Avoids oscillation when the ship is already near its desired orbit radius.
+const BLENDED_RANGE_DEADBAND_FRACTION := 0.15
+
+## Throttle used when closing distance at far range (facing move direction).
+const BLENDED_APPROACH_THROTTLE := 0.5
+
+## Throttle used while in close-range combat (facing target, using lateral thrust).
+const BLENDED_COMBAT_THROTTLE := 0.3
+
+## When the blended move vector is this short we treat it as "no meaningful
+## intent" and emit zero throttle rather than picking a random heading.
+const BLENDED_MOVE_MIN_LENGTH := 0.01
+
+## Convert a directive on ship_data.orders into a per-frame pilot_control struct.
+##
+## Parameters
+##   ship_data : Dictionary — full ship dict; orders.goal_weights etc. must be set
+##   target    : Dictionary — target ship_data (may be {} when no target)
+##   threats   : Array      — threat dicts; each must carry .position for nearest-threat calc
+##   delta     : float      — frame time (unused in geometry — kept for future speed hints)
+##
+## Returns
+##   {desired_heading, throttle, thrust_active, is_braking, lateral_thrust}
+##
+## This is the live steering path for ships carrying a "tactical" order.
+## Multiplier on combined_radii that defines the zone inside which separation
+## becomes active. 3.0 means a ship reacts when friendlies are within 3× the
+## summed hull sizes — roughly one ship-length of breathing room.
+const SEPARATION_RADIUS_FACTOR    := 3.0
+
+## Base weight of the separation goal in the blend.  At the edge of the
+## separation zone the goal is effectively zero; it ramps steeply to
+## SEPARATION_WEIGHT at contact (inverse-square curve).  Set high enough
+## that a single near-contact neighbor dominates a full formation+pursue
+## stack (0.7 + 0.8 = 1.5), but the curve fades quickly so ships can still
+## close to normal formation spacing without resistance.
+const SEPARATION_WEIGHT           := 5.0
+
+## Detection lookahead distance for obstacle avoidance in blended mode.
+## Ships start reacting to obstacles within this many pixels of their centre.
+const OBSTACLE_AVOID_MARGIN       := 200.0
+
+## Weight of the obstacle-avoidance goal when an obstacle is detected.
+## Lower than SEPARATION_WEIGHT (5.0) because obstacles don't move — a ship
+## steering away at moderate weight will clear them without jittering.
+const OBSTACLE_AVOID_WEIGHT       := 2.0
+
+static func calculate_blended_control(
+	ship_data: Dictionary,
+	target: Dictionary,
+	threats: Array,
+	nearby_ships: Array,
+	obstacles: Array,
+	_delta: float
+) -> Dictionary:
+	var orders: Dictionary  = ship_data.get("orders", {})
+	var weights: Dictionary = orders.get("goal_weights", {})
+	var preferred_range: float = orders.get("preferred_range", get_engagement_range(ship_data))
+
+	var w_pursue: float    = weights.get("pursue",     0.0)
+	var w_range: float     = weights.get("keep_range", 0.0)
+	var w_evade: float     = weights.get("evade",      0.0)
+	var w_form: float      = weights.get("formation",  0.0)
+
+	var my_pos: Vector2    = ship_data.get("position", Vector2.ZERO)
+	var has_target: bool   = not target.is_empty() and target.has("position")
+
+	# --- 1. Build unit desired-vector per goal ---
+
+	# pursue: toward target (zero when no target)
+	var goal_pursue: Vector2 = Vector2.ZERO
+	var dist_to_target: float = 0.0
+	if has_target:
+		var to_target: Vector2 = target.position - my_pos
+		dist_to_target = to_target.length()
+		if dist_to_target > BLENDED_MOVE_MIN_LENGTH:
+			goal_pursue = to_target.normalized()
+
+	# keep_range: radial in/out around preferred_range, deadband in the middle.
+	# Combined with pursue this yields orbit-at-range:
+	#   small preferred_range → constant inward push → brawl
+	#   large preferred_range → outward push when close → kite
+	var goal_keep_range: Vector2 = Vector2.ZERO
+	if has_target and dist_to_target > BLENDED_MOVE_MIN_LENGTH:
+		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
+		var radial_err: float = dist_to_target - preferred_range
+		if abs(radial_err) > deadband:
+			# Positive error → too far → move toward target (same direction as pursue)
+			# Negative error → too close → move away from target
+			var radial_dir: Vector2 = (target.position - my_pos).normalized()
+			goal_keep_range = radial_dir if radial_err > 0.0 else -radial_dir
+
+	# evade: away from nearest enemy threat
+	var goal_evade: Vector2 = Vector2.ZERO
+	if not threats.is_empty():
+		var nearest: Dictionary = _nearest_threat(my_pos, threats)
+		if nearest.has("position"):
+			var away: Vector2 = my_pos - nearest.position
+			if away.length() > BLENDED_MOVE_MIN_LENGTH:
+				goal_evade = away.normalized()
+
+	# separation: boids-style push away from nearby same-team ships.
+	# Inverse-square curve: rises steeply near hull-touch, fades at zone edge
+	# so ships form up normally at spacing > combined_radii but are strongly
+	# repelled when about to clip.
+	#
+	# Each neighbor contributes a push vector scaled by (strength * SEPARATION_WEIGHT).
+	# We accumulate WITHOUT normalizing so that N neighbors each push independently
+	# and the total magnitude grows with crowd density.
+	# separation_effective_weight is fixed at 1.0 because the scaling is already
+	# baked into goal_separation's magnitude.
+	var goal_separation: Vector2 = Vector2.ZERO
+	var separation_effective_weight: float = 1.0
+	var my_col_radius: float = ship_data.get("collision_radius", 15.0)
+	# Track the closest neighbor and how deep we are inside its safety margin
+	# so we can suppress convergence goals that would pull us closer.
+	var min_neighbor_dist: float = INF
+	var min_neighbor_combined_radii: float = 0.0
+	for other in nearby_ships:
+		if other == null or other.get("ship_id","") == ship_data.get("ship_id",""):
+			continue
+		var to_other: Vector2 = other.get("position", Vector2.ZERO) - my_pos
+		var dist: float = to_other.length()
+		var other_col_radius: float = other.get("collision_radius", my_col_radius)
+		var combined_radii: float = my_col_radius + other_col_radius
+		var sep_radius: float = combined_radii * SEPARATION_RADIUS_FACTOR
+		if dist < min_neighbor_dist:
+			min_neighbor_dist = dist
+			min_neighbor_combined_radii = combined_radii
+		if dist < sep_radius and dist > BLENDED_MOVE_MIN_LENGTH:
+			# t = 0 at zone edge, 1 at contact. Squared gives inverse-square curve.
+			var t: float = 1.0 - (dist / sep_radius)
+			var strength: float = t * t * SEPARATION_WEIGHT
+			goal_separation -= to_other.normalized() * strength
+	# No normalize: accumulated magnitude is the influence signal.
+
+	# Convergence-goal suppression: when a neighbor is inside the SEPARATION zone
+	# (closer than combined_radii × SEPARATION_RADIUS_FACTOR), scale down any goals
+	# that would pull this ship TOWARD that neighbor (formation, pursue, keep_range
+	# if pointing inward).  This prevents the vector-cancellation problem where
+	# symmetric piles zero out separation and formation wins by default.
+	# suppress_t = 0 at zone edge → 1 at contact; convergence goals are scaled by (1 - suppress_t).
+	var convergence_suppress: float = 0.0
+	if min_neighbor_dist < INF:
+		var inner_sep_radius: float = min_neighbor_combined_radii * SEPARATION_RADIUS_FACTOR
+		if min_neighbor_dist < inner_sep_radius:
+			var t: float = 1.0 - (min_neighbor_dist / inner_sep_radius)
+			convergence_suppress = t * t   # 0 at edge, 1 at contact — same curve as separation
+
+	# Apply suppression: scale formation and pursuit down as neighbors get close.
+	# At contact (suppress=1) formation is fully zeroed; at zone edge (suppress=0) it's unchanged.
+	var effective_w_form: float   = w_form   * (1.0 - convergence_suppress)
+	var effective_w_pursue: float = w_pursue * (1.0 - convergence_suppress)
+	var effective_w_range: float  = w_range  * (1.0 - convergence_suppress)
+
+	# formation: toward formation_slot, which is an ABSOLUTE world position
+	# stamped by FormationSystem each frame (not an offset from anchor_position).
+	var goal_formation: Vector2 = Vector2.ZERO
+	var slot: Vector2    = orders.get("formation_slot",  Vector2.ZERO)
+	if effective_w_form > 0.0:
+		var to_slot: Vector2 = slot - my_pos
+		if to_slot.length() > BLENDED_MOVE_MIN_LENGTH:
+			goal_formation = to_slot.normalized()
+
+	# obstacle avoidance: steer away from blocking obstacles within lookahead margin.
+	# Works identically to separation but uses the obstacle's radius for the zone.
+	var goal_obstacle: Vector2 = Vector2.ZERO
+	var obstacle_effective_weight: float = 0.0
+	for obs in obstacles:
+		if obs == null or obs.get("status","operational") == "destroyed":
+			continue
+		if not obs.get("blocks_movement", true):
+			continue
+		var to_obs: Vector2 = obs.get("position", Vector2.ZERO) - my_pos
+		var dist: float = to_obs.length()
+		var combined: float = my_col_radius + obs.get("radius", 0.0)
+		var detect_dist: float = combined + OBSTACLE_AVOID_MARGIN
+		if dist < detect_dist and dist > BLENDED_MOVE_MIN_LENGTH:
+			var strength: float = 1.0 - ((dist - combined) / OBSTACLE_AVOID_MARGIN)
+			strength = clampf(strength, 0.0, 1.0)
+			goal_obstacle -= to_obs.normalized() * strength
+			obstacle_effective_weight += strength * OBSTACLE_AVOID_WEIGHT
+
+	if goal_obstacle.length() > BLENDED_MOVE_MIN_LENGTH:
+		goal_obstacle = goal_obstacle.normalized()
+
+	# --- 2. Blend ---
+	# Separation uses its accumulated magnitude directly (weight=1.0).
+	# Convergence goals (pursue, keep_range, formation) use suppressed weights
+	# so that proximity pressure fades them out as neighbors approach hull-touch.
+	var move: Vector2 = (
+		goal_pursue     * effective_w_pursue +
+		goal_keep_range * effective_w_range  +
+		goal_evade      * w_evade            +
+		goal_formation  * effective_w_form   +
+		goal_separation * separation_effective_weight +
+		goal_obstacle   * obstacle_effective_weight
+	)
+
+	# Normalize to a unit direction; if effectively zero, hold current heading.
+	if move.length() > BLENDED_MOVE_MIN_LENGTH:
+		move = move.normalized()
+	else:
+		# No intent: hold heading, no thrust
+		return {
+			"desired_heading": ship_data.get("rotation", 0.0),
+			"throttle": 0.0,
+			"thrust_active": false,
+			"is_braking": false,
+			"lateral_thrust": 0.0,
+		}
+
+	# --- 3. Facing rule ---
+	#
+	# facing_mode decouples WHERE the ship POINTS from WHERE it MOVES.
+	# Movement (throttle/lateral) always comes from the blended goal vector above.
+	#
+	# "auto"      — close → face target; far → face move direction.
+	# "nose_on"   — always face the target (anchor/brawler/screen: bow armor forward).
+	# "broadside" — always face perpendicular to the target bearing (artillery orbit).
+	#
+	# When no target exists, all modes fall back to facing the move direction.
+
+	var facing_mode: String = ship_data.get("orders", {}).get("facing_mode", "auto")
+
+	var desired_heading: float
+	var throttle: float
+	var is_braking: bool = false
+	var lateral_thrust: float = 0.0
+
+	var at_close_range: bool = has_target and dist_to_target < LATERAL_THRUST_RANGE
+
+	if facing_mode == "broadside" and has_target:
+		# Artillery orbit: face perpendicular to the target bearing so side
+		# batteries bear. Movement (throttle/lateral) still comes from blended
+		# goals, so the ship orbits at preferred_range with its side to the enemy.
+		var current_rot: float = ship_data.get("rotation", 0.0)
+		desired_heading = _broadside_heading_toward(my_pos, target.position, current_rot)
+		# Express the blended move as lateral + throttle relative to the broadside facing.
+		var facing_vec: Vector2 = get_visual_forward(desired_heading)
+		var right_vec: Vector2  = Vector2(facing_vec.y, -facing_vec.x)
+		lateral_thrust = clampf(move.dot(right_vec), -1.0, 1.0)
+		# Forward component drives range-keeping (nose is perpendicular, so
+		# forward motion is tangential — helps the orbit, not a charge).
+		var fwd_component: float = move.dot(facing_vec)
+		throttle = clampf(fwd_component, 0.0, 1.0)
+		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
+		if has_target and dist_to_target < preferred_range - deadband:
+			is_braking = true
+			throttle   = 0.0
+
+	elif facing_mode == "nose_on" and has_target:
+		# Anchor/brawler/screen: always point bow at the target regardless of range.
+		var to_target: Vector2 = target.position - my_pos
+		desired_heading = direction_to_heading(to_target.normalized())
+		throttle = BLENDED_COMBAT_THROTTLE
+		var facing_vec: Vector2 = get_visual_forward(desired_heading)
+		var right_vec: Vector2  = Vector2(facing_vec.y, -facing_vec.x)
+		lateral_thrust = clampf(move.dot(right_vec), -1.0, 1.0)
+		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
+		if dist_to_target < preferred_range - deadband:
+			is_braking = true
+			throttle   = 0.0
+
+	elif at_close_range:
+		# "auto" close-range: face the target, use lateral thrust for positioning.
+		var to_target: Vector2 = target.position - my_pos
+		desired_heading = direction_to_heading(to_target.normalized())
+		throttle = BLENDED_COMBAT_THROTTLE
+
+		# Project move direction onto the lateral axis (perpendicular to facing).
+		var facing: Vector2 = get_visual_forward(desired_heading)
+		var right: Vector2  = Vector2(facing.y, -facing.x)  # 90° clockwise = strafe right
+		var lateral_component: float = move.dot(right)
+		lateral_thrust = clampf(lateral_component, -1.0, 1.0)
+
+		# Brake if inside preferred_range — keep_range is pushing us out but we
+		# overshot; the physical brake stops the inward drift.
+		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
+		if has_target and dist_to_target < preferred_range - deadband:
+			is_braking = true
+			throttle = 0.0
+
+	else:
+		# "auto" far-range (or no target): face the blended move direction, main throttle.
+		desired_heading = direction_to_heading(move)
+		throttle = BLENDED_APPROACH_THROTTLE
+		lateral_thrust = 0.0
+
+	return {
+		"desired_heading": desired_heading,
+		"throttle":        throttle,
+		"thrust_active":   throttle > 0.1,
+		"is_braking":      is_braking,
+		"lateral_thrust":  lateral_thrust,
+	}
+
+
+## Collect enemy ship positions as lightweight threat dicts for calculate_blended_control.
+## Each entry carries .position; target_id is omitted because the is-targeted check
+## inside SteeringBlender uses the threats built at decision time, not this per-frame list.
+## This list only drives the evade-direction goal in the converter.
+static func _gather_enemy_positions(ship_data: Dictionary, all_ships: Array) -> Array:
+	var my_team: int = ship_data.get("team", -1)
+	var result: Array = []
+	for s in all_ships:
+		if s.get("team", -1) == my_team: continue
+		if s.get("status", "") != "operational": continue
+		result.append({ "position": s.get("position", Vector2.ZERO) })
+	return result
+
+
+## Return the threat dict whose position is closest to pos.
+## Skips threats without a position key.
+static func _nearest_threat(pos: Vector2, threats: Array) -> Dictionary:
+	var nearest: Dictionary = {}
+	var best_dist: float = INF
+	for t in threats:
+		if not t.has("position"):
+			continue
+		var d: float = pos.distance_to(t.position)
+		if d < best_dist:
+			best_dist = d
+			nearest = t
+	return nearest

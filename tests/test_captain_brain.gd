@@ -1,6 +1,10 @@
 extends GutTest
 
 ## Tests for CaptainBrain GOAP planner — behavior only, no specific data values.
+##
+## Command orders (engage/withdraw/hold) are BLENDED —
+## they set ship.orders.posture / ship.orders.focus_target and let CaptainBrain
+## run normally, rather than short-circuiting into discrete sub-orders.
 
 const GAME_TIME := 100.0
 const HIGH_SKILL := 1.0
@@ -11,29 +15,42 @@ func _make_captain(skill: float = HIGH_SKILL, ship_id: String = "ship_1") -> Dic
 	return TestFactories.make_crew_captain(skill, ship_id)
 
 
-# SQUADRON-LEADER ORDER REFLEX
+# BLENDED COMMAND ORDER ABSORPTION (replaces old short-circuit tests)
 
-func test_squadron_leader_order_executes_before_brain():
+func test_engage_order_absorbed_and_clears_received():
+	## Engage order is ABSORBED (not short-circuited). orders.received
+	## must be null after the call; ship.orders.focus_target must be set.
 	var captain := _make_captain()
 	captain.orders.received = {"type": "engage", "subtype": "pursue", "target_id": "enemy_1"}
 
 	var result := CaptainAI.make_decision(captain, GAME_TIME)
 
-	assert_true(result.has("decision"), "Order should produce a decision")
-	assert_eq(result.decision.get("subtype", ""), "engage",
-		"Order should be reflected in the decision subtype")
-	assert_null(result.crew_data.orders.received, "Received order should be cleared")
+	assert_true(result.has("decision"), "Absorbed order must still produce a decision (from CaptainBrain)")
+	assert_null(result.crew_data.orders.get("received"),
+		"orders.received must be null after blended absorption")
+	assert_eq(result.crew_data.orders.get("focus_target", ""), "enemy_1",
+		"Engage order must stamp ship.orders.focus_target with the target_id")
 
 
-func test_order_broken_down_for_subordinates():
+func test_engage_order_does_not_produce_discrete_pursue_subtype():
+	## The old short-circuit emitted subtype "engage" (discrete). The new path
+	## lets CaptainBrain run — subtype will be whatever the brain picks, never
+	## the raw order type echoed as a discrete maneuver.
 	var captain := _make_captain()
 	captain.command_chain.subordinates = ["pilot_x", "gunner_x"]
 	captain.orders.received = {"type": "engage", "subtype": "pursue", "target_id": "t1"}
 
 	var result := CaptainAI.make_decision(captain, GAME_TIME)
 
-	assert_false(result.crew_data.orders.issued.is_empty(),
-		"Squadron-leader order should be broken down into subordinate orders")
+	# orders.received was absorbed — no discrete breakdown should have run.
+	assert_null(result.crew_data.orders.get("received"),
+		"orders.received must be cleared by the absorber")
+	# The issued orders from CaptainBrain may be empty (no subordinates in bare
+	# captain fixture), but there must NOT be discrete pursue orders per old path.
+	var issued: Array = result.crew_data.orders.get("issued", [])
+	var pursue_orders := issued.filter(func(o): return o.get("subtype","") == "pursue")
+	assert_eq(pursue_orders.size(), 0,
+		"Absorbed engage order must NOT produce discrete 'pursue' subordinate orders")
 
 
 # DECISIONS ALWAYS PAIR WITH ORDERS

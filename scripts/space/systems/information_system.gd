@@ -121,12 +121,12 @@ static func create_entity_info(entity: Dictionary, entity_type: String) -> Dicti
 ## Identify and prioritize threats. Awareness gates how many threats appear
 ## on the crew's list at all; tactics shapes whether they are *correctly*
 ## ordered by urgency (high-tactics: clean ranking; low-tactics: noisy).
-static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, _all_ships: Array) -> Array:
+static func identify_threats(visible_entities: Array, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array) -> Array:
 	var enemies = visible_entities.filter(func(e): return e.team != own_ship.team)
 
 	# All enemies are potential threats (weapons can damage any target, just at reduced effectiveness)
 	var scored: Array = enemies \
-		.map(func(e): return add_threat_priority(e, own_ship, crew_data)) \
+		.map(func(e): return add_threat_priority(e, own_ship, crew_data, all_ships)) \
 		.filter(func(e): return e._threat_priority > 0.0)
 
 	return prioritize_threats(scored, crew_data, own_ship)
@@ -201,14 +201,14 @@ static func _compute_urgency(threat: Dictionary, own_ship: Dictionary) -> float:
 	return (closing_speed / time_to_intercept) * weapon_threat * aspect_bias
 
 ## Calculate threat priority for an entity
-static func add_threat_priority(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> Dictionary:
-	var priority = calculate_threat_priority(entity, own_ship, crew_data)
+static func add_threat_priority(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array = []) -> Dictionary:
+	var priority = calculate_threat_priority(entity, own_ship, crew_data, all_ships)
 	var result = entity.duplicate(true)
 	result._threat_priority = priority
 	return result
 
 ## Calculate threat priority score
-static func calculate_threat_priority(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> float:
+static func calculate_threat_priority(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array = []) -> float:
 	var priority = 0.0
 
 	# Distance factor (closer = higher threat)
@@ -220,6 +220,15 @@ static func calculate_threat_priority(entity: Dictionary, own_ship: Dictionary, 
 		priority += calculate_projectile_threat(entity, own_ship)
 	elif entity.get("type") == "ship":
 		priority += calculate_ship_threat(entity)
+
+	# Tactics multiplier: doctrine shapes which enemies rank highest (applied
+	# before skill-gated noise so noise still perturbs the doctrine-weighted order).
+	# Thread focus_assignment + concentration so 3b focus-fire boost is applied here.
+	var tactics: Dictionary = crew_data.get("tactics", {})
+	if not tactics.is_empty():
+		var focus_assignment: String = crew_data.get("focus_assignment", "")
+		var concentration: float = float(tactics.get("concentration", 0.0))
+		priority *= targeting_weight(entity, own_ship, tactics, all_ships, focus_assignment, concentration)
 
 	return priority
 
@@ -273,7 +282,7 @@ static func identify_opportunities(visible_entities: Array, own_ship: Dictionary
 	# All enemy ships are potential opportunities (can damage any target at some effectiveness)
 	# Prioritization of good targets happens at the weapon system level
 	var opportunities = enemies \
-		.map(func(e): return add_opportunity_score(e, own_ship, crew_data)) \
+		.map(func(e): return add_opportunity_score(e, own_ship, crew_data, all_ships)) \
 		.filter(func(e): return e._opportunity_score > 0.0)
 	opportunities.sort_custom(func(a, b): return a._opportunity_score > b._opportunity_score)
 
@@ -283,14 +292,14 @@ static func identify_opportunities(visible_entities: Array, own_ship: Dictionary
 	return opportunities.slice(0, min(max_opportunities, opportunities.size()))
 
 ## Add opportunity score to entity
-static func add_opportunity_score(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> Dictionary:
-	var score = calculate_opportunity_score(entity, own_ship, crew_data)
+static func add_opportunity_score(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array = []) -> Dictionary:
+	var score = calculate_opportunity_score(entity, own_ship, crew_data, all_ships)
 	var result = entity.duplicate(true)
 	result._opportunity_score = score
 	return result
 
 ## Calculate opportunity score (good targets)
-static func calculate_opportunity_score(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary) -> float:
+static func calculate_opportunity_score(entity: Dictionary, own_ship: Dictionary, crew_data: Dictionary, all_ships: Array = []) -> float:
 	if entity.get("type") != "ship":
 		return 0.0
 
@@ -306,7 +315,195 @@ static func calculate_opportunity_score(entity: Dictionary, own_ship: Dictionary
 	var distance = own_ship.position.distance_to(entity.position)
 	score += (1.0 - (distance / crew_data.stats.awareness_range)) * 30.0
 
+	# Tactics multiplier: doctrine shapes which enemies rank highest (applied
+	# before awareness cap so doctrine is visible across the whole ranked set).
+	# Thread focus_assignment + concentration so 3b focus-fire boost is applied here.
+	var tactics: Dictionary = crew_data.get("tactics", {})
+	if not tactics.is_empty():
+		var focus_assignment: String = crew_data.get("focus_assignment", "")
+		var concentration: float = float(tactics.get("concentration", 0.0))
+		score *= targeting_weight(entity, own_ship, tactics, all_ships, focus_assignment, concentration)
+
 	return score
+
+# ============================================================================
+# TACTICS-DRIVEN TARGETING WEIGHT
+# ============================================================================
+
+## Boost magnitudes for priority dials. Named constants so tuning is one-place.
+## A multiplier of 1.0 = neutral (no change). Values > 1.0 push that class up.
+const PRIORITY_BOOST          := 2.5  # Preferred class gets this multiplier
+const PRIORITY_PENALTY        := 0.6  # Non-preferred class gets this multiplier
+const SECTOR_BOOST            := 2.0  # Enemy in the focused sector gets this multiplier
+const NEAREST_DISTANCE_SCALE  := 2000.0  # Reference distance for nearest priority (units)
+
+## Maximum weight multiplier applied to the focus-designated target.
+## At concentration=1.0 the focused enemy gets this boost; at concentration=0.0
+## the boost is 1.0 (neutral), so low-concentration leaders produce no effect.
+const FOCUS_MAX_BOOST         := 3.0
+
+## Half-width of the "center" lateral sector (mirrors TacticsTelemetry).
+const SECTOR_CENTER_HALF_WIDTH := 100.0
+
+## Ship types that count as "capital-class" for priority matching.
+const CAPITAL_CLASS_TYPES: Array = ["capital", "corvette"]
+
+## Ship types that count as "fighter-class" for priority matching.
+const FIGHTER_CLASS_TYPES: Array = ["fighter", "heavy_fighter", "torpedo_boat"]
+
+## Pure function: returns a multiplier (1.0 = neutral) that scales a raw
+## threat/opportunity score according to the crew's resolved tactics dict.
+##
+## entity           — entity_info snapshot (has ship_type, position, id)
+## own_ship         — the observing ship (position, team)
+## tactics          — crew_data["tactics"] (resolved at spawn by TacticsSystem.compile_player_tactics)
+## all_ships        — full fleet snapshot for centroid computation; may be []
+## focus_assignment — ship_id of the designated focus target (crew["focus_assignment"]);
+##                    "" means no active focus (3a behaviour, no change)
+## concentration    — crew tactics concentration dial (0..1); scales the focus boost
+##
+## Application order inside priority/opportunity scorers:
+##   base_score  →  × targeting_weight  →  skill-gated noise in prioritize_threats
+## So tactics shapes the pre-noise order; skill still adds mis-prioritization for rookies.
+static func targeting_weight(
+	entity: Dictionary,
+	own_ship: Dictionary,
+	tactics: Dictionary,
+	all_ships: Array,
+	focus_assignment: String = "",
+	concentration: float = 0.0
+) -> float:
+	var weight := 1.0
+
+	# --- Priority dial ---
+	var priority: String = tactics.get("priority", "nearest")
+	var ship_type: String = entity.get("ship_type", "")
+
+	match priority:
+		"capitals_first":
+			# Boost capital/corvette; penalise fighters so doctrine is visible
+			# even when a fighter happens to be closer.
+			if ship_type in CAPITAL_CLASS_TYPES:
+				weight *= PRIORITY_BOOST
+			elif ship_type in FIGHTER_CLASS_TYPES:
+				weight *= PRIORITY_PENALTY
+
+		"fighters_first":
+			if ship_type in FIGHTER_CLASS_TYPES:
+				weight *= PRIORITY_BOOST
+			elif ship_type in CAPITAL_CLASS_TYPES:
+				weight *= PRIORITY_PENALTY
+
+		"weakest_first":
+			# Prefer low-health targets. We read current/max armor directly from
+			# the original ship dict (health not copied into entity_info snapshot).
+			var health_ratio := _entity_health_ratio(entity, all_ships)
+			# health_ratio 0→1: invert so weak=high weight, then scale into boost range.
+			# At ratio 0.0: weight = PRIORITY_BOOST; at 1.0: weight = PRIORITY_PENALTY.
+			weight *= lerp(PRIORITY_BOOST, PRIORITY_PENALTY, health_ratio)
+
+		"command_first":
+			# Capitals are always command targets. Ships carrying a command hat
+			# (commander / squadron_leader role tag) would also qualify, but that
+			# requires scanning crew which is not available at this scope — we
+			# treat all capital-class ships as command targets (simple, correct
+			# for the vast majority of battles where the capital IS the command ship).
+			if ship_type in CAPITAL_CLASS_TYPES:
+				weight *= PRIORITY_BOOST
+			elif ship_type in FIGHTER_CLASS_TYPES:
+				weight *= PRIORITY_PENALTY
+
+		"nearest":
+			# Closer = higher weight. Normalised so a ship at distance 0 gets
+			# PRIORITY_BOOST and one at NEAREST_DISTANCE_SCALE gets PRIORITY_PENALTY.
+			var dist: float = own_ship.get("position", Vector2.ZERO).distance_to(
+				entity.get("position", Vector2.ZERO))
+			var t: float = clamp(dist / NEAREST_DISTANCE_SCALE, 0.0, 1.0)
+			weight *= lerp(PRIORITY_BOOST, PRIORITY_PENALTY, t)
+
+	# --- Sector-focus dial ---
+	var sector_focus: String = tactics.get("sector_focus", "none")
+	if sector_focus != "none":
+		var lateral_sector := _lateral_sector(entity, own_ship, all_ships)
+		if lateral_sector == sector_focus:
+			weight *= SECTOR_BOOST
+
+	# --- Focus-fire boost ---
+	# When the leader has designated a focus target, multiply its weight by
+	# lerp(1.0, FOCUS_MAX_BOOST, concentration). crew with no focus_assignment
+	# or concentration=0 are unaffected (multiplier stays 1.0 exactly).
+	if focus_assignment != "" and entity.get("id", "") == focus_assignment:
+		weight *= lerp(1.0, FOCUS_MAX_BOOST, clampf(concentration, 0.0, 1.0))
+
+	return weight
+
+
+## Compute the entity's lateral sector ("left"/"center"/"right") relative to
+## the own-team-centroid → enemy-centroid axis (same geometry as TacticsTelemetry).
+## Falls back to "center" when the axis is degenerate or all_ships is empty.
+static func _lateral_sector(entity: Dictionary, own_ship: Dictionary, all_ships: Array) -> String:
+	if all_ships.is_empty():
+		return "center"
+
+	var own_team: int = own_ship.get("team", 0)
+	# Own-team centroid
+	var own_sum := Vector2.ZERO
+	var own_count := 0
+	for s in all_ships:
+		if s.get("team", -1) == own_team and s.get("status", "") not in ["destroyed", "fled"]:
+			own_sum += s.position
+			own_count += 1
+	if own_count == 0:
+		return "center"
+	var own_centroid := own_sum / float(own_count)
+
+	# Enemy centroid (anchor)
+	var enemy_sum := Vector2.ZERO
+	var enemy_count := 0
+	for s in all_ships:
+		if s.get("team", -1) != own_team and s.get("status", "") not in ["destroyed", "fled"]:
+			enemy_sum += s.position
+			enemy_count += 1
+	if enemy_count == 0:
+		return "center"
+	var enemy_centroid := enemy_sum / float(enemy_count)
+
+	var axis := enemy_centroid - own_centroid
+	if axis.length_squared() < 0.001:
+		return "center"
+
+	# Rightward direction from own team's perspective facing the enemy.
+	var right_dir := Vector2(-axis.y, axis.x).normalized()
+	var offset: Vector2 = entity.get("position", Vector2.ZERO) - own_centroid
+	var lateral: float = offset.dot(right_dir)
+
+	if lateral > SECTOR_CENTER_HALF_WIDTH:
+		return "right"
+	elif lateral < -SECTOR_CENTER_HALF_WIDTH:
+		return "left"
+	return "center"
+
+
+## Returns a 0..1 health ratio for the entity identified by entity_info.
+## Reads current_armor/max_armor from armor_sections in the original ship dict.
+## Falls back to 1.0 (full health) when the ship cannot be found or has no
+## armor sections — so an unarmored ship is not mistakenly prioritised as weak.
+static func _entity_health_ratio(entity_info: Dictionary, all_ships: Array) -> float:
+	var entity_id: String = entity_info.get("id", "")
+	for ship in all_ships:
+		if ship.get("ship_id", "") != entity_id:
+			continue
+		var sections: Array = ship.get("armor_sections", [])
+		if sections.is_empty():
+			return 1.0  # No armor data → treat as full health
+		var current := 0.0
+		var maximum := 0.0
+		for section in sections:
+			current += float(section.get("current_armor", 0))
+			maximum += float(section.get("max_armor", 0))
+		return current / maximum if maximum > 0.0 else 1.0
+	return 1.0  # Ship not found → neutral
+
 
 # ============================================================================
 # AWARENESS UPDATE

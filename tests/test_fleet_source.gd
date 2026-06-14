@@ -9,6 +9,7 @@ extends GutTest
 
 const TEST_TEAM: int = 9
 const SAVE_PATH: String = "user://skirmish_fleet_team_9.json"
+const PRESET_PATH: String = "user://skirmish_fleet_preset_team_9.json"
 
 # Saved RoguelikeRun state for restoration after each test.
 var _saved_fleet_hulls: Array = []
@@ -26,6 +27,7 @@ var _saved_campaign: Dictionary = {}
 
 func before_each() -> void:
 	_delete_if_exists(SAVE_PATH)
+	_delete_if_exists(PRESET_PATH)
 	_saved_fleet_hulls = RoguelikeRun.fleet_hulls.duplicate(true)
 	_saved_doctrine = RoguelikeRun.doctrine.duplicate(true)
 	_saved_enemy_fleet = RoguelikeRun.enemy_fleet.duplicate(true)
@@ -41,6 +43,7 @@ func before_each() -> void:
 
 func after_each() -> void:
 	_delete_if_exists(SAVE_PATH)
+	_delete_if_exists(PRESET_PATH)
 	RoguelikeRun.fleet_hulls = _saved_fleet_hulls
 	RoguelikeRun.doctrine = _saved_doctrine
 	RoguelikeRun.enemy_fleet = _saved_enemy_fleet
@@ -265,6 +268,48 @@ func test_skirmish_commit_persists_and_reload_reflects_changes() -> void:
 		"tactics.mission persisted and reloaded")
 
 
+func test_skirmish_set_fleet_preset_round_trips() -> void:
+	"""set_fleet_preset is read back by get_fleet_preset on the same source."""
+	var src: SkirmishSource = SkirmishSource.new(TEST_TEAM)
+	src.set_fleet_preset("hammer_and_anvil")
+	assert_eq(src.get_fleet_preset(), "hammer_and_anvil", "fleet preset reads back")
+
+
+func test_skirmish_set_command_role_persists_on_hull() -> void:
+	"""set_command_role writes the command_role mark onto the target hull."""
+	var src: SkirmishSource = SkirmishSource.new(TEST_TEAM)
+	var hull_id: String = str(src.ships()[0].get("hull_id", ""))
+	src.set_command_role(hull_id, "commander")
+	assert_eq(str(src.ships()[0].get("command_role", "")), "commander",
+		"command_role mark set on hull")
+
+
+func test_skirmish_fleet_preset_and_role_persist_through_commit_reload() -> void:
+	"""commit() persists fleet preset + per-hull role/overrides; a fresh source reloads them."""
+	var src: SkirmishSource = SkirmishSource.new(TEST_TEAM)
+	var hull_id: String = str(src.ships()[0].get("hull_id", ""))
+	src.set_fleet_preset("hammer_and_anvil")
+	src.set_tactics(hull_id, {
+		"mission": "free", "mission_params": {},
+		"role": "artillery",
+		"overrides": {"mentality": "all_out", "engagement_range": ""},
+	})
+	src.commit()
+
+	var src2: SkirmishSource = SkirmishSource.new(TEST_TEAM)
+	assert_eq(src2.get_fleet_preset(), "hammer_and_anvil", "fleet preset persisted + reloaded")
+	var reloaded: Dictionary = {}
+	for h in src2.ships():
+		if str(h.get("hull_id", "")) == hull_id:
+			reloaded = h
+	assert_eq(str(reloaded.get("tactics", {}).get("role", "")), "artillery",
+		"per-hull role persisted + reloaded")
+	assert_eq(
+		str(reloaded.get("tactics", {}).get("overrides", {}).get("mentality", "")),
+		"all_out",
+		"per-hull mentality override persisted + reloaded")
+
+
 # ============================================================
 # RunSource contract tests (over a live RoguelikeRun)
 # ============================================================
@@ -338,6 +383,26 @@ func test_run_source_set_tactics_writes_to_hull() -> void:
 		str(RoguelikeRun.hull_by_id(hull_id).get("tactics", {}).get("mission", "")),
 		"intercept",
 		"tactics written to RoguelikeRun hull")
+
+
+func test_run_source_set_fleet_preset_stored_on_run_tactics() -> void:
+	"""RunSource.set_fleet_preset stores the id on RoguelikeRun.tactics["preset"] and reads back."""
+	RoguelikeRun.start_run(_run_counts())
+	var src: RunSource = RunSource.new()
+	src.set_fleet_preset("hammer_and_anvil")
+	assert_eq(str(RoguelikeRun.tactics.get("preset", "")), "hammer_and_anvil",
+		"preset stored on run tactics")
+	assert_eq(src.get_fleet_preset(), "hammer_and_anvil", "get_fleet_preset reads it back")
+
+
+func test_run_source_set_command_role_writes_to_hull() -> void:
+	"""RunSource.set_command_role marks the hull in the run fleet."""
+	RoguelikeRun.start_run(_run_counts())
+	var src: RunSource = RunSource.new()
+	var hull_id: String = str(src.ships()[0].get("hull_id", ""))
+	src.set_command_role(hull_id, "squadron_leader")
+	assert_eq(str(RoguelikeRun.hull_by_id(hull_id).get("command_role", "")), "squadron_leader",
+		"command_role written to run hull")
 
 
 func test_run_source_commit_is_noop() -> void:

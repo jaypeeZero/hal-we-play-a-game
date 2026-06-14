@@ -249,9 +249,12 @@ func find_component(ship: Dictionary, component_id: String) -> Dictionary:
 # WEAPON MOUNT DESTRUCTION
 # ============================================================================
 
-## A real ship instance carries a synthesized destroyable mount per weapon.
-func _fighter_instance() -> Dictionary:
-	return ShipData.create_ship_instance("fighter", 0, Vector2.ZERO)
+## Weapon mounts are a LARGE-SHIP feature: corvette/capital guns sit in
+## destroyable turrets. A large-ship instance carries one synthesized mount per
+## weapon. (Fighter-class guns are integral and have no mount — see the
+## fighter-rule tests below.)
+func _large_ship_instance() -> Dictionary:
+	return ShipData.create_ship_instance("corvette", 0, Vector2.ZERO)
 
 func _set_mounts(ship: Dictionary, destroyed: bool) -> void:
 	for component in ship.internals:
@@ -260,16 +263,16 @@ func _set_mounts(ship: Dictionary, destroyed: bool) -> void:
 			component.current_health = 0 if destroyed else component.max_health
 
 func test_destroyed_mount_marks_its_weapon_destroyed():
-	var ship = _fighter_instance()
+	var ship = _large_ship_instance()
 	_set_mounts(ship, true)
 
 	var updated = DamageResolver.recompute_stats_from_components(ship)
 
 	assert_eq(updated.weapons[0].get("status", ""), "destroyed",
-		"Destroying a weapon's mount should mark the weapon destroyed")
+		"Destroying a turret mount should mark its weapon destroyed")
 
 func test_repairing_mount_restores_its_weapon():
-	var ship = _fighter_instance()
+	var ship = _large_ship_instance()
 	_set_mounts(ship, true)
 	ship = DamageResolver.recompute_stats_from_components(ship)
 	assert_eq(ship.weapons[0].get("status", ""), "destroyed", "precondition: weapon is down")
@@ -281,7 +284,7 @@ func test_repairing_mount_restores_its_weapon():
 		"Repairing the mount should bring its weapon back online")
 
 func test_intact_mount_keeps_weapon_operational():
-	var ship = _fighter_instance()
+	var ship = _large_ship_instance()
 
 	var updated = DamageResolver.recompute_stats_from_components(ship)
 
@@ -289,11 +292,33 @@ func test_intact_mount_keeps_weapon_operational():
 		"A weapon with an intact mount stays operational")
 
 # ============================================================================
+# FIGHTER RULE: integral guns — no destroyable weapon mounts
+# ============================================================================
+
+func test_fighter_has_no_weapon_mounts():
+	var fighter = ShipData.create_ship_instance("fighter", 0, Vector2.ZERO)
+	var mounts = fighter.internals.filter(
+		func(c): return c.get("type", "") == "weapon_mount")
+	assert_eq(mounts.size(), 0,
+		"Fighter-class guns are integral — they get no destroyable weapon mounts")
+
+func test_fighter_weapon_survives_total_internal_loss():
+	var fighter = ShipData.create_ship_instance("fighter", 0, Vector2.ZERO)
+	# Destroy every internal the fighter has (engines) — there is no gun mount.
+	for component in fighter.internals:
+		component.status = "destroyed"
+
+	var updated = DamageResolver.recompute_stats_from_components(fighter)
+
+	assert_ne(updated.weapons[0].get("status", ""), "destroyed",
+		"A fighter's gun is never knocked out on its own — it has no mount to lose")
+
+# ============================================================================
 # SHIP DEATH WITH WEAPON MOUNTS (decided: mounts count toward death)
 # ============================================================================
 
 func test_ship_dies_when_all_internals_including_mounts_destroyed():
-	var ship = _fighter_instance()
+	var ship = _large_ship_instance()
 	for component in ship.internals:
 		component.status = "destroyed"
 
@@ -301,7 +326,7 @@ func test_ship_dies_when_all_internals_including_mounts_destroyed():
 		"A ship is destroyed once every internal — engines and gun mounts — is gone")
 
 func test_ship_survives_engine_loss_while_mounts_intact():
-	var ship = _fighter_instance()
+	var ship = _large_ship_instance()
 	for component in ship.internals:
 		if component.get("type", "") == "engine":
 			component.status = "destroyed"

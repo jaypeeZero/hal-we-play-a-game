@@ -77,6 +77,17 @@ var _crew_mailboxes: Dictionary = {}  # crew_id -> Array[event] for the schedule
 var _crew_index: Dictionary = {}  # crew_id -> crew_data (O(1) lookup)
 const ENABLE_CREW_AI = true  # Re-enabled with proper event architecture
 
+## DEV HOOK — per-team tactics presets for non-roguelike launches.
+## Gives team 0 alpha_strike (knife-range brawl) and team 1 phalanx (standoff kite)
+## so a plain `godot scenes/space_battle.tscn` visibly shows contrasting tactics.
+## A future pre-battle UI will supersede this once player-facing setup lands.
+## To change the presets, edit the values here; valid preset ids are the keys in
+## data/tactics/doctrine_presets.json: "alpha_strike", "phalanx", "hammer_and_anvil".
+const DEBUG_TEAM_PRESETS := { 0: "alpha_strike", 1: "phalanx" }
+
+## Fallback combat-tactics preset when a fleet has no configured preset id.
+const DEFAULT_PLAYER_PRESET := "alpha_strike"
+
 # Wing formation state
 var _previous_wings: Array = []  # Previous frame's wings for loyalty preservation
 var _wings_last_formed_at: float = -1.0  # game_time of last form_wings() call
@@ -85,7 +96,7 @@ var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 var _debug_overlay: DebugOverlay
 var _debug_panel_layer: CanvasLayer = null
 
-# On-screen player command buttons (Layer C — all-out attack)
+# On-screen player command buttons (all-out attack / stand down)
 var _command_panel_layer: CanvasLayer = null
 var _allout_button: Button = null
 var _standdown_button: Button = null
@@ -99,8 +110,10 @@ const DEBUG_PANEL_OPTIONS: Array = [
 	{"label": "Wing Lines",      "setting": "show_wing_lines"},
 	{"label": "Squadron Lines",  "setting": "show_squadron_lines"},
 	{"label": "Escape Boundary", "setting": "show_escape_boundary"},
-	{"label": "Pilot Direction", "setting": "show_pilot_direction"},
-	{"label": "Leader Numbers",  "setting": "show_leader_numbers"},
+	{"label": "Pilot Direction",   "setting": "show_pilot_direction"},
+	{"label": "Leader Numbers",    "setting": "show_leader_numbers"},
+	{"label": "Tactics State",     "setting": "show_tactics_state"},
+	{"label": "Tactics Telemetry", "setting": "show_tactics_telemetry"},
 ]
 
 func _ready() -> void:
@@ -161,6 +174,11 @@ func _process(delta: float) -> void:
 	# by a rookie pilot only takes effect now.
 	if ENABLE_CREW_AI:
 		_commit_pending_intents()
+
+	# 1. FORMATION SYSTEM - Resolve live world positions from formation_assignment.
+	# Slot specs were issued by squadron leaders (crew decisions); this resolves
+	# them each frame against live lead-ship and enemy positions.
+	_ships = FormationSystem.assign_slots(_ships)
 
 	# 1. MOVEMENT SYSTEM - Update ship positions with obstacle avoidance
 	var game_time = Time.get_ticks_msec() / 1000.0
@@ -976,7 +994,7 @@ func _on_debug_option_toggled(setting_name: String, value: bool) -> void:
 
 
 ## Build the bottom-centre player command bar (always visible).
-## Hosts the all-out-attack / stand-down order buttons (Layer C) so the order
+## Hosts the all-out-attack / stand-down order buttons so the order
 ## is issued by clicking, not a hidden keybind.
 func _create_command_panel() -> void:
 	const MARGIN := 12.0
@@ -1079,6 +1097,10 @@ func _update_crew_ai_systems(delta: float, ship_grid: Dictionary, projectile_gri
 		_wings_last_formed_at = game_time
 		_wings_dirty = false
 	var wings = _previous_wings
+	# Stamp command hats (squadron_leader / commander) onto crew immediately
+	# after fresh wings are available.  Pure data pass; CrewAISystem reads the
+	# hats to dispatch the command brains.
+	_crew_list = CommandDesignationSystem.designate(_crew_list, _ships, wings)
 	_update_ship_wing_colors(wings)
 	_update_ship_debug_data(wings)
 
@@ -1288,30 +1310,54 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 		new_crew = CrewData.create_crew_for_ship_type(ship_type, weapon_count, base_skill)
 		new_crew = CrewData.bind_gunners_to_weapons(new_crew, ship_data.get("weapons", []))
 
-	# Compile doctrine and stamp mission onto each player crew member.
+	# Compile per-ship orders for player crew. Roguelike uses the run's saved
+	# doctrine + squadron mission; skirmish (Fleet Command) uses its doctrine +
+	# the hull's chosen mission. Both then resolve combat tactics from the
+	# player's chosen fleet preset + per-hull Role/overrides (set in Fleet
+	# Command), replacing the old debug-preset hook. The enemy fleet still uses
+	# DEBUG_TEAM_PRESETS so a contrasting opponent doctrine survives.
+	var player_configured: bool = false
 	if team == 0 and RoguelikeRun.active:
-		# Roguelite: compile run doctrine + squadron mission from RoguelikeRun.
+		var squadron: Dictionary = SquadronSystem.get_squadron_for_hull(RoguelikeRun.squadrons, hull_id)
+		var squadron_id: String = squadron.get("squadron_id", "")
 		var mission_info: Dictionary = SquadronSystem.get_mission(RoguelikeRun.squadrons, hull_id)
+		var run_hull: Dictionary = RoguelikeRun.hull_by_id(hull_id)
+		var fleet_preset: String = str(RoguelikeRun.tactics.get("preset", DEFAULT_PLAYER_PRESET))
 		for i in range(new_crew.size()):
 			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, RoguelikeRun.doctrine)
 			new_crew[i]["squadron_mission"] = mission_info.get("mission", SquadronData.Mission.FREE)
 			new_crew[i]["squadron_mission_params"] = mission_info.get("params", {})
+		new_crew = _attach_player_tactics(new_crew, run_hull, fleet_preset, squadron_id)
+		player_configured = true
 	elif team == 0 and not hull_id.is_empty():
-		# Skirmish: stamp per-ship mission from the hull's tactics dict.
-		var skirmish_mission: String = SquadronData.Mission.FREE
-		var skirmish_params: Dictionary = {}
+		# Skirmish: Fleet Command doctrine + the hull's per-ship mission + tactics.
+		var skirmish_hull: Dictionary = {}
 		var skirmish_hulls: Array = SkirmishFleet.get_fleet(0)
 		for hull in skirmish_hulls:
 			if str(hull.get("hull_id", "")) == hull_id:
-				var tactics: Dictionary = hull.get("tactics", {})
-				skirmish_mission = tactics.get("mission", SquadronData.Mission.FREE)
-				skirmish_params = tactics.get("mission_params", {})
+				skirmish_hull = hull
 				break
+		var hull_tactics: Dictionary = skirmish_hull.get("tactics", {})
+		var skirmish_mission: String = hull_tactics.get("mission", SquadronData.Mission.FREE)
+		var skirmish_params: Dictionary = hull_tactics.get("mission_params", {})
 		var skirmish_doctrine: Dictionary = SkirmishFleet.get_doctrine()
 		for i in range(new_crew.size()):
 			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, skirmish_doctrine)
 			new_crew[i]["squadron_mission"] = skirmish_mission
 			new_crew[i]["squadron_mission_params"] = skirmish_params
+		new_crew = _attach_player_tactics(
+			new_crew, skirmish_hull, SkirmishFleet.get_fleet_preset(0), "")
+		player_configured = true
+
+	# Enemy / unconfigured ships: combat-tactics block from a preset constant so
+	# the steering blender always has a coherent doctrine (and a contrasting
+	# opponent for the player's chosen fleet doctrine).
+	if not player_configured:
+		var preset_id: String = DEBUG_TEAM_PRESETS.get(team, DEFAULT_PLAYER_PRESET)
+		var dev_tactics: Dictionary = TacticsSystem.resolve_from_preset(preset_id, "", "", {})
+		for i in range(new_crew.size()):
+			new_crew[i] = new_crew[i].duplicate(true)
+			new_crew[i]["tactics"] = dev_tactics
 
 	# Assign crew to ship and add to index
 	for crew_member in new_crew:
@@ -1320,6 +1366,25 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 		_crew_index[crew_member.crew_id] = crew_member
 
 	BattleEventLoggerAutoload.log_event("crew_created", {"ship_id": ship_id, "ship_type": ship_type, "count": new_crew.size()})
+
+## Resolve a player hull's combat-tactics block from its fleet preset + per-hull
+## Role/overrides (set in Fleet Command) and attach it to every crew member.
+## Also stamps the hull's manual command_role onto each crew dict so
+## CommandDesignationSystem can honor it. Pure: returns a new crew list.
+func _attach_player_tactics(
+		crew: Array, hull: Dictionary, fleet_preset: String, squadron_id: String) -> Array:
+	var preset_id: String = fleet_preset if not fleet_preset.is_empty() else DEFAULT_PLAYER_PRESET
+	var command_role: String = str(hull.get("command_role", ""))
+	var resolved: Dictionary = TacticsSystem.compile_player_tactics(hull, preset_id, squadron_id)
+
+	var out: Array = []
+	for member in crew:
+		var updated: Dictionary = member.duplicate(true)
+		updated["tactics"] = resolved.duplicate(true)
+		updated["command_role"] = command_role
+		out.append(updated)
+	return out
+
 
 ## Remove crew assigned to a ship
 func _remove_crew_for_ship(ship_id: String) -> void:
@@ -1478,10 +1543,10 @@ func _check_squadron_leadership_succession() -> void:
 						"crew_id": crew.crew_id, "callsign": crew.get("callsign", "Unknown")})
 
 
-## Layer C — Player "All-Out Attack" order.
+## Player "All-Out Attack" order.
 ## Sets a sticky (player_override=true) press_attack posture on every player-team
-## pilot/captain. Uses the same posture channel as AI commit decisions (Layer B)
-## so A/B/C all converge on one read path in FighterWorldState.
+## pilot/captain. Uses the same posture channel as AI commit decisions so the
+## player order and AI escalation converge on one read path in FighterWorldState.
 func _issue_allout_attack() -> void:
 	var game_time := Time.get_ticks_msec() / 1000.0
 	var focus_target_id: String = ""   # TODO: wire to player target selection

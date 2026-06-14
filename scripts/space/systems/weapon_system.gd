@@ -12,6 +12,18 @@ extends RefCounted
 const MIN_REACTION_TIME = 0.1
 const MAX_REACTION_TIME = 0.3
 
+## diagnose_firing reason constants — used by DebugOverlay and tests.
+const DIAG_NO_WEAPONS    := "no_weapons"
+const DIAG_ALL_DESTROYED := "all_weapons_destroyed"
+const DIAG_NO_TARGET     := "no_target"
+const DIAG_OUT_OF_RANGE  := "out_of_range"
+const DIAG_OUT_OF_ARC    := "out_of_arc"
+const DIAG_CAN_FIRE      := "can_fire"
+
+## Fallback range used when a ship has no operational weapons.
+## Conservative close-quarters distance: too far to ram, too close to orbit uselessly.
+const NO_WEAPONS_FALLBACK_RANGE: float = 300.0
+
 # Target selection: closer targets score higher (base minus distance), plus
 # a per-class bonus - small fast hulls threaten everyone, capitals can wait.
 const DISTANCE_PRIORITY_BASE: float = 1000.0
@@ -484,6 +496,22 @@ static func calculate_projectile_velocity(direction: Vector2, speed: float) -> V
 # PUBLIC QUERY FUNCTIONS
 # ============================================================================
 
+## Return the effective weapon range for AI positioning: the max stats.range over
+## all OPERATIONAL weapons. Destroyed mounts are skipped — a ship that lost its
+## long-gun shouldn't try to hold standoff range for a weapon it no longer has.
+## Falls back to NO_WEAPONS_FALLBACK_RANGE when no operational weapons exist so
+## the blender always produces a coherent preferred_range (never zero or INF).
+static func get_effective_range(ship_data: Dictionary) -> float:
+	var weapons: Array = ship_data.get("weapons", [])
+	var best: float = -1.0
+	for weapon in weapons:
+		if not is_weapon_operational(weapon):
+			continue
+		var r: float = float(weapon.get("stats", {}).get("range", 0.0))
+		if r > best:
+			best = r
+	return best if best > 0.0 else NO_WEAPONS_FALLBACK_RANGE
+
 static func get_fireable_weapons(ship_data: Dictionary, target: Dictionary) -> Array:
 	return ship_data.weapons.filter(
 		func(w): return is_weapon_ready(w) and can_fire_at_target(ship_data, w, target)
@@ -504,3 +532,44 @@ static func calculate_velocity_factor(target: Dictionary) -> float:
 		return 1.0
 	var speed = target.velocity.length()
 	return 1.0 - min(speed / 300.0, 0.5)  # Up to 50% penalty
+
+## diagnose_firing: explains why a ship is or isn't firing.
+## Pure: reads ship_data and targets only, never mutates.
+## Returns { "firing": bool, "reason": String } where reason is one of the DIAG_* consts.
+##
+## Walk order: no weapons → all destroyed → no enemy targets → out of range → out of arc → can fire.
+## Stops at the first failing gate so the reason is always the shallowest blocker.
+static func diagnose_firing(ship_data: Dictionary, targets: Array) -> Dictionary:
+	var weapons: Array = ship_data.get("weapons", [])
+
+	if weapons.is_empty():
+		return { "firing": false, "reason": DIAG_NO_WEAPONS }
+
+	var operational: Array = weapons.filter(func(w): return is_weapon_operational(w))
+	if operational.is_empty():
+		return { "firing": false, "reason": DIAG_ALL_DESTROYED }
+
+	var enemies: Array = get_valid_targets(targets, ship_data.get("team", -1))
+	if enemies.is_empty():
+		return { "firing": false, "reason": DIAG_NO_TARGET }
+
+	# Find nearest enemy and check range against any operational weapon.
+	var any_in_range := false
+	var any_in_arc  := false
+	for weapon in operational:
+		var weapon_range: float = float(weapon.get("stats", {}).get("range", 0.0))
+		for enemy in enemies:
+			if not is_in_range(ship_data.get("position", Vector2.ZERO), enemy.get("position", Vector2.ZERO), weapon_range):
+				continue
+			any_in_range = true
+			if is_in_firing_arc(ship_data, weapon, enemy):
+				any_in_arc = true
+				break
+		if any_in_arc:
+			break
+
+	if not any_in_range:
+		return { "firing": false, "reason": DIAG_OUT_OF_RANGE }
+	if not any_in_arc:
+		return { "firing": false, "reason": DIAG_OUT_OF_ARC }
+	return { "firing": true, "reason": DIAG_CAN_FIRE }

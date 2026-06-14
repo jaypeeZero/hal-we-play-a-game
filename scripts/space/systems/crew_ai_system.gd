@@ -7,6 +7,28 @@ extends RefCounted
 ##   FighterBrain (fighters), LargeShipPilotAI (large-ship engagement FSM).
 ## Following functional programming principles — all data is immutable.
 
+# ── Formation command constants ───────────────────────────────────────────────
+
+## Base interval (seconds) between formation-slot orders from a squadron leader.
+## High-skill leaders issue on this cadence; low-skill leaders wait longer.
+const FORMATION_COMMAND_CADENCE_BASE: float = 2.0
+
+## Low-skill leaders add up to this many extra seconds to the cadence.
+const FORMATION_COMMAND_CADENCE_SKILL_SCALE: float = 3.0
+
+## Leadership skill below this threshold produces sloppy slot assignments
+## (shuffled wingman order and jittered spacing).
+const FORMATION_SKILL_JITTER_THRESHOLD: float = 0.5
+
+# ── Focus-fire command constants ──────────────────────────────────────────────
+
+## Minimum concentration for a squadron leader to issue focus_target orders.
+## Below this value the leader stays silent and ships spread per their own 3a priority.
+const CONCENTRATION_THRESHOLD: float = 0.5
+
+## Seconds between focus_target broadcasts. Mirrors FORMATION_COMMAND_CADENCE_BASE.
+const FOCUS_CADENCE: float = 3.0
+
 # ============================================================================
 # MAIN API - Process crew decisions
 # ============================================================================
@@ -65,15 +87,21 @@ static func can_make_decisions(crew_data: Dictionary) -> bool:
 	return crew_data.assigned_to != null
 
 ## Calculate effective skill with stress/fatigue penalties.
-## Reads the role-appropriate primary stat (Phase 03 default).  Phase 07
-## replaces this with per-stat decay rates.
+## Reads the role-appropriate primary stat.
+## When a PILOT holds command_hat == "squadron_leader", coordination quality is
+## governed by tactics/leadership skill, not piloting — the hat changes what
+## the skill gates (coordination tier, brain action preconditions).
 static func calculate_effective_skill(crew_data: Dictionary) -> float:
 	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
 	var role = crew_data.get("role", -1)
 	var base_skill: float = 0.5
 	match role:
 		CrewData.Role.PILOT:
-			base_skill = float(skills.get("piloting", 0.5))
+			# Squadron-leader hat: coordination is tactics/leadership, not stick work.
+			if crew_data.get("command_hat", "") == "squadron_leader":
+				base_skill = float(skills.get("leadership", skills.get("tactics", 0.5)))
+			else:
+				base_skill = float(skills.get("piloting", 0.5))
 		CrewData.Role.GUNNER:
 			base_skill = float(skills.get("aim", 0.5))
 		CrewData.Role.CAPTAIN, CrewData.Role.SQUADRON_LEADER, CrewData.Role.FLEET_COMMANDER:
@@ -112,19 +140,35 @@ static func calculate_decision_delay(crew_data: Dictionary) -> float:
 
 ## Pilot makes tactical maneuvering decisions
 static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: Array = [], crew_list: Array = [], wings: Array = []) -> Dictionary:
+	# Formation-slot orders: lift into crew["formation_assignment"] and stamp
+	# onto ship.orders so FormationSystem can resolve the live world position.
+	# Must run BEFORE _absorb_play_order; clearing orders.received here
+	# prevents execute_pilot_order from short-circuiting into discrete mode.
+	crew_data = _absorb_formation_order(crew_data, ships)
+
+	# Focus-target orders: lift target_id into crew["focus_assignment"] so the
+	# pilot's blended decision can apply a targeting bias without short-circuiting
+	# into discrete pursue mode. Must run before the orders.received guard below.
+	crew_data = _absorb_focus_order(crew_data, ships)
+
 	# Squadron-play orders are persistent constraints, not one-shot orders.
 	# Lift them off `orders.received` into `play_assignment` so the pilot's
 	# normal decision flow can read them as a navigation hint without the
 	# generic "execute order" path consuming them as a one-time movement.
 	crew_data = _absorb_play_order(crew_data)
 
-	# Posture orders (press_attack) are also persistent — lift into combat_posture
-	# so they survive across multiple decision ticks without being consumed once.
-	crew_data = _absorb_posture_order(crew_data)
+	# Translate any remaining command orders (engage/withdraw/hold/support_ally/
+	# formation/reform) into persistent crew fields that SteeringBlender reads as
+	# directive biases. Never short-circuits to a discrete maneuver — pilot always
+	# continues to the blended path below.
+	crew_data = _absorb_command_order(crew_data)
 
-	# Check for orders from captain - ALWAYS respect superior orders
-	if crew_data.orders.received != null:
-		return execute_pilot_order(crew_data, game_time)
+	# Press-attack posture (captain/commander commit or fleet all-out) is persistent
+	# too — lift into combat_posture so FighterWorldState surfaces ws.press_attack
+	# across ticks. AttackAction maps an active press into the "press" steering
+	# posture, which the blender weights toward closing in; it never short-circuits
+	# the blend.
+	crew_data = _absorb_posture_order(crew_data)
 
 	# Analyze tactical context (include wings for fighter coordination)
 	var context = analyze_tactical_context(crew_data, ships, crew_list)
@@ -203,24 +247,295 @@ static func _absorb_play_order(crew_data: Dictionary) -> Dictionary:
 	updated.orders.received = null
 	return updated
 
-## Execute order from captain
-static func execute_pilot_order(crew_data: Dictionary, game_time: float) -> Dictionary:
-	var order = crew_data.orders.received
-	var updated = crew_data.duplicate(true)
+## Absorb a received formation_slot order into crew["formation_assignment"].
+##
+## If orders.received is a formation_slot order, copies the formation_assignment
+## block into crew["formation_assignment"], stamps it onto the ship's orders
+## dict (so FormationSystem's resolver can read it), and clears orders.received
+## so execute_pilot_order does NOT short-circuit into discrete pursue mode.
+## Returns the (possibly mutated) crew dict and updated ship (via ships lookup).
+static func _absorb_formation_order(crew_data: Dictionary, ships: Array) -> Dictionary:
+	var received: Variant = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+	if received.get("type", "") != "formation_slot":
+		return crew_data
 
-	# Clear order once acknowledged
-	updated.orders.current = order
+	var fa: Dictionary = received.get("formation_assignment", {})
+	if fa.is_empty():
+		return crew_data
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated["formation_assignment"] = fa.duplicate(true)
 	updated.orders.received = null
 
-	return {
-		"crew_data": updated,
-		"decision": create_movement_decision(updated, order, game_time)
-	}
+	# Also stamp formation_assignment onto the ship's orders dict so the
+	# per-frame FormationSystem resolver can read it without going through crew.
+	var ship_id: String = updated.get("assigned_to", "")
+	for i in range(ships.size()):
+		if ships[i] != null and ships[i].get("ship_id", "") == ship_id:
+			# Mutate in place — ships is an array of dicts owned by the caller
+			# and stamping formation_assignment is single-owner per frame.
+			ships[i]["orders"]["formation_assignment"] = fa.duplicate(true)
+			break
+
+	return updated
+
+
+## Absorb a received focus_target order into crew["focus_assignment"].
+##
+## If orders.received is a focus_target order, lifts the target_id into the
+## persistent crew["focus_assignment"] string and clears orders.received so
+## the generic execute_pilot_order path is NOT triggered — the pilot then runs
+## its normal blended decision with focus_assignment as a targeting bias.
+## This is a mirror of _absorb_formation_order; it MUST run before the
+## orders.received guard in make_pilot_decision.
+static func _absorb_focus_order(crew_data: Dictionary, ships: Array) -> Dictionary:
+	var received: Variant = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+	if received.get("type", "") != "focus_target":
+		return crew_data
+
+	var target_id: String = received.get("target_id", "")
+	if target_id == "":
+		return crew_data
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	# Persist target so it survives across decision ticks until superseded.
+	updated["focus_assignment"] = target_id
+	updated.orders.received = null
+	return updated
+
+
+## Translate any remaining command order into a persistent crew field so
+## SteeringBlender can apply it as a directive bias on every subsequent tick.
+## Must run AFTER _absorb_formation_order / _absorb_focus_order / _absorb_play_order
+## so those specific types are already consumed and won't reach this absorber.
+## NEVER returns a discrete decision — always clears orders.received and lets the
+## pilot proceed to its normal blended path.
+##
+## Also stamps ship.orders.posture / ship.orders.focus_target so that on large
+## ships (where captain ≠ pilot) whoever absorbs the order (captain or pilot)
+## writes posture/focus once, and LargeShipPilotAI reads it from ship.orders.
+## Fighters ignore ship.orders for posture — they read crew["posture"] directly
+## — so stamping ship.orders too is harmless for them.
+static func _absorb_command_order(crew_data: Dictionary) -> Dictionary:
+	var received: Variant = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	var order_type: String = received.get("type", "")
+
+	match order_type:
+		"engage":
+			# Re-engage: clear any withdraw posture so normal fight-bias resumes.
+			var target_id: String = received.get("target_id", "")
+			if target_id != "":
+				updated["focus_assignment"] = target_id
+				# Stamp ship.orders so LargeShipPilotAI can read focus on its crew.
+				updated.orders["focus_target"] = target_id
+			updated["posture"] = ""   # returning to offensive blend
+			updated.orders["posture"] = ""
+
+		"withdraw":
+			# Commanded disengage: evade-dominant blend, not a hard flee reflex.
+			updated["posture"] = "withdraw"
+			updated.orders["posture"] = "withdraw"
+
+		"hold":
+			# Hold the line: formation-dominant blend, don't chase past the line.
+			updated["posture"] = "hold"
+			updated.orders["posture"] = "hold"
+
+		"support_ally":
+			# Escort assignment stored; escort-movement consumed in a later phase.
+			var ally_id: String = received.get("ally_id", "")
+			if ally_id != "":
+				updated["support_assignment"] = ally_id
+
+		"formation", "reform":
+			# Reform shape stored; _issue_formation_commands will read it next tick.
+			var shape: String = received.get("formation", "")
+			if shape != "":
+				updated["reform_shape"] = shape
+
+		_:
+			# Unknown order type — clear without side-effects so nothing stalls.
+			pass
+
+	updated.orders.received = null
+	return updated
+
+
+## Issue focus_target orders to all subordinates when concentration is high enough.
+##
+## Called for crew with command_hat == "squadron_leader" alongside
+## _issue_formation_commands. Throttled on FOCUS_CADENCE. When concentration is
+## below CONCENTRATION_THRESHOLD no orders are issued — ships spread per their
+## own 3a priority. The designated target is the leader's current_target (if
+## set) or the top-priority enemy from awareness.opportunities.
+## Returns the (possibly mutated) crew dict with orders.issued appended.
+static func _issue_focus_commands(
+		crew_data: Dictionary, ship_data: Dictionary, game_time: float, ships: Array) -> Dictionary:
+	var tactics: Dictionary = crew_data.get("tactics", {})
+	var concentration: float = float(tactics.get("concentration", 0.0))
+	# Below threshold: don't issue focus orders — let ships spread per 3a priority.
+	if concentration < CONCENTRATION_THRESHOLD:
+		return crew_data
+
+	# Throttle: only issue if enough time has passed.
+	var last_focus_time: float = crew_data.get("last_focus_command_time", -INF)
+	if game_time - last_focus_time < FOCUS_CADENCE:
+		return crew_data
+
+	var subordinates: Array = crew_data.get("command_chain", {}).get("subordinates", [])
+	if subordinates.is_empty():
+		return crew_data
+
+	# Pick the designated target: commander-assigned focus takes priority so
+	# concentrate orders cascade (commander → leader.focus_assignment → pilots).
+	# Then prefer current_target; fall back to top opportunity.
+	var designated_id: String = crew_data.get("focus_assignment", "")
+	if designated_id == "":
+		designated_id = crew_data.get("current_target", "")
+	if designated_id == "":
+		var opportunities: Array = crew_data.get("awareness", {}).get("opportunities", [])
+		if opportunities.is_empty():
+			return crew_data
+		# opportunities is already ranked by targeting_weight from identify_opportunities.
+		designated_id = opportunities[0].get("id", "")
+	if designated_id == "":
+		return crew_data
+
+	var issued_orders: Array = []
+	for sub_crew_id in subordinates:
+		issued_orders.append({
+			"to": sub_crew_id,
+			"type": "focus_target",
+			"target_id": designated_id,
+		})
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated["last_focus_command_time"] = game_time
+	# Leader also holds its own focus assignment so targeting_weight boosts apply.
+	updated["focus_assignment"] = designated_id
+	# Merge with any existing issued orders (formation slot orders may already be present).
+	var existing_issued: Array = updated.orders.get("issued", []).duplicate()
+	existing_issued.append_array(issued_orders)
+	updated.orders.issued = existing_issued
+	return updated
+
+
+## Run the GOAP brain for complementary squadron-leader actions only.
+##
+## Activates CallMutualSupport and ScreenWithdrawal.  AssignTargets,
+## CoordinateAttackRun, and ReformFormation are suppressed — the bespoke
+## formation/focus systems own those decisions and produce superior results.
+## Merges brain-issued orders into orders.issued without clobbering the
+## existing formation/focus orders already placed this tick.
+## Always advances next_decision_time so the leader doesn't perpetually
+## re-decide when the brain returns nothing (perpetual-due bug fix).
+static func _run_complementary_brain(crew_data: Dictionary, game_time: float) -> Dictionary:
+	const SUPPRESSED_ACTIONS := ["assign_targets", "coordinate_attack_run", "reform_formation"]
+	var ws := SquadronLeaderWorldState.build(crew_data, game_time)
+	var result := SquadronLeaderBrain.decide(ws, game_time)
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	# Always advance the command-decision timer so we don't spin every scheduler tick.
+	updated.next_decision_time = game_time + randf_range(
+		SquadronLeaderAI.REDECIDE_MIN, SquadronLeaderAI.REDECIDE_MAX)
+
+	if result.is_empty():
+		return updated
+
+	var decision: Dictionary = result.get("decision", {})
+	var action_id: String = decision.get("subtype", decision.get("action_id", ""))
+	# Suppress overlapping actions — formation/focus systems own these.
+	if SUPPRESSED_ACTIONS.has(action_id):
+		return updated
+
+	# Merge brain-issued orders with formation/focus orders already in place.
+	var brain_orders: Array = result.get("issued_orders", [])
+	var existing_issued: Array = updated.orders.get("issued", []).duplicate()
+	existing_issued.append_array(brain_orders)
+	updated.orders.issued = existing_issued
+	return updated
+
+
+## Issue formation-slot orders to all wingmen in the command chain.
+##
+## Called from make_fighter_pilot_decision when the crew holds the
+## "squadron_leader" command hat.  Throttled on FORMATION_COMMAND_CADENCE_BASE;
+## low-skill leaders wait longer and produce sloppier assignments.
+## Returns the (possibly mutated) crew dict with orders.issued populated.
+static func _issue_formation_commands(
+		crew_data: Dictionary, ship_data: Dictionary, game_time: float) -> Dictionary:
+	# Throttle: only issue if enough time has passed since last command.
+	var last_cmd_time: float = crew_data.get("last_formation_command_time", -INF)
+	var leadership_skill: float = crew_data.get("stats", {}).get("skills", {}).get(
+		"leadership", crew_data.get("stats", {}).get("skills", {}).get("tactics", 0.5))
+	# Low skill → longer cadence (add up to FORMATION_COMMAND_CADENCE_SKILL_SCALE extra seconds).
+	var cadence: float = FORMATION_COMMAND_CADENCE_BASE \
+		+ FORMATION_COMMAND_CADENCE_SKILL_SCALE * (1.0 - clampf(leadership_skill, 0.0, 1.0))
+	if game_time - last_cmd_time < cadence:
+		return crew_data
+
+	var subordinates: Array = crew_data.get("command_chain", {}).get("subordinates", [])
+	if subordinates.is_empty():
+		return crew_data
+
+	# Read formation shape/spacing from the leader's resolved tactics block.
+	var tactics: Dictionary = crew_data.get("tactics", {})
+	var shape: String   = tactics.get("shape",   "line_abreast")
+	var spacing: float  = tactics.get("spacing", 0.5)
+	var lead_ship_id: String = ship_data.get("ship_id", "")
+	var wingman_count: int = subordinates.size()
+
+	# Build wingman slot list (0-based).  Low-skill leaders shuffle assignments.
+	var slot_indices: Array = []
+	for i in range(wingman_count):
+		slot_indices.append(i)
+
+	if leadership_skill < FORMATION_SKILL_JITTER_THRESHOLD:
+		# Shuffle slot assignments so low-skill leaders are inconsistent.
+		slot_indices.shuffle()
+
+	# Optionally jitter spacing for low-skill leaders.
+	var effective_spacing: float = spacing
+	if leadership_skill < FORMATION_SKILL_JITTER_THRESHOLD:
+		effective_spacing = clampf(
+			spacing + randf_range(-0.15, 0.15) * (1.0 - leadership_skill * 2.0),
+			0.0, 1.0)
+
+	var issued_orders: Array = []
+	for i in range(wingman_count):
+		issued_orders.append({
+			"to": subordinates[i],
+			"type": "formation_slot",
+			"formation_assignment": {
+				"shape":        shape,
+				"slot_index":   slot_indices[i],
+				"slot_count":   wingman_count,
+				"spacing":      effective_spacing,
+				"lead_ship_id": lead_ship_id,
+			},
+		})
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated["last_formation_command_time"] = game_time
+	# Merge with any existing issued orders (plays may already populate this).
+	var existing_issued: Array = updated.orders.get("issued", []).duplicate()
+	existing_issued.append_array(issued_orders)
+	updated.orders.issued = existing_issued
+	return updated
+
 
 ## Make evasive maneuver decision.
 ##
 ## Evasion is a *reactive* decision and goes through the pending-intent
-## buffer (Phase 04): we mark the decision with `intent_type` / `commit_at`
+## buffer: we mark the decision with `intent_type` / `commit_at`
 ## so `_apply_crew_decisions` stashes it on the ship and PendingIntentSystem
 ## applies it once game time crosses commit_at. Elite pilots commit in
 ## ~80 ms; rookies in ~700 ms. Stress beyond the composure buffer adds
@@ -333,6 +648,24 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 	# of the squadron alongside its own combat decision.
 	crew_data = _maybe_run_fighter_squadron_play(crew_data, ship_data, all_ships, game_time)
 
+	# Squadron-leader hat: issue formation-slot orders to wingmen (skill-gated,
+	# throttled on FORMATION_COMMAND_CADENCE_BASE).  This is additive to the
+	# leader's own blended flight decision — the leader still flies normally.
+	if crew_data.get("command_hat", "") == "squadron_leader":
+		crew_data = _issue_formation_commands(crew_data, ship_data, game_time)
+		# Also issue focus_target orders when concentration is high enough.
+		# Runs alongside formation commands; both are additive to the leader's
+		# own blended flight decision.
+		crew_data = _issue_focus_commands(crew_data, ship_data, game_time, all_ships)
+		# Activate the squadron-leader GOAP brain for COMPLEMENTARY actions only
+		# (CallMutualSupport + ScreenWithdrawal).  AssignTargets, CoordinateAttackRun,
+		# and ReformFormation are suppressed here — the formation/focus systems above
+		# already own those concerns and do it better.
+		# Thrash risk: the brain respects PLAN_LOCK_DURATION (1.2 s) for stability,
+		# and this block runs on the leader's command cadence (≥2 s), so oscillation
+		# between support/withdrawal is bounded by cadence, not per-tick.
+		crew_data = _run_complementary_brain(crew_data, game_time)
+
 	# Check whether the current target just died (before calling make_decision,
 	# so we can shorten the next delay for elite pilots who spot the kill fast).
 	var target_just_died: bool = false
@@ -352,6 +685,14 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 	var updated = crew_data.duplicate(true)
 	updated.orders.current = decision
 	updated.current_action = decision.get("subtype", "idle")
+
+	# Propagate support_assignment from crew → ship.orders so FormationSystem
+	# can stamp support_pos from the ally's live position each frame.
+	var support_id: String = updated.get("support_assignment", "")
+	if support_id != "":
+		updated.orders["support_assignment"] = support_id
+	else:
+		updated.orders.erase("support_assignment")
 
 	# Set next decision time based on maneuver type
 	var next_delay = _get_fighter_decision_delay(decision.get("subtype", "idle"))
@@ -442,20 +783,16 @@ static func _build_fighter_play_geometry(crew_data: Dictionary, ship_data: Dicti
 ## Get decision delay for fighter maneuvers
 static func _get_fighter_decision_delay(maneuver_subtype: String) -> float:
 	match maneuver_subtype:
-		"fight_dogfight_maneuver", "fight_tight_pursuit":
+		"fight_dogfight_maneuver":
 			return randf_range(0.2, 0.4)  # Very frequent updates for close combat
-		"fight_flank_behind", "fight_pursue_tactical":
+		"fight_pursue_tactical":
 			return randf_range(0.4, 0.7)  # Moderate updates for tactical maneuvers
-		"fight_group_run_attack", "fight_dodge_and_weave":
+		"fight_dodge_and_weave":
 			return randf_range(0.3, 0.6)  # Quick updates for dynamic maneuvers
-		"fight_pursue_full_speed", "fight_group_run_approach":
+		"fight_pursue_full_speed":
 			return randf_range(0.7, 1.0)  # Less frequent for straightforward approach
 		"fight_wing_rejoin":
 			return randf_range(0.2, 0.4)  # Frequent updates when rejoining lead
-		"fight_wing_follow":
-			return randf_range(0.4, 0.7)  # Moderate updates when following lead
-		"fight_wing_engage":
-			return randf_range(0.2, 0.4)  # Frequent updates when engaging with wing
 		"idle":
 			return randf_range(2.0, 4.0)  # Slow when idle
 		_:
@@ -579,19 +916,6 @@ static func make_pursuit_decision_from_threat(crew_data: Dictionary, game_time: 
 	updated.current_action = "pursuing"
 	updated.next_decision_time = game_time + randf_range(0.7, 1.0)
 	return {"crew_data": updated, "decision": decision}
-
-## Create movement decision from order
-static func create_movement_decision(crew_data: Dictionary, order: Dictionary, game_time: float) -> Dictionary:
-	return {
-		"type": "maneuver",
-		"subtype": order.get("subtype", "pursue"),
-		"crew_id": crew_data.crew_id,
-		"entity_id": crew_data.assigned_to,
-		"target_id": order.get("target_id", ""),
-		"skill_factor": calculate_effective_skill(crew_data),
-		"delay": crew_data.stats.reaction_time,
-		"timestamp": game_time
-	}
 
 ## Calculate threat urgency
 static func calculate_threat_urgency(threat: Dictionary) -> float:

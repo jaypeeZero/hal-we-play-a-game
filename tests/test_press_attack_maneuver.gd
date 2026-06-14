@@ -1,6 +1,6 @@
 extends GutTest
 
-## Tests for Layer A — press-to-effective-range maneuver vs capitals.
+## Tests for the press-to-effective-range maneuver vs capitals.
 ## Asserts BEHAVIOR: posture selects closing maneuver, movement system closes,
 ## no regression when posture is absent.
 
@@ -41,7 +41,9 @@ func _build_ws(crew: Dictionary, fighter: Dictionary, capital: Dictionary) -> Fi
 # AttackAction._vs_capital selects maneuver based on posture
 # ---------------------------------------------------------------------------
 
-func test_press_attack_posture_selects_closing_maneuver():
+func test_press_attack_posture_drives_aggressive_blend():
+	# Press-attack now routes through the blender (subtype "tactical") with the
+	# "press" posture: pursue dominant, keep_range/evade minimal — close and brawl.
 	var crew := _make_fighter_with_posture(true)
 	var fighter := _make_fighter_ship()
 	var capital := _make_capital("cap1", Vector2(2000, 0))
@@ -50,8 +52,13 @@ func test_press_attack_posture_selects_closing_maneuver():
 	var action := AttackAction.new()
 	var decision := action.execute(ws)
 
-	assert_eq(decision.get("subtype", ""), "fight_press_attack",
-		"Fighter with press_attack posture vs capital should select fight_press_attack")
+	assert_eq(decision.get("subtype", ""), "tactical",
+		"Press posture routes through the blender, not a discrete maneuver")
+	var gw: Dictionary = decision.get("goal_weights", {})
+	assert_gt(gw.get("pursue", 0.0), gw.get("keep_range", 1.0),
+		"Press posture makes pursue dominant — the fighter commits and closes")
+	assert_gt(gw.get("pursue", 0.0), gw.get("evade", 1.0),
+		"Press posture commits despite incoming fire (pursue >> evade)")
 
 
 func test_no_posture_does_not_select_press_attack():
@@ -68,8 +75,10 @@ func test_no_posture_does_not_select_press_attack():
 	var action := AttackAction.new()
 	var decision := action.execute(ws)
 
-	assert_ne(decision.get("subtype", ""), "fight_press_attack",
-		"Without posture, fighter must not select fight_press_attack vs capital")
+	# All non-reflex engage decisions are "tactical" now; without a press posture
+	# the blender uses tactics-derived weights, not the aggressive press set.
+	assert_eq(decision.get("subtype", ""), "tactical",
+		"Without posture, the fighter still emits a normal blended decision")
 
 
 func test_expired_posture_does_not_press():
@@ -83,8 +92,11 @@ func test_expired_posture_does_not_press():
 
 	var action := AttackAction.new()
 	var decision := action.execute(ws)
-	assert_ne(decision.get("subtype", ""), "fight_press_attack",
-		"Expired posture must not select the press maneuver")
+	var gw: Dictionary = decision.get("goal_weights", {})
+	# Expired posture → press_attack is false → blender uses normal weights, so
+	# pursue is NOT forced to the press-dominant value.
+	assert_lt(gw.get("pursue", 1.0), 0.9,
+		"Expired posture must not drive the aggressive press blend")
 
 
 func test_player_override_ignores_expiry():
@@ -103,49 +115,11 @@ func test_player_override_ignores_expiry():
 		"A player_override posture should remain active past expires_at")
 
 
-# ---------------------------------------------------------------------------
-# Movement system: calculate_press_attack behavior
-# ---------------------------------------------------------------------------
-
-func _ship_with_pos(pos: Vector2) -> Dictionary:
-	return TestFactories.make_fighter("s", pos)
-
-
-func test_press_attack_far_from_target_applies_main_thrust():
-	# Fighter is well beyond PRESS_ATTACK_RANGE — should thrust toward target.
-	var fighter := _ship_with_pos(Vector2.ZERO)
-	var capital := _make_capital("cap1", Vector2(WingConstants.PRESS_ATTACK_RANGE * 3, 0))
-
-	var ctrl := MovementSystem.calculate_press_attack(fighter, capital, GAME_TIME)
-
-	assert_gt(ctrl.get("throttle", 0.0), 0.0,
-		"Fighter far outside effective range should apply main thrust to close")
-
-
-func test_press_attack_inside_range_stops_closing():
-	# Fighter is well inside PRESS_ATTACK_RANGE — should brake, not thrust.
-	var fighter := _ship_with_pos(Vector2.ZERO)
-	var capital := _make_capital("cap1", Vector2(WingConstants.PRESS_ATTACK_RANGE * 0.3, 0))
-
-	var ctrl := MovementSystem.calculate_press_attack(fighter, capital, GAME_TIME)
-
-	assert_eq(ctrl.get("throttle", 1.0), 0.0,
-		"Fighter inside effective range should not apply closing thrust")
-	assert_true(ctrl.get("is_braking", false),
-		"Fighter inside effective range should brake")
-
-
-func test_press_attack_within_band_holds_position():
-	# Fighter is exactly at PRESS_ATTACK_RANGE — no thrust, no brake.
-	var fighter := _ship_with_pos(Vector2.ZERO)
-	var capital := _make_capital("cap1", Vector2(WingConstants.PRESS_ATTACK_RANGE, 0))
-
-	var ctrl := MovementSystem.calculate_press_attack(fighter, capital, GAME_TIME)
-
-	assert_eq(ctrl.get("throttle", 1.0), 0.0,
-		"Fighter at PRESS_ATTACK_RANGE should not apply thrust")
-	assert_false(ctrl.get("is_braking", true),
-		"Fighter at PRESS_ATTACK_RANGE should not brake")
+# Note: press-attack closing is no longer a discrete movement function
+# (calculate_press_attack was removed). It is now the "press" steering posture —
+# pursue-dominant, low keep_range — covered by
+# test_press_attack_posture_drives_aggressive_blend above and the SteeringBlender
+# posture tests.
 
 
 # ---------------------------------------------------------------------------

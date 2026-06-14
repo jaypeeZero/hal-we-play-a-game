@@ -12,7 +12,9 @@ var game_time: float = 0.0
 # ============================================================================
 
 func test_full_speed_pursuit_when_far_away():
-	# BEHAVIOR: When target is far away (beyond FAR_RANGE), fighter pursues at full speed
+	# BEHAVIOR: When target is far away, AttackAction produces a tactical directive
+	# with a non-zero pursue weight so the blended control closes the distance.
+	# AttackAction returns subtype "tactical" with goal_weights.
 	var far_distance = FighterPilotAI.FAR_RANGE * 1.5  # Well beyond far range
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var target = TestFactories.make_fighter("enemy1", Vector2(far_distance, 0), 1)
@@ -22,10 +24,14 @@ func test_full_speed_pursuit_when_far_away():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	assert_string_contains(decision.subtype, "pursue", "Should pursue when far away")
+	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive")
+	assert_true(decision.has("goal_weights"), "Tactical decision should carry goal_weights")
+	assert_gt(decision.goal_weights.get("pursue", 0.0), 0.0, "Should have positive pursue weight to close distance")
 
 func test_slows_approach_at_mid_range():
-	# BEHAVIOR: When target is at mid range, use tactical approach maneuvers (not close-range combat)
+	# BEHAVIOR: At mid range, AttackAction produces a tactical directive.
+	# The blended control converges to preferred_range rather than a discrete mode.
+	# Subtype is "tactical" for all AttackAction outputs.
 	var mid_distance = (FighterPilotAI.MID_RANGE + FighterPilotAI.FAR_RANGE) / 2.0  # Middle of mid range
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var target = TestFactories.make_fighter("enemy1", Vector2(mid_distance, 0), 1)
@@ -35,12 +41,15 @@ func test_slows_approach_at_mid_range():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	# When target is at mid range, should use pursuit-type maneuvers, not close-range ones
-	var is_not_close_combat = decision.subtype not in ["fight_tight_pursuit", "fight_dogfight_maneuver"]
-	assert_true(is_not_close_combat, "Should use approach maneuvers when target is at mid range")
+	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive")
+	assert_true(decision.has("preferred_range"), "Tactical directive should carry preferred_range")
+	assert_gt(decision.get("preferred_range", 0.0), 0.0, "preferred_range must be positive")
 
 func test_tight_maneuvering_at_close_range():
-	# BEHAVIOR: At very close range (inside MIN_COMBAT_RANGE), fighter uses tight maneuvers
+	# BEHAVIOR: At close range AttackAction still produces a tactical directive.
+	# Close-range brawl emerges from the blender (keep_range pushes back out,
+	# pursue keeps closing) — not from a discrete tight-maneuver mode.
+	# Subtype is "tactical" regardless of distance to target.
 	var close_distance = FighterPilotAI.MIN_COMBAT_RANGE * 0.8  # Inside minimum combat range
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var target = TestFactories.make_fighter("enemy1", Vector2(close_distance, 0), 1)
@@ -50,15 +59,19 @@ func test_tight_maneuvering_at_close_range():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, target], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	var is_close_combat = decision.subtype in ["fight_tight_pursuit", "fight_dogfight_maneuver", "fight_flank_behind"]
-	assert_true(is_close_combat, "Should use tight maneuvering at close range")
+	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive at close range")
+	assert_true(decision.has("goal_weights"), "Should carry goal_weights")
+	assert_gt(decision.goal_weights.get("keep_range", 0.0), 0.0, "keep_range weight active so ship doesn't ram")
 
 # ============================================================================
 # BEHAVIOR TESTS - Fighter vs Fighter combat
 # ============================================================================
 
 func test_tries_to_get_behind_enemy_fighter():
-	# BEHAVIOR: When fighting fighters at close range, try to get behind enemy
+	# BEHAVIOR: When fighting a fighter, AttackAction emits a tactical directive.
+	# Flanking/positioning intent is now expressed through goal_weights (pursue +
+	# keep_range blend), not a discrete subtype. The directive targets the enemy.
+	# Behind-position geometry is handled by the blender/converter.
 	var close_distance = FighterPilotAI.CLOSE_RANGE * 0.5  # Well inside close range
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var enemy = TestFactories.make_fighter("enemy1", Vector2(close_distance, 0), 1)
@@ -68,13 +81,14 @@ func test_tries_to_get_behind_enemy_fighter():
 
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, enemy], [crew], game_time)
 
-	# Should attempt flanking or pursuit maneuvers
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	assert_true(decision.has("behind_position") or "flank" in decision.subtype.to_lower() or "pursuit" in decision.subtype.to_lower(),
-		"Should consider getting behind enemy")
+	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive")
+	assert_eq(decision.get("target_id", ""), "enemy1", "Directive should name the target to engage")
 
 func test_formation_flying_with_wingmates():
-	# BEHAVIOR: When fighting with wingmates, maintain formation
+	# BEHAVIOR: When fighting with wingmates, AttackAction emits a tactical directive.
+	# The directive carries all contract fields; formation_slot is Vector2.ZERO when no formation goal is active.
+	# The key behavior: the decision is still type "maneuver" and targets the enemy.
 	var formation_spacing = FighterPilotAI.FORMATION_SPACING
 	var combat_distance = FighterPilotAI.CLOSE_RANGE * 0.8
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
@@ -86,15 +100,20 @@ func test_formation_flying_with_wingmates():
 
 	var decision = FighterPilotAI.make_decision(crew1, my_ship, [my_ship, wingmate, enemy], [crew1, crew2], game_time)
 
-	# Should include formation offset when wingmates present
-	assert_true(decision.has("formation_offset"), "Should calculate formation offset with wingmates")
+	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
+	assert_eq(decision.subtype, "tactical", "AttackAction emits tactical directive")
+	# AttackAction leaves formation_slot at ZERO; FormationSystem stamps live positions later.
+	assert_true(decision.has("formation_slot"), "Directive should carry formation_slot")
 
 # ============================================================================
 # BEHAVIOR TESTS - Fighter vs Capital/Corvette combat
 # ============================================================================
 
 func test_stays_at_distance_vs_capital_ships():
-	# BEHAVIOR: When fighting capitals/corvettes too close, use defensive maneuvers
+	# BEHAVIOR: When fighting a capital, AttackAction emits a tactical directive.
+	# Standoff distance is set via preferred_range (range_scalar from tactics) rather
+	# than a discrete defensive subtype. The blender's keep_range goal handles the geometry.
+	# All AttackAction paths return subtype "tactical".
 	var too_close_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.5  # Too close to capital
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var capital = TestFactories.make_capital("capital1", Vector2(too_close_distance, 0), 1)
@@ -104,11 +123,14 @@ func test_stays_at_distance_vs_capital_ships():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, capital], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	var is_defensive = decision.subtype in ["fight_dodge_and_weave", "fight_cautious_approach", "fight_evasive_retreat"]
-	assert_true(is_defensive, "Should use defensive maneuvers vs capital ships")
+	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive vs capital")
+	assert_true(decision.has("preferred_range"), "Directive must carry preferred_range for standoff geometry")
+	assert_gt(decision.get("preferred_range", 0.0), 0.0, "preferred_range must be positive")
 
 func test_dodge_and_weave_vs_corvettes():
-	# BEHAVIOR: When fighting corvettes solo at safe distance, dodge and weave
+	# BEHAVIOR: When fighting a corvette, AttackAction emits a tactical directive.
+	# Evasion is expressed via evade weight in goal_weights, not a fight_ subtype.
+	# The blended output naturally avoids reckless charges through preferred_range.
 	var safe_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL  # At safe harass distance
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	var corvette = TestFactories.make_corvette("corvette1", Vector2(safe_distance, 0), 1)
@@ -118,11 +140,14 @@ func test_dodge_and_weave_vs_corvettes():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, corvette], [crew], game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	# Should use evasive tactics when solo vs larger ship
-	assert_ne(decision.subtype, "fight_pursue_full_speed", "Should not charge capital ships alone")
+	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive vs corvette")
+	assert_true(decision.has("goal_weights"), "Directive must carry goal_weights")
+	assert_gt(decision.goal_weights.get("evade", 0.0), 0.0, "Should have positive evade weight (threat present)")
 
 func test_group_runs_with_multiple_fighters():
-	# BEHAVIOR: With many fighters, coordinate group runs vs capitals
+	# BEHAVIOR: With many fighters vs a capital, AttackAction emits a tactical directive.
+	# Group-run coordination (high pursue weight when many allies close) is now expressed
+	# through the blended directive rather than a discrete "fight_group_run" subtype.
 	var formation_spacing = FighterPilotAI.FORMATION_SPACING
 	var attack_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.8  # Close enough for attack run
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
@@ -143,10 +168,9 @@ func test_group_runs_with_multiple_fighters():
 	var decision = FighterPilotAI.make_decision(crew, my_ship, fighters, crew_list, game_time)
 
 	assert_eq(decision.type, "maneuver", "Should make maneuver decision")
-	# With enough fighters, should coordinate group runs
-	var is_group_run = "group_run" in decision.subtype
-	assert_true(is_group_run, "Should coordinate group runs with multiple fighters")
-	assert_true(decision.has("nearby_fighters"), "Should track nearby fighters count")
+	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive")
+	assert_true(decision.has("goal_weights"), "Directive should carry goal_weights")
+	assert_gt(decision.goal_weights.get("pursue", 0.0), 0.0, "Should have pursue weight to close on capital")
 
 # ============================================================================
 # BEHAVIOR TESTS - Edge cases
@@ -188,7 +212,7 @@ func test_movement_system_handles_fighter_engage():
 	var target = TestFactories.make_fighter("enemy1", Vector2(300, 0), 1)
 
 	# Set up fighter_engage order with various subtypes
-	var subtypes = ["fight_pursue_full_speed", "fight_dogfight_maneuver", "fight_dodge_and_weave", "fight_group_run_attack"]
+	var subtypes = ["fight_pursue_full_speed", "fight_dogfight_maneuver", "fight_dodge_and_weave"]
 
 	for subtype in subtypes:
 		ship.orders.current_order = "fighter_engage"
@@ -206,10 +230,13 @@ func test_movement_system_handles_fighter_engage():
 # ============================================================================
 
 func test_full_integration_fighter_vs_fighter():
-	# BEHAVIOR: Full integration from AI decision to movement
+	# BEHAVIOR: Full integration — AttackAction → CrewIntegrationSystem → MovementSystem.
+	# AttackAction emits subtype "tactical"; CrewIntegrationSystem sets
+	# current_order "tactical"; MovementSystem routes through calculate_blended_control.
+	# Ships are placed at FAR_RANGE so no collision/pre-commit reflexes fire.
 	var my_ship = TestFactories.make_fighter("fighter1", Vector2(0, 0), 0)
 	my_ship.velocity = Vector2(100, 0)  # Moving right
-	var enemy = TestFactories.make_fighter("enemy1", Vector2(300, 0), 1)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(FighterPilotAI.FAR_RANGE, 0), 1)
 	enemy.velocity = Vector2(-50, 0)  # Moving left (toward us)
 	var crew = TestFactories.make_pilot("pilot1", "fighter1")
 	crew.awareness.threats = ["enemy1"]
@@ -220,19 +247,22 @@ func test_full_integration_fighter_vs_fighter():
 	# 2. Apply decision to ship via CrewIntegrationSystem
 	var updated_ship = CrewIntegrationSystem.apply_decision_to_ship(my_ship, decision, crew)
 
-	# 3. Verify ship orders were updated
-	assert_eq(updated_ship.orders.current_order, "fighter_engage", "Should set fighter_engage order")
-	assert_eq(updated_ship.orders.target_id, "enemy1", "Should target enemy")
+	# 3. Verify ship orders were updated with blended directive
+	assert_eq(updated_ship.orders.current_order, "tactical", "Should set tactical order")
+	assert_eq(updated_ship.orders.target_id, "enemy1", "Should mirror target_id onto orders")
+	assert_true(updated_ship.orders.has("goal_weights"), "Orders should carry goal_weights")
 
-	# 4. MovementSystem processes the ship
+	# 4. MovementSystem processes the ship through blended control
 	var final_ship = MovementSystem.update_ship_movement(updated_ship, [updated_ship, enemy], 0.016, 0.0, [])
 
 	# 5. Verify ship moved
-	assert_ne(final_ship.position, my_ship.position, "Ship should move based on AI decision")
+	assert_ne(final_ship.position, my_ship.position, "Ship should move based on blended directive")
 	assert_true(final_ship.has("_pilot_state"), "Should have pilot state from movement calculation")
 
 func test_full_integration_group_run():
-	# BEHAVIOR: Multiple fighters coordinate group run on capital
+	# BEHAVIOR: Multiple fighters vs a capital all emit tactical directives and move.
+	# Group-run coordination emerges from high pursue weight in the blended
+	# directive rather than a discrete "fight_group_run" subtype.
 	var formation_spacing = FighterPilotAI.FORMATION_SPACING
 	var attack_distance = FighterPilotAI.SAFE_DISTANCE_VS_CAPITAL * 0.8
 	var fighters = []
@@ -250,19 +280,14 @@ func test_full_integration_group_run():
 	var capital = TestFactories.make_capital("capital1", Vector2(attack_distance, 0), 1)
 	fighters.append(capital)
 
-	# All fighters make decisions
-	var decisions = []
+	# All fighters make decisions — all should produce tactical directives
+	var tactical_count = 0
 	for i in range(num_fighters):
 		var decision = FighterPilotAI.make_decision(crew_list[i], fighters[i], fighters, crew_list, game_time)
-		decisions.append(decision)
+		if decision.get("subtype", "") == "tactical":
+			tactical_count += 1
 
-	# Verify group coordination
-	var group_run_count = 0
-	for decision in decisions:
-		if "group_run" in decision.subtype:
-			group_run_count += 1
-
-	assert_gt(group_run_count, 0, "At least some fighters should coordinate group runs")
+	assert_gt(tactical_count, 0, "At least some fighters should emit tactical directives when attacking capital")
 
 # ============================================================================
 # COLLISION DETECTION AND LATERAL THRUST TESTS
@@ -995,3 +1020,117 @@ func test_leash_pull_ramps_with_distance():
 	var pull_far = abs(MovementSystem.angle_difference(heading_far, east_heading))
 	assert_gt(pull_far, pull_near,
 		"Ship further outside the zone should be pulled more strongly back home")
+
+
+# ── Tactics-driven AttackAction behaviour ─────────────────────────────────────
+# These tests verify that the goal_weights/preferred_range produced by AttackAction
+# vary predictably with different tactics presets. They test the PIPELINE, not
+# internal SteeringBlender constants (those are covered in test_steering_blender.gd).
+
+func _make_tactical_crew(crew_id: String, ship_id: String, preset_id: String) -> Dictionary:
+	# Build a crew member whose tactics block is resolved from a named preset,
+	# matching what space_battle_game._create_crew_for_ship does for non-roguelike ships.
+	var crew = TestFactories.make_pilot(crew_id, ship_id)
+	crew["tactics"] = TacticsSystem.resolve_from_preset(preset_id, "", "", {})
+	return crew
+
+func test_alpha_strike_tactics_produces_small_preferred_range():
+	# BEHAVIOR: alpha_strike (mentality=all_out, engagement_range=knife) should
+	# produce a preferred_range well below the ship's real weapon range —
+	# the brawl identity of the doctrine (dives in close to fight).
+	var my_ship = TestFactories.make_armed_ship("light_cannon", 0.0, "f1", "fighter")
+	my_ship.position = Vector2(0, 0)
+	var enemy   = TestFactories.make_fighter("e1", Vector2(3000, 0), 1)
+	var crew    = _make_tactical_crew("c1", "f1", "alpha_strike")
+	crew.awareness.threats = ["e1"]
+
+	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, enemy], [crew], game_time)
+
+	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive")
+	var preferred_range: float = decision.get("preferred_range", 9999.0)
+	var weapon_range: float = WeaponSystem.get_effective_range(my_ship)
+	assert_lt(preferred_range, weapon_range,
+		"alpha_strike preferred_range should be below weapon range (brawler dives in close)")
+
+func test_phalanx_tactics_produces_large_preferred_range():
+	# BEHAVIOR: phalanx (mentality=defensive, engagement_range=standoff) should
+	# produce a preferred_range larger than alpha_strike — the standoff kite identity.
+	# After the range-fix, preferred_range is always within weapon envelope (≤ weapon_range),
+	# so we assert the ordering (phalanx > alpha_strike) rather than "> weapon_optimal".
+	var my_ship = TestFactories.make_armed_ship("light_cannon", 0.0, "f1", "fighter")
+	my_ship.position = Vector2(0, 0)
+	var enemy   = TestFactories.make_fighter("e1", Vector2(3000, 0), 1)
+
+	var crew_phalanx = _make_tactical_crew("c1", "f1", "phalanx")
+	crew_phalanx.awareness.threats = ["e1"]
+	var crew_alpha = _make_tactical_crew("c2", "f1", "alpha_strike")
+	crew_alpha.awareness.threats = ["e1"]
+
+	var dec_phalanx = FighterPilotAI.make_decision(crew_phalanx, my_ship, [my_ship, enemy], [crew_phalanx], game_time)
+	var dec_alpha   = FighterPilotAI.make_decision(crew_alpha,   my_ship, [my_ship, enemy], [crew_alpha],   game_time)
+
+	assert_eq(dec_phalanx.subtype, "tactical", "AttackAction should emit tactical directive")
+	var phalanx_range: float = dec_phalanx.get("preferred_range", 0.0)
+	var alpha_range:   float = dec_alpha.get("preferred_range", 9999.0)
+	var weapon_range:  float = WeaponSystem.get_effective_range(my_ship)
+
+	assert_gt(phalanx_range, alpha_range,
+		"phalanx (standoff) preferred_range must exceed alpha_strike (knife) preferred_range")
+	assert_lte(phalanx_range, weapon_range,
+		"phalanx preferred_range must stay within weapon range — kiter fights at the far edge, not beyond")
+
+func test_alpha_strike_has_higher_pursue_weight_than_phalanx():
+	# BEHAVIOR: alpha_strike (all_out mentality) produces higher pursue weight
+	# than phalanx (defensive mentality) — more aggressive chasing.
+	var my_ship = TestFactories.make_fighter("f1", Vector2(0, 0), 0)
+	var enemy   = TestFactories.make_fighter("e1", Vector2(3000, 0), 1)
+
+	var crew_alpha  = _make_tactical_crew("c1", "f1", "alpha_strike")
+	crew_alpha.awareness.threats = ["e1"]
+	var crew_phalanx = _make_tactical_crew("c2", "f1", "phalanx")
+	crew_phalanx.awareness.threats = ["e1"]
+
+	var dec_alpha   = FighterPilotAI.make_decision(crew_alpha,  my_ship, [my_ship, enemy], [crew_alpha],  game_time)
+	var dec_phalanx = FighterPilotAI.make_decision(crew_phalanx, my_ship, [my_ship, enemy], [crew_phalanx], game_time)
+
+	var pursue_alpha:   float = dec_alpha.get("goal_weights",   {}).get("pursue", 0.0)
+	var pursue_phalanx: float = dec_phalanx.get("goal_weights", {}).get("pursue", 0.0)
+	assert_gt(pursue_alpha, pursue_phalanx,
+		"alpha_strike (all_out) should produce higher pursue weight than phalanx (defensive)")
+
+func test_tactical_order_applied_to_ship_orders():
+	# BEHAVIOR: After CrewIntegrationSystem processes a tactical decision,
+	# orders.current_order must be "tactical" and all directive fields present.
+	var my_ship = TestFactories.make_fighter("f1", Vector2(0, 0), 0)
+	var enemy   = TestFactories.make_fighter("e1", Vector2(3000, 0), 1)
+	var crew    = _make_tactical_crew("c1", "f1", "alpha_strike")
+	crew.awareness.threats = ["e1"]
+
+	var decision     = FighterPilotAI.make_decision(crew, my_ship, [my_ship, enemy], [crew], game_time)
+	var updated_ship = CrewIntegrationSystem.apply_decision_to_ship(my_ship, decision, crew)
+
+	assert_eq(updated_ship.orders.current_order, "tactical",
+		"CrewIntegrationSystem should set current_order = tactical")
+	assert_true(updated_ship.orders.has("goal_weights"),   "Orders should carry goal_weights")
+	assert_true(updated_ship.orders.has("preferred_range"),"Orders should carry preferred_range")
+	assert_true(updated_ship.orders.has("engagement_target"), "Orders should carry engagement_target")
+	assert_true(updated_ship.orders.has("formation_slot"), "Orders should carry formation_slot")
+	assert_true(updated_ship.orders.has("anchor_position"),"Orders should carry anchor_position")
+
+func test_tactical_order_drives_movement():
+	# BEHAVIOR: A ship with current_order "tactical" and valid goal_weights should
+	# move each frame — MovementSystem must not drift-idle it.
+	var my_ship = TestFactories.make_fighter("f1", Vector2(0, 0), 0)
+	var enemy   = TestFactories.make_fighter("e1", Vector2(3000, 0), 1)
+	my_ship.orders.current_order    = "tactical"
+	my_ship.orders.engagement_target = "e1"
+	my_ship.orders.goal_weights      = {"pursue": 1.0, "keep_range": 0.4, "evade": 0.05, "formation": 0.0}
+	my_ship.orders.preferred_range   = 1200.0
+	my_ship.orders.formation_slot    = Vector2.ZERO
+	my_ship.orders.anchor_position   = Vector2.ZERO
+	my_ship.orders.target_id         = "e1"
+
+	var result = MovementSystem.update_ship_movement(my_ship, [my_ship, enemy], 0.016, 0.0, [])
+
+	assert_ne(result.position, my_ship.position,
+		"Tactical order should cause the ship to move toward target")

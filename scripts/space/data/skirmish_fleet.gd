@@ -8,6 +8,10 @@ extends RefCounted
 const SAVE_PATH_TEMPLATE := "user://skirmish_fleet_team_%d.json"
 const LEGACY_PATH_TEMPLATE := "user://team_%d_fleet.json"
 const DOCTRINE_SAVE_PATH := "user://skirmish_doctrine.json"
+const FLEET_PRESET_PATH_TEMPLATE := "user://skirmish_fleet_preset_team_%d.json"
+
+## Default fleet-wide tactics preset id (a key in doctrine_presets.json).
+const DEFAULT_FLEET_PRESET := "alpha_strike"
 
 const STARTER_COUNTS: Dictionary = {
 	"fighter": 6,
@@ -123,10 +127,48 @@ static func empty_hull(ship_type: String, hull_index: int) -> Dictionary:
 		"name": "",
 		"crew": [],
 		"complement": _complement_from_crew(template_crew),
-		"tactics": {"mission": DEFAULT_MISSION, "mission_params": {}},
+		"tactics": _default_tactics(),
+		"command_role": "",
 		"iced": false,
 		"ship": {},
 	}
+
+
+## Default per-hull tactics block. Carries main's mission fields plus the
+## combat-tactics fields (role / overrides) consumed by TacticsSystem.
+## role "" = ship-class default; each override "" = inherit the fleet preset.
+static func _default_tactics() -> Dictionary:
+	return {
+		"mission": DEFAULT_MISSION,
+		"mission_params": {},
+		"role": "",
+		"overrides": {"mentality": "", "engagement_range": ""},
+	}
+
+
+## Load the persisted fleet-wide tactics preset id for team. Returns the
+## default preset when no file exists yet.
+static func get_fleet_preset(team: int) -> String:
+	var path: String = FLEET_PRESET_PATH_TEMPLATE % team
+	if not FileAccess.file_exists(path):
+		return DEFAULT_FLEET_PRESET
+	var raw := FileAccess.get_file_as_string(path)
+	var data: Variant = JSON.parse_string(raw)
+	if data is String and not (data as String).is_empty():
+		return data
+	return DEFAULT_FLEET_PRESET
+
+
+## Persist the fleet-wide tactics preset id for team. Returns true on success.
+static func save_fleet_preset(team: int, preset_id: String) -> bool:
+	var path: String = FLEET_PRESET_PATH_TEMPLATE % team
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("SkirmishFleet: failed to open %s for writing" % path)
+		return false
+	file.store_string(JSON.stringify(preset_id))
+	file.close()
+	return true
 
 
 ## Freshly randomized RNG, mirroring RoguelikeRun's convention so each
@@ -208,7 +250,8 @@ static func _make_hull(
 		"name": "",
 		"crew": crew,
 		"complement": complement,
-		"tactics": {"mission": DEFAULT_MISSION, "mission_params": {}},
+		"tactics": _default_tactics(),
+		"command_role": "",
 		"iced": false,
 		"ship": {},
 	}

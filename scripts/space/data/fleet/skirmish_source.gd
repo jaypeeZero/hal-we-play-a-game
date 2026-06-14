@@ -12,6 +12,7 @@ extends FleetSource
 var _team: int
 var _ships: Array
 var _pool: Array  # Array of crew dicts (same shape as ship crew members)
+var _fleet_preset: String  # fleet-wide combat-tactics preset id
 
 
 func _init(team: int) -> void:
@@ -19,6 +20,7 @@ func _init(team: int) -> void:
 	_team = team
 	_ships = SkirmishFleet.get_fleet(team)
 	_pool = _build_initial_pool()
+	_fleet_preset = SkirmishFleet.get_fleet_preset(team)
 
 
 ## All ships for this team (live in-memory copy).
@@ -159,6 +161,25 @@ func set_tactics(hull_id: String, tactics: Dictionary) -> void:
 	hull["tactics"] = tactics
 
 
+## Set the fleet-wide combat-tactics preset id (persisted on commit).
+func set_fleet_preset(preset_id: String) -> void:
+	_fleet_preset = preset_id
+
+
+## The fleet-wide combat-tactics preset id for this team.
+func get_fleet_preset() -> String:
+	return _fleet_preset
+
+
+## Mark a hull's manual command hat ("" | "squadron_leader" | "commander").
+func set_command_role(hull_id: String, role: String) -> void:
+	var hull: Dictionary = _hull(hull_id)
+	if hull.is_empty():
+		push_error("SkirmishSource.set_command_role: hull not found: %s" % hull_id)
+		return
+	hull["command_role"] = role
+
+
 ## Ice or activate a hull in the working copy.
 func set_iced(hull_id: String, iced: bool) -> void:
 	var hull: Dictionary = _hull(hull_id)
@@ -173,9 +194,10 @@ func set_squadron_mission(_squadron_id: String, _mission: String, _params: Dicti
 	pass
 
 
-## Persist the in-memory fleet back to disk.
+## Persist the in-memory fleet (and fleet preset) back to disk.
 func commit() -> void:
 	SkirmishFleet.save_fleet(_team, _ships)
+	SkirmishFleet.save_fleet_preset(_team, _fleet_preset)
 
 
 # Internal helpers

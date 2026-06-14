@@ -100,6 +100,21 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 	elif subtype == "idle":
 		updated.orders.current_order = ""
 		updated.orders.target_id = ""
+	elif subtype == "tactical":
+		# Blended steering directive from AttackAction / LargeShipPilotAI.
+		# Copies all directive fields onto orders so MovementSystem can
+		# re-blend them live each frame from current positions.
+		updated.orders.current_order = "tactical"
+		updated.orders.engagement_target = decision.get("engagement_target", "")
+		updated.orders.goal_weights      = decision.get("goal_weights", {})
+		updated.orders.preferred_range   = decision.get("preferred_range", 0.0)
+		updated.orders.formation_slot    = decision.get("formation_slot",  Vector2.ZERO)
+		updated.orders.anchor_position   = decision.get("anchor_position", Vector2.ZERO)
+		# facing_mode: "auto"/"nose_on"/"broadside" — role-derived by SteeringBlender
+		updated.orders.facing_mode       = decision.get("facing_mode", "auto")
+		# Mirror target_id so leash / other systems that read orders.target_id still work
+		updated.orders.target_id         = decision.get("target_id", "")
+
 	elif subtype.begins_with("fight_"):
 		# ALL fighter maneuvers (fight_*) - pass through everything automatically
 		# This ensures new maneuvers don't get forgotten

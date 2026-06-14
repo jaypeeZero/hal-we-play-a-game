@@ -78,6 +78,26 @@ func set_tactics(hull_id: String, tactics: Dictionary) -> void:
 	hull["tactics"] = tactics
 
 
+## Set the fleet-wide combat-tactics preset id on the live run state.
+## Stored on RoguelikeRun.tactics["preset"], which round-trips with the campaign save.
+func set_fleet_preset(preset_id: String) -> void:
+	RoguelikeRun.tactics["preset"] = preset_id
+
+
+## The fleet-wide combat-tactics preset id for the active run.
+func get_fleet_preset() -> String:
+	return str(RoguelikeRun.tactics.get("preset", ""))
+
+
+## Mark a hull's manual command hat ("" | "squadron_leader" | "commander").
+func set_command_role(hull_id: String, role: String) -> void:
+	var hull: Dictionary = RoguelikeRun.hull_by_id(hull_id)
+	if hull.is_empty():
+		push_error("RunSource.set_command_role: hull not found: %s" % hull_id)
+		return
+	hull["command_role"] = role
+
+
 ## Ice or activate a hull via RoguelikeRun.
 func set_iced(hull_id: String, iced: bool) -> void:
 	RoguelikeRun.set_hull_iced(hull_id, iced)

@@ -66,8 +66,42 @@ When working on this codebase:
   post into the mailbox via `_queue_crew_event`; the scheduler drains them,
   applies side effects (tactical memory, current-target clearing, order
   delivery), refreshes awareness, then runs the role's decision function
-- Urgent events (missile_locked, threat_appeared, ship_damaged) for a pilot
-  with known threats short-circuit to evasion
+- Urgent events (threat_appeared, ship_damaged) for a pilot with known threats
+  short-circuit to evasion
+
+**Combat AI (tactics → steering blend):**
+- `TacticsSystem` resolves fleet → squadron → ship/role doctrine into a per-crew
+  `tactics` block (mentality/range scalars, target priority, sector focus),
+  attached once at battle spawn and read every decision
+- `SteeringBlender.build_directive` turns that block + the live situation into a
+  weighted *steering goal* directive (subtype `"tactical"`): pursue / keep_range /
+  evade / formation / separation / support, plus `preferred_range` and a role
+  `facing_mode` (auto / nose_on / broadside). This replaces discrete engage modes
+  with one continuous blend
+- `MovementSystem.calculate_blended_control` is the live steering path for ships
+  carrying a `"tactical"` order: it re-blends those goals each frame from current
+  positions, so movement stays continuous between decisions
+- Reflexes (evasion, collision break, area leash) remain hard overrides — they run
+  before the brain and short-circuit the blend; orders never do
+- **Postures** ride a single channel (`combat_posture`): `withdraw` (evade-dominant,
+  disengage), `hold` (formation-dominant, anchor the line), `press` (pursue-dominant,
+  close and brawl). AI commit decisions and the player All-Out Attack order both
+  write here, so they converge on one read path
+- **Collision separation**: a separation goal repels friendlies that crowd within a
+  few hull-radii, ramping steeply at contact so ships keep formation without piling up
+
+**Crew command hierarchy:**
+- Command roles are HATS on existing crew, stamped each tick by
+  `CommandDesignationSystem` after wings form: the best-ship captain also wears the
+  Commander hat; the best wing pilot also wears the Squadron Leader hat. No new crew
+  are created
+- `CrewAISystem` reads the hats to dispatch `CommanderBrain` / `SquadronLeaderBrain`
+  alongside the crew's normal role brain
+- Command brains issue formation / focus-fire / posture orders down the chain. Orders
+  are ABSORBED into the receiver's steering blend (posture weights, focus-target
+  boost in `InformationSystem` targeting), never short-circuited into discrete moves
+- Focus-fire: a designated target gets a targeting-weight boost so a wing concentrates
+  fire without forcing every ship onto it
 
 **Event logging and monitoring:**
 - `BattleEventLogger` - Centralized event stream logger that emits standardized events for all battle interactions
@@ -78,9 +112,9 @@ When working on this codebase:
 - `IRenderable` base class for all visual entities
 - `VisualBridge` manages rendering of entities
 - Active renderer is `Renderer3D` (3D ship models from `data/ship_visuals.json`
-  drawn top-down beneath the 2D world; see `DOCS/plans/06_ship_visuals_3d.md`)
-- `Renderer78` (hull outlines from `data/hull_shapes/` JSON) is retained for
-  A/B comparison until the 3D migration completes, then gets deleted
+  drawn top-down beneath the 2D world); set on `VisualBridge` at startup
+- `Renderer78` (hull outlines from `data/hull_shapes/` JSON) is retained, unwired,
+  for A/B comparison only
 
 ## Testing Standards
 

@@ -2,7 +2,7 @@ class_name SquadronLeaderWorldState
 extends RefCounted
 
 ## Snapshot of a squadron leader's tactical situation, built once per decision tick.
-## Coordination-fail roll taken once here (overview §5).
+## Coordination-fail roll taken once here so actions are deterministic for the tick.
 
 # Raw inputs
 var crew_data: Dictionary
@@ -22,7 +22,7 @@ var is_scattered: bool
 var coordination_style: int          # CrewIntegrationSystem.CoordinationStyle.*
 var knowledge_actions: Array         # suggested actions from query_squadron_knowledge
 
-# INDIVIDUAL-style roll — taken once per decision (overview §5)
+# INDIVIDUAL-style roll — taken once per decision
 var coordination_failed: bool        # true → INDIVIDUAL leader fails to coordinate
 
 

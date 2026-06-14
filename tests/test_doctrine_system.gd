@@ -1,6 +1,6 @@
 extends GutTest
 
-## Fleet doctrine (plan 06, increment 2b): template-authored standing
+## Fleet doctrine: template-authored standing
 ## instructions assigned at fleet / class / individual scope, compiled
 ## into each crew member's known_patterns at battle spawn.
 
@@ -248,7 +248,7 @@ func test_entries_without_hull_id_are_unmapped():
 
 
 # ============================================================================
-# DONE-CRITERION (plan 06 increment 2b)
+# DONE-CRITERION
 # ============================================================================
 
 func test_doctrine_measurably_changes_saved_crew_behavior_in_battle():

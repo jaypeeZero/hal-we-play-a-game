@@ -26,6 +26,12 @@ var fleet_hulls: Array = []
 ## Player standing instructions for this run (see DoctrineSystem).
 ## Run state: reset at run start, wiped at run end.
 var doctrine: Dictionary = DoctrineSystem.empty_doctrine()
+## Player combat tactics for this run (see TacticsSystem).
+## Holds the selected fleet preset id ({"preset": ...}); per-hull role/overrides
+## live on each hull and are resolved at spawn by compile_player_tactics().
+## Defaults to empty preset so resolution yields balanced engine defaults.
+## Run state: reset at run start, wiped at run end.
+var tactics: Dictionary = TacticsSystem.empty_tactics()
 ## The enemy fleet for the next/pending battle, set from the destination node
 ## when a battle is launched (the campaign map sets it). Empty until a battle node is selected.
 var enemy_fleet: Dictionary = {}
@@ -81,6 +87,7 @@ func start_run(initial_fleet: Dictionary) -> void:
 	_next_hull_id = 0
 	fleet_hulls = _create_fleet_roster(initial_fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
+	tactics = TacticsSystem.empty_tactics()
 	campaign = CampaignGenerator.generate(_new_rng(), FleetDataManager.load_fleet(1))
 	enemy_fleet = {}
 	money = EconomySystem.roll_starting_money(fleet_hulls, _new_rng())
@@ -101,6 +108,7 @@ func end_run() -> void:
 	started_first_battle = false
 	fleet_hulls = []
 	doctrine = DoctrineSystem.empty_doctrine()
+	tactics = TacticsSystem.empty_tactics()
 	enemy_fleet = {}
 	campaign = {}
 	money = 0
@@ -896,6 +904,7 @@ func save_campaign_to_disk() -> bool:
 		"campaign": campaign,
 		"fleet_hulls": fleet_hulls,
 		"doctrine": doctrine,
+		"tactics": tactics,
 		"enemy_fleet": enemy_fleet,
 		"money": money,
 		"current_star_date": current_star_date,
@@ -914,6 +923,7 @@ func load_campaign_from_disk() -> bool:
 	campaign = data.get("campaign", {})
 	fleet_hulls = data.get("fleet_hulls", [])
 	doctrine = data.get("doctrine", DoctrineSystem.empty_doctrine())
+	tactics = data.get("tactics", TacticsSystem.empty_tactics())
 	enemy_fleet = data.get("enemy_fleet", {})
 	money = int(data.get("money", 0))
 	current_star_date = data.get("current_star_date", STAR_DATE_RUN_START)

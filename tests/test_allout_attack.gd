@@ -1,6 +1,6 @@
 extends GutTest
 
-## Tests for Layer C — Player "All-Out Attack" order.
+## Tests for the player "All-Out Attack" order.
 ## Verifies that issuing the order stamps press_attack posture on every
 ## player-team pilot/captain and that cancelling strips it again.
 ## Uses minimal mocks — we test the pure posture-writing logic, not the
@@ -177,8 +177,13 @@ func test_player_issued_posture_selects_press_maneuver():
 	var action := AttackAction.new()
 	var decision := action.execute(ws)
 
-	assert_eq(decision.get("subtype", ""), "fight_press_attack",
-		"Player all-out order should route fighter to fight_press_attack maneuver")
+	# Press-attack now routes through the blender (subtype "tactical") with the
+	# aggressive "press" posture rather than a discrete fight_press_attack maneuver.
+	assert_eq(decision.get("subtype", ""), "tactical",
+		"Player all-out order routes the fighter through the blended press posture")
+	var gw: Dictionary = decision.get("goal_weights", {})
+	assert_gt(gw.get("pursue", 0.0), gw.get("keep_range", 1.0),
+		"All-out press makes pursue the dominant goal — the fighter commits and closes")
 
 
 # ---------------------------------------------------------------------------

@@ -25,6 +25,11 @@ func precondition(ws: CommanderWorldState) -> bool:
 		and ws.engagement_elapsed >= WingConstants.COMMIT_STALL_WINDOW_SECONDS
 		and ws.focus_target_net_delta <= WingConstants.COMMIT_STALL_NET_DAMAGE_EPSILON
 	)
+	# Doctrine gate: only aggressive fleets escalate to a fleet-wide press.
+	# Defensive/balanced doctrines hold — preserves doctrine variety instead of
+	# every battle collapsing into a charge once the timer fires.
+	if ws.fleet_aggression < WingConstants.COMMIT_MIN_AGGRESSION:
+		return false
 	return few_enemies_trigger or stalemate_trigger
 
 

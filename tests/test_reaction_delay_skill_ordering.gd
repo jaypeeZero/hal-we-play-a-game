@@ -2,8 +2,7 @@ extends GutTest
 
 ## Reaction commit delay must be strictly ordered by the gating skill —
 ## `piloting` for pilots, `tactics` for capital captains. Combined with
-## detection latency from Phase 03, this is what produces the elite-vs-
-## rookie spread in S1 / S1b.
+## detection latency, this is what produces the elite-vs-rookie spread.
 
 func _make_crew(skill_key: String, skill: float, composure: float = 0.5, stress: float = 0.0) -> Dictionary:
 	return {

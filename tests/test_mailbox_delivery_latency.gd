@@ -1,6 +1,6 @@
 extends GutTest
 
-## Phase 03: mailbox supports per-event delivery latency.
+## Mailbox supports per-event delivery latency.
 ##
 ## Events whose `deliver_at` is in the future are not eligible — drain
 ## leaves them queued and has_pending reports false until time catches up.

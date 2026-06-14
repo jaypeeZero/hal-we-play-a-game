@@ -6,8 +6,6 @@ extends GutTest
 ## underlying queue / mailbox implementation.  Tests for behaviors not yet
 ## implemented are marked pending() and will activate as the new modules
 ## come online.
-##
-## Phase 1 of the optimize-npc-commands branch.
 
 # ============================================================================
 # BEHAVIOR 1: Sleeping crew do not decide

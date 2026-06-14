@@ -369,7 +369,7 @@ const SQUADRON_ASSIGNMENT_QUALITY_MAX = 1.0  # 1.0-skill: optimal matching
 const SUBSYSTEM_INTENDED_HIT_BIAS = 0.7
 
 # =============================================================================
-# AWARENESS & DETECTION (Phase 03)
+# AWARENESS & DETECTION
 # =============================================================================
 # Skill-based detection latency. Awareness gates how quickly a crew member's
 # mailbox actually receives a `threat_appeared` event after the world fires
@@ -397,7 +397,7 @@ const HIGH_TACTICS_THRESHOLD = 0.7
 const TACTICS_NOISE = 0.5
 
 # =============================================================================
-# REACTION LATENCY (Phase 04)
+# REACTION LATENCY
 # =============================================================================
 # Pilots/captains commit a reactive decision after a delay gated by skill.
 # Composes with detection latency: rookies are doubly slow.
@@ -534,7 +534,7 @@ const COMPOSURE_PIVOT := 0.5          # composure >= pivot -> aggression up, els
 ## Lower = battles end faster. Start at 0.5 (half total health).
 const REPAIR_POOL_FRACTION_OF_MAX_HEALTH := 0.5
 
-# --- Press-attack maneuver (Layer A) ---
+# --- Press-attack maneuver ---
 ## Desired distance when a fighter presses a capital under press_attack posture.
 const PRESS_ATTACK_RANGE := 700.0
 ## Tolerance band around PRESS_ATTACK_RANGE; no thrust when within this band.
@@ -553,3 +553,8 @@ const COMMIT_STALL_NET_DAMAGE_EPSILON := 5.0
 const COMMIT_POSTURE_DURATION := 15.0
 ## GOAP cost for a commit/press-attack action — must beat hold/standoff.
 const COMMIT_COST := 0.2
+## Minimum doctrine aggression (resolved mentality_scalar, 0..1) for the
+## commit-to-press escalation to fire. Below this, defensive/balanced fleets
+## hold their tactics (a kiting doctrine never auto-charges) — preserves the
+## emergent variety between aggressive and defensive doctrines.
+const COMMIT_MIN_AGGRESSION := 0.6
