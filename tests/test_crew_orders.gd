@@ -218,3 +218,17 @@ func _delete_if_exists(path: String) -> void:
 	"""Delete a user:// file if it exists."""
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_scope_view_surfaces_a_crews_personal_orders() -> void:
+	# Regression: scope_view had no SCOPE_CREW branch, so a crew's own orders
+	# were never returned and the Orders list always rendered empty.
+	var doctrine: Dictionary = DoctrineSystem.empty_doctrine()
+	DoctrineSystem.set_instruction_in_place(
+		doctrine, DoctrineSystem.SCOPE_CREW, "crew_x", PILOT_TEMPLATE, {})
+	var view: Array = DoctrineSystem.scope_view(
+		doctrine, DoctrineSystem.SCOPE_CREW, "crew_x")
+	assert_eq(view.size(), 1, "crew's own instruction is visible in its scope view")
+	var other: Array = DoctrineSystem.scope_view(
+		doctrine, DoctrineSystem.SCOPE_CREW, "crew_other")
+	assert_eq(other.size(), 0, "a different crew sees none of crew_x's orders")
