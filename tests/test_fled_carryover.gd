@@ -3,7 +3,7 @@ extends GutTest
 ## Behavior tests for the Roguelike fled-ship carryover (record_battle_result):
 ## - Victory: a fled hull survives carrying its flee-time damage.
 ## - Defeat with some fled: exactly the fled hulls carry forward, the rest gone.
-## - Defeat with none fled: the existing demotion-stash path is untouched.
+## - Defeat with none fled: a total loss empties the fleet and stashes its final state.
 ## - Crew on a lost (non-fled) hull are pruned from doctrine.
 
 var _saved_fleet_hulls: Array
@@ -125,7 +125,7 @@ func test_defeat_with_some_fled_carries_only_those_hulls():
 		"a defeat with fled ships must flag pending_battle_fled")
 
 
-func test_defeat_with_zero_fled_uses_the_demotion_path():
+func test_defeat_with_zero_fled_is_a_total_loss():
 	RoguelikeRun.start_run(_counts({"fighter": 2}))
 	var hulls: Array = RoguelikeRun.fleet_hulls
 	var final_ships: Array = [
@@ -135,11 +135,11 @@ func test_defeat_with_zero_fled_uses_the_demotion_path():
 	RoguelikeRun.record_battle_result(CampaignSystem.RESULT_DEFEAT, final_ships)
 
 	assert_true(RoguelikeRun.fleet_hulls.is_empty(),
-		"a total defeat empties the hull fleet for the demotion roll")
+		"a total defeat empties the hull fleet")
 	assert_false(RoguelikeRun.pending_battle_fled,
 		"a defeat with no fled ships must not flag pending_battle_fled")
 	assert_false(RoguelikeRun.lost_fleet_final_ships.is_empty(),
-		"the lost fleet's final state must be stashed for the demotion")
+		"the lost fleet's final state is stashed for the post-battle summary")
 
 
 # ============================================================================

@@ -4,7 +4,7 @@ extends Control
 ## Post-battle summary: economy, fleet health before/after, crew development.
 ## Always shown after a roguelike battle (victory and defeat alike).
 ## The Continue button forwards to the campaign map so the map's
-## _resolve_pending_battle still runs (promotion/demotion/game-over unchanged).
+## _resolve_pending_battle still runs (promotion / defeat / game-over).
 
 const CAMPAIGN_MAP_SCENE := "res://scenes/campaign_map_3d.tscn"
 const CONDITION_LOW_RATIO := 0.4

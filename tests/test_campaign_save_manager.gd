@@ -15,13 +15,10 @@ func after_each() -> void:
 	CampaignSaveManager.delete_save()
 
 
-const TEST_ENEMY_FLEET := {"fighter": 3, "capital": 1}
-
-
 func _campaign() -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = TEST_SEED
-	return CampaignGenerator.generate(rng, TEST_ENEMY_FLEET)
+	return CampaignGenerator.generate(rng)
 
 
 func _payload() -> Dictionary:

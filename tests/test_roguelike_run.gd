@@ -671,75 +671,38 @@ func test_defeat_stashes_final_fleet_state_and_empties_fleet():
 		"The defeat is left pending for the campaign map to resolve")
 	assert_eq(RoguelikeRun.lost_fleet_final_ships.size(), 1,
 		"Defeat stashes the wiped fleet's final ship states")
-	assert_eq(RoguelikeRun.lost_fleet_final_crew.size(), 1,
-		"Defeat stashes the wiped fleet's crew groups")
 	assert_true(RoguelikeRun.is_fleet_empty(), "A wiped fleet has no hulls left")
 
 
+# CAN_AFFORD_REBUILD
+
+func test_can_afford_rebuild_true_when_money_covers_cheapest_hull():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	var cheapest := -1
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		var price := EconomySystem.ship_purchase_price(ship_type)
+		if cheapest < 0 or price < cheapest:
+			cheapest = price
+	RoguelikeRun.money = cheapest
+
+	assert_true(RoguelikeRun.can_afford_rebuild(),
+		"can_afford_rebuild should be true when money equals the cheapest hull price")
+
+
+func test_can_afford_rebuild_false_when_money_is_zero():
+	RoguelikeRun.start_run(_counts({"fighter": 1}))
+	RoguelikeRun.money = 0
+
+	assert_false(RoguelikeRun.can_afford_rebuild(),
+		"can_afford_rebuild should be false when the player has no money")
+
+
+
+
+
 # ============================================================================
-# DEMOTION
+
 # ============================================================================
-
-func test_apply_demotion_combines_config_with_survivors():
-	RoguelikeRun.start_run(_counts({"fighter": 1}))
-	var survivor := _ship_with_crew("corvette", "operational", "veteran")
-	var survivors := {"ships": [survivor],
-		"crew_groups": [{"ship_type": "corvette", "crew": survivor["crew"].duplicate(true)}]}
-
-	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
-
-	var counts := RoguelikeRun.fleet_counts()
-	assert_eq(counts["fighter"], 2,
-		"The demoted fleet includes the saved config's hulls")
-	assert_eq(counts["corvette"], 1,
-		"The demoted fleet includes the rolled survivors")
-
-
-func test_apply_demotion_only_survivors_carry_damage_state():
-	RoguelikeRun.start_run(_counts({"fighter": 1}))
-	var survivor := _ship_with_crew("corvette", "operational", "veteran")
-	survivor["armor_sections"][0]["current_armor"] = 1
-	var survivors := {"ships": [survivor], "crew_groups": []}
-
-	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
-
-	var damaged_hulls := RoguelikeRun.fleet_hulls.filter(
-		func(h): return not h.ship.is_empty())
-	assert_eq(damaged_hulls.size(), 1,
-		"Only survivor hulls carry a saved damage state; fresh hulls spawn pristine")
-	assert_eq(int(damaged_hulls[0].ship["armor_sections"][0]["current_armor"]), 1,
-		"Survivor damage state carries into the demoted run")
-
-
-func test_apply_demotion_rosters_fresh_crews_plus_survivor_crews():
-	RoguelikeRun.start_run(_counts({"fighter": 1}))
-	var survivor := _ship_with_crew("corvette", "operational", "veteran")
-	var survivors := {"ships": [survivor],
-		"crew_groups": [{"ship_type": "corvette", "crew": survivor["crew"].duplicate(true)}]}
-
-	RoguelikeRun.apply_demotion(survivors, _counts({"fighter": 2}))
-
-	assert_eq(RoguelikeRun.fleet_hulls.size(), 3,
-		"Two fresh fighter hulls plus the surviving corvette hull")
-	assert_true(_roster_has_crew_id("veteran"),
-		"The surviving crew keeps its identity through the demotion")
-
-
-func test_apply_demotion_prunes_doctrine_of_dead_crew():
-	RoguelikeRun.start_run(_counts({"fighter": 1}))
-	var dead := _ship_with_crew("fighter", "destroyed", "casualty")
-	RoguelikeRun.lost_fleet_final_crew = [
-		{"ship_type": "fighter", "crew": dead["crew"].duplicate(true)}]
-	DoctrineSystem.set_instruction_in_place(
-		RoguelikeRun.doctrine, DoctrineSystem.SCOPE_CREW, "casualty", PILOT_DOCTRINE)
-
-	RoguelikeRun.apply_demotion({"ships": [], "crew_groups": []}, _counts({"fighter": 1}))
-
-	assert_false(RoguelikeRun.doctrine[DoctrineSystem.SCOPE_CREW].has("casualty"),
-		"Doctrine authored for crew lost in the rout is purged")
-	assert_true(RoguelikeRun.lost_fleet_final_crew.is_empty(),
-		"The demotion consumes the stashed lost-fleet state")
-
 
 func test_reconcile_keeps_callsigns_unique_after_adding():
 	RoguelikeRun.start_run(_counts({"fighter": 2}))

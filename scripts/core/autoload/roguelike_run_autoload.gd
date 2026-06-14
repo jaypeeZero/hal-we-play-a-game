@@ -49,10 +49,10 @@ var pending_battle_node_id: String = ""
 var pending_battle_result: String = ""
 ## True when the last recorded battle had at least one ship flee the field.
 ## Read by the campaign map to route a defeat-with-flee to a regroup-in-place
-## instead of demotion / game-over. Consumed by _resolve_pending_battle.
+## instead of a total loss. Consumed by _resolve_pending_battle.
 var pending_battle_fled: bool = false
 ## Final state of a wiped fleet (ships and crew groups at the moment of
-## defeat), kept so a demotion can roll damaged survivors from it.
+## defeat), stashed for the post-battle summary.
 var lost_fleet_final_ships: Array = []
 var lost_fleet_final_crew: Array = []
 var editor_return_scene: String = ""
@@ -72,7 +72,7 @@ var last_battle_progression: Array = []
 const COMPLEMENT_TEMPLATE_SKILL := 0.5
 
 ## Roster entry ids consumed from the hiring pool this run — by run-start
-## crews, demotion refills, and shop hires alike. Consumed ids never return
+## crews and shop hires alike. Consumed ids never return
 ## to the pool, even when the crew member dies or is dismissed. Reset when a
 ## run starts or ends; persisted with the campaign save.
 var hired_roster_ids: Array = []
@@ -88,7 +88,7 @@ func start_run(initial_fleet: Dictionary) -> void:
 	fleet_hulls = _create_fleet_roster(initial_fleet)
 	doctrine = DoctrineSystem.empty_doctrine()
 	tactics = TacticsSystem.empty_tactics()
-	campaign = CampaignGenerator.generate(_new_rng(), FleetDataManager.load_fleet(1))
+	campaign = CampaignGenerator.generate(_new_rng())
 	enemy_fleet = {}
 	money = EconomySystem.roll_starting_money(fleet_hulls, _new_rng())
 	last_battle_summary = {}
@@ -618,6 +618,19 @@ func is_fleet_empty() -> bool:
 	return fleet_hulls.is_empty()
 
 
+## True when the player can afford to buy the cheapest available hull.
+## Used after a defeat to decide between game-over and reset_sector_to_shop.
+func can_afford_rebuild() -> bool:
+	var cheapest := -1
+	for ship_type in FleetDataManager.SHIP_TYPES:
+		var price := EconomySystem.ship_purchase_price(ship_type)
+		if cheapest < 0 or price < cheapest:
+			cheapest = price
+	if cheapest < 0:
+		return false
+	return money >= cheapest
+
+
 ## True when an active run has at least one hull — the gate for showing crew
 ## management (crew instances only exist on fleet_hulls during a live run).
 func has_fleet() -> bool:
@@ -668,8 +681,8 @@ func _ship_health_total(ship: Dictionary) -> int:
 ## Record a battle's outcome for the campaign map to resolve. Victory folds
 ## the survivors back into the persistent hull fleet (damage, casualties,
 ## insurance, doctrine pruning all via apply_battle_outcome). Defeat stashes
-## the wiped fleet's final state so a demotion can roll damaged survivors
-## from it, then empties the hull fleet. `final_ships` is every team-0 ship's
+## the wiped fleet's final state for the post-battle summary, then empties
+## the hull fleet. `final_ships` is every team-0 ship's
 ## end-of-battle state, each carrying its hull_id and its live crew.
 func record_battle_result(result: String, final_ships: Array) -> void:
 	pending_battle_result = result
@@ -689,9 +702,10 @@ func record_battle_result(result: String, final_ships: Array) -> void:
 		lost_fleet_final_ships = []
 		lost_fleet_final_crew = []
 	else:
-		# Defeat, total loss → existing demotion / game-over path, unchanged.
+		# Defeat, total loss → fleet is wiped. The campaign map then either
+		# ends the run or resets the sector to a shop (see can_afford_rebuild).
 		lost_fleet_final_ships = final_ships.duplicate(true)
-		lost_fleet_final_crew = _crew_groups_for_ships(final_ships)
+		lost_fleet_final_crew = []
 		fleet_hulls = []
 
 
@@ -730,85 +744,6 @@ func _carry_forward_fled(fled_ships: Array) -> void:
 	fleet_hulls = kept
 	_prune_doctrine_for_roster(dropped_crew_ids, fleet_counts())
 	squadrons = SquadronSystem.prune_for_roster(squadrons, lost_hull_ids)
-
-
-## Crew groups (ship_type + crew) rebuilt from the crew attached to each ship
-## dict. Feeds the demotion survivor roll (DemotionFleetBuilder), which matches
-## crews to ships by type.
-func _crew_groups_for_ships(ships: Array) -> Array:
-	var groups: Array = []
-	for ship in ships:
-		var members: Array = ship.get("crew", [])
-		if not members.is_empty():
-			groups.append({"ship_type": ship.get("type", ""), "crew": members.duplicate(true)})
-	return groups
-
-
-## Rebuild the run's hull fleet for a demotion: the saved fleet config (fresh
-## hulls, fresh crews, undamaged) plus the rolled survivors of the lost fleet
-## (battered hulls keeping their crews). Survivor crews keep their identity;
-## doctrine authored for crew that did not survive the rout is pruned.
-func apply_demotion(survivors: Dictionary, fleet_config: Dictionary) -> void:
-	var survivor_ships: Array = survivors.get("ships", [])
-	var survivor_crew_groups: Array = survivors.get("crew_groups", [])
-
-	var dead_ids := _dead_crew_ids(survivor_crew_groups)
-	fleet_hulls = _create_fleet_roster(fleet_config)
-	for survivor_hull in _hulls_from_survivors(survivor_ships, survivor_crew_groups):
-		fleet_hulls.append(survivor_hull)
-
-	_prune_doctrine_for_roster(dead_ids, fleet_counts())
-	# The stash is consumed: the demotion is its only reader.
-	lost_fleet_final_ships = []
-	lost_fleet_final_crew = []
-
-
-## Turn the demotion's rolled survivor ships + crew groups into hull records:
-## each battered ship becomes a hull keeping its damage state and (by type) its
-## surviving crew, so the limped-home remnant carries forward intact.
-func _hulls_from_survivors(survivor_ships: Array, survivor_crew_groups: Array) -> Array:
-	var remaining_groups: Array = survivor_crew_groups.duplicate(true)
-	var hulls: Array = []
-	for ship in survivor_ships:
-		var ship_type: String = ship.get("type", "")
-		var crew: Array = _take_crew_group_for_type(remaining_groups, ship_type)
-		var weapons: Array = ShipData.get_ship_template(ship_type).get("weapons", [])
-		var template_crew: Array = CrewData.bind_gunners_to_weapons(
-			CrewData.create_crew_for_ship_type(ship_type, weapons.size(), COMPLEMENT_TEMPLATE_SKILL), weapons)
-		var hull_id := "hull_%d" % _next_hull_id
-		_next_hull_id += 1
-		hulls.append({
-			"hull_id": hull_id,
-			"ship_type": ship_type,
-			"iced": false,
-			"crew": crew,
-			"complement": _complement_from_crew(template_crew),
-			"ship": _strip_crew(ship),
-		})
-	return hulls
-
-
-func _take_crew_group_for_type(groups: Array, ship_type: String) -> Array:
-	for i in range(groups.size()):
-		if groups[i].get("ship_type", "") == ship_type:
-			return groups.pop_at(i).get("crew", [])
-	return []
-
-
-## Crew ids present in the lost fleet's final state but absent from the
-## demotion survivors: their doctrine no longer has a referent.
-func _dead_crew_ids(survivor_crew_groups: Array) -> Array:
-	var survived := {}
-	for group in survivor_crew_groups:
-		for member in group.get("crew", []):
-			survived[member.get("crew_id", "")] = true
-	var dead: Array = []
-	for group in lost_fleet_final_crew:
-		for member in group.get("crew", []):
-			var crew_id: String = member.get("crew_id", "")
-			if not survived.has(crew_id):
-				dead.append(crew_id)
-	return dead
 
 
 ## True when `crew_id` can be moved to `dest_hull_id`: the member exists,
