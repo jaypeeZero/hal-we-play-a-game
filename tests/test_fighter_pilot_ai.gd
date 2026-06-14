@@ -212,7 +212,7 @@ func test_movement_system_handles_fighter_engage():
 	var target = TestFactories.make_fighter("enemy1", Vector2(300, 0), 1)
 
 	# Set up fighter_engage order with various subtypes
-	var subtypes = ["fight_pursue_full_speed", "fight_dogfight_maneuver", "fight_dodge_and_weave", "fight_group_run_attack"]
+	var subtypes = ["fight_pursue_full_speed", "fight_dogfight_maneuver", "fight_dodge_and_weave"]
 
 	for subtype in subtypes:
 		ship.orders.current_order = "fighter_engage"

@@ -543,20 +543,16 @@ static func _build_fighter_play_geometry(crew_data: Dictionary, ship_data: Dicti
 ## Get decision delay for fighter maneuvers
 static func _get_fighter_decision_delay(maneuver_subtype: String) -> float:
 	match maneuver_subtype:
-		"fight_dogfight_maneuver", "fight_tight_pursuit":
+		"fight_dogfight_maneuver":
 			return randf_range(0.2, 0.4)  # Very frequent updates for close combat
-		"fight_flank_behind", "fight_pursue_tactical":
+		"fight_pursue_tactical":
 			return randf_range(0.4, 0.7)  # Moderate updates for tactical maneuvers
-		"fight_group_run_attack", "fight_dodge_and_weave":
+		"fight_dodge_and_weave":
 			return randf_range(0.3, 0.6)  # Quick updates for dynamic maneuvers
-		"fight_pursue_full_speed", "fight_group_run_approach":
+		"fight_pursue_full_speed":
 			return randf_range(0.7, 1.0)  # Less frequent for straightforward approach
 		"fight_wing_rejoin":
 			return randf_range(0.2, 0.4)  # Frequent updates when rejoining lead
-		"fight_wing_follow":
-			return randf_range(0.4, 0.7)  # Moderate updates when following lead
-		"fight_wing_engage":
-			return randf_range(0.2, 0.4)  # Frequent updates when engaging with wing
 		"idle":
 			return randf_range(2.0, 4.0)  # Slow when idle
 		_:

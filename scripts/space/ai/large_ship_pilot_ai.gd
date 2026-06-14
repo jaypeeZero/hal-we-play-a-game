@@ -254,23 +254,6 @@ static func _compute_next_phase(
 			return "closing"
 
 
-## Map a phase tag to a maneuver subtype consumed by MovementSystem.
-static func _phase_to_maneuver(phase: String) -> String:
-	match phase:
-		"closing":
-			return "large_ship_close_to_broadside"
-		"broadside":
-			return "large_ship_hold_broadside"
-		"kiting":
-			return "large_ship_kite"
-		"repositioning":
-			return "large_ship_reposition_arc"
-		"fighting_withdrawal":
-			return "large_ship_fighting_withdrawal"
-		_:
-			return "large_ship_close_to_broadside"
-
-
 ## ---------------------------------------------------------------------------
 ## PERSONALITY — skill / aggression / composure
 ## ---------------------------------------------------------------------------
