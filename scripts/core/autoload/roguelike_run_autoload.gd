@@ -82,6 +82,14 @@ var hired_roster_ids: Array = []
 var run_roster: Array = []
 ## Monotonic source of unique hull ids for the run.
 var _next_hull_id: int = 0
+## Resolved event records for the current run, newest first.
+## Capped at WingConstants.NEWS_FEED_MAX_ENTRIES. Persisted with the save.
+var news_feed: Array = []
+## Active temp effects to be folded in at battle start.
+## Each record: {kind, target:{kind,...}, field/skill/scope, value,
+## expires_after_battles}. Decremented by EventSystem.tick_battle_effects
+## after each battle. Persisted with the save.
+var active_effects: Array = []
 
 
 func start_run(initial_fleet: Dictionary) -> void:
@@ -107,6 +115,8 @@ func start_run(initial_fleet: Dictionary) -> void:
 	last_jump_repair_summary = {}
 	squadrons = []
 	last_battle_progression = []
+	news_feed = []
+	active_effects = []
 
 
 func end_run() -> void:
@@ -131,6 +141,8 @@ func end_run() -> void:
 	run_roster = []
 	_next_hull_id = 0
 	last_battle_progression = []
+	news_feed = []
+	active_effects = []
 
 
 ## The live hiring pool for this run: run_roster entries not yet consumed,
@@ -702,11 +714,172 @@ func apply_jump_repairs(destination_star_date: int, is_rnr: bool) -> Dictionary:
 		"points_repaired": points_repaired,
 		"date_delta": date_delta,
 	}
+
+	# Generate and apply jump events stamped with the new current_star_date.
+	# Only fire when a real campaign is running (nodes exist). Tests that set
+	# fleet_hulls directly without a campaign skip event generation.
+	if active and not campaign.get("nodes", {}).is_empty():
+		roll_jump_events(date_delta)
+
 	return last_jump_repair_summary
 
 
 func _ship_health_total(ship: Dictionary) -> int:
 	return DamageResolver.calculate_total_armor(ship) + DamageResolver.calculate_total_internal_health(ship)
+
+
+## Build the run_state snapshot for EventSystem, generate jump events, apply
+## effects (permanent mutations here; temp effects pushed onto active_effects),
+## and prepend to news_feed.  Returns the new events Array.
+func roll_jump_events(date_delta: int) -> Array:
+	"""Generate and apply star-date events for a jump of `date_delta` star dates."""
+	# Build flat crew list from all hull crews
+	var all_crew: Array = []
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			all_crew.append(member)
+
+	# Build place names from campaign nodes
+	var places: Array = []
+	for node_id in campaign.get("nodes", {}):
+		var node: Dictionary = campaign["nodes"][node_id]
+		var nname: String = str(node.get("name", ""))
+		if not nname.is_empty():
+			places.append(nname)
+
+	var run_state: Dictionary = {
+		"hulls": fleet_hulls,
+		"crew": all_crew,
+		"star_date": current_star_date,
+		"places": places,
+		"battles_done": started_first_battle,
+	}
+
+	var rng := _new_rng()
+	var events: Array = EventSystem.generate_for_jump(run_state, date_delta, rng)
+
+	# Apply each event's effects
+	for event in events:
+		var classified: Dictionary = EventSystem.classify_effects(event)
+
+		# Apply permanent effects in place
+		for perm in classified.get("permanent", []):
+			_apply_permanent_effect(perm, event)
+
+		# Push temp effects onto active_effects
+		for temp in classified.get("temp", []):
+			active_effects.append(temp)
+
+	# Prepend to news_feed, cap to ring-buffer size
+	var combined: Array = events.duplicate() + news_feed
+	if combined.size() > WingConstants.NEWS_FEED_MAX_ENTRIES:
+		combined = combined.slice(0, WingConstants.NEWS_FEED_MAX_ENTRIES)
+	news_feed = combined
+
+	return events
+
+
+## Apply one permanent effect from a resolved event onto run state.
+func _apply_permanent_effect(effect: Dictionary, _event: Dictionary) -> void:
+	"""Mutate run state for a single permanent effect descriptor."""
+	var kind: String = str(effect.get("kind", ""))
+	var target: Dictionary = effect.get("resolved_target", {})
+	var target_kind: String = str(target.get("kind", ""))
+
+	match kind:
+		"crew_skill":
+			var crew_id: String = str(target.get("crew_id", ""))
+			var skill: String = str(effect.get("skill", ""))
+			var value: float = float(effect.get("value", 0.0))
+			for hull in fleet_hulls:
+				for member in hull.get("crew", []):
+					if member.get("crew_id", "") == crew_id:
+						var current: float = float(member.get("stats", {}).get("skills", {}).get(skill, 0.0))
+						member["stats"]["skills"][skill] = clampf(current + value, 0.0, 1.0)
+
+		"add_attribute":
+			var crew_id: String = str(target.get("crew_id", ""))
+			var attr_id: String = str(effect.get("attribute", ""))
+			for hull in fleet_hulls:
+				for member in hull.get("crew", []):
+					if member.get("crew_id", "") == crew_id:
+						var attrs: Array = member.get("attributes", [])
+						if not attrs.has(attr_id):
+							attrs.append(attr_id)
+						member["attributes"] = attrs
+
+		"remove_attribute":
+			var crew_id: String = str(target.get("crew_id", ""))
+			var attr_id: String = str(effect.get("attribute", ""))
+			for hull in fleet_hulls:
+				for member in hull.get("crew", []):
+					if member.get("crew_id", "") == crew_id:
+						var attrs: Array = member.get("attributes", []).duplicate()
+						attrs.erase(attr_id)
+						member["attributes"] = attrs
+
+		"ship_repair":
+			var hull_id: String = str(target.get("hull_id", ""))
+			var section: String = str(effect.get("section", "body"))
+			var value: int = int(effect.get("value", 0))
+			for hull in fleet_hulls:
+				if hull.get("hull_id", "") == hull_id:
+					_apply_ship_hp_delta(hull, section, value, true)
+
+		"ship_damage":
+			var hull_id: String = str(target.get("hull_id", ""))
+			var section: String = str(effect.get("section", "body"))
+			var value: int = int(effect.get("value", 0))
+			for hull in fleet_hulls:
+				if hull.get("hull_id", "") == hull_id:
+					_apply_ship_hp_delta(hull, section, -value, true)
+
+		"money":
+			money = maxi(0, money + int(effect.get("value", 0)))
+
+		"intel":
+			# intel effects are always temp (battles:N); permanent intel is a
+			# no-op here — already pushed to active_effects via classify_effects.
+			pass
+
+		_:
+			# Unknown permanent effect kind — safe to ignore; already validated.
+			pass
+
+	# Suppress unused var warning for fleet/none targets
+	if target_kind == "fleet" or target_kind == "none":
+		pass
+
+
+## Adjust armor or internals HP on a hull's persisted ship record.
+## Positive delta heals (up to max); negative deals damage. Creates an empty
+## ship record stub if the hull has none (so damage from events is recorded).
+func _apply_ship_hp_delta(hull: Dictionary, section: String, delta: int, _heal: bool) -> void:
+	"""Adjust the persisted armor or internals health on a hull record."""
+	var saved: Dictionary = hull.get("ship", {})
+	if saved.is_empty():
+		# No damage record yet — nothing to repair or damage in an abstract sense;
+		# skip to avoid creating a partial ship record that confuses the battle scene.
+		return
+
+	var ship: Dictionary = saved.duplicate(true)
+
+	if delta > 0:
+		# Repair: try armor sections first, then internals
+		for sec in ship.get("armor_sections", []):
+			if sec.get("section", "") == section or section == "body":
+				var max_val: int = int(sec.get("max_armor", sec.get("current_armor", 0)))
+				sec["current_armor"] = mini(max_val, int(sec.get("current_armor", 0)) + delta)
+				break
+	else:
+		# Damage: reduce current_armor on first matching section
+		var dmg: int = -delta
+		for sec in ship.get("armor_sections", []):
+			if sec.get("section", "") == section or section == "body":
+				sec["current_armor"] = maxi(0, int(sec.get("current_armor", 0)) - dmg)
+				break
+
+	hull["ship"] = ship
 
 
 ## Record a battle's outcome for the campaign map to resolve. Victory folds
@@ -716,6 +889,9 @@ func _ship_health_total(ship: Dictionary) -> int:
 ## the hull fleet. `final_ships` is every team-0 ship's
 ## end-of-battle state, each carrying its hull_id and its live crew.
 func record_battle_result(result: String, final_ships: Array) -> void:
+	# Expire temp effects whose battle count reaches zero after this battle.
+	active_effects = EventSystem.tick_battle_effects(active_effects)
+
 	pending_battle_result = result
 	var fled: Array = final_ships.filter(func(ship): return ship.get("fled", false))
 	pending_battle_fled = not fled.is_empty()
@@ -878,6 +1054,8 @@ func save_campaign_to_disk() -> bool:
 		"run_roster": run_roster,
 		"next_hull_id": _next_hull_id,
 		"squadrons": squadrons,
+		"news_feed": news_feed,
+		"active_effects": active_effects,
 	})
 
 
@@ -902,6 +1080,10 @@ func load_campaign_from_disk() -> bool:
 	run_roster = data.get("run_roster", [])
 	_next_hull_id = data.get("next_hull_id", fleet_hulls.size())
 	squadrons = data.get("squadrons", [])
+	# v2/v3 saves without news_feed/active_effects: default to empty (permanent
+	# effects already live in crew/ship/money state — no replay needed).
+	news_feed = data.get("news_feed", [])
+	active_effects = data.get("active_effects", [])
 	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""
