@@ -46,7 +46,7 @@ func _empty_run_state() -> Dictionary:
 		"crew": [],
 		"star_date": 2310,
 		"places": ["Kepler Station", "Dust Rim", "Vega Crossing"],
-		"battles_done": false,
+		"battle_count": 0,
 	}
 
 
@@ -59,7 +59,7 @@ func _run_state_with_fleet(hull: Dictionary, member: Dictionary) -> Dictionary:
 		"crew": [member.duplicate(true)],
 		"star_date": 2310,
 		"places": ["Kepler Station"],
-		"battles_done": true,
+		"battle_count": 5,
 	}
 
 
@@ -180,12 +180,12 @@ func test_template_requiring_crew_is_excluded_when_no_crew():
 
 
 func test_template_requiring_min_battles_excluded_when_no_battles():
-	## battle_hardened requires "min_battles": 1. With battles_done=false it
+	## battle_hardened requires "min_battles": 1. With battle_count=0 it
 	## must not appear.
 	var hull := _make_hull()
 	var member := _make_crew()
 	var state := _run_state_with_fleet(hull, member)
-	state["battles_done"] = false
+	state["battle_count"] = 0
 
 	var selected_ids: Array = []
 	for i in range(80):
@@ -194,7 +194,25 @@ func test_template_requiring_min_battles_excluded_when_no_battles():
 			selected_ids.append(ev.get("id", ""))
 
 	assert_false(selected_ids.has("battle_hardened"),
-		"battle_hardened is never selected when battles_done is false")
+		"battle_hardened is never selected when battle_count is 0")
+
+
+func test_min_battles_compares_count_not_just_presence():
+	## A template requiring min_battles:5 must stay excluded at battle_count=3 —
+	## proving the gate is an integer comparison, not a "≥1 battle" boolean.
+	var hull := _make_hull()
+	var member := _make_crew()
+	var state := _run_state_with_fleet(hull, member)
+	state["battle_count"] = 3
+
+	var selected_ids: Array = []
+	for i in range(120):
+		var events := EventSystem.generate_for_jump(state, 9, _make_rng(i + 500))
+		for ev in events:
+			selected_ids.append(ev.get("id", ""))
+
+	assert_false(selected_ids.has("war_weary_onset"),
+		"war_weary_onset (min_battles:5) must not appear at battle_count=3")
 
 
 # ---------------------------------------------------------------------------

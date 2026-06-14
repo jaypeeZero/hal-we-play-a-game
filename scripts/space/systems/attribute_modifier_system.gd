@@ -57,7 +57,7 @@ static func _apply_kind(updated: Dictionary, crew_data: Dictionary, kind: String
 			cm["pilot_accel_factor"] = float(cm.get("pilot_accel_factor", 1.0)) * (1.0 + value)
 
 		"close_range_fire_rate":
-			cm["close_range_fire_bonus"] = value
+			cm["close_range_fire_bonus"] = float(cm.get("close_range_fire_bonus", 0.0)) + value
 
 		"last_stand":
-			cm["low_hp_aim_bonus"] = value
+			cm["low_hp_aim_bonus"] = float(cm.get("low_hp_aim_bonus", 0.0)) + value

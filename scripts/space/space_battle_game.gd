@@ -866,10 +866,13 @@ func _end_game(winner: int) -> void:
 func _handle_roguelike_battle_end(winner: int) -> void:
 	var result: String = CampaignSystem.RESULT_VICTORY if winner == 0 \
 		else CampaignSystem.RESULT_DEFEAT
+	# Capture the intel reward bonus BEFORE record_battle_result ticks (and may
+	# expire) the active effects that grant it.
+	var intel_bonus := RoguelikeRun.next_battle_reward_bonus()
 	RoguelikeRun.record_battle_result(result, _get_player_ships_final_state())
 	if result == CampaignSystem.RESULT_VICTORY:
 		var destroyed_enemies := _destroyed_enemy_counts()
-		var reward := EconomySystem.battle_reward(destroyed_enemies)
+		var reward := int(round(EconomySystem.battle_reward(destroyed_enemies) * (1.0 + intel_bonus)))
 		RoguelikeRun.money += reward
 		RoguelikeRun.last_battle_summary["reward"] = reward
 		RoguelikeRun.last_battle_summary["destroyed_enemies"] = destroyed_enemies

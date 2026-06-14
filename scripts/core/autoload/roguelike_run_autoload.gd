@@ -11,6 +11,9 @@ const STAR_DATE_RUN_START = 2300
 
 var active: bool = false
 var started_first_battle: bool = false
+## Count of battles fought this run. Drives event `requires.min_battles`
+## (late-run events gate on a real count, not just "≥1 battle"). Persisted.
+var battles_fought: int = 0
 ## The player fleet as per-hull records, each with a stable identity:
 ## {
 ##   "hull_id": String,          # stable for the run
@@ -95,6 +98,7 @@ var active_effects: Array = []
 func start_run(initial_fleet: Dictionary) -> void:
 	active = true
 	started_first_battle = false
+	battles_fought = 0
 	hired_roster_ids = []
 	_next_hull_id = 0
 	run_roster = CrewGenerator.generate_run_roster(
@@ -122,6 +126,7 @@ func start_run(initial_fleet: Dictionary) -> void:
 func end_run() -> void:
 	active = false
 	started_first_battle = false
+	battles_fought = 0
 	fleet_hulls = []
 	doctrine = DoctrineSystem.empty_doctrine()
 	tactics = TacticsSystem.empty_tactics()
@@ -728,6 +733,17 @@ func _ship_health_total(ship: Dictionary) -> int:
 	return DamageResolver.calculate_total_armor(ship) + DamageResolver.calculate_total_internal_health(ship)
 
 
+## Total bonus fraction from active intel effects, applied to the next victory
+## reward (e.g. 0.25 = +25%). Read at battle end BEFORE temp effects tick.
+## Intel events (spy convoy reports, intercepted orders) pay off here.
+func next_battle_reward_bonus() -> float:
+	var bonus: float = 0.0
+	for effect in active_effects:
+		if str(effect.get("kind", "")) == "intel":
+			bonus += float(effect.get("value", 0.0))
+	return bonus
+
+
 ## Build the run_state snapshot for EventSystem, generate jump events, apply
 ## effects (permanent mutations here; temp effects pushed onto active_effects),
 ## and prepend to news_feed.  Returns the new events Array.
@@ -752,7 +768,7 @@ func roll_jump_events(date_delta: int) -> Array:
 		"crew": all_crew,
 		"star_date": current_star_date,
 		"places": places,
-		"battles_done": started_first_battle,
+		"battle_count": battles_fought,
 	}
 
 	var rng := _new_rng()
@@ -819,20 +835,10 @@ func _apply_permanent_effect(effect: Dictionary, _event: Dictionary) -> void:
 						member["attributes"] = attrs
 
 		"ship_repair":
-			var hull_id: String = str(target.get("hull_id", ""))
-			var section: String = str(effect.get("section", "body"))
-			var value: int = int(effect.get("value", 0))
-			for hull in fleet_hulls:
-				if hull.get("hull_id", "") == hull_id:
-					_apply_ship_hp_delta(hull, section, value, true)
+			_apply_hp_effect(target, target_kind, effect, 1)
 
 		"ship_damage":
-			var hull_id: String = str(target.get("hull_id", ""))
-			var section: String = str(effect.get("section", "body"))
-			var value: int = int(effect.get("value", 0))
-			for hull in fleet_hulls:
-				if hull.get("hull_id", "") == hull_id:
-					_apply_ship_hp_delta(hull, section, -value, true)
+			_apply_hp_effect(target, target_kind, effect, -1)
 
 		"money":
 			money = maxi(0, money + int(effect.get("value", 0)))
@@ -846,38 +852,45 @@ func _apply_permanent_effect(effect: Dictionary, _event: Dictionary) -> void:
 			# Unknown permanent effect kind — safe to ignore; already validated.
 			pass
 
-	# Suppress unused var warning for fleet/none targets
-	if target_kind == "fleet" or target_kind == "none":
-		pass
+
+## Apply a ship_repair (sign_dir +1) or ship_damage (sign_dir -1) effect to the
+## resolved target. Fleet-targeted effects hit every hull; ship-targeted effects
+## hit the matching hull_id. Magnitude is the effect's `value`.
+func _apply_hp_effect(target: Dictionary, target_kind: String, effect: Dictionary, sign_dir: int) -> void:
+	"""Route a repair/damage effect to all hulls (fleet) or the targeted hull (ship)."""
+	var section: String = str(effect.get("section", "body"))
+	var delta: int = int(effect.get("value", 0)) * sign_dir
+	if target_kind == "fleet":
+		for hull in fleet_hulls:
+			_apply_ship_hp_delta(hull, section, delta)
+	else:
+		var hull_id: String = str(target.get("hull_id", ""))
+		for hull in fleet_hulls:
+			if hull.get("hull_id", "") == hull_id:
+				_apply_ship_hp_delta(hull, section, delta)
 
 
-## Adjust armor or internals HP on a hull's persisted ship record.
-## Positive delta heals (up to max); negative deals damage. Creates an empty
-## ship record stub if the hull has none (so damage from events is recorded).
-func _apply_ship_hp_delta(hull: Dictionary, section: String, delta: int, _heal: bool) -> void:
-	"""Adjust the persisted armor or internals health on a hull record."""
+## Adjust armor HP on a hull's persisted ship record. Positive delta repairs
+## (up to max_armor), negative damages (down to 0). `section` names one armor
+## section, or "body" to apply across every section. Hulls with no persisted
+## ship record (pristine / never-damaged) are skipped so events never fabricate
+## partial battle state.
+func _apply_ship_hp_delta(hull: Dictionary, section: String, delta: int) -> void:
+	"""Apply an armor HP delta to one named section, or every section when "body"."""
 	var saved: Dictionary = hull.get("ship", {})
 	if saved.is_empty():
-		# No damage record yet — nothing to repair or damage in an abstract sense;
-		# skip to avoid creating a partial ship record that confuses the battle scene.
 		return
 
 	var ship: Dictionary = saved.duplicate(true)
-
-	if delta > 0:
-		# Repair: try armor sections first, then internals
-		for sec in ship.get("armor_sections", []):
-			if sec.get("section", "") == section or section == "body":
-				var max_val: int = int(sec.get("max_armor", sec.get("current_armor", 0)))
-				sec["current_armor"] = mini(max_val, int(sec.get("current_armor", 0)) + delta)
-				break
-	else:
-		# Damage: reduce current_armor on first matching section
-		var dmg: int = -delta
-		for sec in ship.get("armor_sections", []):
-			if sec.get("section", "") == section or section == "body":
-				sec["current_armor"] = maxi(0, int(sec.get("current_armor", 0)) - dmg)
-				break
+	for sec in ship.get("armor_sections", []):
+		if section != "body" and sec.get("section", "") != section:
+			continue
+		var cur: int = int(sec.get("current_armor", 0))
+		if delta >= 0:
+			var max_val: int = int(sec.get("max_armor", cur))
+			sec["current_armor"] = mini(max_val, cur + delta)
+		else:
+			sec["current_armor"] = maxi(0, cur + delta)
 
 	hull["ship"] = ship
 
@@ -891,6 +904,7 @@ func _apply_ship_hp_delta(hull: Dictionary, section: String, delta: int, _heal: 
 func record_battle_result(result: String, final_ships: Array) -> void:
 	# Expire temp effects whose battle count reaches zero after this battle.
 	active_effects = EventSystem.tick_battle_effects(active_effects)
+	battles_fought += 1
 
 	pending_battle_result = result
 	var fled: Array = final_ships.filter(func(ship): return ship.get("fled", false))
@@ -1056,6 +1070,7 @@ func save_campaign_to_disk() -> bool:
 		"squadrons": squadrons,
 		"news_feed": news_feed,
 		"active_effects": active_effects,
+		"battles_fought": battles_fought,
 	})
 
 
@@ -1084,6 +1099,7 @@ func load_campaign_from_disk() -> bool:
 	# effects already live in crew/ship/money state — no replay needed).
 	news_feed = data.get("news_feed", [])
 	active_effects = data.get("active_effects", [])
+	battles_fought = int(data.get("battles_fought", 0))
 	last_battle_summary = {}
 	pending_battle_node_id = ""
 	pending_battle_result = ""

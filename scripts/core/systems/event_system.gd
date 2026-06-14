@@ -13,7 +13,7 @@ extends RefCounted
 ##   "crew":         Array,   # flat list of all crew dicts across all hulls
 ##   "star_date":    int,     # current_star_date (after advancing)
 ##   "places":       Array,   # Array[String] — place names from the campaign
-##   "battles_done": bool,    # true when started_first_battle is true
+##   "battle_count": int,     # number of battles fought this run (for min_battles)
 ## }
 
 
@@ -248,7 +248,7 @@ static func _requires_pass(tmpl: Dictionary, run_state: Dictionary) -> bool:
 	# requires.min_battles — at least this many battles completed
 	var min_b: int = int(reqs.get("min_battles", 0))
 	if min_b > 0:
-		if not run_state.get("battles_done", false):
+		if int(run_state.get("battle_count", 0)) < min_b:
 			return false
 
 	return true
