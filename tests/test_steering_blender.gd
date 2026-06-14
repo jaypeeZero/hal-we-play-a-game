@@ -342,3 +342,147 @@ func test_kite_preferred_range_less_than_knife_preferred_range_still_in_order():
 		"kite preferred_range must be farther than knife")
 	assert_lte(d_kite["preferred_range"], optimal,
 		"kite preferred_range must be ≤ weapon_optimal_range (kiter fights at far edge, not beyond)")
+
+
+# 9. Posture weight sets (Phase 4a)
+
+## Helper: build a directive with an explicit posture string.
+func _build_with_posture(posture: String, mentality_scalar: float = 0.7) -> Dictionary:
+	var ship    := _make_ship()
+	var tactics := _make_tactics(mentality_scalar, 0.5, "support")
+	var target  := _make_target()
+	return SteeringBlender.build_directive(ship, tactics, target, [], 1000.0, posture)
+
+
+func test_withdraw_posture_evade_is_dominant_and_pursue_near_zero():
+	# Commanded disengage: evade must be the highest weight and pursue ≈ 0.
+	var d_withdraw := _build_with_posture("withdraw")
+	var gw: Dictionary = d_withdraw["goal_weights"]
+	assert_gt(gw["evade"], gw["pursue"],
+		"withdraw: evade must be higher than pursue")
+	assert_gt(gw["evade"], gw["formation"],
+		"withdraw: evade must be higher than formation")
+	assert_gt(gw["evade"], gw["keep_range"],
+		"withdraw: evade must be higher than keep_range")
+	# pursue must be very small — ship should stop closing on the enemy
+	var d_normal := _build_with_posture("", 0.7)
+	assert_lt(gw["pursue"], d_normal["goal_weights"]["pursue"],
+		"withdraw: pursue must be lower than same-mentality normal-posture ship")
+
+
+func test_hold_posture_formation_is_dominant_and_pursue_reduced():
+	# Hold the line: formation must be the highest weight; pursue lower than normal.
+	var d_hold   := _build_with_posture("hold")
+	var d_normal := _build_with_posture("", 0.7)
+	var gw: Dictionary = d_hold["goal_weights"]
+	assert_gt(gw["formation"], gw["pursue"],
+		"hold: formation must be higher than pursue")
+	assert_gt(gw["formation"], gw["evade"],
+		"hold: formation must be higher than evade")
+	assert_lt(gw["pursue"], d_normal["goal_weights"]["pursue"],
+		"hold: pursue must be lower than same-mentality normal-posture ship")
+
+
+func test_empty_posture_goal_weights_identical_to_no_posture_baseline():
+	# Regression: passing posture="" must produce exactly the same weights as
+	# calling build_directive without the posture arg (5-arg form).
+	var ship    := _make_ship()
+	var tactics := _make_tactics(0.6, 0.4, "support")
+	var target  := _make_target()
+	var threats := [_make_threat_targeting("s1")]
+	var d_old := SteeringBlender.build_directive(ship, tactics, target, threats, 1000.0)
+	var d_new := SteeringBlender.build_directive(ship, tactics, target, threats, 1000.0, "")
+	assert_eq(d_old["goal_weights"], d_new["goal_weights"],
+		"empty posture must produce identical goal_weights to the no-posture call")
+
+
+# 10. _absorb_command_order behaviour (Phase 4a)
+
+## Minimal crew dict that satisfies _absorb_command_order's guards.
+func _make_crew_with_order(order: Dictionary) -> Dictionary:
+	return {
+		"crew_id": "c1",
+		"assigned_to": "ship_1",
+		"posture": "",
+		"focus_assignment": "",
+		"support_assignment": "",
+		"reform_shape": "",
+		"orders": {
+			"received": order,
+			"current":  null,
+			"issued":   [],
+		},
+	}
+
+
+func test_absorb_engage_sets_focus_assignment_and_clears_received():
+	var crew := _make_crew_with_order({"type": "engage", "target_id": "enemy_42"})
+	var result: Dictionary = CrewAISystem._absorb_command_order(crew)
+	assert_eq(result.get("focus_assignment", ""), "enemy_42",
+		"engage order must set focus_assignment to target_id")
+	assert_eq(result["orders"].get("received"), null,
+		"engage order must clear orders.received")
+
+
+func test_absorb_engage_clears_posture_for_re_engage():
+	# Re-engaging after a withdraw: posture must return to "" (offensive blend).
+	var crew := _make_crew_with_order({"type": "engage", "target_id": "enemy_1"})
+	crew["posture"] = "withdraw"
+	var result: Dictionary = CrewAISystem._absorb_command_order(crew)
+	assert_eq(result.get("posture", "withdraw"), "",
+		"engage order must clear posture so normal offensive blend resumes")
+
+
+func test_absorb_withdraw_sets_posture_withdraw():
+	var crew := _make_crew_with_order({"type": "withdraw"})
+	var result: Dictionary = CrewAISystem._absorb_command_order(crew)
+	assert_eq(result.get("posture", ""), "withdraw",
+		"withdraw order must set posture to 'withdraw'")
+	assert_eq(result["orders"].get("received"), null,
+		"withdraw order must clear orders.received")
+
+
+func test_absorb_hold_sets_posture_hold():
+	var crew := _make_crew_with_order({"type": "hold"})
+	var result: Dictionary = CrewAISystem._absorb_command_order(crew)
+	assert_eq(result.get("posture", ""), "hold",
+		"hold order must set posture to 'hold'")
+	assert_eq(result["orders"].get("received"), null,
+		"hold order must clear orders.received")
+
+
+func test_absorb_support_ally_sets_support_assignment():
+	var crew := _make_crew_with_order({"type": "support_ally", "ally_id": "ally_7"})
+	var result: Dictionary = CrewAISystem._absorb_command_order(crew)
+	assert_eq(result.get("support_assignment", ""), "ally_7",
+		"support_ally order must set support_assignment to ally_id")
+	assert_eq(result["orders"].get("received"), null,
+		"support_ally order must clear orders.received")
+
+
+func test_absorb_unknown_order_clears_received_with_no_side_effects():
+	var crew := _make_crew_with_order({"type": "some_future_order", "data": 42})
+	var before_posture: String = crew.get("posture", "")
+	var before_focus: String   = crew.get("focus_assignment", "")
+	var result: Dictionary = CrewAISystem._absorb_command_order(crew)
+	assert_eq(result["orders"].get("received"), null,
+		"unknown order must clear orders.received")
+	assert_eq(result.get("posture", ""), before_posture,
+		"unknown order must not change posture")
+	assert_eq(result.get("focus_assignment", ""), before_focus,
+		"unknown order must not change focus_assignment")
+
+
+func test_absorb_command_order_never_returns_discrete_pursue_decision():
+	# All absorber cases must return only crew_data updates — never a
+	# discrete "type:maneuver / subtype:pursue" decision dict.
+	# After absorption the pilot's result has no top-level "decision" key, OR
+	# if it does the subtype is "tactical" (blended), never a discrete pursue.
+	for order_type in ["engage", "withdraw", "hold", "support_ally", "formation", "reform", "unknown_xyz"]:
+		var order: Dictionary = {"type": order_type, "target_id": "t1", "ally_id": "a1", "formation": "line"}
+		var crew := _make_crew_with_order(order)
+		var result: Dictionary = CrewAISystem._absorb_command_order(crew)
+		# The absorber itself returns a crew dict (not a result dict), so
+		# there must be no "decision" key at the top level.
+		assert_false(result.has("decision"),
+			"_absorb_command_order must not return a discrete decision for order type: %s" % order_type)

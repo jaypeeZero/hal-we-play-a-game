@@ -47,7 +47,8 @@ func execute(ws: FighterWorldState) -> Dictionary:
 	var threats: Array = _build_threats(ws)
 
 	var directive: Dictionary = SteeringBlender.build_directive(
-		ws.my_ship, tactics, ws.target_ship, threats, weapon_optimal
+		ws.my_ship, tactics, ws.target_ship, threats, weapon_optimal,
+		ws.crew_data.get("posture", "")
 	)
 
 	return {

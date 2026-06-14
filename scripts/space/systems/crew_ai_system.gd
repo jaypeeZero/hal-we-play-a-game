@@ -151,9 +151,11 @@ static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: 
 	# generic "execute order" path consuming them as a one-time movement.
 	crew_data = _absorb_play_order(crew_data)
 
-	# Check for orders from captain - ALWAYS respect superior orders
-	if crew_data.orders.received != null:
-		return execute_pilot_order(crew_data, game_time)
+	# Translate any remaining command orders (engage/withdraw/hold/support_ally/
+	# formation/reform) into persistent crew fields that SteeringBlender reads as
+	# directive biases. Never short-circuits to a discrete maneuver — pilot always
+	# continues to the blended path below.
+	crew_data = _absorb_command_order(crew_data)
 
 	# Analyze tactical context (include wings for fighter coordination)
 	var context = analyze_tactical_context(crew_data, ships, crew_list)
@@ -266,6 +268,56 @@ static func _absorb_focus_order(crew_data: Dictionary, ships: Array) -> Dictiona
 	var updated: Dictionary = crew_data.duplicate(true)
 	# Persist target so it survives across decision ticks until superseded.
 	updated["focus_assignment"] = target_id
+	updated.orders.received = null
+	return updated
+
+
+## Translate any remaining command order into a persistent crew field so
+## SteeringBlender can apply it as a directive bias on every subsequent tick.
+## Must run AFTER _absorb_formation_order / _absorb_focus_order / _absorb_play_order
+## so those specific types are already consumed and won't reach this absorber.
+## NEVER returns a discrete decision — always clears orders.received and lets the
+## pilot proceed to its normal blended path.
+static func _absorb_command_order(crew_data: Dictionary) -> Dictionary:
+	var received: Variant = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	var order_type: String = received.get("type", "")
+
+	match order_type:
+		"engage":
+			# Re-engage: clear any withdraw posture so normal fight-bias resumes.
+			var target_id: String = received.get("target_id", "")
+			if target_id != "":
+				updated["focus_assignment"] = target_id
+			updated["posture"] = ""   # returning to offensive blend
+
+		"withdraw":
+			# Commanded disengage: evade-dominant blend, not a hard flee reflex.
+			updated["posture"] = "withdraw"
+
+		"hold":
+			# Hold the line: formation-dominant blend, don't chase past the line.
+			updated["posture"] = "hold"
+
+		"support_ally":
+			# Escort assignment stored; escort-movement consumed in a later phase.
+			var ally_id: String = received.get("ally_id", "")
+			if ally_id != "":
+				updated["support_assignment"] = ally_id
+
+		"formation", "reform":
+			# Reform shape stored; _issue_formation_commands will read it next tick.
+			var shape: String = received.get("formation", "")
+			if shape != "":
+				updated["reform_shape"] = shape
+
+		_:
+			# Unknown order type — clear without side-effects so nothing stalls.
+			pass
+
 	updated.orders.received = null
 	return updated
 
@@ -392,20 +444,6 @@ static func _issue_formation_commands(
 	updated.orders.issued = existing_issued
 	return updated
 
-
-## Execute order from captain
-static func execute_pilot_order(crew_data: Dictionary, game_time: float) -> Dictionary:
-	var order = crew_data.orders.received
-	var updated = crew_data.duplicate(true)
-
-	# Clear order once acknowledged
-	updated.orders.current = order
-	updated.orders.received = null
-
-	return {
-		"crew_data": updated,
-		"decision": create_movement_decision(updated, order, game_time)
-	}
 
 ## Make evasive maneuver decision.
 ##
@@ -775,19 +813,6 @@ static func make_pursuit_decision_from_threat(crew_data: Dictionary, game_time: 
 	updated.current_action = "pursuing"
 	updated.next_decision_time = game_time + randf_range(0.7, 1.0)
 	return {"crew_data": updated, "decision": decision}
-
-## Create movement decision from order
-static func create_movement_decision(crew_data: Dictionary, order: Dictionary, game_time: float) -> Dictionary:
-	return {
-		"type": "maneuver",
-		"subtype": order.get("subtype", "pursue"),
-		"crew_id": crew_data.crew_id,
-		"entity_id": crew_data.assigned_to,
-		"target_id": order.get("target_id", ""),
-		"skill_factor": calculate_effective_skill(crew_data),
-		"delay": crew_data.stats.reaction_time,
-		"timestamp": game_time
-	}
 
 ## Calculate threat urgency
 static func calculate_threat_urgency(threat: Dictionary) -> float:

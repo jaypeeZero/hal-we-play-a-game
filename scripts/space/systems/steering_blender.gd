@@ -78,6 +78,29 @@ const FORMATION_WEIGHT_HOLD    := 0.6
 const FORMATION_WEIGHT_SUPPORT := 0.3
 const FORMATION_WEIGHT_PRESS   := 0.05
 
+# Posture weight sets — applied ON TOP of tactics-derived weights when a
+# commander order has set crew["posture"].  Empty posture → no override.
+
+## withdraw: commanded disengage — evade-dominant blend, not a hard flee reflex.
+## pursue ≈ 0 so the ship stops closing; formation stays low (moving away, not
+## holding line); evade high so MovementSystem biases toward the team's rear.
+const POSTURE_WITHDRAW := {
+	"pursue":     0.02,   # near-zero — stop chasing
+	"keep_range": 0.4,    # unchanged — maintain orbit geometry
+	"evade":      0.8,    # dominant — bias toward exit
+	"formation":  0.05,   # low — breaking from formation to withdraw
+}
+
+## hold: hold the line — formation-dominant, don't chase past the line.
+## pursue reduced so the ship won't break rank; evade normal; formation high
+## so MovementSystem keeps the ship in its slot rather than drifting forward.
+const POSTURE_HOLD := {
+	"pursue":     0.1,    # reduced — don't abandon position to chase
+	"keep_range": 0.4,    # unchanged — orbit still active
+	"evade":      0.2,    # normal — still reacts to incoming fire
+	"formation":  0.7,    # dominant — anchor the line
+}
+
 # facing_mode per role (Phase 2b)
 ## Maps a ship role to the Phase-2b facing_mode string.
 ## artillery presents broadside so its side batteries bear on the target.
@@ -119,7 +142,8 @@ static func build_directive(
 	tactics: Dictionary,
 	target: Dictionary,
 	threats: Array,
-	weapon_optimal_range: float
+	weapon_optimal_range: float,
+	posture: String = ""
 ) -> Dictionary:
 	var mentality_scalar: float = tactics.get("mentality_scalar", 0.5)
 	var range_scalar: float     = tactics.get("range_scalar",     0.5)
@@ -127,7 +151,7 @@ static func build_directive(
 	var engagement_target: String = target.get("ship_id", "")
 
 	var preferred_range: float = _compute_preferred_range(range_scalar, weapon_optimal_range)
-	var goal_weights: Dictionary = _compute_goal_weights(ship, mentality_scalar, tactics, threats)
+	var goal_weights: Dictionary = _compute_goal_weights(ship, mentality_scalar, tactics, threats, posture)
 	var facing_mode: String = _compute_facing_mode(tactics)
 
 	return {
@@ -171,8 +195,21 @@ static func _compute_goal_weights(
 	ship: Dictionary,
 	mentality_scalar: float,
 	tactics: Dictionary,
-	threats: Array
+	threats: Array,
+	posture: String = ""
 ) -> Dictionary:
+	# When a command posture is active, return its pre-set weight set directly.
+	# Posture is a commanded directive bias — it overrides the tactics-derived
+	# weights entirely so the pilot's blend reflects the order, not its own
+	# aggression/duty. Empty posture falls through to the normal path (no regression).
+	match posture:
+		"withdraw":
+			return POSTURE_WITHDRAW.duplicate()
+		"hold":
+			return POSTURE_HOLD.duplicate()
+
+	# Normal tactics-derived path — unchanged from pre-posture baseline.
+
 	# pursue: scales linearly from near-zero (defensive) to near-full (all_out)
 	var pursue: float = PURSUE_WEIGHT_AT_ZERO_MENTALITY + mentality_scalar * PURSUE_WEIGHT_MENTALITY_SCALE
 
