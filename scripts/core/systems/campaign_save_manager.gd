@@ -7,7 +7,10 @@ extends RefCounted
 ## money, current_star_date, hired_roster_ids, next_hull_id}.
 
 const SAVE_PATH := "user://campaign_save.json"
-const SAVE_VERSION := 2
+## Current save format version. Bump when the payload schema grows.
+## Older versions accepted by load_campaign: [2, SAVE_VERSION].
+const SAVE_VERSION := 3
+const SAVE_VERSION_MIN := 2
 
 ## Ship dicts carry Vector2s (positions, weapon mount offsets); JSON has
 ## no vector type, so they round-trip through a tagged single-key dict.
@@ -51,7 +54,10 @@ static func load_campaign() -> Dictionary:
 		push_error("Failed to parse campaign save JSON: " + json.get_error_message())
 		return {}
 	var data = json.get_data()
-	if not data is Dictionary or int(data.get("version", -1)) != SAVE_VERSION:
+	if not data is Dictionary:
+		return {}
+	var version: int = int(data.get("version", -1))
+	if version < SAVE_VERSION_MIN or version > SAVE_VERSION:
 		return {}
 	return _cast_int_fields(_decode_value(data))
 

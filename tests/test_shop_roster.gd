@@ -33,8 +33,7 @@ func after_each() -> void:
 
 ## First available roster candidate id for a slot's role.
 func _candidate_id(slot: Dictionary) -> String:
-	var candidates := CrewRosterManager.available_entries(
-		RoguelikeRun.hired_roster_ids, slot.get("role", -1))
+	var candidates := RoguelikeRun.available_crew(slot.get("role", -1))
 	return candidates[0].id if not candidates.is_empty() else ""
 
 
@@ -329,8 +328,7 @@ func test_hire_button_shows_the_remaining_candidate_count():
 	RoguelikeRun.start_run(_counts({"fighter": 1}))
 	RoguelikeRun.money = 100000
 	RoguelikeRun.add_purchased_hull("fighter")
-	var pilots_left := CrewRosterManager.available_entries(
-		RoguelikeRun.hired_roster_ids, CrewData.Role.PILOT).size()
+	var pilots_left := RoguelikeRun.available_crew(CrewData.Role.PILOT).size()
 	var shop := ShopScreen.new()
 	add_child_autofree(shop)
 	shop.setup({"shop_stock": []})
@@ -346,7 +344,8 @@ func test_hire_button_is_disabled_when_the_pool_is_exhausted():
 	RoguelikeRun.start_run(_counts({"fighter": 1}))
 	RoguelikeRun.money = 100000
 	RoguelikeRun.add_purchased_hull("fighter")
-	for entry in CrewRosterManager.load_roster():
+	# Consume all pilot-qualified entries from the live run_roster pool.
+	for entry in RoguelikeRun.run_roster:
 		if entry.roles.has("pilot"):
 			RoguelikeRun.hired_roster_ids.append(entry.id)
 	var shop := ShopScreen.new()

@@ -82,6 +82,7 @@ var _status_message := ""
 
 var _fleet_panel: FleetConditionPanel
 var _destination_panel: DestinationPanel
+var _dispatches_panel: DispatchesPanel
 
 
 func _ready() -> void:
@@ -99,6 +100,9 @@ func _ready() -> void:
 	_destination_panel.launch_requested.connect(_travel_to_node)
 	_ui_layer.add_child(_destination_panel)
 
+	_dispatches_panel = DispatchesPanel.new()
+	_ui_layer.add_child(_dispatches_panel)
+
 	_build_stars()
 	_build_line_mesh()
 	_set_zoom(_current_shell_radius() + CAMERA_SHELL_MARGIN)
@@ -106,6 +110,7 @@ func _ready() -> void:
 	if _campaign_over:
 		return
 	_refresh_map()
+	_dispatches_panel.refresh(RoguelikeRun.news_feed)
 	_show_repair_summary(RoguelikeRun.last_jump_repair_summary)
 	RoguelikeRun.last_jump_repair_summary = {}
 	# Report the economy outcome of the last battle (reward, casualties, insurance).
@@ -260,6 +265,7 @@ func _complete_node_visit(node: Dictionary, repair_summary: Dictionary) -> void:
 	node_selected.emit(node)
 	RoguelikeRun.save_campaign_to_disk()
 	_refresh_map()
+	_dispatches_panel.refresh(RoguelikeRun.news_feed)
 	_show_repair_summary(repair_summary)
 	RoguelikeRun.last_jump_repair_summary = {}
 

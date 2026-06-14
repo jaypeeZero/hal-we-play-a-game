@@ -58,7 +58,7 @@ func _entry(id: String, role_names: Array, skill: float = 0.5) -> Dictionary:
 
 
 func _entry_by_id(roster_id: String) -> Dictionary:
-	return CrewRosterManager.entry_by_id(roster_id)
+	return RoguelikeRun.crew_entry_by_id(roster_id)
 
 
 # RUN-START CREWS COME FROM THE POOL
@@ -87,10 +87,12 @@ func test_starting_a_new_run_resets_the_pool():
 
 
 func test_pool_exhaustion_leaves_vacancies_instead_of_crashing():
-	# A roster with a single pilot cannot crew two fighters.
-	CrewRosterManager.save_roster([_entry("only_pilot", ["pilot"])])
-
-	RoguelikeRun.start_run(_counts({"fighter": 2}))
+	# When the run_roster holds only one pilot-qualified entry, two fighters
+	# cannot both be fully crewed — the second stays vacant rather than crashing.
+	RoguelikeRun.start_run(_counts())  # Empty fleet: initializes run_roster.
+	RoguelikeRun.run_roster = [_entry("only_pilot", ["pilot"])]
+	RoguelikeRun.hired_roster_ids = []
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"fighter": 2}))
 
 	var crewed := 0
 	for hull in RoguelikeRun.fleet_hulls:
@@ -101,11 +103,12 @@ func test_pool_exhaustion_leaves_vacancies_instead_of_crashing():
 
 
 func test_exhausted_squad_slots_leave_no_dangling_command_links():
-	# One captain and nothing else: a corvette's pilot/gunner/engineer slots
-	# all stay vacant, and the captain must not command ghosts.
-	CrewRosterManager.save_roster([_entry("solo_captain", ["captain"])])
-
-	RoguelikeRun.start_run(_counts({"corvette": 1}))
+	# When the run_roster holds only a captain, a corvette's pilot/gunner/
+	# engineer slots all stay vacant, and the captain must not command ghosts.
+	RoguelikeRun.start_run(_counts())  # Empty fleet: initializes run_roster.
+	RoguelikeRun.run_roster = [_entry("solo_captain", ["captain"])]
+	RoguelikeRun.hired_roster_ids = []
+	RoguelikeRun.reconcile_roster_to_counts(_counts({"corvette": 1}))
 
 	var crew: Array = RoguelikeRun.fleet_hulls[0].crew
 	assert_eq(crew.size(), 1, "Only the captain boards")
@@ -122,8 +125,7 @@ func test_hiring_the_same_candidate_twice_fails():
 	var hull_b := RoguelikeRun.add_purchased_hull("fighter")
 	var slot_a: Dictionary = RoguelikeRun.hull_vacancies(hull_a)[0]
 	var slot_b: Dictionary = RoguelikeRun.hull_vacancies(hull_b)[0]
-	var candidate: String = CrewRosterManager.available_entries(
-		RoguelikeRun.hired_roster_ids, CrewData.Role.PILOT)[0].id
+	var candidate: String = RoguelikeRun.available_crew(CrewData.Role.PILOT)[0].id
 
 	assert_true(RoguelikeRun.fill_vacancy(hull_a.hull_id, slot_a, candidate),
 		"The first hire succeeds")
@@ -147,8 +149,7 @@ func test_hiring_an_off_role_candidate_assigns_the_slot_role():
 	RoguelikeRun.money = 100000
 	var hull := RoguelikeRun.add_purchased_hull("fighter")
 	var pilot_slot: Dictionary = RoguelikeRun.hull_vacancies(hull)[0]
-	var engineer: Dictionary = CrewRosterManager.available_entries(
-		RoguelikeRun.hired_roster_ids, CrewData.Role.ENGINEER)[0]
+	var engineer: Dictionary = RoguelikeRun.available_crew(CrewData.Role.ENGINEER)[0]
 
 	assert_true(RoguelikeRun.fill_vacancy(hull.hull_id, pilot_slot, engineer.id),
 		"Qualification is a soft penalty, not a hiring gate")
@@ -164,8 +165,7 @@ func test_hired_crew_carry_the_candidate_entry_skills():
 	RoguelikeRun.money = 100000
 	var hull := RoguelikeRun.add_purchased_hull("fighter")
 	var slot: Dictionary = RoguelikeRun.hull_vacancies(hull)[0]
-	var candidate: Dictionary = CrewRosterManager.available_entries(
-		RoguelikeRun.hired_roster_ids, CrewData.Role.PILOT)[0]
+	var candidate: Dictionary = RoguelikeRun.available_crew(CrewData.Role.PILOT)[0]
 
 	RoguelikeRun.fill_vacancy(hull.hull_id, slot, candidate.id)
 

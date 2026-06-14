@@ -186,8 +186,7 @@ func _hire_hull_card(hull: Dictionary, vacancies: Array) -> Control:
 		row.add_child(spacer)
 		var hull_id: String = hull.hull_id
 		var slot_copy: Dictionary = slot
-		var candidates := CrewRosterManager.available_entries(
-			RoguelikeRun.hired_roster_ids, slot.get("role", CrewData.Role.PILOT))
+		var candidates := RoguelikeRun.available_crew(slot.get("role", CrewData.Role.PILOT))
 		var hire := UiKit.style_button(
 			_make_button("Hire (%d)" % candidates.size()), "primary")
 		hire.disabled = candidates.is_empty()
@@ -203,7 +202,7 @@ func _open_hire_dialog(hull_id: String, slot: Dictionary) -> void:
 	var role: int = slot.get("role", CrewData.Role.PILOT)
 	var dialog := CrewHireDialog.new()
 	add_child(dialog)
-	dialog.setup(role, CrewRosterManager.available_entries(RoguelikeRun.hired_roster_ids, role))
+	dialog.setup(role, RoguelikeRun.available_crew(role))
 	dialog.hired.connect(func(roster_id: String):
 		RoguelikeRun.fill_vacancy(hull_id, slot, roster_id)
 		_rebuild())

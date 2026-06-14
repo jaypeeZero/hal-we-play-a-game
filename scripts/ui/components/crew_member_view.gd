@@ -60,6 +60,10 @@ func _rebuild() -> void:
 	box.add_child(UiKit.separator())
 	for skill_name in CrewData.SKILL_NAMES:
 		box.add_child(_skill_row(str(skill_name)))
+	var attrs: Array = _entry.get("attributes", [])
+	if not attrs.is_empty():
+		box.add_child(UiKit.separator())
+		box.add_child(_attributes_row(attrs))
 	_refresh_radar()
 	_refresh_derived()
 
@@ -155,6 +159,40 @@ func _skill_row(skill_name: String) -> Control:
 	_skill_value_labels[skill_name] = value_label
 	row.add_child(value_label)
 	return row
+
+
+func _attributes_row(attr_ids: Array) -> Control:
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 4)
+	flow.add_theme_constant_override("v_separation", 4)
+	# Sort: combat attributes first, then personality, then neutral.
+	var combat_attrs: Array = []
+	var other_attrs: Array = []
+	for attr_id in attr_ids:
+		var defn: Dictionary = AttributeLibrary.get_def(str(attr_id))
+		if defn.get("category", "") == "combat":
+			combat_attrs.append(attr_id)
+		else:
+			other_attrs.append(attr_id)
+	for attr_id in combat_attrs + other_attrs:
+		flow.add_child(_attribute_pill(str(attr_id)))
+	return flow
+
+
+func _attribute_pill(attr_id: String) -> Control:
+	var defn: Dictionary = AttributeLibrary.get_def(attr_id)
+	var display: String = defn.get("display_name", attr_id) if not defn.is_empty() else attr_id
+	var polarity: String = defn.get("polarity", "neutral") if not defn.is_empty() else "neutral"
+	var blurb: String = defn.get("blurb", "") if not defn.is_empty() else ""
+	var color: Color
+	match polarity:
+		"positive": color = UiKit.GOOD
+		"negative": color = UiKit.BAD
+		_: color = UiKit.DIM
+	var pill: PanelContainer = UiKit.badge(display, color)
+	if not blurb.is_empty():
+		pill.tooltip_text = blurb
+	return pill
 
 
 # EDIT HANDLERS

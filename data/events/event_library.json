@@ -1,0 +1,432 @@
+{
+	"engineers_botched_repair": {
+		"category": "ship",
+		"target": "ship",
+		"weight": 1.0,
+		"polarity": "negative",
+		"headline": "Engineers botched the refit on the {ship_name}",
+		"body": "A coolant line was crossed during the overhaul; she'll fight sluggish next sortie.",
+		"requires": { "ship": true },
+		"effects": [
+			{ "kind": "ship_modifier", "field": "pilot_accel_factor", "value": -0.12, "duration": "battles:1" }
+		]
+	},
+	"bar_fight": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.8,
+		"polarity": "negative",
+		"headline": "{callsign} got into a bar fight on shore leave",
+		"body": "Three stitches and a dented ego. Not their finest hour.",
+		"requires": { "crew": true },
+		"effects": [
+			{ "kind": "crew_skill", "skill": "composure", "value": -0.03, "duration": "battles:2" }
+		]
+	},
+	"battle_hardened": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.5,
+		"polarity": "positive",
+		"headline": "{callsign} came through the gauntlet hardened",
+		"body": "Whatever doesn't kill you...",
+		"requires": { "crew": true, "min_battles": 1 },
+		"effects": [
+			{ "kind": "add_attribute", "attribute": "battle_hardened" }
+		]
+	},
+	"spies_report": {
+		"category": "intel",
+		"target": "none",
+		"weight": 0.6,
+		"polarity": "positive",
+		"headline": "Spies report a fat convoy near {place}",
+		"body": "Light escort, heavy holds. Worth a detour.",
+		"effects": [
+			{ "kind": "intel", "scope": "next_battle_reward", "value": 0.25, "duration": "battles:1" }
+		]
+	},
+	"overslept_muster": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.7,
+		"polarity": "negative",
+		"headline": "{callsign} missed muster again",
+		"body": "Showed up late, eyes red, smelling of station-side spirits. Not a great look.",
+		"requires": { "crew": true },
+		"effects": [
+			{ "kind": "crew_skill", "skill": "awareness", "value": -0.02, "duration": "battles:1" }
+		]
+	},
+	"shore_leave_morale": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.9,
+		"polarity": "positive",
+		"headline": "{callsign} came back from shore leave refreshed",
+		"body": "Whatever they got up to, it worked. They're sharp, loose, ready.",
+		"requires": { "crew": true },
+		"effects": [
+			{ "kind": "crew_skill", "skill": "composure", "value": 0.04, "duration": "battles:2" }
+		]
+	},
+	"breakdown": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.4,
+		"polarity": "negative",
+		"headline": "{callsign} had a rough night",
+		"body": "Found them staring at the bulkhead at 0300. They said they were fine. They weren't.",
+		"requires": { "crew": true },
+		"effects": [
+			{ "kind": "add_attribute", "attribute": "shaken" }
+		]
+	},
+	"redemption_arc": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.3,
+		"polarity": "positive",
+		"headline": "{callsign} pulled themselves back from the edge",
+		"body": "Something clicked. Old habits died. They're not the same person they were — in the best way.",
+		"requires": { "crew": true },
+		"effects": [
+			{ "kind": "remove_attribute", "attribute": "shaken" },
+			{ "kind": "remove_attribute", "attribute": "war_weary" }
+		]
+	},
+	"hull_stress_crack": {
+		"category": "ship",
+		"target": "ship",
+		"weight": 0.7,
+		"polarity": "negative",
+		"headline": "Stress fractures found in the {ship_name}'s frame",
+		"body": "The dock crew found micro-cracks near the port thruster housing. She'll hold — for now.",
+		"requires": { "ship": true },
+		"effects": [
+			{ "kind": "ship_damage", "section": "body", "value": 8 }
+		]
+	},
+	"emergency_refit": {
+		"category": "ship",
+		"target": "ship",
+		"weight": 0.6,
+		"polarity": "positive",
+		"headline": "Field refit brought the {ship_name} up to spec",
+		"body": "The engineers worked a double shift. The old girl is as good as she'll ever be out here.",
+		"requires": { "ship": true },
+		"effects": [
+			{ "kind": "ship_repair", "section": "body", "value": 15 }
+		]
+	},
+	"black_market_parts": {
+		"category": "fleet",
+		"target": "fleet",
+		"weight": 0.5,
+		"polarity": "positive",
+		"headline": "Quartermaster scored parts off the black market",
+		"body": "No serial numbers, no questions. Half the price, twice the hustle.",
+		"effects": [
+			{ "kind": "money", "value": -200 },
+			{ "kind": "ship_repair", "section": "body", "value": 20 }
+		]
+	},
+	"prize_salvage": {
+		"category": "fleet",
+		"target": "fleet",
+		"weight": 0.6,
+		"polarity": "positive",
+		"headline": "Salvage crew stripped the last hulk for scrap",
+		"body": "Crude but profitable. The bean counters will be pleased.",
+		"effects": [
+			{ "kind": "money", "value": 350 }
+		]
+	},
+	"fuel_price_spike": {
+		"category": "fleet",
+		"target": "fleet",
+		"weight": 0.5,
+		"polarity": "negative",
+		"headline": "Fuel prices spiked near {place}",
+		"body": "The cartels are at it again. Running lean until the next depot.",
+		"effects": [
+			{ "kind": "money", "value": -180 }
+		]
+	},
+	"steady_nerves_under_fire": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.5,
+		"polarity": "positive",
+		"headline": "{callsign} held it together when it counted",
+		"body": "Three ships on them, shields failing — and they didn't blink. Crew noticed.",
+		"requires": { "crew": true, "min_battles": 1 },
+		"effects": [
+			{ "kind": "crew_skill", "skill": "composure", "value": 0.02, "duration": "permanent" }
+		]
+	},
+	"friendly_fire_incident": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.3,
+		"polarity": "negative",
+		"headline": "{callsign} clipped a friendly in the last engagement",
+		"body": "Nobody's saying it out loud. Everybody's thinking it.",
+		"requires": { "crew": true, "min_battles": 1 },
+		"effects": [
+			{ "kind": "crew_skill", "skill": "aim", "value": -0.03, "duration": "battles:2" }
+		]
+	},
+	"tactical_insight": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.4,
+		"polarity": "positive",
+		"headline": "{callsign} figured something out",
+		"body": "Whatever they were mulling over, it clicked. You can see it in how they move.",
+		"requires": { "crew": true, "min_battles": 2 },
+		"effects": [
+			{ "kind": "crew_skill", "skill": "tactics", "value": 0.02, "duration": "permanent" }
+		]
+	},
+	"weapons_calibration": {
+		"category": "ship",
+		"target": "ship",
+		"weight": 0.7,
+		"polarity": "positive",
+		"headline": "Weapons tech recalibrated the {ship_name}'s gun mounts",
+		"body": "Tighter grouping, faster cycle. Small improvement, big difference in a furball.",
+		"requires": { "ship": true },
+		"effects": [
+			{ "kind": "ship_modifier", "field": "lead_accuracy", "value": 0.08, "duration": "battles:2" }
+		]
+	},
+	"thruster_misalignment": {
+		"category": "ship",
+		"target": "ship",
+		"weight": 0.6,
+		"polarity": "negative",
+		"headline": "Thruster misalignment on the {ship_name}",
+		"body": "She's crabbing slightly to starboard. Not dangerous, but the pilot will know.",
+		"requires": { "ship": true },
+		"effects": [
+			{ "kind": "ship_modifier", "field": "pilot_turn_factor", "value": -0.10, "duration": "battles:1" }
+		]
+	},
+	"intel_network_tip": {
+		"category": "intel",
+		"target": "none",
+		"weight": 0.5,
+		"polarity": "positive",
+		"headline": "The network flagged a poorly-defended depot near {place}",
+		"body": "Unverified, but the source is usually solid. Worth peeling off a ship.",
+		"effects": [
+			{ "kind": "intel", "scope": "next_battle_scout", "value": 0.20, "duration": "battles:1" }
+		]
+	},
+	"old_debt_collected": {
+		"category": "fleet",
+		"target": "fleet",
+		"weight": 0.4,
+		"polarity": "positive",
+		"headline": "An old debt finally came through",
+		"body": "You'd written it off. Apparently they hadn't.",
+		"effects": [
+			{ "kind": "money", "value": 500 }
+		]
+	},
+	"commendation_ceremony": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.3,
+		"polarity": "positive",
+		"headline": "{callsign} was commended at the last port of call",
+		"body": "Someone up the chain noticed. The citation was short; the respect it bought was not.",
+		"requires": { "crew": true, "min_battles": 3 },
+		"effects": [
+			{ "kind": "add_attribute", "attribute": "decorated" },
+			{ "kind": "crew_skill", "skill": "composure", "value": 0.01, "duration": "permanent" }
+		]
+	},
+	"close_call_jinx": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.5,
+		"polarity": "negative",
+		"headline": "{callsign} came within an arm's length of not coming back",
+		"body": "They were quiet in the debrief. They're still quiet. Give them a moment.",
+		"requires": { "crew": true, "min_battles": 1 },
+		"effects": [
+			{ "kind": "add_attribute", "attribute": "superstitious_after_scare" },
+			{ "kind": "crew_skill", "skill": "composure", "value": -0.02, "duration": "battles:2" }
+		]
+	},
+	"port_side_trouble": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.4,
+		"polarity": "negative",
+		"headline": "{callsign} stirred something up in port",
+		"body": "Details are vague. The docking fee was not. Someone owes someone something.",
+		"requires": { "crew": true },
+		"effects": [
+			{ "kind": "money", "value": -120 },
+			{ "kind": "crew_skill", "skill": "awareness", "value": -0.01, "duration": "battles:1" }
+		]
+	},
+	"salvage_windfall": {
+		"category": "fleet",
+		"target": "fleet",
+		"weight": 0.4,
+		"polarity": "positive",
+		"headline": "Salvage team hit a windfall in the debris field near {place}",
+		"body": "Military grade, barely damaged. Someone's loss is very much our gain.",
+		"effects": [
+			{ "kind": "money", "value": 480 },
+			{ "kind": "ship_repair", "section": "body", "value": 10 }
+		]
+	},
+	"crew_grievance": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.5,
+		"polarity": "negative",
+		"headline": "{callsign} lodged a formal grievance with the quartermaster",
+		"body": "The details are petty; the tension is real. Someone needs to smooth this over.",
+		"requires": { "crew": true },
+		"effects": [
+			{ "kind": "crew_skill", "skill": "composure", "value": -0.04, "duration": "battles:2" }
+		]
+	},
+	"sensor_ghost": {
+		"category": "ship",
+		"target": "ship",
+		"weight": 0.5,
+		"polarity": "negative",
+		"headline": "Sensor suite on the {ship_name} throwing false contacts",
+		"body": "Tech says it's an interference pattern. Pilot says it's going to get someone killed.",
+		"requires": { "ship": true },
+		"effects": [
+			{ "kind": "ship_modifier", "field": "lead_accuracy", "value": -0.08, "duration": "battles:1" }
+		]
+	},
+	"drive_overhaul": {
+		"category": "ship",
+		"target": "ship",
+		"weight": 0.5,
+		"polarity": "positive",
+		"headline": "Drive systems on the {ship_name} overhauled at {place}",
+		"body": "New injectors, recalibrated thrust curve. She's got some bite back.",
+		"requires": { "ship": true },
+		"effects": [
+			{ "kind": "ship_modifier", "field": "pilot_accel_factor", "value": 0.10, "duration": "battles:2" }
+		]
+	},
+	"intercepted_orders": {
+		"category": "intel",
+		"target": "none",
+		"weight": 0.4,
+		"polarity": "positive",
+		"headline": "Signals team pulled something useful from the noise near {place}",
+		"body": "Encrypted, but not well. The enemy is moving a supply column. We can be there first.",
+		"effects": [
+			{ "kind": "intel", "scope": "next_battle_scout", "value": 0.30, "duration": "battles:1" }
+		]
+	},
+	"wartime_levy": {
+		"category": "fleet",
+		"target": "fleet",
+		"weight": 0.5,
+		"polarity": "negative",
+		"headline": "Wartime levy assessed at {place}",
+		"body": "The station harbormaster had the look of someone who enjoys their work too much.",
+		"effects": [
+			{ "kind": "money", "value": -300 }
+		]
+	},
+	"scavenged_ammo": {
+		"category": "fleet",
+		"target": "fleet",
+		"weight": 0.6,
+		"polarity": "positive",
+		"headline": "Quartermaster found a cache of reconditioned munitions",
+		"body": "Nothing stamped with a manufacturer's mark, but they'll fire. Probably.",
+		"effects": [
+			{ "kind": "money", "value": -80 },
+			{ "kind": "ship_modifier", "field": "lead_accuracy", "value": 0.05, "duration": "battles:1" }
+		]
+	},
+	"burnout_onset": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.3,
+		"polarity": "negative",
+		"headline": "{callsign} is running on empty",
+		"body": "You can see it in the eyes. They're still getting up every morning, but the fire's banking low.",
+		"requires": { "crew": true, "min_battles": 4 },
+		"effects": [
+			{ "kind": "add_attribute", "attribute": "burnout" }
+		]
+	},
+	"earned_their_stripes": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.4,
+		"polarity": "positive",
+		"headline": "{callsign} finally found their footing",
+		"body": "It took time, but so does anything worth having. They know what they're doing now.",
+		"requires": { "crew": true, "min_battles": 3 },
+		"effects": [
+			{ "kind": "crew_skill", "skill": "aim", "value": 0.02, "duration": "permanent" },
+			{ "kind": "crew_skill", "skill": "composure", "value": 0.01, "duration": "permanent" }
+		]
+	},
+	"supply_line_disrupted": {
+		"category": "economy",
+		"target": "fleet",
+		"weight": 0.4,
+		"polarity": "negative",
+		"headline": "Supply line through {place} disrupted by hostile action",
+		"body": "The resupply we banked on isn't coming. Time to tighten belts and improvise.",
+		"effects": [
+			{ "kind": "money", "value": -250 },
+			{ "kind": "ship_damage", "section": "body", "value": 5 }
+		]
+	},
+	"black_site_contract": {
+		"category": "economy",
+		"target": "fleet",
+		"weight": 0.3,
+		"polarity": "positive",
+		"headline": "A contract with no name came through encrypted channels",
+		"body": "Generous terms. No questions about what happened at {place}. Standard arrangement.",
+		"effects": [
+			{ "kind": "money", "value": 650 }
+		]
+	},
+	"war_weary_onset": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.2,
+		"polarity": "negative",
+		"headline": "{callsign} has been at this too long",
+		"body": "They don't celebrate kills anymore. They're here because they don't know what else to be.",
+		"requires": { "crew": true, "min_battles": 5 },
+		"effects": [
+			{ "kind": "add_attribute", "attribute": "war_weary" }
+		]
+	},
+	"remove_burnout": {
+		"category": "crew",
+		"target": "crew",
+		"weight": 0.25,
+		"polarity": "positive",
+		"headline": "{callsign} found something worth fighting for again",
+		"body": "A letter, a conversation, a moment of stillness between the battles. They're back.",
+		"requires": { "crew": true },
+		"effects": [
+			{ "kind": "remove_attribute", "attribute": "burnout" },
+			{ "kind": "crew_skill", "skill": "composure", "value": 0.02, "duration": "permanent" }
+		]
+	}
+}

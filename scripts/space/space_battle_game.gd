@@ -744,7 +744,7 @@ func _apply_roguelike_damage_states() -> void:
 		var saved: Dictionary = hull.get("ship", {})
 		if saved.is_empty():
 			continue
-		_ships[i] = DictUtils.merge_dict(saved, {
+		var merged_ship: Dictionary = DictUtils.merge_dict(saved, {
 			"ship_id": ship["ship_id"],
 			"hull_id": hull_id,
 			"position": ship["position"],
@@ -753,6 +753,9 @@ func _apply_roguelike_damage_states() -> void:
 			"angular_velocity": ship["angular_velocity"],
 			"assigned_area": ship["assigned_area"],
 		})
+		# Fold active ship_modifier temp effects onto crew_modifiers.
+		_ships[i] = EventSystem.apply_active_ship_effects(
+				merged_ship, hull_id, RoguelikeRun.active_effects)
 
 
 ## Spawn an obstacle at the given position
@@ -863,10 +866,13 @@ func _end_game(winner: int) -> void:
 func _handle_roguelike_battle_end(winner: int) -> void:
 	var result: String = CampaignSystem.RESULT_VICTORY if winner == 0 \
 		else CampaignSystem.RESULT_DEFEAT
+	# Capture the intel reward bonus BEFORE record_battle_result ticks (and may
+	# expire) the active effects that grant it.
+	var intel_bonus := RoguelikeRun.next_battle_reward_bonus()
 	RoguelikeRun.record_battle_result(result, _get_player_ships_final_state())
 	if result == CampaignSystem.RESULT_VICTORY:
 		var destroyed_enemies := _destroyed_enemy_counts()
-		var reward := EconomySystem.battle_reward(destroyed_enemies)
+		var reward := int(round(EconomySystem.battle_reward(destroyed_enemies) * (1.0 + intel_bonus)))
 		RoguelikeRun.money += reward
 		RoguelikeRun.last_battle_summary["reward"] = reward
 		RoguelikeRun.last_battle_summary["destroyed_enemies"] = destroyed_enemies
@@ -1293,7 +1299,14 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 	if team == 0 and RoguelikeRun.active:
 		var hull: Dictionary = RoguelikeRun.hull_by_id(hull_id)
 		for saved_member in hull.get("crew", []):
-			new_crew.append(CrewData.reset_for_battle(saved_member))
+			var battle_member: Dictionary = CrewData.reset_for_battle(saved_member)
+			# Fold active crew_skill temp effects into effective skills for this battle.
+			var effective_skills: Dictionary = EventSystem.apply_active_crew_skill(
+					battle_member.get("stats", {}).get("skills", {}),
+					battle_member.get("crew_id", ""),
+					RoguelikeRun.active_effects)
+			battle_member["stats"]["skills"] = effective_skills
+			new_crew.append(battle_member)
 	elif team == 0 and not hull_id.is_empty():
 		# Skirmish with a bound hull_id: load crew from the saved skirmish fleet.
 		var skirmish_hulls: Array = SkirmishFleet.get_fleet(0)

@@ -1,0 +1,18 @@
+{
+	"adjectives": [
+		"Static", "Drift", "Ghost", "Silent", "Solar", "Amber", "Cobalt", "Crimson",
+		"Lunar", "Night", "Ember", "Slate", "Gilded", "Halo", "Feral", "Razor",
+		"Storm", "Argent", "Iron", "Void",
+		"Neon", "Obsidian", "Polar", "Veiled", "Ashen", "Blazing", "Cinder",
+		"Dusky", "Eclipse", "Fractured", "Glacial", "Hollow", "Inert", "Jagged",
+		"Kinetic", "Lacuna", "Molten", "Nomad", "Oblique", "Phantom"
+	],
+	"nouns": [
+		"Falcon", "Viper", "Raven", "Comet", "Wolf", "Lance", "Mantis", "Harrier",
+		"Saber", "Jackal",
+		"Arrow", "Banshee", "Claw", "Drake", "Eel", "Fox", "Golem", "Hydra",
+		"Imp", "Jinx", "Kestrel", "Lynx", "Mako", "Nadir", "Osprey", "Paladin",
+		"Quasar", "Reaper", "Shrike", "Titan", "Umbra", "Valkyrie", "Warden",
+		"Xerxes", "Yeti", "Zenith"
+	]
+}

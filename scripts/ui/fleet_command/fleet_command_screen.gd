@@ -837,7 +837,7 @@ class _AssignedSlot extends HBoxContainer:
 		if vp != null and vp.gui_is_dragging():
 			set_drag_preview(preview)
 		return {"kind": "crew", "crew_id": str(_member.get("crew_id", "")),
-			"role": int(_member.get("role", CrewData.Role.PILOT))}
+			"role": CrewData.role_of(_member)}
 
 	func _gui_input(event: InputEvent) -> void:
 		# A left click (not a drag) opens the crew stats popup. Drag is initiated
@@ -850,7 +850,7 @@ class _AssignedSlot extends HBoxContainer:
 				var orders_ctx: Dictionary = {
 					"crew_id": str(_member.get("crew_id", "")),
 					"ship_type": _ship_type,
-					"role": int(_member.get("role", -1)),
+					"role": CrewData.role_of(_member),
 				}
 				CrewViewModal.open(_screen, CrewData.entry_from_crew(_member), orders_ctx)
 
@@ -916,7 +916,7 @@ class _PoolChip extends PanelContainer:
 		name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		col.add_child(name_lbl)
 
-		var role_lbl := UiKit.label(CrewData.get_role_name(int(member.get("role", -1))), UiKit.DIM, 9)
+		var role_lbl := UiKit.label(CrewData.get_role_name(CrewData.role_of(member)), UiKit.DIM, 9)
 		role_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		role_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		col.add_child(role_lbl)
@@ -926,7 +926,7 @@ class _PoolChip extends PanelContainer:
 		preview.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.CHIP, UiKit.ACCENT))
 		var lbl := UiKit.label(
 			"%s · %s" % [str(_member.get("callsign", "")),
-				CrewData.get_role_name(int(_member.get("role", -1)))],
+				CrewData.get_role_name(CrewData.role_of(_member))],
 			UiKit.ACCENT, 12)
 		preview.add_child(lbl)
 		preview.custom_minimum_size = Vector2(FleetCommandScreen.DRAG_PREVIEW_WIDTH, 0)
@@ -934,7 +934,7 @@ class _PoolChip extends PanelContainer:
 		if vp != null and vp.gui_is_dragging():
 			set_drag_preview(preview)
 		return {"kind": "crew", "crew_id": str(_member.get("crew_id", "")),
-			"role": int(_member.get("role", CrewData.Role.PILOT))}
+			"role": CrewData.role_of(_member)}
 
 	func _gui_input(event: InputEvent) -> void:
 		# Left click (not drag) → crew stats popup. See _AssignedSlot._gui_input.
@@ -945,6 +945,6 @@ class _PoolChip extends PanelContainer:
 				var orders_ctx: Dictionary = {
 					"crew_id": str(_member.get("crew_id", "")),
 					"ship_type": "",
-					"role": int(_member.get("role", -1)),
+					"role": CrewData.role_of(_member),
 				}
 				CrewViewModal.open(_screen, CrewData.entry_from_crew(_member), orders_ctx)

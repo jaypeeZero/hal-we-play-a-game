@@ -100,7 +100,7 @@ static func try_fire_weapon(ship_data: Dictionary, weapon: Dictionary, targets: 
 		return create_no_fire_result(weapon)
 
 	return create_fire_result(
-		set_weapon_cooldown(weapon, calculate_cooldown_time(weapon)),
+		set_weapon_cooldown(weapon, calculate_cooldown_time(weapon, ship_data, best_target)),
 		create_fire_command(ship_data, weapon, best_target)
 	)
 
@@ -146,8 +146,16 @@ static func is_weapon_ready(weapon: Dictionary) -> bool:
 static func is_weapon_operational(weapon: Dictionary) -> bool:
 	return weapon.get("status", "operational") != "destroyed"
 
-static func calculate_cooldown_time(weapon: Dictionary) -> float:
-	return 1.0 / weapon.stats.rate_of_fire
+static func calculate_cooldown_time(weapon: Dictionary, ship_data: Dictionary = {}, target: Dictionary = {}) -> float:
+	"""Base cooldown scaled down when a close_range_fire_bonus applies and target is inside close range."""
+	var base: float = 1.0 / weapon.stats.rate_of_fire
+	var bonus: float = ship_data.get("crew_modifiers", {}).get("close_range_fire_bonus", 0.0)
+	if bonus > 0.0 and not ship_data.is_empty() and not target.is_empty():
+		var close_threshold: float = float(weapon.stats.get("range", 0.0)) * WingConstants.CLOSE_RANGE_OPTIMAL_FRACTION
+		var dist: float = calculate_distance(ship_data.get("position", Vector2.ZERO), target.get("position", Vector2.ZERO))
+		if dist < close_threshold:
+			return base / (1.0 + bonus)
+	return base
 
 static func set_weapon_cooldown(weapon: Dictionary, cooldown: float) -> Dictionary:
 	return DictUtils.merge_dict(weapon, {cooldown_remaining = cooldown})
@@ -481,7 +489,30 @@ static func calculate_aim_spread_angle(ship_data: Dictionary) -> float:
 	var aim_skill: float = clamp(float(modifiers.get("aim_skill", 0.0)), 0.0, 1.0)
 	var captain_factor: float = clamp(float(modifiers.get("captain_coordination", 1.0)), COORDINATION_CLAMP_MIN, COORDINATION_CLAMP_MAX)
 	var effective: float = clamp(aim_skill * captain_factor, 0.0, 1.0)
+
+	# Last stand (low_hp_aim_bonus attribute): a wounded hull's gunners bear down,
+	# tightening the cone once integrity drops below the threshold.
+	var low_hp_bonus: float = float(modifiers.get("low_hp_aim_bonus", 0.0))
+	if low_hp_bonus > 0.0 and _hull_integrity_fraction(ship_data) < WingConstants.LAST_STAND_HP_FRACTION:
+		effective = clamp(effective + low_hp_bonus, 0.0, 1.0)
+
 	return WingConstants.GUNNER_AIM_WORST_SPREAD_RAD * (1.0 - effective)
+
+
+## Current armor+internals as a fraction of their maxima (1.0 = pristine).
+## Returns 1.0 when no max data exists, so the bonus never fires on a hull
+## that can't report its capacity.
+static func _hull_integrity_fraction(ship_data: Dictionary) -> float:
+	var current: int = DamageResolver.calculate_total_armor(ship_data) \
+		+ DamageResolver.calculate_total_internal_health(ship_data)
+	var max_total: int = 0
+	for sec in ship_data.get("armor_sections", []):
+		max_total += int(sec.get("max_armor", sec.get("current_armor", 0)))
+	for internal in ship_data.get("internals", []):
+		max_total += int(internal.get("max_health", internal.get("current_health", 0)))
+	if max_total <= 0:
+		return 1.0
+	return float(current) / float(max_total)
 
 static func generate_random_spread(max_spread: float) -> float:
 	return randf_range(-max_spread, max_spread)

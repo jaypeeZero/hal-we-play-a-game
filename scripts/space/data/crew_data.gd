@@ -68,6 +68,35 @@ static func qualified_roles_from_entry(entry: Dictionary) -> Array:
 		roles.append(Role.PILOT)
 	return roles
 
+## The serving role of any crew-ish dict, as a Role int — the ONE place role is
+## read off a dict. Handles every shape that has bitten us:
+##   • a live crew dict   → its `role` int
+##   • a JSON-loaded crew → `role` as a float (2.0) — int()-coerced
+##   • a roster entry     → first of its `roles` name array (no `role` key)
+## Never returns an out-of-range value: an unknown/missing role falls back to
+## PILOT, so callers never render "Unknown" or compare against a stray -1.
+## Prefer this over `int(member.get("role", -1))` everywhere.
+static func role_of(member: Dictionary) -> int:
+	if member.has("role") and member["role"] != null:
+		var role := int(member["role"])
+		return role if ROLE_NAMES.has(role) else Role.PILOT
+	var roles: Array = member.get("roles", [])
+	if not roles.is_empty():
+		return role_from_name(str(roles[0]))
+	return Role.PILOT
+
+## The qualified roles of any crew-ish dict, as Role ints. Reads `qualified_roles`
+## (live crew) or `roles` names (roster entry); defaults to [serving role].
+static func roles_of(member: Dictionary) -> Array:
+	if member.has("qualified_roles") and not member["qualified_roles"].is_empty():
+		var ints: Array = []
+		for q in member["qualified_roles"]:
+			ints.append(int(q))
+		return ints
+	if not member.get("roles", []).is_empty():
+		return qualified_roles_from_entry(member)
+	return [role_of(member)]
+
 ## Whether the crew member is qualified to serve in `role`.
 static func is_qualified_for(crew: Dictionary, role: int) -> bool:
 	return crew.get("qualified_roles", []).has(role)
@@ -145,7 +174,8 @@ static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictiona
 			"subordinates": []  # crew_ids of subordinates
 		},
 		"next_decision_time": 0.0,  # Scheduler wakes the crew at this game_time.
-		"current_action": null  # What they're doing now
+		"current_action": null,  # What they're doing now
+		"attributes": [],  # Array of attribute id strings (see AttributeLibrary)
 	}
 
 	return base_crew
@@ -444,6 +474,7 @@ static func reset_for_battle(saved: Dictionary) -> Dictionary:
 	fresh.stats.fatigue = 0.0
 	fresh.qualified_roles = saved.get("qualified_roles", fresh.qualified_roles).duplicate()
 	fresh.known_patterns = saved.get("known_patterns", []).duplicate()
+	fresh.attributes = saved.get("attributes", []).duplicate()
 	fresh.command_chain = saved.get("command_chain", fresh.command_chain).duplicate(true)
 	# A gunner's weapon binding is persistent identity: it decides which weapon
 	# they man and, if its mount is shot off, whether they become a casualty.
@@ -467,6 +498,7 @@ static func from_roster_entry(entry: Dictionary) -> Dictionary:
 static func apply_roster_entry(member: Dictionary, entry: Dictionary) -> Dictionary:
 	member["callsign"] = str(entry.get("callsign", member.crew_id))
 	member["qualified_roles"] = qualified_roles_from_entry(entry)
+	member["attributes"] = entry.get("attributes", member.get("attributes", [])).duplicate()
 	var entry_skills: Dictionary = entry.get("skills", {})
 	var skills: Dictionary = member.stats.skills
 	for skill_name in SKILL_NAMES:
@@ -501,6 +533,7 @@ static func entry_from_crew(member: Dictionary) -> Dictionary:
 		"callsign": str(member.get("callsign", member.get("crew_id", ""))),
 		"roles": role_names,
 		"skills": skills,
+		"attributes": member.get("attributes", []).duplicate(),
 	}
 
 
