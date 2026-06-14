@@ -98,6 +98,19 @@ static func assign_slots(ships: Array) -> Array:
 			var cleared_orders: Dictionary = cleared.get("orders", {}).duplicate(true)
 			cleared_orders.erase("formation_slot")
 			cleared_orders.erase("anchor_position")
+			# Resolve support_pos from the ally's live position, or clear it when
+			# the assignment is gone or the ally is destroyed/missing.
+			var support_ship_id: String = cleared_orders.get("support_assignment", "")
+			if support_ship_id != "":
+				var ally: Variant = ship_lookup.get(support_ship_id, null)
+				if ally != null and ally.get("status", "") == OPERATIONAL_STATUS:
+					cleared_orders["support_pos"] = ally.get("position", Vector2.ZERO)
+				else:
+					# Ally gone or destroyed — clear escort pull so pilot isn't stuck.
+					cleared_orders.erase("support_assignment")
+					cleared_orders.erase("support_pos")
+			else:
+				cleared_orders.erase("support_pos")
 			cleared["orders"] = cleared_orders
 			result.append(cleared)
 			continue
@@ -130,6 +143,17 @@ static func assign_slots(ships: Array) -> Array:
 		var updated_orders: Dictionary = updated.get("orders", {}).duplicate(true)
 		updated_orders["formation_slot"]  = world_slot
 		updated_orders["anchor_position"] = lead_pos
+		# Resolve support_pos from ally's live position (same logic as the no-FA path).
+		var support_ship_id2: String = updated_orders.get("support_assignment", "")
+		if support_ship_id2 != "":
+			var ally2: Variant = ship_lookup.get(support_ship_id2, null)
+			if ally2 != null and ally2.get("status", "") == OPERATIONAL_STATUS:
+				updated_orders["support_pos"] = ally2.get("position", Vector2.ZERO)
+			else:
+				updated_orders.erase("support_assignment")
+				updated_orders.erase("support_pos")
+		else:
+			updated_orders.erase("support_pos")
 		updated["orders"] = updated_orders
 		result.append(updated)
 

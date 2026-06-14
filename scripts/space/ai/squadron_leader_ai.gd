@@ -23,10 +23,10 @@ static func make_decision(crew_data: Dictionary, game_time: float) -> Dictionary
 	var result := SquadronLeaderBrain.decide(ws, game_time)
 
 	if result.is_empty():
-		# NOTE: no-decision path intentionally does NOT advance next_decision_time,
-		# so the leader stays due and re-rolls every scheduler tick.
-		# This preserves the existing INDIVIDUAL-coordination-fail behavior.
-		# Likely a bug worth a separate fix (should use idle cadence like other roles).
+		# Always advance next_decision_time even on no-decision so the scheduler
+		# doesn't treat the leader as perpetually due and spin every tick.
+		# Previously this path left the timer unadvanced — now fixed (4b).
+		updated.next_decision_time = game_time + randf_range(REDECIDE_MIN, REDECIDE_MAX)
 		return {"crew_data": updated}
 
 	var decision: Dictionary = result.get("decision", {})

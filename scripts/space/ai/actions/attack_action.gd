@@ -46,9 +46,14 @@ func execute(ws: FighterWorldState) -> Dictionary:
 	# each entry may carry .target_id (for "am I being targeted?") and .position.
 	var threats: Array = _build_threats(ws)
 
+	# Pass support_pos from ship.orders so the blender adds an escort-pull goal
+	# when a support_ally order is active.  Null when no escort assignment.
+	var support_pos: Variant = ws.my_ship.get("orders", {}).get("support_pos", null)
+
 	var directive: Dictionary = SteeringBlender.build_directive(
 		ws.my_ship, tactics, ws.target_ship, threats, weapon_optimal,
-		ws.crew_data.get("posture", "")
+		ws.crew_data.get("posture", ""),
+		support_pos
 	)
 
 	return {
@@ -60,6 +65,7 @@ func execute(ws: FighterWorldState) -> Dictionary:
 		"preferred_range":   directive.get("preferred_range", weapon_optimal),
 		"formation_slot":    directive.get("formation_slot",  Vector2.ZERO),
 		"anchor_position":   directive.get("anchor_position", Vector2.ZERO),
+		"support_pos":       directive.get("support_pos",     null),
 		# Standard decision metadata
 		"crew_id":    ws.crew_data.get("crew_id", ""),
 		"entity_id":  ws.my_ship.get("ship_id", ""),

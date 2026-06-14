@@ -89,13 +89,20 @@ static func can_make_decisions(crew_data: Dictionary) -> bool:
 ## Calculate effective skill with stress/fatigue penalties.
 ## Reads the role-appropriate primary stat (Phase 03 default).  Phase 07
 ## replaces this with per-stat decay rates.
+## When a PILOT holds command_hat == "squadron_leader", coordination quality is
+## governed by tactics/leadership skill, not piloting — the hat changes what
+## the skill gates (coordination tier, brain action preconditions).
 static func calculate_effective_skill(crew_data: Dictionary) -> float:
 	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
 	var role = crew_data.get("role", -1)
 	var base_skill: float = 0.5
 	match role:
 		CrewData.Role.PILOT:
-			base_skill = float(skills.get("piloting", 0.5))
+			# Squadron-leader hat: coordination is tactics/leadership, not stick work.
+			if crew_data.get("command_hat", "") == "squadron_leader":
+				base_skill = float(skills.get("leadership", skills.get("tactics", 0.5)))
+			else:
+				base_skill = float(skills.get("piloting", 0.5))
 		CrewData.Role.GUNNER:
 			base_skill = float(skills.get("aim", 0.5))
 		CrewData.Role.CAPTAIN, CrewData.Role.SQUADRON_LEADER, CrewData.Role.FLEET_COMMANDER:
@@ -377,6 +384,42 @@ static func _issue_focus_commands(
 	return updated
 
 
+## Run the GOAP brain for complementary squadron-leader actions only.
+##
+## Activates CallMutualSupport and ScreenWithdrawal.  AssignTargets,
+## CoordinateAttackRun, and ReformFormation are suppressed — the bespoke
+## formation/focus systems own those decisions and produce superior results.
+## Merges brain-issued orders into orders.issued without clobbering the
+## existing formation/focus orders already placed this tick.
+## Always advances next_decision_time so the leader doesn't perpetually
+## re-decide when the brain returns nothing (perpetual-due bug fix).
+static func _run_complementary_brain(crew_data: Dictionary, game_time: float) -> Dictionary:
+	const SUPPRESSED_ACTIONS := ["assign_targets", "coordinate_attack_run", "reform_formation"]
+	var ws := SquadronLeaderWorldState.build(crew_data, game_time)
+	var result := SquadronLeaderBrain.decide(ws, game_time)
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	# Always advance the command-decision timer so we don't spin every scheduler tick.
+	updated.next_decision_time = game_time + randf_range(
+		SquadronLeaderAI.REDECIDE_MIN, SquadronLeaderAI.REDECIDE_MAX)
+
+	if result.is_empty():
+		return updated
+
+	var decision: Dictionary = result.get("decision", {})
+	var action_id: String = decision.get("subtype", decision.get("action_id", ""))
+	# Suppress overlapping actions — formation/focus systems own these.
+	if SUPPRESSED_ACTIONS.has(action_id):
+		return updated
+
+	# Merge brain-issued orders with formation/focus orders already in place.
+	var brain_orders: Array = result.get("issued_orders", [])
+	var existing_issued: Array = updated.orders.get("issued", []).duplicate()
+	existing_issued.append_array(brain_orders)
+	updated.orders.issued = existing_issued
+	return updated
+
+
 ## Issue formation-slot orders to all wingmen in the command chain.
 ##
 ## Called from make_fighter_pilot_decision when the crew holds the
@@ -570,6 +613,14 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 		# Runs alongside formation commands; both are additive to the leader's
 		# own blended flight decision.
 		crew_data = _issue_focus_commands(crew_data, ship_data, game_time, all_ships)
+		# Activate the squadron-leader GOAP brain for COMPLEMENTARY actions only
+		# (CallMutualSupport + ScreenWithdrawal).  AssignTargets, CoordinateAttackRun,
+		# and ReformFormation are suppressed here — the formation/focus systems above
+		# already own those concerns and do it better.
+		# Thrash risk: the brain respects PLAN_LOCK_DURATION (1.2 s) for stability,
+		# and this block runs on the leader's command cadence (≥2 s), so oscillation
+		# between support/withdrawal is bounded by cadence, not per-tick.
+		crew_data = _run_complementary_brain(crew_data, game_time)
 
 	# Check whether the current target just died (before calling make_decision,
 	# so we can shorten the next delay for elite pilots who spot the kill fast).
@@ -590,6 +641,14 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 	var updated = crew_data.duplicate(true)
 	updated.orders.current = decision
 	updated.current_action = decision.get("subtype", "idle")
+
+	# Propagate support_assignment from crew → ship.orders so FormationSystem
+	# can stamp support_pos from the ally's live position each frame.
+	var support_id: String = updated.get("support_assignment", "")
+	if support_id != "":
+		updated.orders["support_assignment"] = support_id
+	else:
+		updated.orders.erase("support_assignment")
 
 	# Set next decision time based on maneuver type
 	var next_delay = _get_fighter_decision_delay(decision.get("subtype", "idle"))

@@ -6,7 +6,7 @@ extends RefCounted
 ##
 ## Contract fields produced (02b-directive-contract.md):
 ##   engagement_target  : String   — ship_id to fight; "" = none
-##   goal_weights       : Dictionary — {pursue, keep_range, evade, formation} ≥ 0
+##   goal_weights       : Dictionary — {pursue, keep_range, evade, formation, support} ≥ 0
 ##   preferred_range    : float    — desired distance to engagement_target
 ##   facing_mode        : String   — "auto" / "nose_on" / "broadside" (Phase 2b)
 ##
@@ -78,6 +78,12 @@ const FORMATION_WEIGHT_HOLD    := 0.6
 const FORMATION_WEIGHT_SUPPORT := 0.3
 const FORMATION_WEIGHT_PRESS   := 0.05
 
+## Weight of the escort-pull goal toward the supported ally.
+## Blended alongside engage/evade so the pilot orbits near the ally while
+## still fighting — not a discrete maneuver, just a directional bias.
+## Set to zero automatically when no support_assignment is active.
+const SUPPORT_WEIGHT := 0.45
+
 # Posture weight sets — applied ON TOP of tactics-derived weights when a
 # commander order has set crew["posture"].  Empty posture → no override.
 
@@ -134,6 +140,8 @@ const FACING_MODE_BY_ROLE := {
 ##   threats            : Array[Dictionary] — threat entries from awareness;
 ##                        each may carry .target_id for "is this ship targeted?" checks
 ##   weapon_optimal_range : float — preferred firing range for this ship's weapons
+##   posture            : String — commander-ordered posture ("withdraw", "hold", "")
+##   support_pos        : Variant — Vector2 ally position from FormationSystem, or null
 ##
 ## Returns all Phase-2 contract fields. formation_slot and anchor_position
 ## are zero here — FormationSystem stamps live values onto orders each frame.
@@ -143,7 +151,8 @@ static func build_directive(
 	target: Dictionary,
 	threats: Array,
 	weapon_optimal_range: float,
-	posture: String = ""
+	posture: String = "",
+	support_pos: Variant = null
 ) -> Dictionary:
 	var mentality_scalar: float = tactics.get("mentality_scalar", 0.5)
 	var range_scalar: float     = tactics.get("range_scalar",     0.5)
@@ -151,7 +160,7 @@ static func build_directive(
 	var engagement_target: String = target.get("ship_id", "")
 
 	var preferred_range: float = _compute_preferred_range(range_scalar, weapon_optimal_range)
-	var goal_weights: Dictionary = _compute_goal_weights(ship, mentality_scalar, tactics, threats, posture)
+	var goal_weights: Dictionary = _compute_goal_weights(ship, mentality_scalar, tactics, threats, posture, support_pos)
 	var facing_mode: String = _compute_facing_mode(tactics)
 
 	return {
@@ -163,6 +172,9 @@ static func build_directive(
 		# without a null check before MovementSystem runs.
 		"formation_slot":    Vector2.ZERO,
 		"anchor_position":   Vector2.ZERO,
+		# support_pos echoed through so MovementSystem can blend toward it.
+		# Null means no escort assignment is active.
+		"support_pos":       support_pos,
 	}
 
 
@@ -189,6 +201,9 @@ static func _compute_preferred_range(range_scalar: float, weapon_optimal_range: 
 ## formation:  set from duty — hold keeps the line; press breaks to chase;
 ##             support sits between. FormationSystem supplies the actual slot
 ##             position each frame, so a high weight really does hold the shape.
+## support:    SUPPORT_WEIGHT when escort active; 0.0 otherwise.
+##             Pulls the ship toward the protected ally's live position (support_pos).
+##             The pilot still engages threats near the ally — this is a bias, not a lock.
 ##
 ## Weights are not normalized here; the converter normalizes on use.
 static func _compute_goal_weights(
@@ -196,17 +211,24 @@ static func _compute_goal_weights(
 	mentality_scalar: float,
 	tactics: Dictionary,
 	threats: Array,
-	posture: String = ""
+	posture: String = "",
+	support_pos: Variant = null
 ) -> Dictionary:
 	# When a command posture is active, return its pre-set weight set directly.
 	# Posture is a commanded directive bias — it overrides the tactics-derived
 	# weights entirely so the pilot's blend reflects the order, not its own
 	# aggression/duty. Empty posture falls through to the normal path (no regression).
+	# Support weight is appended even in posture mode so escort pull is never lost.
+	var support_weight: float = SUPPORT_WEIGHT if support_pos != null else 0.0
 	match posture:
 		"withdraw":
-			return POSTURE_WITHDRAW.duplicate()
+			var w := POSTURE_WITHDRAW.duplicate()
+			w["support"] = support_weight
+			return w
 		"hold":
-			return POSTURE_HOLD.duplicate()
+			var w := POSTURE_HOLD.duplicate()
+			w["support"] = support_weight
+			return w
 
 	# Normal tactics-derived path — unchanged from pre-posture baseline.
 
@@ -242,6 +264,7 @@ static func _compute_goal_weights(
 		"keep_range": KEEP_RANGE_WEIGHT,
 		"evade":      evade,
 		"formation":  formation,
+		"support":    support_weight,
 	}
 
 

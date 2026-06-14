@@ -370,6 +370,8 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 	var pilot_tactics: Dictionary = {}
 	var command_hat: String = ""
 	var pilot_name: String = "—"
+	var pilot_posture: String = ""
+	var pilot_has_support: bool = false
 	var crew_list: Array = _game.get("_crew_list") if _game.get("_crew_list") is Array else []
 	var ship_id: String = ship.get("ship_id", "")
 	for crew in crew_list:
@@ -379,6 +381,8 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 			pilot_tactics = crew.get("tactics", {})
 			command_hat = crew.get("command_hat", "")
 			pilot_name = str(crew.get("callsign", crew.get("crew_id", "—")))
+			pilot_posture = crew.get("posture", "")
+			pilot_has_support = crew.get("support_assignment", "") != ""
 			break
 
 	# Formation
@@ -427,6 +431,11 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 			dials_line += " [CMDR]"
 		elif command_hat == "squadron_leader":
 			dials_line += " [LEAD]"
+		# Posture and escort markers (4b: activated brain outputs)
+		if pilot_posture != "":
+			dials_line += " pos:%s" % pilot_posture
+		if pilot_has_support:
+			dials_line += " [SUP]"
 
 	var lines: Array = [ship_line, pilot_line, intent_line, target_line, fire_label, formation_line]
 	if dials_line != "":
