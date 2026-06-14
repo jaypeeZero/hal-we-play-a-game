@@ -186,7 +186,7 @@ static func validate_order(order: Dictionary, recipient_role: int) -> bool:
 
 	match recipient_role:
 		CrewData.Role.PILOT:
-			return order_type in ["engage", "withdraw", "maneuver", "formation_slot"]
+			return order_type in ["engage", "withdraw", "maneuver", "formation_slot", "focus_target"]
 		CrewData.Role.GUNNER:
 			return order_type in ["engage", "cease_fire"]
 		CrewData.Role.CAPTAIN:

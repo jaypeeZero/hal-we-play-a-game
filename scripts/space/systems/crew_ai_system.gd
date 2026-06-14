@@ -20,6 +20,15 @@ const FORMATION_COMMAND_CADENCE_SKILL_SCALE: float = 3.0
 ## (shuffled wingman order and jittered spacing).
 const FORMATION_SKILL_JITTER_THRESHOLD: float = 0.5
 
+# ── Focus-fire command constants ──────────────────────────────────────────────
+
+## Minimum concentration for a squadron leader to issue focus_target orders.
+## Below this value the leader stays silent and ships spread per their own 3a priority.
+const CONCENTRATION_THRESHOLD: float = 0.5
+
+## Seconds between focus_target broadcasts. Mirrors FORMATION_COMMAND_CADENCE_BASE.
+const FOCUS_CADENCE: float = 3.0
+
 # ============================================================================
 # MAIN API - Process crew decisions
 # ============================================================================
@@ -131,6 +140,11 @@ static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: 
 	# prevents execute_pilot_order from short-circuiting into discrete mode.
 	crew_data = _absorb_formation_order(crew_data, ships)
 
+	# Focus-target orders: lift target_id into crew["focus_assignment"] so the
+	# pilot's blended decision can apply a targeting bias without short-circuiting
+	# into discrete pursue mode. Must run before the orders.received guard below.
+	crew_data = _absorb_focus_order(crew_data, ships)
+
 	# Squadron-play orders are persistent constraints, not one-shot orders.
 	# Lift them off `orders.received` into `play_assignment` so the pilot's
 	# normal decision flow can read them as a navigation hint without the
@@ -227,6 +241,87 @@ static func _absorb_formation_order(crew_data: Dictionary, ships: Array) -> Dict
 			ships[i]["orders"]["formation_assignment"] = fa.duplicate(true)
 			break
 
+	return updated
+
+
+## Absorb a received focus_target order into crew["focus_assignment"].
+##
+## If orders.received is a focus_target order, lifts the target_id into the
+## persistent crew["focus_assignment"] string and clears orders.received so
+## the generic execute_pilot_order path is NOT triggered — the pilot then runs
+## its normal blended decision with focus_assignment as a targeting bias.
+## This is a mirror of _absorb_formation_order; it MUST run before the
+## orders.received guard in make_pilot_decision.
+static func _absorb_focus_order(crew_data: Dictionary, ships: Array) -> Dictionary:
+	var received: Variant = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+	if received.get("type", "") != "focus_target":
+		return crew_data
+
+	var target_id: String = received.get("target_id", "")
+	if target_id == "":
+		return crew_data
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	# Persist target so it survives across decision ticks until superseded.
+	updated["focus_assignment"] = target_id
+	updated.orders.received = null
+	return updated
+
+
+## Issue focus_target orders to all subordinates when concentration is high enough.
+##
+## Called for crew with command_hat == "squadron_leader" alongside
+## _issue_formation_commands. Throttled on FOCUS_CADENCE. When concentration is
+## below CONCENTRATION_THRESHOLD no orders are issued — ships spread per their
+## own 3a priority. The designated target is the leader's current_target (if
+## set) or the top-priority enemy from awareness.opportunities.
+## Returns the (possibly mutated) crew dict with orders.issued appended.
+static func _issue_focus_commands(
+		crew_data: Dictionary, ship_data: Dictionary, game_time: float, ships: Array) -> Dictionary:
+	var tactics: Dictionary = crew_data.get("tactics", {})
+	var concentration: float = float(tactics.get("concentration", 0.0))
+	# Below threshold: don't issue focus orders — let ships spread per 3a priority.
+	if concentration < CONCENTRATION_THRESHOLD:
+		return crew_data
+
+	# Throttle: only issue if enough time has passed.
+	var last_focus_time: float = crew_data.get("last_focus_command_time", -INF)
+	if game_time - last_focus_time < FOCUS_CADENCE:
+		return crew_data
+
+	var subordinates: Array = crew_data.get("command_chain", {}).get("subordinates", [])
+	if subordinates.is_empty():
+		return crew_data
+
+	# Pick the designated target: prefer current_target, fall back to top opportunity.
+	var designated_id: String = crew_data.get("current_target", "")
+	if designated_id == "":
+		var opportunities: Array = crew_data.get("awareness", {}).get("opportunities", [])
+		if opportunities.is_empty():
+			return crew_data
+		# opportunities is already ranked by targeting_weight from identify_opportunities.
+		designated_id = opportunities[0].get("id", "")
+	if designated_id == "":
+		return crew_data
+
+	var issued_orders: Array = []
+	for sub_crew_id in subordinates:
+		issued_orders.append({
+			"to": sub_crew_id,
+			"type": "focus_target",
+			"target_id": designated_id,
+		})
+
+	var updated: Dictionary = crew_data.duplicate(true)
+	updated["last_focus_command_time"] = game_time
+	# Leader also holds its own focus assignment so targeting_weight boosts apply.
+	updated["focus_assignment"] = designated_id
+	# Merge with any existing issued orders (formation slot orders may already be present).
+	var existing_issued: Array = updated.orders.get("issued", []).duplicate()
+	existing_issued.append_array(issued_orders)
+	updated.orders.issued = existing_issued
 	return updated
 
 
@@ -433,6 +528,10 @@ static func make_fighter_pilot_decision(crew_data: Dictionary, context: Dictiona
 	# leader's own blended flight decision — the leader still flies normally.
 	if crew_data.get("command_hat", "") == "squadron_leader":
 		crew_data = _issue_formation_commands(crew_data, ship_data, game_time)
+		# Also issue focus_target orders when concentration is high enough.
+		# Runs alongside formation commands; both are additive to the leader's
+		# own blended flight decision.
+		crew_data = _issue_focus_commands(crew_data, ship_data, game_time, all_ships)
 
 	# Check whether the current target just died (before calling make_decision,
 	# so we can shorten the next delay for elite pilots who spot the kill fast).

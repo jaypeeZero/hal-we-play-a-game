@@ -223,9 +223,12 @@ static func calculate_threat_priority(entity: Dictionary, own_ship: Dictionary, 
 
 	# Tactics multiplier: doctrine shapes which enemies rank highest (applied
 	# before skill-gated noise so noise still perturbs the doctrine-weighted order).
+	# Thread focus_assignment + concentration so 3b focus-fire boost is applied here.
 	var tactics: Dictionary = crew_data.get("tactics", {})
 	if not tactics.is_empty():
-		priority *= targeting_weight(entity, own_ship, tactics, all_ships)
+		var focus_assignment: String = crew_data.get("focus_assignment", "")
+		var concentration: float = float(tactics.get("concentration", 0.0))
+		priority *= targeting_weight(entity, own_ship, tactics, all_ships, focus_assignment, concentration)
 
 	return priority
 
@@ -314,9 +317,12 @@ static func calculate_opportunity_score(entity: Dictionary, own_ship: Dictionary
 
 	# Tactics multiplier: doctrine shapes which enemies rank highest (applied
 	# before awareness cap so doctrine is visible across the whole ranked set).
+	# Thread focus_assignment + concentration so 3b focus-fire boost is applied here.
 	var tactics: Dictionary = crew_data.get("tactics", {})
 	if not tactics.is_empty():
-		score *= targeting_weight(entity, own_ship, tactics, all_ships)
+		var focus_assignment: String = crew_data.get("focus_assignment", "")
+		var concentration: float = float(tactics.get("concentration", 0.0))
+		score *= targeting_weight(entity, own_ship, tactics, all_ships, focus_assignment, concentration)
 
 	return score
 
@@ -331,6 +337,11 @@ const PRIORITY_PENALTY        := 0.6  # Non-preferred class gets this multiplier
 const SECTOR_BOOST            := 2.0  # Enemy in the focused sector gets this multiplier
 const NEAREST_DISTANCE_SCALE  := 2000.0  # Reference distance for nearest priority (units)
 
+## Maximum weight multiplier applied to the focus-designated target.
+## At concentration=1.0 the focused enemy gets this boost; at concentration=0.0
+## the boost is 1.0 (neutral), so low-concentration leaders produce no effect.
+const FOCUS_MAX_BOOST         := 3.0
+
 ## Half-width of the "center" lateral sector (mirrors TacticsTelemetry).
 const SECTOR_CENTER_HALF_WIDTH := 100.0
 
@@ -343,10 +354,13 @@ const FIGHTER_CLASS_TYPES: Array = ["fighter", "heavy_fighter", "torpedo_boat"]
 ## Pure function: returns a multiplier (1.0 = neutral) that scales a raw
 ## threat/opportunity score according to the crew's resolved tactics dict.
 ##
-## entity     — entity_info snapshot (has ship_type, position, id)
-## own_ship   — the observing ship (position, team)
-## tactics    — crew_data["tactics"] (resolved by TacticsSystem.compile_for_crew)
-## all_ships  — full fleet snapshot for centroid computation; may be []
+## entity           — entity_info snapshot (has ship_type, position, id)
+## own_ship         — the observing ship (position, team)
+## tactics          — crew_data["tactics"] (resolved by TacticsSystem.compile_for_crew)
+## all_ships        — full fleet snapshot for centroid computation; may be []
+## focus_assignment — ship_id of the designated focus target (crew["focus_assignment"]);
+##                    "" means no active focus (3a behaviour, no change)
+## concentration    — crew tactics concentration dial (0..1); scales the focus boost
 ##
 ## Application order inside priority/opportunity scorers:
 ##   base_score  →  × targeting_weight  →  skill-gated noise in prioritize_threats
@@ -355,7 +369,9 @@ static func targeting_weight(
 	entity: Dictionary,
 	own_ship: Dictionary,
 	tactics: Dictionary,
-	all_ships: Array
+	all_ships: Array,
+	focus_assignment: String = "",
+	concentration: float = 0.0
 ) -> float:
 	var weight := 1.0
 
@@ -411,6 +427,13 @@ static func targeting_weight(
 		var lateral_sector := _lateral_sector(entity, own_ship, all_ships)
 		if lateral_sector == sector_focus:
 			weight *= SECTOR_BOOST
+
+	# --- Focus-fire boost (Phase 3b) ---
+	# When the leader has designated a focus target, multiply its weight by
+	# lerp(1.0, FOCUS_MAX_BOOST, concentration). crew with no focus_assignment
+	# or concentration=0 are unaffected (multiplier stays 1.0 exactly).
+	if focus_assignment != "" and entity.get("id", "") == focus_assignment:
+		weight *= lerp(1.0, FOCUS_MAX_BOOST, clampf(concentration, 0.0, 1.0))
 
 	return weight
 
