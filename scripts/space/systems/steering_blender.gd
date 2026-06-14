@@ -107,6 +107,17 @@ const POSTURE_HOLD := {
 	"formation":  0.7,    # dominant — anchor the line
 }
 
+## press: commanded all-out commit (#79 captain/commander press-attack / fleet
+## all-out). Close NOW and brawl — the aggressive counterpart to withdraw.
+## pursue dominant, keep_range/evade minimal so the ship dives inside firing
+## range and stays there rather than orbiting or peeling off.
+const POSTURE_PRESS := {
+	"pursue":     0.9,    # dominant — drive straight in
+	"keep_range": 0.1,    # minimal — don't hold at range, close to brawl
+	"evade":      0.05,   # near-zero — commit despite incoming fire
+	"formation":  0.02,   # low — break formation to press the attack
+}
+
 # facing_mode per role (Phase 2b)
 ## Maps a ship role to the Phase-2b facing_mode string.
 ## artillery presents broadside so its side batteries bear on the target.
@@ -227,6 +238,10 @@ static func _compute_goal_weights(
 			return w
 		"hold":
 			var w := POSTURE_HOLD.duplicate()
+			w["support"] = support_weight
+			return w
+		"press":
+			var w := POSTURE_PRESS.duplicate()
 			w["support"] = support_weight
 			return w
 

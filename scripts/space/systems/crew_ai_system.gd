@@ -164,6 +164,13 @@ static func make_pilot_decision(crew_data: Dictionary, game_time: float, ships: 
 	# continues to the blended path below.
 	crew_data = _absorb_command_order(crew_data)
 
+	# Press-attack posture (#79 captain/commander commit + all-out) is persistent
+	# too — lift into combat_posture so FighterWorldState surfaces ws.press_attack
+	# across ticks. Blended: AttackAction maps an active press into the "press"
+	# steering posture (no discrete short-circuit; the old execute_pilot_order
+	# path was removed when fighters moved onto the blender).
+	crew_data = _absorb_posture_order(crew_data)
+
 	# Analyze tactical context (include wings for fighter coordination)
 	var context = analyze_tactical_context(crew_data, ships, crew_list)
 	context["wings"] = wings  # Add wings to context for fighter decisions
@@ -194,6 +201,29 @@ static func infer_ship_type(crew_data: Dictionary) -> String:
 	else:
 		# Solo pilot = fighter
 		return "fighter"
+
+## Lift incoming "posture" orders into the persistent `combat_posture` slot,
+## clearing them from `orders.received`. Postures persist across ticks (they
+## expire via `expires_at` or a player_override flag) so they need their own
+## storage separate from consume-once received orders.
+## Returns the (possibly mutated) crew dict.
+static func _absorb_posture_order(crew_data: Dictionary) -> Dictionary:
+	var received = crew_data.orders.get("received") if crew_data.has("orders") else null
+	if received == null or not received is Dictionary:
+		return crew_data
+	if received.get("type", "") != "posture":
+		return crew_data
+	var updated := crew_data.duplicate(true)
+	updated["combat_posture"] = {
+		"subtype":        received.get("subtype", ""),
+		"target_id":      received.get("target_id", ""),
+		"expires_at":     received.get("expires_at", 0.0),
+		"player_override": received.get("player_override", false),
+		"received_at":    received.get("timestamp", 0.0),
+	}
+	updated.orders.received = null
+	return updated
+
 
 ## Lift incoming "play" orders into the persistent `play_assignment` slot,
 ## clearing them from `orders.received`. Plays span multiple decision ticks

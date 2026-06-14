@@ -69,7 +69,9 @@ func _rebuild() -> void:
 func _top_row() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", TOP_ROW_GAP)
-	row.add_child(HeadshotSilhouette.new())
+	var portrait := CrewPortrait.new()
+	portrait.setup(_entry)
+	row.add_child(portrait)
 
 	var identity := VBoxContainer.new()
 	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL

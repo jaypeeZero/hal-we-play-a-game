@@ -18,15 +18,19 @@ var worst_armor: Dictionary     # {subtype, section_id, ratio} — lowest-ratio 
 # Skill
 var effective_skill: float
 
+# Repair pool (Layer D) — 0 means no in-battle repair is possible
+var repair_pool_remaining: int
+
 
 static func build(crew_data: Dictionary, game_time: float, ships: Array) -> EngineerWorldState:
 	var ws := EngineerWorldState.new()
-	ws.crew_data       = crew_data
-	ws.game_time       = game_time
-	ws.effective_skill = CrewAISystem.calculate_effective_skill(crew_data)
-	ws.ship            = find_ship_by_id(crew_data.get("assigned_to", ""), ships)
-	ws.worst_internal  = _find_worst_internal(ws.ship)
-	ws.worst_armor     = _find_worst_armor(ws.ship)
+	ws.crew_data              = crew_data
+	ws.game_time              = game_time
+	ws.effective_skill        = CrewAISystem.calculate_effective_skill(crew_data)
+	ws.ship                   = find_ship_by_id(crew_data.get("assigned_to", ""), ships)
+	ws.repair_pool_remaining  = ws.ship.get("repair_pool", 0)
+	ws.worst_internal         = _find_worst_internal(ws.ship)
+	ws.worst_armor            = _find_worst_armor(ws.ship)
 	return ws
 
 

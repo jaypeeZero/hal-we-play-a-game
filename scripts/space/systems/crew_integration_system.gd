@@ -350,7 +350,14 @@ static func apply_captain_skill_modifiers(ship_data: Dictionary, crew_data: Dict
 ## Apply an engineer's repair decision. The heal is a machinery-skill-scaled
 ## fraction of the target's maximum, boosted by the captain's damage-control
 ## modifier. Destroyed components are beyond in-battle field repair.
+## Draws from the ship's battle-scoped repair_pool (Layer D); returns ship
+## unchanged when the pool is exhausted.
 static func apply_repair_decision(ship_data: Dictionary, decision: Dictionary, _crew_data: Dictionary) -> Dictionary:
+	# Layer D: pool gate — no pool, no repair.
+	var pool: int = ship_data.get("repair_pool", 0)
+	if pool <= 0:
+		return ship_data
+
 	var skill_factor: float = decision.get("skill_factor", 0.5)
 	var damage_control: float = ship_data.get("crew_modifiers", {}).get("damage_control", 1.0)
 	var fraction: float = lerpf(WingConstants.ENGINEER_REPAIR_FRACTION_MIN,
@@ -363,15 +370,24 @@ static func apply_repair_decision(ship_data: Dictionary, decision: Dictionary, _
 		if component.is_empty():
 			return ship_data
 		amount = RepairSystem.fraction_to_amount(component.get("max_health", 0), fraction)
+		amount = mini(amount, pool)   # clamp to remaining pool
+		if amount <= 0:
+			return ship_data
 		updated = RepairSystem.repair_component(ship_data, decision.component_id, amount)
 	elif decision.has("section_id"):
 		var section = RepairSystem.find_armor_section_by_id(ship_data, decision.section_id)
 		if section.is_empty():
 			return ship_data
 		amount = RepairSystem.fraction_to_amount(section.get("max_armor", 0), fraction)
+		amount = mini(amount, pool)   # clamp to remaining pool
+		if amount <= 0:
+			return ship_data
 		updated = RepairSystem.repair_armor_section(ship_data, decision.section_id, amount)
 	else:
 		return ship_data
+
+	# Draw down the pool.
+	updated["repair_pool"] = pool - amount
 
 	# Stamp the repair pulse so the renderer can show the heal landing.
 	updated = DictUtils.merge_dict(updated, {
@@ -384,6 +400,7 @@ static func apply_repair_decision(ship_data: Dictionary, decision: Dictionary, _
 			"crew_id": decision.get("crew_id", ""),
 			"subtype": decision.get("subtype", ""),
 			"amount": amount,
+			"repair_pool_remaining": updated["repair_pool"],
 		})
 	return updated
 

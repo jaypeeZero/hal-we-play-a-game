@@ -93,6 +93,12 @@ var _wings_dirty: bool = true  # Set true when membership-affecting events fire
 var _debug_overlay: DebugOverlay
 var _debug_panel_layer: CanvasLayer = null
 
+# On-screen player command buttons (Layer C — all-out attack)
+var _command_panel_layer: CanvasLayer = null
+var _allout_button: Button = null
+var _standdown_button: Button = null
+var _allout_active: bool = false
+
 # Options shown in the in-battle F1 panel and mirrored in the Settings menu.
 const DEBUG_PANEL_OPTIONS: Array = [
 	{"label": "Target Lines",    "setting": "show_target_lines"},
@@ -121,6 +127,7 @@ func _ready() -> void:
 	add_child(_debug_overlay)
 
 	_create_debug_panel()
+	_create_command_panel()
 
 	game_started.emit()
 
@@ -635,6 +642,13 @@ func spawn_ship(ship_type: String, team: int, position: Vector2, patrol_center: 
 	# Stable per-run hull identity carries through to survivor reconciliation.
 	ship_data["hull_id"] = hull_id
 
+	# Battle-scoped repair pool (Layer D). Full at battle start; never refills.
+	# Between-battle downtime repairs (RepairSystem.apply_engineer_repairs) are
+	# a separate path and must NOT consume this pool.
+	var pool: int = ShipData.compute_repair_pool(ship_data)
+	ship_data["repair_pool"] = pool
+	ship_data["repair_pool_max"] = pool
+
 	# Add to data array
 	_ships.append(ship_data)
 
@@ -974,6 +988,61 @@ func _toggle_debug_panel() -> void:
 func _on_debug_option_toggled(setting_name: String, value: bool) -> void:
 	GameSettings.set(setting_name, value)
 	GameSettings.save_settings()
+
+
+## Build the bottom-centre player command bar (always visible).
+## Hosts the all-out-attack / stand-down order buttons (Layer C) so the order
+## is issued by clicking, not a hidden keybind.
+func _create_command_panel() -> void:
+	const MARGIN := 12.0
+	const BUTTON_SEPARATION := 8
+
+	_command_panel_layer = CanvasLayer.new()
+	_command_panel_layer.layer = 10
+	add_child(_command_panel_layer)
+
+	var panel := PanelContainer.new()
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 1.0
+	panel.anchor_bottom = 1.0
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	panel.offset_bottom = -MARGIN
+	_command_panel_layer.add_child(panel)
+
+	var margin_container := MarginContainer.new()
+	margin_container.add_theme_constant_override("margin_left", 8)
+	margin_container.add_theme_constant_override("margin_right", 8)
+	margin_container.add_theme_constant_override("margin_top", 6)
+	margin_container.add_theme_constant_override("margin_bottom", 6)
+	panel.add_child(margin_container)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", BUTTON_SEPARATION)
+	margin_container.add_child(hbox)
+
+	_allout_button = Button.new()
+	_allout_button.text = "All-Out Attack"
+	_allout_button.add_theme_font_size_override("font_size", 14)
+	_allout_button.pressed.connect(_issue_allout_attack)
+	hbox.add_child(_allout_button)
+
+	_standdown_button = Button.new()
+	_standdown_button.text = "Stand Down"
+	_standdown_button.add_theme_font_size_override("font_size", 14)
+	_standdown_button.pressed.connect(_cancel_allout_attack)
+	hbox.add_child(_standdown_button)
+
+	_refresh_command_buttons()
+
+
+## Enable/disable the order buttons to reflect whether an all-out order is live.
+func _refresh_command_buttons() -> void:
+	if _allout_button != null:
+		_allout_button.disabled = _allout_active
+	if _standdown_button != null:
+		_standdown_button.disabled = not _allout_active
 
 # ============================================================================
 # PUBLIC API (for testing)
@@ -1414,3 +1483,64 @@ func _check_squadron_leadership_succession() -> void:
 				if crew.get("is_squadron_leader", false) and crew.crew_id != leader_id:
 					BattleEventLoggerAutoload.log_event("squadron_leader_promoted", {
 						"crew_id": crew.crew_id, "callsign": crew.get("callsign", "Unknown")})
+
+
+## Layer C — Player "All-Out Attack" order.
+## Sets a sticky (player_override=true) press_attack posture on every player-team
+## pilot/captain. Uses the same posture channel as AI commit decisions (Layer B)
+## so A/B/C all converge on one read path in FighterWorldState.
+func _issue_allout_attack() -> void:
+	var game_time := Time.get_ticks_msec() / 1000.0
+	var focus_target_id: String = ""   # TODO: wire to player target selection
+
+	var posture := {
+		"type": "posture",
+		"subtype": "press_attack",
+		"target_id": focus_target_id,
+		"expires_at": 0.0,             # ignored when player_override=true
+		"player_override": true,
+		"timestamp": game_time,
+	}
+
+	for crew in _crew_list:
+		var role: int = crew.get("role", -1)
+		if role not in [CrewData.Role.PILOT, CrewData.Role.CAPTAIN]:
+			continue
+		var ship_id: String = crew.get("assigned_to", "")
+		var ship: Dictionary = _find_ship_by_id(ship_id)
+		if ship.is_empty() or ship.get("team", -1) != 0:
+			continue
+		crew["combat_posture"] = posture.duplicate(true)
+
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("player_allout_attack", {
+			"focus_target_id": focus_target_id,
+			"timestamp": game_time,
+		})
+
+	_allout_active = true
+	_refresh_command_buttons()
+
+
+## Cancel an active player all-out-attack order; pilots revert to normal AI posture.
+func _cancel_allout_attack() -> void:
+	var game_time := Time.get_ticks_msec() / 1000.0
+	for crew in _crew_list:
+		var role: int = crew.get("role", -1)
+		if role not in [CrewData.Role.PILOT, CrewData.Role.CAPTAIN]:
+			continue
+		var ship_id: String = crew.get("assigned_to", "")
+		var ship: Dictionary = _find_ship_by_id(ship_id)
+		if ship.is_empty() or ship.get("team", -1) != 0:
+			continue
+		var posture: Dictionary = crew.get("combat_posture", {})
+		if posture.get("player_override", false):
+			crew["combat_posture"] = {}
+
+	if BattleEventLoggerAutoload.service:
+		BattleEventLoggerAutoload.service.log_event("player_allout_cancelled", {
+			"timestamp": game_time,
+		})
+
+	_allout_active = false
+	_refresh_command_buttons()

@@ -62,7 +62,7 @@ func test_both_modes_share_the_same_visual_anatomy():
 		var view := _view(editable)
 		assert_eq(_find_by_script(view, SkillRadarChart, []).size(), 1,
 			"A radar chart renders in both modes")
-		assert_eq(_find_by_script(view, HeadshotSilhouette, []).size(), 1,
+		assert_eq(_find_by_script(view, CrewPortrait, []).size(), 1,
 			"A portrait renders in both modes")
 
 

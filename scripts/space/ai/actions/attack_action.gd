@@ -50,9 +50,14 @@ func execute(ws: FighterWorldState) -> Dictionary:
 	# when a support_ally order is active.  Null when no escort assignment.
 	var support_pos: Variant = ws.my_ship.get("orders", {}).get("support_pos", null)
 
+	# A live press-attack posture (#79 commit / all-out, surfaced as ws.press_attack)
+	# maps to the aggressive "press" steering posture. Otherwise use any
+	# commander-set posture (withdraw/hold) on the crew.
+	var posture: String = "press" if ws.press_attack else ws.crew_data.get("posture", "")
+
 	var directive: Dictionary = SteeringBlender.build_directive(
 		ws.my_ship, tactics, ws.target_ship, threats, weapon_optimal,
-		ws.crew_data.get("posture", ""),
+		posture,
 		support_pos
 	)
 
@@ -80,7 +85,6 @@ func execute(ws: FighterWorldState) -> Dictionary:
 ## Each entry carries .position and .target_id so the blender can detect
 ## when this ship is being targeted (raises evade weight).
 func _build_threats(ws: FighterWorldState) -> Array:
-	var my_id: String   = ws.my_ship.get("ship_id", "")
 	var my_team: int    = ws.my_ship.get("team", -1)
 	var threats: Array  = []
 	for s in ws.all_ships:

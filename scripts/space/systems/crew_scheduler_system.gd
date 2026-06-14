@@ -91,6 +91,9 @@ static func tick_with_awareness(
 		var aware_crew = InformationSystem.update_crew_awareness(
 			crew, ships, projectiles, game_time, ship_grid, projectile_grid)
 
+		# Stamp first-contact time so commit decisions can measure engagement duration.
+		aware_crew = TacticalProgressSystem.maybe_stamp_engagement_start(aware_crew, game_time)
+
 		var events: Array = []
 		if has_events:
 			var drained = CrewMailboxSystem.drain_events(current_mailboxes, crew_id, game_time)

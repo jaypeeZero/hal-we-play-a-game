@@ -11,7 +11,7 @@ func cost(ws: EngineerWorldState) -> float:
 	return EngineerAction.ARMOR_COST_BASE + ws.worst_armor.get("ratio", 1.0)
 
 func precondition(ws: EngineerWorldState) -> bool:
-	return not ws.worst_armor.is_empty()
+	return ws.repair_pool_remaining > 0 and not ws.worst_armor.is_empty()
 
 func execute(ws: EngineerWorldState) -> Dictionary:
 	return EngineerAction.make_repair_decision(
