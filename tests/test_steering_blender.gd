@@ -312,3 +312,33 @@ func test_all_weights_are_non_negative():
 	for key in d["goal_weights"]:
 		assert_gte(d["goal_weights"][key], 0.0,
 			"goal_weights[%s] must be non-negative" % key)
+
+
+# ---------------------------------------------------------------------------
+# 8. Firing-envelope invariant: preferred_range ≤ weapon_optimal for all scalars
+# ---------------------------------------------------------------------------
+
+func test_preferred_range_never_exceeds_weapon_optimal():
+	# INVARIANT: for every range_scalar, the ship's preferred fighting distance
+	# must be at most weapon_optimal_range. Ships must orbit within their firing
+	# envelope — never beyond it. (Old 2.5× kite multiplier violated this.)
+	var ship    := _make_ship()
+	var target  := _make_target()
+	var optimal := 1000.0
+	for rs in [0.0, 0.25, 0.5, 0.75, 1.0]:
+		var d := _build(ship, _make_tactics(0.5, rs), target, [], optimal)
+		assert_lte(d["preferred_range"], optimal,
+			"preferred_range must be ≤ weapon_optimal_range at range_scalar=%.2f (ship must stay in firing range)" % rs)
+
+
+func test_kite_preferred_range_less_than_knife_preferred_range_still_in_order():
+	# Kite must be farther than knife — but BOTH within weapon range.
+	var ship    := _make_ship()
+	var target  := _make_target()
+	var optimal := 1000.0
+	var d_knife := _build(ship, _make_tactics(0.5, 0.0), target, [], optimal)
+	var d_kite  := _build(ship, _make_tactics(0.5, 1.0), target, [], optimal)
+	assert_gt(d_kite["preferred_range"], d_knife["preferred_range"],
+		"kite preferred_range must be farther than knife")
+	assert_lte(d_kite["preferred_range"], optimal,
+		"kite preferred_range must be ≤ weapon_optimal_range (kiter fights at far edge, not beyond)")

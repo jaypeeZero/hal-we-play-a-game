@@ -36,10 +36,11 @@ func execute(ws: FighterWorldState) -> Dictionary:
 	# Fall back to mid-range balanced defaults so an un-configured crew is still coherent.
 	var tactics: Dictionary = ws.crew_data.get("tactics", FALLBACK_TACTICS)
 
-	# Weapon optimal range: per-type engagement range from MovementSystem.
-	# This is the authoritative per-hull-class distance used everywhere else in
-	# the movement system; using it keeps preferred_range on the same scale.
-	var weapon_optimal: float = MovementSystem.get_engagement_range(ws.my_ship)
+	# Weapon optimal range: real max range over this ship's operational weapons.
+	# Using actual weapon stats (not hull-class heuristics) ensures preferred_range
+	# stays inside the firing envelope — the blender multipliers (0.35–0.9×) then
+	# place the ship at brawl-to-far-edge, all within weapon reach.
+	var weapon_optimal: float = WeaponSystem.get_effective_range(ws.my_ship)
 
 	# Build threat list in the format SteeringBlender expects:
 	# each entry may carry .target_id (for "am I being targeted?") and .position.

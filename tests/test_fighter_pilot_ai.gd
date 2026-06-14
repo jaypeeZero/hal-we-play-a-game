@@ -1036,9 +1036,10 @@ func _make_tactical_crew(crew_id: String, ship_id: String, preset_id: String) ->
 
 func test_alpha_strike_tactics_produces_small_preferred_range():
 	# BEHAVIOR: alpha_strike (mentality=all_out, engagement_range=knife) should
-	# produce a preferred_range well below the ship's weapon_optimal range —
-	# the brawl identity of the doctrine.
-	var my_ship = TestFactories.make_fighter("f1", Vector2(0, 0), 0)
+	# produce a preferred_range well below the ship's real weapon range —
+	# the brawl identity of the doctrine (dives in close to fight).
+	var my_ship = TestFactories.make_armed_ship("light_cannon", 0.0, "f1", "fighter")
+	my_ship.position = Vector2(0, 0)
 	var enemy   = TestFactories.make_fighter("e1", Vector2(3000, 0), 1)
 	var crew    = _make_tactical_crew("c1", "f1", "alpha_strike")
 	crew.awareness.threats = ["e1"]
@@ -1047,25 +1048,36 @@ func test_alpha_strike_tactics_produces_small_preferred_range():
 
 	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive")
 	var preferred_range: float = decision.get("preferred_range", 9999.0)
-	var weapon_optimal: float = MovementSystem.get_engagement_range(my_ship)
-	assert_lt(preferred_range, weapon_optimal,
-		"alpha_strike preferred_range should be below weapon_optimal (brawl inside enemy's comfort zone)")
+	var weapon_range: float = WeaponSystem.get_effective_range(my_ship)
+	assert_lt(preferred_range, weapon_range,
+		"alpha_strike preferred_range should be below weapon range (brawler dives in close)")
 
 func test_phalanx_tactics_produces_large_preferred_range():
 	# BEHAVIOR: phalanx (mentality=defensive, engagement_range=standoff) should
-	# produce a preferred_range larger than weapon_optimal — the kite identity.
-	var my_ship = TestFactories.make_fighter("f1", Vector2(0, 0), 0)
+	# produce a preferred_range larger than alpha_strike — the standoff kite identity.
+	# After the range-fix, preferred_range is always within weapon envelope (≤ weapon_range),
+	# so we assert the ordering (phalanx > alpha_strike) rather than "> weapon_optimal".
+	var my_ship = TestFactories.make_armed_ship("light_cannon", 0.0, "f1", "fighter")
+	my_ship.position = Vector2(0, 0)
 	var enemy   = TestFactories.make_fighter("e1", Vector2(3000, 0), 1)
-	var crew    = _make_tactical_crew("c1", "f1", "phalanx")
-	crew.awareness.threats = ["e1"]
 
-	var decision = FighterPilotAI.make_decision(crew, my_ship, [my_ship, enemy], [crew], game_time)
+	var crew_phalanx = _make_tactical_crew("c1", "f1", "phalanx")
+	crew_phalanx.awareness.threats = ["e1"]
+	var crew_alpha = _make_tactical_crew("c2", "f1", "alpha_strike")
+	crew_alpha.awareness.threats = ["e1"]
 
-	assert_eq(decision.subtype, "tactical", "AttackAction should emit tactical directive")
-	var preferred_range: float = decision.get("preferred_range", 0.0)
-	var weapon_optimal: float = MovementSystem.get_engagement_range(my_ship)
-	assert_gt(preferred_range, weapon_optimal,
-		"phalanx preferred_range should exceed weapon_optimal (kite at standoff)")
+	var dec_phalanx = FighterPilotAI.make_decision(crew_phalanx, my_ship, [my_ship, enemy], [crew_phalanx], game_time)
+	var dec_alpha   = FighterPilotAI.make_decision(crew_alpha,   my_ship, [my_ship, enemy], [crew_alpha],   game_time)
+
+	assert_eq(dec_phalanx.subtype, "tactical", "AttackAction should emit tactical directive")
+	var phalanx_range: float = dec_phalanx.get("preferred_range", 0.0)
+	var alpha_range:   float = dec_alpha.get("preferred_range", 9999.0)
+	var weapon_range:  float = WeaponSystem.get_effective_range(my_ship)
+
+	assert_gt(phalanx_range, alpha_range,
+		"phalanx (standoff) preferred_range must exceed alpha_strike (knife) preferred_range")
+	assert_lte(phalanx_range, weapon_range,
+		"phalanx preferred_range must stay within weapon range — kiter fights at the far edge, not beyond")
 
 func test_alpha_strike_has_higher_pursue_weight_than_phalanx():
 	# BEHAVIOR: alpha_strike (all_out mentality) produces higher pursue weight

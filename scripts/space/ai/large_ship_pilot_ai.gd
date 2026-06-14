@@ -536,8 +536,10 @@ static func _emit_phase_maneuver(
 	# Fall back to balanced defaults so un-configured crew are still coherent.
 	var tactics: Dictionary = crew_data.get("tactics", FALLBACK_TACTICS)
 
-	# Weapon optimal range: per-type engagement range (same scale as fighter path).
-	var weapon_optimal: float = MovementSystem.get_engagement_range(ship_data)
+	# Weapon optimal range: real max range over this ship's operational weapons.
+	# Same fix as the fighter path — hull-class heuristics put ships far beyond
+	# their actual weapon range; using real stats keeps preferred_range in-envelope.
+	var weapon_optimal: float = WeaponSystem.get_effective_range(ship_data)
 
 	# Threat list: all_ships is not available here so pass empty.
 	# The converter re-gathers enemy positions per-frame (_gather_enemy_positions),

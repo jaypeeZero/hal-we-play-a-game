@@ -12,6 +12,10 @@ extends RefCounted
 const MIN_REACTION_TIME = 0.1
 const MAX_REACTION_TIME = 0.3
 
+## Fallback range used when a ship has no operational weapons.
+## Conservative close-quarters distance: too far to ram, too close to orbit uselessly.
+const NO_WEAPONS_FALLBACK_RANGE: float = 300.0
+
 # Target selection: closer targets score higher (base minus distance), plus
 # a per-class bonus - small fast hulls threaten everyone, capitals can wait.
 const DISTANCE_PRIORITY_BASE: float = 1000.0
@@ -483,6 +487,22 @@ static func calculate_projectile_velocity(direction: Vector2, speed: float) -> V
 # ============================================================================
 # PUBLIC QUERY FUNCTIONS
 # ============================================================================
+
+## Return the effective weapon range for AI positioning: the max stats.range over
+## all OPERATIONAL weapons. Destroyed mounts are skipped — a ship that lost its
+## long-gun shouldn't try to hold standoff range for a weapon it no longer has.
+## Falls back to NO_WEAPONS_FALLBACK_RANGE when no operational weapons exist so
+## the blender always produces a coherent preferred_range (never zero or INF).
+static func get_effective_range(ship_data: Dictionary) -> float:
+	var weapons: Array = ship_data.get("weapons", [])
+	var best: float = -1.0
+	for weapon in weapons:
+		if not is_weapon_operational(weapon):
+			continue
+		var r: float = float(weapon.get("stats", {}).get("range", 0.0))
+		if r > best:
+			best = r
+	return best if best > 0.0 else NO_WEAPONS_FALLBACK_RANGE
 
 static func get_fireable_weapons(ship_data: Dictionary, target: Dictionary) -> Array:
 	return ship_data.weapons.filter(

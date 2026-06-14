@@ -21,13 +21,14 @@ extends RefCounted
 # ---------------------------------------------------------------------------
 
 ## At range_scalar = 0 (knife), desired range is this multiplier × weapon_optimal.
-## Short so the brawler physically dives inside the enemy's comfort zone.
-const KNIFE_RANGE_MULTIPLIER := 0.3
+## < 0.5 so the brawler dives well inside mid-range while remaining in firing range.
+const KNIFE_RANGE_MULTIPLIER := 0.35
 
 ## At range_scalar = 1 (kite), desired range is this multiplier × weapon_optimal.
-## Long so the kiter stays outside optimal range and forces the enemy to close
-## under fire — the core geometry of the standoff trade-off.
-const KITE_RANGE_MULTIPLIER := 2.5
+## Capped ≤ 1.0 so a kiter fights at the FAR EDGE of its weapon envelope, never
+## beyond it. The old 2.5× value put ships 2.5× past max weapon range so they
+## orbited uselessly and never fired — the core correctness bug this fixes.
+const KITE_RANGE_MULTIPLIER := 0.9
 
 ## Minimum preferred_range floor regardless of weapon_optimal or scalar.
 ## Prevents a degenerate 0-range goal when weapon_optimal is very small.
@@ -146,9 +147,11 @@ static func build_directive(
 # ---------------------------------------------------------------------------
 
 ## Map range_scalar [0..1] onto preferred_range in world units.
-## 0 (knife) → KNIFE_RANGE_MULTIPLIER × optimal  (short — brawl)
-## 1 (kite)  → KITE_RANGE_MULTIPLIER  × optimal  (long  — standoff)
-## Lerp gives a continuous dial; extremes have physical meaning.
+## 0 (knife) → KNIFE_RANGE_MULTIPLIER × optimal  (short  — brawl; dives in close)
+## 1 (kite)  → KITE_RANGE_MULTIPLIER  × optimal  (far edge — just inside weapon range)
+## Both multipliers are ≤ 1.0, so preferred_range is ALWAYS within the weapon envelope.
+## A kiter orbits at 90% of max weapon range — far enough to frustrate brawlers but
+## close enough to fire every pass. Lerp gives a continuous dial.
 static func _compute_preferred_range(range_scalar: float, weapon_optimal_range: float) -> float:
 	var multiplier: float = lerp(KNIFE_RANGE_MULTIPLIER, KITE_RANGE_MULTIPLIER, range_scalar)
 	return maxf(weapon_optimal_range * multiplier, MIN_PREFERRED_RANGE)
