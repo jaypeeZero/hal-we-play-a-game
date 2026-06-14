@@ -19,7 +19,7 @@ extends GutTest
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-## Crew with tactics block injected directly (bypasses TacticsSystem.compile_for_crew
+## Crew with tactics block injected directly (bypasses TacticsSystem.compile_player_tactics
 ## so tests don't require the full preset pipeline).
 func _make_crew(tactics_dict: Dictionary) -> Dictionary:
 	var crew = CrewData.create_crew_member(CrewData.Role.PILOT, 1.0)

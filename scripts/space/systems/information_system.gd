@@ -356,7 +356,7 @@ const FIGHTER_CLASS_TYPES: Array = ["fighter", "heavy_fighter", "torpedo_boat"]
 ##
 ## entity           — entity_info snapshot (has ship_type, position, id)
 ## own_ship         — the observing ship (position, team)
-## tactics          — crew_data["tactics"] (resolved by TacticsSystem.compile_for_crew)
+## tactics          — crew_data["tactics"] (resolved at spawn by TacticsSystem.compile_player_tactics)
 ## all_ships        — full fleet snapshot for centroid computation; may be []
 ## focus_assignment — ship_id of the designated focus target (crew["focus_assignment"]);
 ##                    "" means no active focus (3a behaviour, no change)

@@ -302,6 +302,12 @@ static func resolve_tactics(
 		else:
 			resolved[dial] = ENGINE_DEFAULTS[dial]
 
+	# The selected role IS the ship's role — surface it on the role dial so
+	# role-derived behavior (facing_mode, etc.) matches the bundle that shaped the
+	# other dials. An unset ship_role keeps the squadron/fleet/engine default above.
+	if not ship_role.is_empty():
+		resolved["role"] = ship_role
+
 	# Derived scalars — computed once so callers never re-map the ordinals.
 	resolved["mentality_scalar"] = MENTALITY_SCALE.get(resolved["mentality"], 0.5)
 	resolved["range_scalar"]     = ENGAGEMENT_RANGE_SCALE.get(resolved["engagement_range"], 0.5)
@@ -329,10 +335,28 @@ static func resolve_from_preset(
 	return resolve_tactics(fleet_tactics, squadron_tactics, ship_role, ship_override)
 
 
+## Ship-class → default combat role (the ship is the "footballer"; role is
+## overridable per hull in the Fleet Command UI). Keys are ship_type strings.
+## Ensures an "auto"-role hull fights its class (capital anchors, fighter
+## intercepts) rather than inheriting a generic profile from the fleet preset.
+const SHIP_CLASS_ROLES: Dictionary = {
+	"fighter":       "interceptor",
+	"heavy_fighter": "skirmisher",
+	"torpedo_boat":  "skirmisher",
+	"corvette":      "brawler",
+	"capital":       "anchor",
+}
+
+## Default role when ship_type is not in SHIP_CLASS_ROLES.
+const DEFAULT_ROLE := "brawler"
+
+
 ## Resolve a player hull's combat tactics from its fleet preset + per-hull
 ## Role/overrides (the Fleet Command player-facing model). Empty-string
 ## overrides mean "inherit" and are dropped so they don't clobber the chain.
-## Delegates to resolve_from_preset — no parallel resolution path.
+## Delegates to resolve_from_preset — no parallel resolution path. Called at battle
+## spawn so the resolved tactics block is attached once and read by the steering
+## blender every decision, without re-resolving it each tick.
 ##
 ## hull["tactics"] shape: {role: String, overrides: {mentality, engagement_range}}
 ## (role "" = class/preset default; each override "" = inherit).
@@ -342,7 +366,13 @@ static func compile_player_tactics(
 		squadron_id: String
 ) -> Dictionary:
 	var hull_tactics: Dictionary = hull.get("tactics", {})
-	var ship_role: String = str(hull_tactics.get("role", ""))
+	# Effective role precedence: explicit hull role > the preset's squadron role >
+	# the preset's fleet role > the ship class's default. So a capital with no
+	# chosen role anchors and a fighter intercepts, unless the preset assigns a
+	# role at squadron/fleet scope (e.g. hammer_and_anvil's flanker wing).
+	var preset: Dictionary = get_preset(fleet_preset)
+	var ship_role: String = _effective_role(
+		str(hull_tactics.get("role", "")), preset, squadron_id, str(hull.get("ship_type", "")))
 	var raw_overrides: Dictionary = hull_tactics.get("overrides", {})
 	var overrides: Dictionary = {}
 	for key in raw_overrides:
@@ -350,6 +380,22 @@ static func compile_player_tactics(
 		if not value.is_empty():
 			overrides[key] = value
 	return resolve_from_preset(fleet_preset, squadron_id, ship_role, overrides)
+
+
+## Effective role for a hull: explicit hull role > preset squadron role >
+## preset fleet role > ship-class default > DEFAULT_ROLE. Keeps a class-sensible
+## role for "auto" hulls while letting a preset's squadron/fleet assignment win.
+static func _effective_role(
+		hull_role: String, preset: Dictionary, squadron_id: String, ship_type: String) -> String:
+	if not hull_role.is_empty():
+		return hull_role
+	var squadron_role: String = str(preset.get("squadrons", {}).get(squadron_id, {}).get("role", ""))
+	if not squadron_role.is_empty():
+		return squadron_role
+	var fleet_role: String = str(preset.get("fleet", {}).get("role", ""))
+	if not fleet_role.is_empty():
+		return fleet_role
+	return SHIP_CLASS_ROLES.get(ship_type, DEFAULT_ROLE)
 
 
 ## Compute the mentality scalar for a resolved tactics dict.
@@ -367,64 +413,8 @@ static func range_scalar(resolved: Dictionary) -> float:
 
 # Run-state structure
 
-## Default (empty) tactics run-state dict. Shape mirrors DoctrineSystem.empty_doctrine():
-## fleet and squadron dicts are scopes for dial overrides; ship_overrides is keyed by hull_id.
-## Passing all three empty to resolve_tactics() yields coherent engine defaults — no behavior change.
+## Default (empty) tactics run-state dict. The live player-facing model stores a
+## single fleet preset id; per-hull role/overrides live on the hull and are resolved
+## at spawn by compile_player_tactics(). An empty preset resolves to engine defaults.
 static func empty_tactics() -> Dictionary:
-	return {"fleet": {}, "squadrons": {}, "ship_overrides": {}}
-
-
-# Ship-class → default role (the ship is the "footballer"; role is overridable by doctrine)
-# These defaults are used when neither the squadron nor fleet scope in tactics_doctrine sets a role.
-# Keys are the ship_type strings from data/ship_templates/ (fighter.json, etc.).
-const SHIP_CLASS_ROLES: Dictionary = {
-	"fighter":       "interceptor",
-	"heavy_fighter": "skirmisher",
-	"torpedo_boat":  "skirmisher",
-	"corvette":      "brawler",
-	"capital":       "anchor",
-}
-
-## Default role when ship_type is not in SHIP_CLASS_ROLES.
-const DEFAULT_ROLE := "brawler"
-
-
-# Crew compilation (battle spawn)
-
-## Resolve combat tactics for one crew member and attach the result to crew["tactics"].
-## Pure: returns a duplicate of crew with tactics block attached; input is never mutated.
-##
-## Why this exists: mirrors DoctrineSystem.compile_for_crew() for the tactics system.
-## Called at battle spawn so the resolved tactics block is attached once and read
-## by the steering blender every decision, without re-resolving it each tick.
-##
-## Role resolution order:
-##   ship_overrides[hull_id].role  (per-ship override in the tactics doctrine)
-##   squadrons[squadron_id].role   (squadron default)
-##   fleet.role                    (fleet default)
-##   SHIP_CLASS_ROLES[ship_type]   (class default — the footballer's natural position)
-##   DEFAULT_ROLE                  (final fallback)
-static func compile_for_crew(
-	crew: Dictionary,
-	ship_type: String,
-	squadron_id: String,
-	tactics_doctrine: Dictionary
-) -> Dictionary:
-	var updated: Dictionary = crew.duplicate(true)
-
-	var fleet_tactics: Dictionary    = tactics_doctrine.get("fleet", {})
-	var squadron_tactics: Dictionary = tactics_doctrine.get("squadrons", {}).get(squadron_id, {})
-	var ship_override: Dictionary    = tactics_doctrine.get("ship_overrides", {}).get(updated.get("hull_id", ""), {})
-
-	# Determine the ship's role from the most specific scope that sets it,
-	# falling back through the class default so unconfigured ships still get
-	# a sensible role bundle without requiring the player to set one.
-	var ship_role: String = (
-		ship_override.get("role",
-		squadron_tactics.get("role",
-		fleet_tactics.get("role",
-		SHIP_CLASS_ROLES.get(ship_type, DEFAULT_ROLE))))
-	)
-
-	updated["tactics"] = resolve_tactics(fleet_tactics, squadron_tactics, ship_role, ship_override)
-	return updated
+	return {"preset": ""}

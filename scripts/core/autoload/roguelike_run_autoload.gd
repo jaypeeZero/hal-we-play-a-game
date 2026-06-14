@@ -27,8 +27,9 @@ var fleet_hulls: Array = []
 ## Run state: reset at run start, wiped at run end.
 var doctrine: Dictionary = DoctrineSystem.empty_doctrine()
 ## Player combat tactics for this run (see TacticsSystem).
-## Mirrors the doctrine field shape: fleet/squadron/ship_overrides scopes.
-## Defaults to empty so resolution yields balanced engine defaults.
+## Holds the selected fleet preset id ({"preset": ...}); per-hull role/overrides
+## live on each hull and are resolved at spawn by compile_player_tactics().
+## Defaults to empty preset so resolution yields balanced engine defaults.
 ## Run state: reset at run start, wiped at run end.
 var tactics: Dictionary = TacticsSystem.empty_tactics()
 ## The enemy fleet for the next/pending battle, set from the destination node

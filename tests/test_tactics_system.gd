@@ -363,77 +363,58 @@ func test_range_scalar_helper_matches_resolved_field():
 		"range_scalar() helper must match resolved['range_scalar']")
 
 
-# 8. compile_for_crew — per-crew tactics compilation
+# 8. compile_player_tactics — spawn-path tactics compilation (live API)
 
-## Minimal crew dict sufficient for compile_for_crew tests.
-func _make_crew(crew_id: String = "c1") -> Dictionary:
+## A player hull configured in Fleet Command: fleet preset + per-hull role/overrides.
+func _make_hull(role: String, overrides: Dictionary, ship_type: String = "fighter") -> Dictionary:
 	return {
-		"crew_id": crew_id,
-		"known_patterns": [],
-		"role": 0,
+		"hull_id": "hull_0",
+		"ship_type": ship_type,
+		"tactics": {"mission": "free", "mission_params": {}, "role": role, "overrides": overrides},
 	}
 
 
-func test_compiled_crew_carries_tactics_block():
-	# After compile_for_crew the crew dict must have a populated "tactics" key.
-	var crew := _make_crew()
-	var result := TacticsSystem.compile_for_crew(crew, "fighter", "", TacticsSystem.empty_tactics())
-	assert_true(result.has("tactics"), "compile_for_crew must attach a 'tactics' key to the crew dict")
-	assert_false(result["tactics"].is_empty(), "Attached tactics block must not be empty")
-
-
-func test_compiled_tactics_block_has_all_dial_keys():
-	# The tactics block must contain every declared dial, not a partial set.
-	var crew := _make_crew()
-	var result := TacticsSystem.compile_for_crew(crew, "capital", "", TacticsSystem.empty_tactics())
+func test_compiled_tactics_block_is_complete_and_populated():
+	# compile_player_tactics must return a non-empty resolved block carrying every dial.
+	var resolved := TacticsSystem.compile_player_tactics(
+		_make_hull("anchor", {}, "capital"), "phalanx", "")
+	assert_false(resolved.is_empty(), "Resolved tactics block must not be empty")
 	for dial in TacticsSystem.ALL_DIAL_KEYS:
-		assert_true(result["tactics"].has(dial),
+		assert_true(resolved.has(dial),
 			"Compiled tactics block must contain dial '%s'" % dial)
 
 
-func test_empty_tactics_doctrine_yields_engine_default_dials():
-	# Empty doctrine → no fleet/squadron overrides → resolution falls to role then engine defaults.
-	# With an unrecognised ship type DEFAULT_ROLE applies (brawler/anchor), which sets mentality to
-	# "cautious". To get pure engine defaults we must also clear the role via ship_override.
-	var doctrine := {
-		"fleet":          {},
-		"squadrons":      {},
-		"ship_overrides": {"": {"role": ""}},  # hull_id "" → clears the role bundle
-	}
-	var crew := _make_crew()  # crew has no hull_id key → get("hull_id","") = ""
-	var result := TacticsSystem.compile_for_crew(crew, "unknown_type", "", doctrine)
-	assert_eq(result["tactics"]["mentality"], TacticsSystem.ENGINE_DEFAULTS["mentality"],
-		"When no role bundle applies, empty tactics doctrine must yield engine-default mentality")
+func test_empty_preset_and_no_role_yields_engine_default_dials():
+	# No preset id + no role → no overrides anywhere → resolution falls to engine defaults.
+	var resolved := TacticsSystem.resolve_from_preset("", "", "")
+	assert_eq(resolved["mentality"], TacticsSystem.ENGINE_DEFAULTS["mentality"],
+		"With no preset and no role bundle, resolution must yield engine-default mentality")
 
 
-func test_squadron_scope_dial_overrides_fleet_scope_through_compile():
-	# Fleet says standoff; squadron says knife.
-	# hull_id "" (no hull_id in crew) → ship_overrides[""] clears the role so no
-	# role bundle wins, letting fleet/squadron inheritance run cleanly.
-	var doctrine := {
-		"fleet":          {"engagement_range": "standoff"},
-		"squadrons":      {"sq1": {"engagement_range": "knife"}},
-		"ship_overrides": {"": {"role": ""}},  # hull_id "" → clears role bundle
-	}
-	var crew := _make_crew()  # hull_id defaults to "" via get("hull_id","")
-	var result := TacticsSystem.compile_for_crew(crew, "unknown_type", "sq1", doctrine)
-	assert_eq(result["tactics"]["engagement_range"], "knife",
-		"Squadron-scope dial must override fleet-scope dial when no role bundle sets it")
+func test_compile_player_tactics_does_not_mutate_input_hull():
+	# Pure function contract: the input hull dict must be unchanged after the call.
+	var hull := _make_hull("interceptor", {"mentality": "all_out"})
+	TacticsSystem.compile_player_tactics(hull, "phalanx", "")
+	assert_false(hull["tactics"].has("mentality_scalar"),
+		"compile_player_tactics must not mutate the input hull's tactics")
+	assert_eq(hull["tactics"]["role"], "interceptor",
+		"compile_player_tactics must not alter the input hull's configured role")
 
 
-func test_ship_class_default_role_applied_when_doctrine_sets_none():
-	# fighter → interceptor class default; interceptor role has high pursuit_discipline (0.8).
-	# With empty doctrine the class default must drive the role bundle.
-	var crew := _make_crew()
-	var result := TacticsSystem.compile_for_crew(crew, "fighter", "", TacticsSystem.empty_tactics())
-	var interceptor_pd: float = TacticsSystem.ROLE_INTERCEPTOR["pursuit_discipline"]
-	assert_eq(result["tactics"]["pursuit_discipline"], interceptor_pd,
-		"Fighter class must default to interceptor role, giving interceptor's pursuit_discipline")
+func test_auto_role_falls_back_to_ship_class_role():
+	# A hull with no explicit role ("auto") adopts its ship class's role so it
+	# fights its class even under an aggressive fleet preset — a capital anchors,
+	# a fighter intercepts — rather than inheriting a generic profile.
+	var capital := TacticsSystem.compile_player_tactics(_make_hull("", {}, "capital"), "alpha_strike", "")
+	assert_eq(capital["role"], "anchor",
+		"A capital with auto role must resolve to its class role (anchor)")
+	var fighter := TacticsSystem.compile_player_tactics(_make_hull("", {}, "fighter"), "alpha_strike", "")
+	assert_eq(fighter["role"], "interceptor",
+		"A fighter with auto role must resolve to its class role (interceptor)")
 
 
-func test_compile_for_crew_does_not_mutate_input():
-	# Pure function contract: input crew dict must be unchanged after the call.
-	var crew := _make_crew()
-	TacticsSystem.compile_for_crew(crew, "fighter", "", TacticsSystem.empty_tactics())
-	assert_false(crew.has("tactics"),
-		"compile_for_crew must not mutate the input crew dict")
+func test_explicit_role_overrides_ship_class_default():
+	# An explicitly chosen role wins over the ship-class default.
+	var resolved := TacticsSystem.compile_player_tactics(_make_hull("artillery", {}, "capital"), "alpha_strike", "")
+	assert_eq(resolved["role"], "artillery",
+		"An explicit hull role must override the ship-class default")

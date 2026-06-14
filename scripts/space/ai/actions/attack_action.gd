@@ -32,7 +32,7 @@ func precondition(ws: FighterWorldState) -> bool:
 
 
 func execute(ws: FighterWorldState) -> Dictionary:
-	# Read the crew's resolved tactics block (stamped at spawn by TacticsSystem.compile_for_crew).
+	# Read the crew's resolved tactics block (stamped at spawn by TacticsSystem.compile_player_tactics).
 	# Fall back to mid-range balanced defaults so an un-configured crew is still coherent.
 	var tactics: Dictionary = ws.crew_data.get("tactics", FALLBACK_TACTICS)
 
