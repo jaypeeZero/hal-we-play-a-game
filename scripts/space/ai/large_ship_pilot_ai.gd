@@ -111,9 +111,23 @@ static func make_decision(crew_data: Dictionary, ship_data: Dictionary, all_ship
 ## ---------------------------------------------------------------------------
 ## TARGETING
 ## ---------------------------------------------------------------------------
+## When a commander/captain has set ship.orders.focus_target, honour it as the
+## designated enemy (concentrate-force cascade). Falls back to proximity scoring
+## if the pinned ship is gone or not in all_ships.
 static func _find_best_target(crew_data: Dictionary, ship_data: Dictionary, all_ships: Array) -> Dictionary:
 	var my_team: int = ship_data.get("team", -1)
 	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+
+	# Honour a commander-designated focus target when one is set on the ship.
+	var focus_id: String = ship_data.get("orders", {}).get("focus_target", "")
+	if focus_id != "":
+		for ship in all_ships:
+			if str(ship.get("ship_id", "")) == focus_id:
+				var s := str(ship.get("status", ""))
+				if s != "destroyed" and s != "exploding" and s != "disabled":
+					return ship
+		# Pinned ship is gone — fall through to proximity scoring.
+
 	var best_target := {}
 	var best_score: float = -INF
 
@@ -530,8 +544,12 @@ static func _emit_phase_maneuver(
 	# nice-to-have that costs nothing to omit at decision time.
 	var threats: Array = []
 
+	# Posture: read from ship.orders so a captain/commander order set on the ship
+	# reaches the pilot's blended directive even though captain ≠ pilot on large ships.
+	var posture: String = ship_data.get("orders", {}).get("posture", "")
+
 	var directive: Dictionary = SteeringBlender.build_directive(
-		ship_data, tactics, target, threats, weapon_optimal
+		ship_data, tactics, target, threats, weapon_optimal, posture
 	)
 
 	var delay: float = randf_range(DECISION_DELAY_NORMAL_MIN, DECISION_DELAY_NORMAL_MAX)

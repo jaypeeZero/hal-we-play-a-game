@@ -285,6 +285,12 @@ static func _absorb_focus_order(crew_data: Dictionary, ships: Array) -> Dictiona
 ## so those specific types are already consumed and won't reach this absorber.
 ## NEVER returns a discrete decision — always clears orders.received and lets the
 ## pilot proceed to its normal blended path.
+##
+## Also stamps ship.orders.posture / ship.orders.focus_target so that on large
+## ships (where captain ≠ pilot) whoever absorbs the order (captain or pilot)
+## writes posture/focus once, and LargeShipPilotAI reads it from ship.orders.
+## Fighters ignore ship.orders for posture — they read crew["posture"] directly
+## — so stamping ship.orders too is harmless for them.
 static func _absorb_command_order(crew_data: Dictionary) -> Dictionary:
 	var received: Variant = crew_data.orders.get("received") if crew_data.has("orders") else null
 	if received == null or not received is Dictionary:
@@ -299,15 +305,20 @@ static func _absorb_command_order(crew_data: Dictionary) -> Dictionary:
 			var target_id: String = received.get("target_id", "")
 			if target_id != "":
 				updated["focus_assignment"] = target_id
+				# Stamp ship.orders so LargeShipPilotAI can read focus on its crew.
+				updated.orders["focus_target"] = target_id
 			updated["posture"] = ""   # returning to offensive blend
+			updated.orders["posture"] = ""
 
 		"withdraw":
 			# Commanded disengage: evade-dominant blend, not a hard flee reflex.
 			updated["posture"] = "withdraw"
+			updated.orders["posture"] = "withdraw"
 
 		"hold":
 			# Hold the line: formation-dominant blend, don't chase past the line.
 			updated["posture"] = "hold"
+			updated.orders["posture"] = "hold"
 
 		"support_ally":
 			# Escort assignment stored; escort-movement consumed in a later phase.
@@ -354,8 +365,12 @@ static func _issue_focus_commands(
 	if subordinates.is_empty():
 		return crew_data
 
-	# Pick the designated target: prefer current_target, fall back to top opportunity.
-	var designated_id: String = crew_data.get("current_target", "")
+	# Pick the designated target: commander-assigned focus takes priority so
+	# concentrate orders cascade (commander → leader.focus_assignment → pilots).
+	# Then prefer current_target; fall back to top opportunity.
+	var designated_id: String = crew_data.get("focus_assignment", "")
+	if designated_id == "":
+		designated_id = crew_data.get("current_target", "")
 	if designated_id == "":
 		var opportunities: Array = crew_data.get("awareness", {}).get("opportunities", [])
 		if opportunities.is_empty():
