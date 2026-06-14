@@ -101,8 +101,10 @@ const DEBUG_PANEL_OPTIONS: Array = [
 	{"label": "Wing Lines",      "setting": "show_wing_lines"},
 	{"label": "Squadron Lines",  "setting": "show_squadron_lines"},
 	{"label": "Escape Boundary", "setting": "show_escape_boundary"},
-	{"label": "Pilot Direction", "setting": "show_pilot_direction"},
-	{"label": "Leader Numbers",  "setting": "show_leader_numbers"},
+	{"label": "Pilot Direction",   "setting": "show_pilot_direction"},
+	{"label": "Leader Numbers",    "setting": "show_leader_numbers"},
+	{"label": "Tactics State",     "setting": "show_tactics_state"},
+	{"label": "Tactics Telemetry", "setting": "show_tactics_telemetry"},
 ]
 
 func _ready() -> void:

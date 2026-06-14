@@ -257,3 +257,47 @@ func test_calculate_hit_probability_returns_valid_range():
 
 	assert_gte(probability, 0.0, "Hit probability should be >= 0")
 	assert_lte(probability, 1.0, "Hit probability should be <= 1")
+
+# DIAGNOSE_FIRING TESTS
+
+func test_diagnose_firing_can_fire_when_enemy_in_range_and_arc():
+	# Ship at origin, rotation 0 → faces up (negative Y). Enemy directly above in arc.
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
+	var enemy = TestFactories.make_fighter("", Vector2(0, -300), 1)
+
+	var result = WeaponSystem.diagnose_firing(ship, [ship, enemy])
+
+	assert_eq(result.reason, WeaponSystem.DIAG_CAN_FIRE,
+		"Should report can_fire when enemy is in range and arc")
+	assert_true(result.firing, "firing flag should be true")
+
+func test_diagnose_firing_out_of_range_when_enemy_too_far():
+	# light_cannon range = 1000; enemy at 3x that.
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
+	var enemy = TestFactories.make_fighter("", Vector2(0, -3000), 1)
+
+	var result = WeaponSystem.diagnose_firing(ship, [ship, enemy])
+
+	assert_eq(result.reason, WeaponSystem.DIAG_OUT_OF_RANGE,
+		"Should report out_of_range when nearest enemy is beyond weapon range")
+	assert_false(result.firing, "firing flag should be false")
+
+func test_diagnose_firing_all_weapons_destroyed_when_no_operational_weapon():
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
+	ship.weapons[0]["status"] = "destroyed"
+	var enemy = TestFactories.make_fighter("", Vector2(0, -300), 1)
+
+	var result = WeaponSystem.diagnose_firing(ship, [ship, enemy])
+
+	assert_eq(result.reason, WeaponSystem.DIAG_ALL_DESTROYED,
+		"Should report all_weapons_destroyed when every mount is destroyed")
+	assert_false(result.firing, "firing flag should be false")
+
+func test_diagnose_firing_no_target_when_no_enemies():
+	var ship = TestFactories.make_armed_ship("light_cannon", 0.0)
+	# Only ship in the list is on same team — no valid enemies.
+	var result = WeaponSystem.diagnose_firing(ship, [ship])
+
+	assert_eq(result.reason, WeaponSystem.DIAG_NO_TARGET,
+		"Should report no_target when no active enemies exist")
+	assert_false(result.firing, "firing flag should be false")
