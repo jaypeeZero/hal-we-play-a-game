@@ -369,6 +369,7 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 	# Find pilot crew for this ship.
 	var pilot_tactics: Dictionary = {}
 	var command_hat: String = ""
+	var pilot_name: String = "—"
 	var crew_list: Array = _game.get("_crew_list") if _game.get("_crew_list") is Array else []
 	var ship_id: String = ship.get("ship_id", "")
 	for crew in crew_list:
@@ -377,6 +378,7 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 		if int(crew.get("role", -1)) == CrewData.Role.PILOT:
 			pilot_tactics = crew.get("tactics", {})
 			command_hat = crew.get("command_hat", "")
+			pilot_name = str(crew.get("callsign", crew.get("crew_id", "—")))
 			break
 
 	# Formation
@@ -405,7 +407,10 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 			_:
 				fire_color = TACTICS_FIRE_BAD_COLOR
 
-	# Build lines
+	# Build lines. Ships have no display name, so identify by type + id; the
+	# pilot is named by callsign (falls back to crew_id).
+	var ship_line: String = "%s  %s" % [ship.get("type", "ship"), ship_id]
+	var pilot_line: String = "Pilot: %s" % pilot_name
 	var intent_line: String = "Intent: %s" % current_order
 	if maneuver_subtype != "":
 		intent_line += " (%s)" % maneuver_subtype
@@ -423,7 +428,7 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 		elif command_hat == "squadron_leader":
 			dials_line += " [LEAD]"
 
-	var lines: Array = [intent_line, target_line, fire_label, formation_line]
+	var lines: Array = [ship_line, pilot_line, intent_line, target_line, fire_label, formation_line]
 	if dials_line != "":
 		lines.append(dials_line)
 
