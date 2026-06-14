@@ -1264,26 +1264,54 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 	var weapon_count = ship_data.weapons.size() if not ship_data.is_empty() else 1
 	var new_crew = []
 
-	# In a roguelike run, each player hull carries its own crew roster: spawn
-	# exactly the crew bound to this hull_id (which may be empty for a freshly
-	# purchased hull — no free crew). Identity is by hull_id, not type+order.
+	# Player team: load crew from the hull record so chosen crew actually fly.
+	# Roguelite: each hull in RoguelikeRun carries its own crew.
+	# Skirmish: SkirmishFleet ships carry their assigned crew (chosen in Fleet Command).
+	# Enemy team (or no hull_id): generate fresh crew at the configured skill level.
 	if team == 0 and RoguelikeRun.active:
 		var hull: Dictionary = RoguelikeRun.hull_by_id(hull_id)
 		for saved_member in hull.get("crew", []):
 			new_crew.append(CrewData.reset_for_battle(saved_member))
+	elif team == 0 and not hull_id.is_empty():
+		# Skirmish with a bound hull_id: load crew from the saved skirmish fleet.
+		var skirmish_hulls: Array = SkirmishFleet.get_fleet(0)
+		for hull in skirmish_hulls:
+			if str(hull.get("hull_id", "")) == hull_id:
+				for saved_member in hull.get("crew", []):
+					new_crew.append(CrewData.reset_for_battle(saved_member))
+				break
+		if new_crew.is_empty():
+			# Fallback: no crew found for this hull_id — generate fresh.
+			new_crew = CrewData.create_crew_for_ship_type(ship_type, weapon_count, base_skill)
+			new_crew = CrewData.bind_gunners_to_weapons(new_crew, ship_data.get("weapons", []))
 	else:
 		new_crew = CrewData.create_crew_for_ship_type(ship_type, weapon_count, base_skill)
 		new_crew = CrewData.bind_gunners_to_weapons(new_crew, ship_data.get("weapons", []))
 
-	# Compile the run's doctrine (player standing instructions) into each
-	# crew member's knowledge set, then stamp the squadron mission so the
-	# AI can read it from crew_data without touching the squadrons array.
+	# Compile doctrine and stamp mission onto each player crew member.
 	if team == 0 and RoguelikeRun.active:
+		# Roguelite: compile run doctrine + squadron mission from RoguelikeRun.
 		var mission_info: Dictionary = SquadronSystem.get_mission(RoguelikeRun.squadrons, hull_id)
 		for i in range(new_crew.size()):
 			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, RoguelikeRun.doctrine)
 			new_crew[i]["squadron_mission"] = mission_info.get("mission", SquadronData.Mission.FREE)
 			new_crew[i]["squadron_mission_params"] = mission_info.get("params", {})
+	elif team == 0 and not hull_id.is_empty():
+		# Skirmish: stamp per-ship mission from the hull's tactics dict.
+		var skirmish_mission: String = SquadronData.Mission.FREE
+		var skirmish_params: Dictionary = {}
+		var skirmish_hulls: Array = SkirmishFleet.get_fleet(0)
+		for hull in skirmish_hulls:
+			if str(hull.get("hull_id", "")) == hull_id:
+				var tactics: Dictionary = hull.get("tactics", {})
+				skirmish_mission = tactics.get("mission", SquadronData.Mission.FREE)
+				skirmish_params = tactics.get("mission_params", {})
+				break
+		var skirmish_doctrine: Dictionary = SkirmishFleet.get_doctrine()
+		for i in range(new_crew.size()):
+			new_crew[i] = DoctrineSystem.compile_for_crew(new_crew[i], ship_type, skirmish_doctrine)
+			new_crew[i]["squadron_mission"] = skirmish_mission
+			new_crew[i]["squadron_mission_params"] = skirmish_params
 
 	# Assign crew to ship and add to index
 	for crew_member in new_crew:
