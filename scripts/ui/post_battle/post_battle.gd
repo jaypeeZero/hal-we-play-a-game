@@ -266,7 +266,7 @@ func _build_footer() -> Control:
 		var manage_btn := Button.new()
 		manage_btn.text = "Manage Crew"
 		UiKit.style_button(manage_btn, "ghost")
-		manage_btn.pressed.connect(func(): CrewManagementScreen.open(self))
+		manage_btn.pressed.connect(func() -> void: FleetCommandScreen.open_overlay(self))
 		row.add_child(manage_btn)
 
 	var continue_btn := Button.new()

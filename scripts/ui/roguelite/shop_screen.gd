@@ -48,6 +48,13 @@ func _build_topbar() -> Control:
 	title_box.add_child(UiKit.label("Trade outpost", UiKit.DIM, 11))
 	row.add_child(title_box)
 
+	var manage_btn := Button.new()
+	manage_btn.text = "Manage Crew"
+	UiKit.style_button(manage_btn, "ghost")
+	manage_btn.pressed.connect(func() -> void:
+		FleetCommandScreen.open_overlay(self))
+	row.add_child(manage_btn)
+
 	var credits_box := VBoxContainer.new()
 	credits_box.alignment = BoxContainer.ALIGNMENT_END
 	_money_label = UiKit.label("", UiKit.GOLD, 26)
@@ -77,7 +84,6 @@ func _rebuild() -> void:
 		child.queue_free()
 	_build_ships_for_sale()
 	_build_hiring()
-	_build_roster()
 
 
 # SECTION: SHIPS FOR SALE
@@ -201,22 +207,6 @@ func _open_hire_dialog(hull_id: String, slot: Dictionary) -> void:
 	dialog.hired.connect(func(roster_id: String):
 		RoguelikeRun.fill_vacancy(hull_id, slot, roster_id)
 		_rebuild())
-
-
-# SECTION: FLEET ROSTER (assignment board + ice/activate)
-
-func _build_roster() -> void:
-	_content.add_child(UiKit.section_title("Fleet roster"))
-	if RoguelikeRun.fleet_hulls.is_empty():
-		_content.add_child(UiKit.label("No hulls in the fleet.", UiKit.DIM))
-		return
-
-	var board := CrewAssignmentBoard.new()
-	board.show_ice = true
-	board.modal_host = self
-	board.setup()
-	board.changed.connect(_rebuild)
-	_content.add_child(board)
 
 
 # HELPERS

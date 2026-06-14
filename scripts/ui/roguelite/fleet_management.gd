@@ -73,4 +73,4 @@ func _on_edit_fleet_pressed() -> void:
 
 
 func _on_manage_crew_pressed() -> void:
-	CrewManagementScreen.open(get_tree().current_scene)
+	FleetCommandScreen.open_overlay(get_tree().current_scene)

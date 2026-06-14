@@ -159,6 +159,15 @@ func set_tactics(hull_id: String, tactics: Dictionary) -> void:
 	hull["tactics"] = tactics
 
 
+## Ice or activate a hull in the working copy.
+func set_iced(hull_id: String, iced: bool) -> void:
+	var hull: Dictionary = _hull(hull_id)
+	if hull.is_empty():
+		push_error("SkirmishSource.set_iced: hull not found: %s" % hull_id)
+		return
+	hull["iced"] = iced
+
+
 ## Skirmish has no squadrons; this is a no-op.
 func set_squadron_mission(_squadron_id: String, _mission: String, _params: Dictionary) -> void:
 	pass

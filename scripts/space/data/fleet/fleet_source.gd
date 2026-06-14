@@ -67,6 +67,11 @@ func set_squadron_mission(squadron_id: String, mission: String, params: Dictiona
 	push_error("FleetSource.set_squadron_mission() not implemented squad=%s mission=%s" % [squadron_id, mission])
 
 
+## Ice or activate a hull (benched vs. sortieable).
+func set_iced(hull_id: String, iced: bool) -> void:
+	push_error("FleetSource.set_iced() not implemented hull=%s iced=%s" % [hull_id, str(iced)])
+
+
 ## Persist all in-memory changes (save to disk or update RoguelikeRun state).
 func commit() -> void:
 	push_error("FleetSource.commit() not implemented")

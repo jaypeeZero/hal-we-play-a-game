@@ -78,6 +78,11 @@ func set_tactics(hull_id: String, tactics: Dictionary) -> void:
 	hull["tactics"] = tactics
 
 
+## Ice or activate a hull via RoguelikeRun.
+func set_iced(hull_id: String, iced: bool) -> void:
+	RoguelikeRun.set_hull_iced(hull_id, iced)
+
+
 ## Set the mission for a squadron, delegating to SquadronSystem.
 func set_squadron_mission(squadron_id: String, mission: String, params: Dictionary) -> void:
 	RoguelikeRun.squadrons = SquadronSystem.set_mission(

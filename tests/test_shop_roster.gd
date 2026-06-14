@@ -250,16 +250,6 @@ func test_buy_button_is_disabled_when_unaffordable():
 	assert_true(buys[0].disabled, "Buy is disabled when the player cannot afford the ship")
 
 
-func test_roster_section_has_an_assignment_board():
-	RoguelikeRun.start_run(_counts({"fighter": 1}))
-	var shop := ShopScreen.new()
-	add_child_autofree(shop)
-	shop.setup({"shop_stock": []})
-
-	assert_gt(_find_by_script(shop, CrewAssignmentBoard, []).size(), 0,
-		"The roster section contains a CrewAssignmentBoard")
-
-
 func test_board_drag_to_vacant_transfers_crew():
 	RoguelikeRun.start_run(_counts({"fighter": 1}))
 	RoguelikeRun.money = 100000
@@ -391,34 +381,3 @@ func test_hiring_through_the_candidate_dialog_fills_the_vacancy():
 		"The fighter's only slot is no longer vacant")
 
 
-func test_clicking_a_crew_callsign_opens_their_stat_sheet():
-	RoguelikeRun.start_run(_counts({"fighter": 1}))
-	var callsign: String = RoguelikeRun.fleet_hulls[0].crew[0].callsign
-	var shop := ShopScreen.new()
-	add_child_autofree(shop)
-	shop.setup({"shop_stock": []})
-
-	var name_buttons := _find_buttons(shop, callsign, [])
-	assert_eq(name_buttons.size(), 1, "The crew member's callsign is clickable")
-	name_buttons[0].pressed.emit()
-
-	assert_eq(_find_by_script(shop, CrewViewModal, []).size(), 1,
-		"Clicking a callsign opens the crew member's stat sheet")
-
-
-func test_roster_renders_condition_for_a_damaged_hull():
-	RoguelikeRun.start_run(_counts({"corvette": 1}))
-	# Persist a damaged ship state so the roster header's condition meters
-	# render off the damaged branch (not the pristine 100%/100% shortcut).
-	var ship := ShipData.create_ship_instance("corvette", 0, Vector2.ZERO)
-	ship["armor_sections"][0]["current_armor"] = 0
-	ship.erase("crew")
-	RoguelikeRun.fleet_hulls[0].ship = ship
-	var shop := ShopScreen.new()
-	add_child_autofree(shop)
-
-	shop.setup({"shop_stock": []})
-
-	# The damaged hull still renders in the roster with its ice toggle intact.
-	assert_gt(_find_buttons(shop, "Put on ice", []).size(), 0,
-		"A damaged hull renders in the roster with condition shown and controls working")

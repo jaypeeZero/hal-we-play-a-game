@@ -79,6 +79,16 @@ func setup(source: FleetSource, mode: String) -> void:
 	_select_first_ship()
 
 
+## Open a self-freeing Fleet Command overlay over an active run.
+## Adds the screen to `parent`, auto-frees on done, returns the screen.
+static func open_overlay(parent: Node) -> FleetCommandScreen:
+	var screen := FleetCommandScreen.new()
+	screen.setup(RunSource.new(), "done")
+	parent.add_child(screen)
+	screen.done.connect(screen.queue_free)
+	return screen
+
+
 # ── Layout construction ──────────────────────────────────────────────────────
 
 func _build_layout() -> void:
@@ -394,6 +404,35 @@ func _rebuild_right_panel() -> void:
 	)
 	header_info.add_child(name_edit)
 	header_info.add_child(UiKit.label(str(hull.get("ship_type", "")).replace("_", " ").capitalize(), UiKit.DIM, 12))
+
+	# Condition meters
+	const CONDITION_LOW_RATIO := 0.6
+	var cond := HullConditionSystem.condition(hull)
+	var meter_row := HBoxContainer.new()
+	meter_row.add_theme_constant_override("separation", 8)
+	meter_row.add_child(UiKit.mini_meter("Arm", cond.armor, UiKit.ACCENT,
+		cond.armor < CONDITION_LOW_RATIO))
+	meter_row.add_child(UiKit.mini_meter("Sys", cond.systems, UiKit.GOLD,
+		cond.systems < CONDITION_LOW_RATIO))
+	header_info.add_child(meter_row)
+
+	# Ice / Activate button + badge
+	var is_iced: bool = hull.get("iced", false)
+	var ice_row := HBoxContainer.new()
+	ice_row.add_theme_constant_override("separation", 8)
+	if is_iced:
+		ice_row.add_child(UiKit.badge("On ice"))
+	var hid_ice: String = str(hull.get("hull_id", ""))
+	var ice_btn := Button.new()
+	ice_btn.text = "Activate" if is_iced else "Put on ice"
+	UiKit.style_button(ice_btn, "ghost")
+	ice_btn.pressed.connect(func() -> void:
+		_source.set_iced(hid_ice, not hull.get("iced", false))
+		_rebuild_right_panel()
+		_rebuild_roster()
+	)
+	ice_row.add_child(ice_btn)
+	header_info.add_child(ice_row)
 
 	body.add_child(UiKit.separator())
 
