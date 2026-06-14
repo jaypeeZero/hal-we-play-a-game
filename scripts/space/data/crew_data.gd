@@ -145,7 +145,8 @@ static func create_crew_member(role: Role, skill_level: float = 0.5) -> Dictiona
 			"subordinates": []  # crew_ids of subordinates
 		},
 		"next_decision_time": 0.0,  # Scheduler wakes the crew at this game_time.
-		"current_action": null  # What they're doing now
+		"current_action": null,  # What they're doing now
+		"attributes": [],  # Array of attribute id strings (see AttributeLibrary)
 	}
 
 	return base_crew
@@ -444,6 +445,7 @@ static func reset_for_battle(saved: Dictionary) -> Dictionary:
 	fresh.stats.fatigue = 0.0
 	fresh.qualified_roles = saved.get("qualified_roles", fresh.qualified_roles).duplicate()
 	fresh.known_patterns = saved.get("known_patterns", []).duplicate()
+	fresh.attributes = saved.get("attributes", []).duplicate()
 	fresh.command_chain = saved.get("command_chain", fresh.command_chain).duplicate(true)
 	# A gunner's weapon binding is persistent identity: it decides which weapon
 	# they man and, if its mount is shot off, whether they become a casualty.
@@ -467,6 +469,7 @@ static func from_roster_entry(entry: Dictionary) -> Dictionary:
 static func apply_roster_entry(member: Dictionary, entry: Dictionary) -> Dictionary:
 	member["callsign"] = str(entry.get("callsign", member.crew_id))
 	member["qualified_roles"] = qualified_roles_from_entry(entry)
+	member["attributes"] = entry.get("attributes", member.get("attributes", [])).duplicate()
 	var entry_skills: Dictionary = entry.get("skills", {})
 	var skills: Dictionary = member.stats.skills
 	for skill_name in SKILL_NAMES:
@@ -501,6 +504,7 @@ static func entry_from_crew(member: Dictionary) -> Dictionary:
 		"callsign": str(member.get("callsign", member.get("crew_id", ""))),
 		"roles": role_names,
 		"skills": skills,
+		"attributes": member.get("attributes", []).duplicate(),
 	}
 
 

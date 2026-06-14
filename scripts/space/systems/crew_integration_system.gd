@@ -159,6 +159,7 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 	# Apply crew skill modifiers to ship stats
 	if crew_data and crew_data.has("stats"):
 		updated = apply_pilot_skill_modifiers(updated, crew_data)
+		updated = AttributeModifierSystem.apply_for_crew(updated, crew_data)
 
 	return updated
 
@@ -228,6 +229,7 @@ static func apply_fire_decision(ship_data: Dictionary, decision: Dictionary, cre
 	# Apply gunner skill to weapon accuracy
 	if crew_data and crew_data.has("stats"):
 		updated = apply_gunner_skill_modifiers(updated, crew_data)
+		updated = AttributeModifierSystem.apply_for_crew(updated, crew_data)
 
 	return updated
 
@@ -304,6 +306,7 @@ static func apply_tactical_decision(ship_data: Dictionary, decision: Dictionary,
 	# Captain's skill affects overall ship coordination
 	if crew_data and crew_data.has("stats"):
 		updated = apply_captain_skill_modifiers(updated, crew_data)
+		updated = AttributeModifierSystem.apply_for_crew(updated, crew_data)
 
 	return updated
 

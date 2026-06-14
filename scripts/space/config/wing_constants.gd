@@ -558,3 +558,29 @@ const COMMIT_COST := 0.2
 ## hold their tactics (a kiting doctrine never auto-charges) — preserves the
 ## emergent variety between aggressive and defensive doctrines.
 const COMMIT_MIN_AGGRESSION := 0.6
+
+# --- Crew attributes ---
+## Minimum number of attributes rolled for a fresh crew member.
+const ATTRIBUTES_PER_CREW_MIN := 1
+## Maximum number of attributes rolled for a fresh crew member.
+const ATTRIBUTES_PER_CREW_MAX := 4
+## Probability that one rolled attribute slot is filled with a negative-polarity trait.
+const ATTRIBUTE_NEGATIVE_QUIRK_CHANCE := 0.35
+## A target inside this fraction of a weapon's optimal range is considered "close".
+const CLOSE_RANGE_OPTIMAL_FRACTION := 0.5
+
+# --- Run roster ---
+## Target crew pool size generated at run start.
+const RUN_ROSTER_SIZE := 30
+## Gaussian noise (sigma) applied to skill values during procedural generation.
+const GEN_SKILL_NOISE := 0.08
+
+# --- Star-date events ---
+## Expected events per star date of jump travel.
+const EVENTS_PER_STARDATE := 0.4
+## Minimum events generated per jump, regardless of travel time.
+const EVENTS_PER_JUMP_MIN := 1
+## Maximum events generated per jump, regardless of travel time.
+const EVENTS_PER_JUMP_MAX := 5
+## Ring-buffer cap for the Dispatches news feed.
+const NEWS_FEED_MAX_ENTRIES := 100

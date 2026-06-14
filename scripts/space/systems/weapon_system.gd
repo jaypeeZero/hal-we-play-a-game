@@ -100,7 +100,7 @@ static func try_fire_weapon(ship_data: Dictionary, weapon: Dictionary, targets: 
 		return create_no_fire_result(weapon)
 
 	return create_fire_result(
-		set_weapon_cooldown(weapon, calculate_cooldown_time(weapon)),
+		set_weapon_cooldown(weapon, calculate_cooldown_time(weapon, ship_data, best_target)),
 		create_fire_command(ship_data, weapon, best_target)
 	)
 
@@ -146,8 +146,16 @@ static func is_weapon_ready(weapon: Dictionary) -> bool:
 static func is_weapon_operational(weapon: Dictionary) -> bool:
 	return weapon.get("status", "operational") != "destroyed"
 
-static func calculate_cooldown_time(weapon: Dictionary) -> float:
-	return 1.0 / weapon.stats.rate_of_fire
+static func calculate_cooldown_time(weapon: Dictionary, ship_data: Dictionary = {}, target: Dictionary = {}) -> float:
+	"""Base cooldown scaled down when a close_range_fire_bonus applies and target is inside close range."""
+	var base: float = 1.0 / weapon.stats.rate_of_fire
+	var bonus: float = ship_data.get("crew_modifiers", {}).get("close_range_fire_bonus", 0.0)
+	if bonus > 0.0 and not ship_data.is_empty() and not target.is_empty():
+		var close_threshold: float = float(weapon.stats.get("range", 0.0)) * WingConstants.CLOSE_RANGE_OPTIMAL_FRACTION
+		var dist: float = calculate_distance(ship_data.get("position", Vector2.ZERO), target.get("position", Vector2.ZERO))
+		if dist < close_threshold:
+			return base / (1.0 + bonus)
+	return base
 
 static func set_weapon_cooldown(weapon: Dictionary, cooldown: float) -> Dictionary:
 	return DictUtils.merge_dict(weapon, {cooldown_remaining = cooldown})

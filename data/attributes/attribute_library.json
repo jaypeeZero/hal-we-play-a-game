@@ -1,0 +1,205 @@
+{
+	"close_range_killer": {
+		"display_name": "Fires Faster At Close Range",
+		"blurb": "Comes alive in a knife fight — trigger discipline goes out the airlock.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["gunner", "pilot"],
+		"rarity": 1.0,
+		"combat": { "kind": "close_range_fire_rate", "value": 0.20 },
+		"event_weights": {}
+	},
+	"dead_eye": {
+		"display_name": "Dead Eye",
+		"blurb": "Leads targets before they know they're dead. Cold, precise, relentless.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["gunner"],
+		"rarity": 0.8,
+		"combat": { "kind": "lead_accuracy", "value": 0.15 },
+		"event_weights": {}
+	},
+	"ice_in_the_veins": {
+		"display_name": "Ice In The Veins",
+		"blurb": "Doesn't rattle. The closer the scrape, the calmer the hands.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["gunner", "pilot"],
+		"rarity": 0.7,
+		"combat": { "kind": "composure_factor", "value": 0.20 },
+		"event_weights": { "bar_fight": 0.5 }
+	},
+	"nimble": {
+		"display_name": "Nimble",
+		"blurb": "Flicks the ship through gaps that shouldn't exist. Dents be damned.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["pilot"],
+		"rarity": 0.9,
+		"combat": { "kind": "turn_rate", "value": 0.18 },
+		"event_weights": {}
+	},
+	"reckless": {
+		"display_name": "Reckless",
+		"blurb": "Throws the throttle wide open before the battle plan is finished.",
+		"category": "combat",
+		"polarity": "negative",
+		"roles": ["pilot"],
+		"rarity": 1.1,
+		"combat": { "kind": "aggression", "value": 0.25 },
+		"event_weights": { "bar_fight": 2.0, "overslept_muster": 1.5 }
+	},
+	"afterburner_addict": {
+		"display_name": "Afterburner Addict",
+		"blurb": "Redlines the drive every time. Brilliant in a sprint, costly in a war.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["pilot"],
+		"rarity": 0.9,
+		"combat": { "kind": "accel", "value": 0.22 },
+		"event_weights": { "engineers_botched_repair": 1.4 }
+	},
+	"last_stand_fighter": {
+		"display_name": "Last Stand Fighter",
+		"blurb": "Cornered is where they're most dangerous. Aiming gets sharper when the hull is bleeding.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["gunner", "pilot"],
+		"rarity": 0.6,
+		"combat": { "kind": "last_stand", "value": 0.30 },
+		"event_weights": {}
+	},
+	"shaken": {
+		"display_name": "Shaken",
+		"blurb": "Hasn't been the same since the mauling.",
+		"category": "personality",
+		"polarity": "negative",
+		"roles": [],
+		"rarity": 0.0,
+		"combat": { "kind": "composure_factor", "value": -0.15 },
+		"event_weights": { "breakdown": 2.0, "redemption_arc": 1.5 },
+		"grantable_by_events_only": true
+	},
+	"battle_hardened": {
+		"display_name": "Battle Hardened",
+		"blurb": "Been through the furnace and came out the other side. Nothing surprises them anymore.",
+		"category": "mixed",
+		"polarity": "positive",
+		"roles": [],
+		"rarity": 0.0,
+		"combat": { "kind": "composure_factor", "value": 0.12 },
+		"event_weights": { "bar_fight": 0.4, "battle_hardened": 0.1 },
+		"grantable_by_events_only": true
+	},
+	"likes_a_night_out": {
+		"display_name": "Likes A Night Out",
+		"blurb": "First to the bar on shore leave, last to leave it.",
+		"category": "personality",
+		"polarity": "neutral",
+		"roles": [],
+		"rarity": 1.2,
+		"combat": null,
+		"event_weights": { "bar_fight": 3.0, "shore_leave_morale": 2.0, "overslept_muster": 1.5 }
+	},
+	"loner": {
+		"display_name": "Loner",
+		"blurb": "Eats alone. Flies alone. Probably prefers it that way.",
+		"category": "personality",
+		"polarity": "neutral",
+		"roles": [],
+		"rarity": 0.9,
+		"combat": null,
+		"event_weights": { "bar_fight": 0.3, "breakdown": 1.4, "shore_leave_morale": 0.5 }
+	},
+	"glory_hound": {
+		"display_name": "Glory Hound",
+		"blurb": "Needs to be the one who fires the killing shot. Morale depends on it.",
+		"category": "personality",
+		"polarity": "negative",
+		"roles": [],
+		"rarity": 1.0,
+		"combat": { "kind": "aggression", "value": 0.15 },
+		"event_weights": { "bar_fight": 1.5, "battle_hardened": 0.5, "overslept_muster": 0.8 }
+	},
+	"grease_monkey": {
+		"display_name": "Grease Monkey",
+		"blurb": "Talks to machinery. Ships under their care run hotter and smoother.",
+		"category": "personality",
+		"polarity": "positive",
+		"roles": ["engineer"],
+		"rarity": 0.8,
+		"combat": null,
+		"event_weights": { "engineers_botched_repair": 0.4, "shore_leave_morale": 0.8 }
+	},
+	"skittish": {
+		"display_name": "Skittish",
+		"blurb": "Flinches at shadows. Jumpy doesn't begin to cover it.",
+		"category": "combat",
+		"polarity": "negative",
+		"roles": [],
+		"rarity": 1.0,
+		"combat": { "kind": "composure_factor", "value": -0.10 },
+		"event_weights": { "breakdown": 1.6 }
+	},
+	"crowd_pleaser": {
+		"display_name": "Crowd Pleaser",
+		"blurb": "Picks the flashiest shot, not always the smartest one.",
+		"category": "personality",
+		"polarity": "neutral",
+		"roles": ["gunner"],
+		"rarity": 1.0,
+		"combat": null,
+		"event_weights": { "bar_fight": 1.2, "shore_leave_morale": 2.0 }
+	},
+	"tactician": {
+		"display_name": "Tactician",
+		"blurb": "Reads the battle three moves ahead. Their instincts are calibrated, not lucky.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["captain", "squadron_leader", "fleet_commander"],
+		"rarity": 0.6,
+		"combat": { "kind": "lead_accuracy", "value": 0.10 },
+		"event_weights": { "spies_report": 1.5 }
+	},
+	"paranoid": {
+		"display_name": "Paranoid",
+		"blurb": "Assumes every contract is a setup. Annoyingly often correct.",
+		"category": "personality",
+		"polarity": "negative",
+		"roles": [],
+		"rarity": 0.8,
+		"combat": null,
+		"event_weights": { "spies_report": 2.0, "breakdown": 1.3 }
+	},
+	"war_weary": {
+		"display_name": "War Weary",
+		"blurb": "Seen enough to know it never ends. Keeps showing up anyway.",
+		"category": "personality",
+		"polarity": "negative",
+		"roles": [],
+		"rarity": 0.0,
+		"combat": { "kind": "aggression", "value": -0.18 },
+		"event_weights": { "breakdown": 1.8, "redemption_arc": 2.0 },
+		"grantable_by_events_only": true
+	},
+	"steady_hands": {
+		"display_name": "Steady Hands",
+		"blurb": "Unhurried. Fires when it counts, not when it feels good.",
+		"category": "combat",
+		"polarity": "positive",
+		"roles": ["gunner"],
+		"rarity": 0.7,
+		"combat": { "kind": "lead_accuracy", "value": 0.12 },
+		"event_weights": {}
+	},
+	"hotdog_pilot": {
+		"display_name": "Hotdog Pilot",
+		"blurb": "Insists on the hard approach. Usually works. Usually.",
+		"category": "mixed",
+		"polarity": "neutral",
+		"roles": ["pilot"],
+		"rarity": 1.0,
+		"combat": { "kind": "turn_rate", "value": 0.10 },
+		"event_weights": { "bar_fight": 1.8, "overslept_muster": 1.3 }
+	}
+}
