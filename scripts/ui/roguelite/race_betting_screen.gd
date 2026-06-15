@@ -263,7 +263,7 @@ func _roll_new_race() -> void:
 	_race_seed = rng.randi()
 
 	# Pick a track.
-	var track_id := RACE_TRACKS[rng.randi() % RACE_TRACKS.size()]
+	var track_id: String = RACE_TRACKS[rng.randi() % RACE_TRACKS.size()]
 	_track = RaceTrack.load_track(track_id)
 
 	# Determine field size.
