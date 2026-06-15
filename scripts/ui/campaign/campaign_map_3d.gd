@@ -271,6 +271,7 @@ func _complete_node_visit(node: Dictionary, repair_summary: Dictionary) -> void:
 	RoguelikeRun.save_campaign_to_disk()
 	_refresh_map()
 	_dispatches_panel.refresh(RoguelikeRun.news_feed)
+	_dispatches_panel.visible = true
 	_show_repair_summary(repair_summary)
 	RoguelikeRun.last_jump_repair_summary = {}
 
@@ -302,6 +303,9 @@ func _open_manage_crew() -> void:
 func _open_rest(node: Dictionary, repair_summary: Dictionary) -> void:
 	_fleet_panel.visible = false
 	_destination_panel.dismiss()
+	# Dispatches lives on the UI CanvasLayer (above overlays) and would cover
+	# and steal clicks from the R&R overlay; restored in _complete_node_visit.
+	_dispatches_panel.visible = false
 	_open_rest_menu(node, repair_summary)
 
 

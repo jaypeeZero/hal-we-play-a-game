@@ -198,8 +198,13 @@ func _on_bet_selected(entrant_idx: int, on: bool) -> void:
 			if int(btn.get_meta("entrant_idx", -1)) != entrant_idx:
 				btn.button_pressed = false
 		_updating_buttons = false
+		if _status_label != null:
+			var picked: String = _entrants[entrant_idx].crew.get("callsign", "racer")
+			_status_label.text = "Betting on %s — set a wager, then Run Race & Settle Bet." % picked
 	elif _bet_entrant_index == entrant_idx:
 		_bet_entrant_index = -1
+		if _status_label != null:
+			_status_label.text = ""
 
 
 func _on_run_pressed() -> void:
