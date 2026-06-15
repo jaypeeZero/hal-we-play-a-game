@@ -175,6 +175,21 @@ func fielded_crew() -> Array:
 	return crew
 
 
+## The fleet assignment of crew member `crew_id`: {hull_id, ship_type, role}
+## when serving aboard a hull, or {} when not aboard any ship. `role` is the
+## serving-role int (the position held on that ship).
+func assignment_of(crew_id: String) -> Dictionary:
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			if str(member.get("crew_id", "")) == crew_id:
+				return {
+					"hull_id": str(hull.get("hull_id", "")),
+					"ship_type": str(hull.get("ship_type", "")),
+					"role": int(member.get("role", -1)),
+				}
+	return {}
+
+
 ## Find one run-roster entry by id; falls back to CrewRosterManager so
 ## legacy or empty-roster saves still resolve.
 func crew_entry_by_id(roster_id: String) -> Dictionary:

@@ -120,9 +120,10 @@ When working on this codebase:
 - `NewsScreen` and the map's `DispatchesPanel` render the feed through ONE shared
   static renderer (`DispatchesPanel.populate_feed`) — don't reimplement dispatch
   rows; reuse it
-- The Crew tab is `RunCrewScreen`, a READ-ONLY view of `RoguelikeRun.fielded_crew`
-  (the run's hired crew). The editable global crew roster is the separate
-  `crew_manager` screen, reached only from the title menu
+- `crew_manager` is a shared dual-mode screen keyed on `RoguelikeRun.active`:
+  in-run (nav Crew tab) it is READ-ONLY over `RoguelikeRun.fielded_crew` and shows
+  each selected member's ship assignment (`RoguelikeRun.assignment_of`); standalone
+  from the title menu it edits the global crew-roster template
 
 **Event logging and monitoring:**
 - `BattleEventLogger` - Centralized event stream logger that emits standardized events for all battle interactions

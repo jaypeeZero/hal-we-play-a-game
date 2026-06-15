@@ -170,10 +170,12 @@ Screen specifics:
 - **News** (`NewsScreen`) renders the campaign dispatch feed with the *same*
   shared renderer as the map's side panel (`DispatchesPanel.populate_feed`), so
   the two never diverge.
-- **Crew** (`RunCrewScreen`) is a **read-only** view of the run's hired crew
-  (`RoguelikeRun.fielded_crew`); a card opens the shared read-only crew modal.
-  The editable global roster lives in the separate, title-menu-only
-  `crew_manager` screen.
+- **Crew** is the shared `crew_manager` screen, which has two modes chosen by
+  `RoguelikeRun.active`: in a run (nav Crew tab) it is a **read-only** view of
+  the run's hired crew (`RoguelikeRun.fielded_crew`) that also reports each
+  selected member's ship assignment (which ship + position, via
+  `RoguelikeRun.assignment_of`); standalone from the title menu it stays the
+  editable global-roster editor.
 
 ### Key Classes
 
