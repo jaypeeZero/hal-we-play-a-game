@@ -105,9 +105,9 @@ When working on this codebase:
 
 **Roguelike meta-layer navigation:**
 - `NavGraph` (pure `RefCounted`) owns the screen enum, scene paths, and the
-  FIXED Back hierarchy (Map→Fleet Manager; Crew/News/Pre/Post-Battle→Map; Fleet
-  Manager is the floor — Back never goes past it). All routing logic is here and
-  unit-tested (`tests/test_nav_graph.gd`)
+  FIXED Back hierarchy (Fleet Command/Crew/News/Pre/Post-Battle→Map; the Campaign
+  Map is the home/floor — Back never goes past it, and a new run starts there).
+  All routing logic is here and unit-tested (`tests/test_nav_graph.gd`)
 - `Nav` autoload is a thin scene-switch shim over `NavGraph` (`goto`/`back`)
 - `NavBar` is built in code, not a scene. Use `NavBar.attach(parent, screen,
   tabs_on, back_cb)` — it is RUN-SCOPED (adds nothing unless `RoguelikeRun.active`),
@@ -124,6 +124,9 @@ When working on this codebase:
   in-run (nav Crew tab) it is READ-ONLY over `RoguelikeRun.fielded_crew` and shows
   each selected member's ship assignment (`RoguelikeRun.assignment_of`); standalone
   from the title menu it edits the global crew-roster template
+- The Fleet Command tab is `FleetCommandHost` — a thin full-screen host that wraps
+  the `FleetCommandScreen` overlay ("done" mode) + nav bar; Done/Back return to the
+  Map. The old `fleet_management` pre-launch hub is deleted
 
 **Event logging and monitoring:**
 - `BattleEventLogger` - Centralized event stream logger that emits standardized events for all battle interactions

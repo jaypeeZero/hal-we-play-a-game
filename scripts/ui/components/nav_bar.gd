@@ -7,7 +7,7 @@ extends Control
 
 ## Which screen this bar instance lives on (determines active tab + Back state).
 ## Use NavGraph.Screen values (int). Set in the editor via @export.
-@export var current_screen: int = NavGraph.Screen.FLEET_MANAGER
+@export var current_screen: int = NavGraph.Screen.MAP
 
 ## When false, area tabs are disabled (Back still works).
 ## Set to false on pre_battle so deployment can't be abandoned by a stray tab.
@@ -29,7 +29,7 @@ const SIDE_PAD := 8
 # ---- tab definitions ----
 const TABS: Array = [
 	{"screen": NavGraph.Screen.MAP,           "icon": "res://assets/icons/nav/map.svg",   "tip": "Map"},
-	{"screen": NavGraph.Screen.FLEET_MANAGER, "icon": "res://assets/icons/nav/fleet.svg", "tip": "Fleet Manager"},
+	{"screen": NavGraph.Screen.FLEET_COMMAND, "icon": "res://assets/icons/nav/fleet.svg", "tip": "Fleet Command"},
 	{"screen": NavGraph.Screen.CREW,          "icon": "res://assets/icons/nav/crew.svg",  "tip": "Crew Manager"},
 	{"screen": NavGraph.Screen.NEWS,          "icon": "res://assets/icons/nav/news.svg",  "tip": "News"},
 ]

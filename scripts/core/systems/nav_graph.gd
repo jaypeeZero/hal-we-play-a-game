@@ -6,8 +6,8 @@ extends RefCounted
 ## No scene-tree access — safe to instantiate in unit tests.
 
 enum Screen {
-	FLEET_MANAGER,
 	MAP,
+	FLEET_COMMAND,
 	CREW,
 	NEWS,
 	PRE_BATTLE,
@@ -15,24 +15,26 @@ enum Screen {
 }
 
 const SCENE_PATHS: Dictionary = {
-	Screen.FLEET_MANAGER: "res://scenes/fleet_management.tscn",
 	Screen.MAP:           "res://scenes/campaign_map_3d.tscn",
+	Screen.FLEET_COMMAND: "res://scenes/fleet_command.tscn",
 	Screen.CREW:          "res://scenes/crew_manager.tscn",
 	Screen.NEWS:          "res://scenes/news.tscn",
 	Screen.PRE_BATTLE:    "res://scenes/pre_battle.tscn",
 	Screen.POST_BATTLE:   "res://scenes/post_battle.tscn",
 }
 
-## The bottom of the Back stack — Back never navigates past this.
-const FLOOR: int = Screen.FLEET_MANAGER
+## The bottom of the Back stack — Back never navigates past this. The Campaign
+## Map is the roguelike's home.
+const FLOOR: int = Screen.MAP
 
-## Fixed parent hierarchy: each screen's Back destination.
+## Fixed parent hierarchy: each screen's Back destination. Every meta screen
+## bottoms out at the Map.
 const PARENTS: Dictionary = {
-	Screen.MAP:         Screen.FLEET_MANAGER,
-	Screen.CREW:        Screen.MAP,
-	Screen.NEWS:        Screen.MAP,
-	Screen.PRE_BATTLE:  Screen.MAP,
-	Screen.POST_BATTLE: Screen.MAP,
+	Screen.FLEET_COMMAND: Screen.MAP,
+	Screen.CREW:          Screen.MAP,
+	Screen.NEWS:          Screen.MAP,
+	Screen.PRE_BATTLE:    Screen.MAP,
+	Screen.POST_BATTLE:   Screen.MAP,
 }
 
 

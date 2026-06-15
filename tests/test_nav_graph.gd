@@ -25,26 +25,26 @@ func test_back_from_post_battle_returns_map() -> void:
 		"Back from POST_BATTLE should lead to MAP")
 
 
-func test_back_from_map_returns_fleet_manager() -> void:
-	assert_eq(NavGraph.parent_of(NavGraph.Screen.MAP), NavGraph.Screen.FLEET_MANAGER,
-		"Back from MAP should lead to FLEET_MANAGER")
+func test_back_from_fleet_command_returns_map() -> void:
+	assert_eq(NavGraph.parent_of(NavGraph.Screen.FLEET_COMMAND), NavGraph.Screen.MAP,
+		"Back from FLEET_COMMAND should lead to MAP")
 
 
 # ─── Floor behaviour ──────────────────────────────────────────────────────────
 
-func test_fleet_manager_is_the_floor() -> void:
-	assert_true(NavGraph.is_floor(NavGraph.Screen.FLEET_MANAGER),
-		"FLEET_MANAGER must be the floor")
+func test_map_is_the_floor() -> void:
+	assert_true(NavGraph.is_floor(NavGraph.Screen.MAP),
+		"MAP must be the floor (the roguelike home)")
 
 
 func test_cannot_go_back_from_floor() -> void:
-	assert_false(NavGraph.can_go_back(NavGraph.Screen.FLEET_MANAGER),
+	assert_false(NavGraph.can_go_back(NavGraph.Screen.MAP),
 		"can_go_back must be false at the floor")
 
 
 func test_can_go_back_from_non_floor_screens() -> void:
 	var non_floor: Array = [
-		NavGraph.Screen.MAP,
+		NavGraph.Screen.FLEET_COMMAND,
 		NavGraph.Screen.CREW,
 		NavGraph.Screen.NEWS,
 		NavGraph.Screen.PRE_BATTLE,
@@ -56,7 +56,7 @@ func test_can_go_back_from_non_floor_screens() -> void:
 
 
 func test_parent_of_floor_clamps_to_floor() -> void:
-	assert_eq(NavGraph.parent_of(NavGraph.Screen.FLEET_MANAGER), NavGraph.FLOOR,
+	assert_eq(NavGraph.parent_of(NavGraph.Screen.MAP), NavGraph.FLOOR,
 		"parent_of(FLOOR) must clamp to FLOOR")
 
 
