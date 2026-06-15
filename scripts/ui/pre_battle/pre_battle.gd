@@ -31,10 +31,15 @@ const BOX_BORDER_WIDTH: float = 2.0
 var _input: PreBattleInput
 var _preview_entities: Dictionary = {}
 var _fleet_command: FleetCommandScreen = null
+var _nav_bar: NavBar
 
 
 func _ready() -> void:
 	_open_fleet_command()
+	# Nav bar added after the fleet-command overlay so its Back stays on top of
+	# it; tabs disabled (Back only) and run-scoped (skirmish from the title
+	# menu has no meta nav).
+	_nav_bar = NavBar.attach($UI, NavGraph.Screen.PRE_BATTLE, false)
 
 
 func _open_fleet_command() -> void:

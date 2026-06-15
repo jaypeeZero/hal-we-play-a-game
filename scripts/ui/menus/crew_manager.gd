@@ -5,7 +5,9 @@ extends OverlayScreen
 ## selected entry is edited in place through an editable CrewMemberView.
 ## Save writes the whole roster to user://crew_roster.json (the local
 ## override); Reset deletes the override so the shipped roster applies again.
-## Lifecycle: standalone scene — Back calls change_scene_to_file.
+## Lifecycle: dual-entry. Inside a roguelike run the NavBar provides Back
+## (→ Map); launched standalone from the title menu it shows a footer Back
+## (→ main menu). Either path auto-saves when dirty so edits are never lost.
 
 const LIST_WIDTH := 320
 const CARD_PORTRAIT_SIZE := Vector2(72, 84)
@@ -20,9 +22,11 @@ var _gallery: GridContainer
 var _detail: CrewMemberView
 var _subtitle: Label
 var _cards: Array = []
+var _nav_bar: NavBar
 
 
 func _ready() -> void:
+	"""Build the Crew Manager screen; nav bar only inside a roguelike run."""
 	_entries = CrewRosterManager.load_roster()
 	build_chrome()
 	var topbar := _build_topbar()
@@ -32,6 +36,9 @@ func _ready() -> void:
 	_rebuild_list()
 	if not _entries.is_empty():
 		_select(0)
+	# In a run the nav bar carries Back; standalone (from the title menu) the
+	# footer Back added in _build_footer_buttons is used instead.
+	_nav_bar = NavBar.attach(self, NavGraph.Screen.CREW, true, _on_back)
 
 
 # UI CONSTRUCTION
@@ -72,9 +79,12 @@ func _build_body() -> Control:
 
 
 func _build_footer_buttons() -> void:
-	var back := UiKit.style_button(_make_button("Back"), "ghost")
-	back.pressed.connect(_on_back)
-	footer.add_child(back)
+	if not RoguelikeRun.active:
+		# Standalone entry from the title menu has no nav bar, so the footer
+		# carries Back.
+		var back := UiKit.style_button(_make_button("Back"), "ghost")
+		back.pressed.connect(_on_back)
+		footer.add_child(back)
 
 	var reset := UiKit.style_button(_make_button("Reset to defaults"), "warn")
 	reset.pressed.connect(_on_reset)
@@ -136,7 +146,13 @@ func _on_reset() -> void:
 
 
 func _on_back() -> void:
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	# Auto-save when dirty so changes are never silently lost on navigation.
+	if _dirty:
+		_on_save()
+	if RoguelikeRun.active:
+		Nav.back(NavGraph.Screen.CREW)
+	else:
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
 # HELPERS

@@ -103,6 +103,20 @@ When working on this codebase:
 - Focus-fire: a designated target gets a targeting-weight boost so a wing concentrates
   fire without forcing every ship onto it
 
+**Roguelike meta-layer navigation:**
+- `NavGraph` (pure `RefCounted`) owns the screen enum, scene paths, and the
+  FIXED Back hierarchy (Map→Fleet Manager; Crew/News/Pre/Post-Battle→Map; Fleet
+  Manager is the floor — Back never goes past it). All routing logic is here and
+  unit-tested (`tests/test_nav_graph.gd`)
+- `Nav` autoload is a thin scene-switch shim over `NavGraph` (`goto`/`back`)
+- `NavBar` is built in code, not a scene. Use `NavBar.attach(parent, screen,
+  tabs_on, back_cb)` — it is RUN-SCOPED (adds nothing unless `RoguelikeRun.active`),
+  so title-menu/skirmish entries to Crew Manager / Pre-Battle keep their own back.
+  Attach it AFTER a screen's base UI so it draws on top; runtime modals added later
+  still cover it (you can't nav away mid-modal)
+- Tabs jump straight to a screen; Back walks the fixed parent. Adding an area =
+  one `NavGraph.Screen` value + a `SCENE_PATHS`/`PARENTS` row + one `NavBar.TABS` entry
+
 **Event logging and monitoring:**
 - `BattleEventLogger` - Centralized event stream logger that emits standardized events for all battle interactions
 - Event history tracking available for debugging, replay, and analysis

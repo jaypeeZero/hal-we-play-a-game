@@ -18,7 +18,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.1, 0.1, 0.15, 1)
+color = Color(0.039, 0.055, 0.078, 1)
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -29,7 +29,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/margin_left = 40
 theme_override_constants/margin_right = 40
-theme_override_constants/margin_top = 40
+theme_override_constants/margin_top = 56
 theme_override_constants/margin_bottom = 40
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
@@ -67,21 +67,6 @@ visible = false
 [node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 horizontal_alignment = 1
-
-[node name="MessagesContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 10
-
-[node name="MessagesTitle" type="Label" parent="MarginContainer/VBoxContainer/MessagesContainer"]
-layout_mode = 2
-text = "Messages"
-theme_override_font_sizes/font_size = 20
-
-[node name="MessagesList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MessagesContainer"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 10
 
 [connection signal="pressed" from="MarginContainer/VBoxContainer/EditFleetButton" to="." method="_on_edit_fleet_pressed"]
 [connection signal="pressed" from="MarginContainer/VBoxContainer/FleetLaunchButton" to="." method="_on_fleet_launch_pressed"]

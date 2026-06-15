@@ -150,6 +150,21 @@ and they issue posture (withdraw / hold / press), formation, and
 focus-fire orders that are absorbed into subordinates' blends rather
 than forcing discrete moves.
 
+### Roguelike meta-layer navigation
+
+A persistent top nav-bar gives every roguelike meta screen (Fleet Manager,
+Map, Crew Manager, News, Pre/Post-Battle) a consistent way to move around.
+`NavGraph` (pure, `RefCounted`) holds the screen enum, scene paths and a
+**fixed Back hierarchy** (Map → Fleet Manager; Crew/News/Pre/Post-Battle →
+Map; Fleet Manager is the floor — Back never goes past it). The `Nav`
+autoload is a thin shim that turns that graph into `change_scene_to_file`
+calls. `NavBar` (built in code, `NavBar.attach(parent, screen)`) renders the
+icon tabs + Back button; `attach` is **run-scoped** — it adds nothing unless
+a roguelike run is active, so title-menu/skirmish entries keep their own
+navigation. Tabs jump straight to a screen; Back walks up the fixed
+hierarchy. Adding a new area = one `NavGraph.Screen` value + a `SCENE_PATHS`/
+`PARENTS` row + one `NavBar.TABS` entry.
+
 ### Key Classes
 
 #### Data Layer (RefCounted - Pure Data)

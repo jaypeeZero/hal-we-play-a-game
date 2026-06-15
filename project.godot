@@ -24,6 +24,7 @@ VisualBridgeAutoload="*res://scripts/core/autoload/visual_bridge_autoload.gd"
 BattleEventLoggerAutoload="*res://scripts/core/autoload/battle_event_logger_autoload.gd"
 RoguelikeRun="*res://scripts/core/autoload/roguelike_run_autoload.gd"
 BattlePlan="*res://scripts/core/autoload/battle_plan_autoload.gd"
+Nav="*res://scripts/core/autoload/nav_autoload.gd"
 
 [debug]
 

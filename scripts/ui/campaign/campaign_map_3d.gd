@@ -83,6 +83,7 @@ var _status_message := ""
 var _fleet_panel: FleetConditionPanel
 var _destination_panel: DestinationPanel
 var _dispatches_panel: DispatchesPanel
+var _nav_bar: NavBar
 
 
 func _ready() -> void:
@@ -102,6 +103,10 @@ func _ready() -> void:
 
 	_dispatches_panel = DispatchesPanel.new()
 	_ui_layer.add_child(_dispatches_panel)
+
+	# Nav bar added after the base panels so it draws above them; runtime
+	# modals (ship view, shop, rest) added later still cover it, by design.
+	_nav_bar = NavBar.attach(_ui_layer, NavGraph.Screen.MAP)
 
 	_build_stars()
 	_build_line_mesh()

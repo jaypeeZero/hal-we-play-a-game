@@ -16,6 +16,7 @@ const CREW_ROW_PORTRAIT_SIZE := Vector2(36, 42)
 
 func _ready() -> void:
 	_build()
+	NavBar.attach(self, NavGraph.Screen.POST_BATTLE)
 
 
 func _build() -> void:
