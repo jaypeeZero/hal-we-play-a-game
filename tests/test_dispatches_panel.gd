@@ -314,3 +314,23 @@ func test_refresh_hides_badge_when_all_seen():
 	panel.refresh(feed)
 	assert_false(panel._badge_label.visible,
 		"Unseen badge is hidden when all entries are seen")
+
+
+# ---- shared populate_feed (used by both the map panel and the News screen) ----
+
+func test_populate_feed_renders_a_row_per_dispatch():
+	var box := VBoxContainer.new()
+	add_child_autofree(box)
+	var feed := [_make_event("positive", [], false), _make_event("negative", [], false)]
+	DispatchesPanel.populate_feed(feed, box)
+	# Same star_date groups under one section header → header + two rows.
+	assert_true(box.get_child_count() >= 3,
+		"populate_feed renders a row per dispatch into the target box")
+
+
+func test_populate_feed_shows_empty_state_for_empty_feed():
+	var box := VBoxContainer.new()
+	add_child_autofree(box)
+	DispatchesPanel.populate_feed([], box)
+	assert_eq(box.get_child_count(), 1,
+		"populate_feed shows a single empty-state label when the feed is empty")

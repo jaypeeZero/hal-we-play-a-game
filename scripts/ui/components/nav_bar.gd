@@ -34,8 +34,12 @@ const TABS: Array = [
 	{"screen": NavGraph.Screen.NEWS,          "icon": "res://assets/icons/nav/news.svg",  "tip": "News"},
 ]
 
+const CREDITS_GLYPH := "₵"
+
 var _back_btn: Button
 var _tab_buttons: Array = []
+var _credits_label: Label
+var _shown_credits: int = -1
 
 
 ## Create and add a NavBar to `parent`, but only inside an active roguelike run.
@@ -64,6 +68,38 @@ func _ready() -> void:
 	if not tabs_enabled:
 		for btn in _tab_buttons:
 			btn.disabled = true
+	_refresh_credits()
+
+
+func _process(_delta: float) -> void:
+	"""Keep the credits readout in sync with the run's money."""
+	_refresh_credits()
+
+
+## Update the credits readout only when the value has changed.
+func _refresh_credits() -> void:
+	"""Refresh the credits label when RoguelikeRun.money changes."""
+	if _credits_label == null:
+		return
+	var money: int = RoguelikeRun.money
+	if money == _shown_credits:
+		return
+	_shown_credits = money
+	_credits_label.text = "%s %s" % [CREDITS_GLYPH, _with_commas(money)]
+
+
+## Format an integer with thousands separators (e.g. 12345 -> "12,345").
+static func _with_commas(n: int) -> String:
+	"""Return n as a string with comma thousands separators."""
+	var s: String = str(absi(n))
+	var out: String = ""
+	var count: int = 0
+	for i in range(s.length() - 1, -1, -1):
+		out = s[i] + out
+		count += 1
+		if count % 3 == 0 and i > 0:
+			out = "," + out
+	return ("-" + out) if n < 0 else out
 
 
 func _build_bar() -> void:
@@ -101,6 +137,16 @@ func _build_bar() -> void:
 		btn.pressed.connect(_on_tab_pressed.bind(tab["screen"]))
 		_tab_buttons.append(btn)
 		hbox.add_child(btn)
+
+	# Spacer pushes the credits readout to the right edge.
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(spacer)
+
+	_credits_label = UiKit.label("", UiKit.ACCENT, 14)
+	_credits_label.tooltip_text = "Credits on hand"
+	hbox.add_child(_credits_label)
 
 
 func _make_icon_button(icon_path: String, icon_size: Vector2, tip: String) -> Button:

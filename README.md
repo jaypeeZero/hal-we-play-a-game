@@ -159,11 +159,21 @@ Map, Crew Manager, News, Pre/Post-Battle) a consistent way to move around.
 Map; Fleet Manager is the floor — Back never goes past it). The `Nav`
 autoload is a thin shim that turns that graph into `change_scene_to_file`
 calls. `NavBar` (built in code, `NavBar.attach(parent, screen)`) renders the
-icon tabs + Back button; `attach` is **run-scoped** — it adds nothing unless
-a roguelike run is active, so title-menu/skirmish entries keep their own
-navigation. Tabs jump straight to a screen; Back walks up the fixed
-hierarchy. Adding a new area = one `NavGraph.Screen` value + a `SCENE_PATHS`/
-`PARENTS` row + one `NavBar.TABS` entry.
+icon tabs + Back button, plus a live **credits readout** (`RoguelikeRun.money`)
+on the right; `attach` is **run-scoped** — it adds nothing unless a roguelike
+run is active, so title-menu/skirmish entries keep their own navigation. Tabs
+jump straight to a screen; Back walks up the fixed hierarchy. Adding a new area
+= one `NavGraph.Screen` value + a `SCENE_PATHS`/`PARENTS` row + one
+`NavBar.TABS` entry.
+
+Screen specifics:
+- **News** (`NewsScreen`) renders the campaign dispatch feed with the *same*
+  shared renderer as the map's side panel (`DispatchesPanel.populate_feed`), so
+  the two never diverge.
+- **Crew** (`RunCrewScreen`) is a **read-only** view of the run's hired crew
+  (`RoguelikeRun.fielded_crew`); a card opens the shared read-only crew modal.
+  The editable global roster lives in the separate, title-menu-only
+  `crew_manager` screen.
 
 ### Key Classes
 

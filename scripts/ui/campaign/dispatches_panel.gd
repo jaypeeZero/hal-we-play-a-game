@@ -78,13 +78,24 @@ func _ready() -> void:
 ## Rebuild dispatch rows from the feed (newest first). Clears all previous
 ## rows before rebuilding.
 func refresh(feed: Array) -> void:
-	"""Rebuild all rows from `feed`; groups entries by star_date."""
-	for child in _rows_box.get_children():
+	"""Rebuild all rows from `feed` and update the unseen badge."""
+	populate_feed(feed, _rows_box)
+	var unseen: int = count_unseen(feed)
+	_update_unseen_badge(unseen)
+	_unseen_count = unseen
+
+
+## Rebuild dispatch rows into `rows_box` from `feed`, grouped by star date
+## (newest first). Shared by the map side-panel and the full News screen so
+## both render dispatches identically. Clears `rows_box` first; shows an
+## empty-state label when the feed is empty.
+static func populate_feed(feed: Array, rows_box: VBoxContainer) -> void:
+	"""Fill rows_box with grouped dispatch rows (or an empty-state label)."""
+	for child in rows_box.get_children():
 		child.queue_free()
 
 	if feed.is_empty():
-		_rows_box.add_child(UiKit.label("No dispatches yet.", UiKit.DIM))
-		_update_unseen_badge(0)
+		rows_box.add_child(UiKit.label("No dispatches yet.", UiKit.DIM))
 		return
 
 	# Group entries by star_date, preserving newest-first order.
@@ -100,16 +111,9 @@ func refresh(feed: Array) -> void:
 
 	# Render each group with a section header.
 	for sd in date_order:
-		var section := UiKit.section_title("Stardate %d" % sd)
-		_rows_box.add_child(section)
-
+		rows_box.add_child(UiKit.section_title("Stardate %d" % sd))
 		for entry in groups[sd]:
-			_rows_box.add_child(_build_row(entry))
-
-	# Count unseen entries.
-	var unseen: int = count_unseen(feed)
-	_update_unseen_badge(unseen)
-	_unseen_count = unseen
+			rows_box.add_child(build_row(entry))
 
 
 ## Mark every entry in the feed as seen and refresh the badge.
@@ -122,7 +126,7 @@ func mark_all_seen(feed: Array) -> void:
 
 
 ## Build a single dispatch row Control from a resolved event dict.
-func _build_row(entry: Dictionary) -> Control:
+static func build_row(entry: Dictionary) -> Control:
 	"""Build a card row for one event record."""
 	var polarity: String = str(entry.get("polarity", "neutral"))
 	var accent: Color = _polarity_color(polarity)
@@ -285,7 +289,7 @@ func _update_unseen_badge(count: int) -> void:
 		_badge_label.visible = false
 
 
-func _polarity_color(polarity: String) -> Color:
+static func _polarity_color(polarity: String) -> Color:
 	"""Return the UiKit colour for a polarity string."""
 	match polarity:
 		"positive": return UiKit.GOOD
@@ -293,7 +297,7 @@ func _polarity_color(polarity: String) -> Color:
 		_: return UiKit.DIM
 
 
-func _polarity_glyph(polarity: String) -> String:
+static func _polarity_glyph(polarity: String) -> String:
 	"""Return a short text glyph for a polarity string."""
 	match polarity:
 		"positive": return "+"

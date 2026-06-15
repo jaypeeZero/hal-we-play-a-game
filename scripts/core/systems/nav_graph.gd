@@ -17,7 +17,7 @@ enum Screen {
 const SCENE_PATHS: Dictionary = {
 	Screen.FLEET_MANAGER: "res://scenes/fleet_management.tscn",
 	Screen.MAP:           "res://scenes/campaign_map_3d.tscn",
-	Screen.CREW:          "res://scenes/crew_manager.tscn",
+	Screen.CREW:          "res://scenes/run_crew.tscn",
 	Screen.NEWS:          "res://scenes/news.tscn",
 	Screen.PRE_BATTLE:    "res://scenes/pre_battle.tscn",
 	Screen.POST_BATTLE:   "res://scenes/post_battle.tscn",

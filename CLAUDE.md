@@ -111,11 +111,18 @@ When working on this codebase:
 - `Nav` autoload is a thin scene-switch shim over `NavGraph` (`goto`/`back`)
 - `NavBar` is built in code, not a scene. Use `NavBar.attach(parent, screen,
   tabs_on, back_cb)` — it is RUN-SCOPED (adds nothing unless `RoguelikeRun.active`),
-  so title-menu/skirmish entries to Crew Manager / Pre-Battle keep their own back.
-  Attach it AFTER a screen's base UI so it draws on top; runtime modals added later
-  still cover it (you can't nav away mid-modal)
+  so title-menu/skirmish entries to Pre-Battle / the global roster editor keep
+  their own back. Attach it AFTER a screen's base UI so it draws on top; runtime
+  modals added later still cover it (you can't nav away mid-modal). The bar also
+  shows a live credits readout (`RoguelikeRun.money`) on the right
 - Tabs jump straight to a screen; Back walks the fixed parent. Adding an area =
   one `NavGraph.Screen` value + a `SCENE_PATHS`/`PARENTS` row + one `NavBar.TABS` entry
+- `NewsScreen` and the map's `DispatchesPanel` render the feed through ONE shared
+  static renderer (`DispatchesPanel.populate_feed`) — don't reimplement dispatch
+  rows; reuse it
+- The Crew tab is `RunCrewScreen`, a READ-ONLY view of `RoguelikeRun.fielded_crew`
+  (the run's hired crew). The editable global crew roster is the separate
+  `crew_manager` screen, reached only from the title menu
 
 **Event logging and monitoring:**
 - `BattleEventLogger` - Centralized event stream logger that emits standardized events for all battle interactions

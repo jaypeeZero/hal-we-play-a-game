@@ -165,6 +165,16 @@ func available_crew(role: int = -1) -> Array:
 	return available
 
 
+## Every crew member currently serving aboard the fleet, flattened across all
+## hulls. The read-only view of who has been hired/crewed this run.
+func fielded_crew() -> Array:
+	var crew: Array = []
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			crew.append(member)
+	return crew
+
+
 ## Find one run-roster entry by id; falls back to CrewRosterManager so
 ## legacy or empty-roster saves still resolve.
 func crew_entry_by_id(roster_id: String) -> Dictionary:
