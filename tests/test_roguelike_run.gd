@@ -749,18 +749,28 @@ func test_fielded_crew_is_empty_without_hulls():
 		"fielded_crew is empty when the fleet has no hulls")
 
 
-func test_assignment_of_reports_ship_and_position():
+func test_assignment_of_reports_ship_name_and_position():
 	RoguelikeRun.fleet_hulls = [
-		{"hull_id": "h1", "ship_type": "corvette",
+		{"hull_id": "hull_0", "ship_type": "corvette",
 			"crew": [{"crew_id": "c1", "role": CrewData.Role.PILOT}]},
 	]
 
 	var assignment: Dictionary = RoguelikeRun.assignment_of("c1")
 
-	assert_eq(str(assignment.get("ship_type")), "corvette",
-		"assignment_of reports the ship the crew member serves on")
+	assert_eq(str(assignment.get("ship_name")), "Corvette 1",
+		"assignment_of derives a ship name from type + hull number when unnamed")
 	assert_eq(int(assignment.get("role")), int(CrewData.Role.PILOT),
 		"assignment_of reports the serving position (role)")
+
+
+func test_assignment_of_uses_the_ships_explicit_name():
+	RoguelikeRun.fleet_hulls = [
+		{"hull_id": "hull_0", "ship_type": "corvette", "name": "Valiant",
+			"crew": [{"crew_id": "c1", "role": CrewData.Role.PILOT}]},
+	]
+
+	assert_eq(str(RoguelikeRun.assignment_of("c1").get("ship_name")), "Valiant",
+		"assignment_of reports the player-set ship name when one exists")
 
 
 func test_assignment_of_is_empty_when_not_aboard():

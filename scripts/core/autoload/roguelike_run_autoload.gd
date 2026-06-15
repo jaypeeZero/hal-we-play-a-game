@@ -175,15 +175,17 @@ func fielded_crew() -> Array:
 	return crew
 
 
-## The fleet assignment of crew member `crew_id`: {hull_id, ship_type, role}
-## when serving aboard a hull, or {} when not aboard any ship. `role` is the
-## serving-role int (the position held on that ship).
+## The fleet assignment of crew member `crew_id`:
+## {hull_id, ship_name, ship_type, role} when serving aboard a hull, or {} when
+## not aboard any ship. `ship_name` is the player-facing ship name (renameable);
+## `role` is the serving-role int (the position held on that ship).
 func assignment_of(crew_id: String) -> Dictionary:
 	for hull in fleet_hulls:
 		for member in hull.get("crew", []):
 			if str(member.get("crew_id", "")) == crew_id:
 				return {
 					"hull_id": str(hull.get("hull_id", "")),
+					"ship_name": ShipData.hull_display_name(hull),
 					"ship_type": str(hull.get("ship_type", "")),
 					"role": int(member.get("role", -1)),
 				}

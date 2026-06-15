@@ -163,7 +163,7 @@ func _update_assignment_label(entry: Dictionary) -> void:
 	if assignment.is_empty():
 		_assignment_label.text = "Status: not assigned to a ship"
 	else:
-		var ship: String = str(assignment.get("ship_type", "")).capitalize()
+		var ship: String = str(assignment.get("ship_name", ""))
 		var position: String = CrewData.role_to_name(int(assignment.get("role", -1)))
 		_assignment_label.text = "Aboard %s — %s" % [ship, position]
 	_assignment_label.visible = true
