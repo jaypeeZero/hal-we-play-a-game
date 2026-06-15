@@ -353,83 +353,29 @@ func test_no_damage_from_slow_collision():
 
 	assert_eq(damage, 0.0, "Very slow collisions should not deal damage")
 
-func test_ship_ship_collision_applies_momentum_to_both():
+func test_overlapping_ships_pass_through_each_other():
+	# Ship-ship collisions are not physically resolved: ships keep their
+	# velocity and position even when fully overlapping (the AI steers to
+	# avoid each other instead).
 	var ship1 = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
 	ship1.velocity = Vector2(100, 0)  # Moving right
 	ship1.stats.mass = 50.0
 	ship1.stats.size = 15.0
 	ship1.collision_radius = 15.0
 
-	var ship2 = TestFactories.make_fighter("ship_2", Vector2(130, 100), 1)
+	var ship2 = TestFactories.make_fighter("ship_2", Vector2(110, 100), 1)  # Overlapping
 	ship2.velocity = Vector2(-50, 0)  # Moving left (head-on)
 	ship2.stats.mass = 50.0
 	ship2.stats.size = 15.0
 	ship2.collision_radius = 15.0
 
-	var result = CollisionSystem.check_and_resolve_ship_ship_collision(ship1, ship2)
+	var result = CollisionSystem.process_physical_collisions([ship1, ship2], [])
 
-	assert_false(result.is_empty(), "Should detect collision")
-	# Both ships should have their velocities changed
-	assert_ne(result.ship1.velocity, ship1.velocity, "Ship 1 velocity should change")
-	assert_ne(result.ship2.velocity, ship2.velocity, "Ship 2 velocity should change")
-
-func test_heavier_ship_affected_less_by_collision():
-	var light_ship = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
-	light_ship.velocity = Vector2(100, 0)
-	light_ship.stats.mass = 50.0
-	light_ship.stats.size = 15.0
-	light_ship.collision_radius = 15.0
-
-	var heavy_ship = TestFactories.make_fighter("ship_2", Vector2(130, 100), 1)
-	heavy_ship.velocity = Vector2.ZERO  # Stationary
-	heavy_ship.stats.mass = 200.0  # 4x heavier
-	heavy_ship.stats.size = 30.0
-	heavy_ship.collision_radius = 30.0
-
-	var result = CollisionSystem.check_and_resolve_ship_ship_collision(light_ship, heavy_ship)
-
-	if not result.is_empty():
-		var light_velocity_change = (result.ship1.velocity - light_ship.velocity).length()
-		var heavy_velocity_change = (result.ship2.velocity - heavy_ship.velocity).length()
-
-		# Lighter ship should experience more velocity change (conservation of momentum)
-		assert_gt(light_velocity_change, heavy_velocity_change, "Lighter ship should be affected more")
-
-func test_collision_separates_overlapping_ships():
-	var ship1 = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
-	ship1.velocity = Vector2(50, 0)
-	ship1.stats.size = 15.0
-	ship1.collision_radius = 15.0
-
-	var ship2 = TestFactories.make_fighter("ship_2", Vector2(110, 100), 1)  # Overlapping
-	ship2.velocity = Vector2.ZERO
-	ship2.stats.size = 15.0
-	ship2.collision_radius = 15.0
-
-	var initial_distance = ship1.position.distance_to(ship2.position)
-
-	var result = CollisionSystem.check_and_resolve_ship_ship_collision(ship1, ship2)
-
-	if not result.is_empty():
-		var final_distance = result.ship1.position.distance_to(result.ship2.position)
-		var min_distance = ship1.collision_radius + ship2.collision_radius
-
-		assert_true(final_distance >= min_distance, "Ships should be separated after collision")
-
-func test_moving_apart_ships_not_colliding():
-	var ship1 = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)
-	ship1.velocity = Vector2(-100, 0)  # Moving left
-	ship1.stats.size = 15.0
-	ship1.collision_radius = 15.0
-
-	var ship2 = TestFactories.make_fighter("ship_2", Vector2(115, 100), 1)
-	ship2.velocity = Vector2(100, 0)  # Moving right (away)
-	ship2.stats.size = 15.0
-	ship2.collision_radius = 15.0
-
-	var result = CollisionSystem.check_and_resolve_ship_ship_collision(ship1, ship2)
-
-	assert_true(result.is_empty(), "Ships moving apart should not trigger collision response")
+	assert_eq(result.ships[0].velocity, ship1.velocity, "Ship 1 velocity should be unchanged")
+	assert_eq(result.ships[1].velocity, ship2.velocity, "Ship 2 velocity should be unchanged")
+	assert_eq(result.ships[0].position, ship1.position, "Ship 1 position should be unchanged")
+	assert_eq(result.ships[1].position, ship2.position, "Ship 2 position should be unchanged")
+	assert_eq(result.collision_events.size(), 0, "No ship-ship collision events should be emitted")
 
 func test_process_physical_collisions_handles_multiple_ships():
 	var ship1 = TestFactories.make_fighter("ship_1", Vector2(100, 100), 0)

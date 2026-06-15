@@ -2048,17 +2048,33 @@ const BLENDED_MOVE_MIN_LENGTH := 0.01
 ##
 ## This is the live steering path for ships carrying a "tactical" order.
 ## Multiplier on combined_radii that defines the zone inside which separation
-## becomes active. 3.0 means a ship reacts when friendlies are within 3× the
-## summed hull sizes — roughly one ship-length of breathing room.
-const SEPARATION_RADIUS_FACTOR    := 3.0
+## becomes active. A ship reacts when friendlies are within this many × the
+## summed hull sizes. Since ship-ship collisions are not physically resolved,
+## separation steering is the ONLY thing keeping hulls apart, so the zone is
+## wide enough to give a ship room to arrest its closing velocity by thrust
+## alone before hulls would clip.
+const SEPARATION_RADIUS_FACTOR    := 6.0
 
 ## Base weight of the separation goal in the blend.  At the edge of the
 ## separation zone the goal is effectively zero; it ramps steeply to
-## SEPARATION_WEIGHT at contact (inverse-square curve).  Set high enough
-## that a single near-contact neighbor dominates a full formation+pursue
-## stack (0.7 + 0.8 = 1.5), but the curve fades quickly so ships can still
-## close to normal formation spacing without resistance.
-const SEPARATION_WEIGHT           := 5.0
+## SEPARATION_WEIGHT at contact (inverse-square curve).  With no collision
+## physics as a backstop, this must dominate a full formation+pursue stack
+## (0.7 + 0.8 = 1.5) well before contact so converging ships peel apart
+## under thrust instead of interpenetrating.
+const SEPARATION_WEIGHT           := 10.0
+
+## Velocity damping for separation. The position-only push is an undamped
+## spring: a ship accelerates into the gap, overshoots, and oscillates
+## through its neighbour. Without collision physics to absorb that, we add a
+## term proportional to the closing speed so the push brakes relative motion
+## (a damped spring), letting crowded ships ease apart instead of ping-ponging.
+const SEPARATION_DAMPING          := 0.22
+
+## How strongly the separation push along the target-bearing axis modulates
+## close-range throttle. Lets ships stacked in front of / behind each other on
+## the run-in separate via throttle, the only axis available once they face the
+## target (lateral thrust handles the perpendicular axis).
+const SEPARATION_THROTTLE_FACTOR  := 0.22
 
 ## Detection lookahead distance for obstacle avoidance in blended mode.
 ## Ships start reacting to obstacles within this many pixels of their centre.
@@ -2136,6 +2152,7 @@ static func calculate_blended_control(
 	var goal_separation: Vector2 = Vector2.ZERO
 	var separation_effective_weight: float = 1.0
 	var my_col_radius: float = ship_data.get("collision_radius", 15.0)
+	var my_vel: Vector2 = ship_data.get("velocity", Vector2.ZERO)
 	# Track the closest neighbor and how deep we are inside its safety margin
 	# so we can suppress convergence goals that would pull us closer.
 	var min_neighbor_dist: float = INF
@@ -2153,9 +2170,16 @@ static func calculate_blended_control(
 			min_neighbor_combined_radii = combined_radii
 		if dist < sep_radius and dist > BLENDED_MOVE_MIN_LENGTH:
 			# t = 0 at zone edge, 1 at contact. Squared gives inverse-square curve.
+			var away: Vector2 = -to_other.normalized()
 			var t: float = 1.0 - (dist / sep_radius)
 			var strength: float = t * t * SEPARATION_WEIGHT
-			goal_separation -= to_other.normalized() * strength
+			goal_separation += away * strength
+			# Damping: brake the closing velocity so the push eases ships apart
+			# rather than springing them through each other (no physics backstop).
+			var rel_vel: Vector2 = my_vel - other.get("velocity", Vector2.ZERO)
+			var closing: float = -rel_vel.dot(away)  # >0 when closing on this neighbor
+			if closing > 0.0:
+				goal_separation += away * (closing * SEPARATION_DAMPING * t)
 	# No normalize: accumulated magnitude is the influence signal.
 
 	# Convergence-goal suppression: when a neighbor is inside the SEPARATION zone
@@ -2290,7 +2314,6 @@ static func calculate_blended_control(
 		# "auto" close-range: face the target, use lateral thrust for positioning.
 		var to_target: Vector2 = target.position - my_pos
 		desired_heading = direction_to_heading(to_target.normalized())
-		throttle = BLENDED_COMBAT_THROTTLE
 
 		# Project move direction onto the lateral axis (perpendicular to facing).
 		var facing: Vector2 = get_visual_forward(desired_heading)
@@ -2298,10 +2321,21 @@ static func calculate_blended_control(
 		var lateral_component: float = move.dot(right)
 		lateral_thrust = clampf(lateral_component, -1.0, 1.0)
 
+		# Throttle is the combat press, modulated by separation along the facing
+		# (bearing) axis. At close range lateral thrust can only separate ships
+		# side-to-side; ships stacked along the bearing line must separate via
+		# throttle. A friendly dead ahead (negative forward push) backs us off;
+		# one behind (positive) pulls us ahead, so the column strings out instead
+		# of piling onto the same point in front of the target.
+		var fwd_sep: float = goal_separation.dot(facing)
+		throttle = clampf(BLENDED_COMBAT_THROTTLE + fwd_sep * SEPARATION_THROTTLE_FACTOR, 0.0, 1.0)
+
 		# Brake if inside preferred_range — keep_range is pushing us out but we
-		# overshot; the physical brake stops the inward drift.
+		# overshot; the physical brake stops the inward drift. Skip the brake
+		# when separation is pushing us forward (a friendly behind) so we can
+		# still pull ahead to clear them.
 		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
-		if has_target and dist_to_target < preferred_range - deadband:
+		if has_target and dist_to_target < preferred_range - deadband and fwd_sep <= 0.0:
 			is_braking = true
 			throttle = 0.0
 

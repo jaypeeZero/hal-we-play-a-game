@@ -250,17 +250,16 @@ func _process(delta: float) -> void:
 	if ENABLE_CREW_AI:
 		_check_squadron_leadership_succession()
 
-	# 5a. PHYSICAL COLLISION SYSTEM - Handle ship-ship and ship-obstacle collisions
+	# 5a. PHYSICAL COLLISION SYSTEM - Handle ship-obstacle collisions
+	# (ship-ship collisions are not physically resolved; ships pass through
+	# each other while the AI steers to avoid them)
 	var physics_collision_result = CollisionSystem.process_physical_collisions(_ships, _obstacles)
 	_ships = physics_collision_result.ships
 	_obstacles = physics_collision_result.obstacles
 
 	# Spawn visual effects from physical collisions
 	for collision_event in physics_collision_result.collision_events:
-		# Get damage amount (ship-obstacle has 'damage', ship-ship has 'damage1' and 'damage2')
 		var damage = collision_event.get("damage", 0.0)
-		if damage == 0.0:  # Ship-ship collision
-			damage = max(collision_event.get("damage1", 0.0), collision_event.get("damage2", 0.0))
 
 		if damage > 5.0:  # Only show effect for significant impacts
 			var effect = VisualEffectSystem.create_effect(
