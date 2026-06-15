@@ -1,0 +1,17 @@
+{
+	"track_id": "nebula_circuit",
+	"name": "Nebula Circuit",
+	"laps": 3,
+	"arena_size": [5000, 5000],
+	"start": { "position": [700, 2500], "heading": 0.0, "grid_spacing": [120, 90] },
+	"markers": [
+		{ "id": 0, "position": [1200, 800],  "gate_normal": [0, 1],  "gate_width": 400 },
+		{ "id": 1, "position": [2500, 500],  "gate_normal": [0, 1],  "gate_width": 400 },
+		{ "id": 2, "position": [3800, 900],  "gate_normal": [-1, 0], "gate_width": 400 },
+		{ "id": 3, "position": [4200, 2100], "gate_normal": [0, -1], "gate_width": 400 },
+		{ "id": 4, "position": [3500, 3200], "gate_normal": [1, 0],  "gate_width": 400 },
+		{ "id": 5, "position": [2000, 3800], "gate_normal": [1, 0],  "gate_width": 400 },
+		{ "id": 6, "position": [900, 3100],  "gate_normal": [0, -1], "gate_width": 400 }
+	],
+	"checkpoint_radius": 200
+}

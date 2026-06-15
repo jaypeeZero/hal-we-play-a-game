@@ -296,17 +296,36 @@ func _open_manage_crew() -> void:
 		_update_fleet_status())
 
 
-## Open the R&R overlay for a rest node, completing the node visit once the
-## player closes it. The 3× repair multiplier already ran via apply_jump_repairs
-## (called above in _travel_to_node), so this screen is purely interactive
-## crew/fleet management on top of those passive repairs.
+## Open the R&R overlay for a rest node. Presents a menu: "Manage Fleet"
+## (existing crew management) or "Go to the Races" (betting overlay).
+## The 3× repair multiplier already ran via apply_jump_repairs before this.
 func _open_rest(node: Dictionary, repair_summary: Dictionary) -> void:
 	_fleet_panel.visible = false
 	_destination_panel.dismiss()
-	var screen := FleetCommandScreen.open_overlay(self)
-	screen.done.connect(func() -> void:
-		_fleet_panel.visible = true
-		_complete_node_visit(node, repair_summary))
+	_open_rest_menu(node, repair_summary)
+
+
+## Show the R&R activity choice: fleet management or racing.
+func _open_rest_menu(node: Dictionary, repair_summary: Dictionary) -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "R&R — What will you do?"
+	dialog.ok_button_text = "Manage Fleet"
+	dialog.cancel_button_text = "Go to the Races"
+	add_child(dialog)
+	dialog.confirmed.connect(func() -> void:
+		dialog.queue_free()
+		var screen := FleetCommandScreen.open_overlay(self)
+		screen.done.connect(func() -> void:
+			_fleet_panel.visible = true
+			_complete_node_visit(node, repair_summary)))
+	dialog.canceled.connect(func() -> void:
+		dialog.queue_free()
+		var betting := RaceBettingScreen.open_overlay(self)
+		betting.closed.connect(func() -> void:
+			betting.queue_free()
+			_fleet_panel.visible = true
+			_complete_node_visit(node, repair_summary)))
+	dialog.popup_centered()
 
 
 ## Open the shop overlay for a shop node, completing the node visit once the

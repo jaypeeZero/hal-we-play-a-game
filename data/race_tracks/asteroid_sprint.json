@@ -1,0 +1,14 @@
+{
+	"track_id": "asteroid_sprint",
+	"name": "Asteroid Sprint",
+	"laps": 3,
+	"arena_size": [6000, 4000],
+	"start": { "position": [800, 2000], "heading": 0.0, "grid_spacing": [120, 90] },
+	"markers": [
+		{ "id": 0, "position": [1500, 600],  "gate_normal": [1, 0], "gate_width": 600 },
+		{ "id": 1, "position": [4800, 900],  "gate_normal": [0, 1], "gate_width": 600 },
+		{ "id": 2, "position": [5000, 3200], "gate_normal": [1, 0], "gate_width": 600 },
+		{ "id": 3, "position": [1400, 3300], "gate_normal": [0, 1], "gate_width": 600 }
+	],
+	"checkpoint_radius": 300
+}
