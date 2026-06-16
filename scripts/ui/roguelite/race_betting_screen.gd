@@ -5,7 +5,6 @@ extends OverlayScreen
 ## Mirrors shop_screen.gd overlay pattern (build_chrome → setup → emit_closed).
 ## Money mutations and save use the exact same path as shop/battle.
 
-const RACE_TRACKS := ["asteroid_sprint", "nebula_circuit"]
 const NPC_SHIP_TYPES := ["fighter", "heavy_fighter", "corvette"]
 const NPC_SKILL_MIN := 0.25
 const NPC_SKILL_MAX := 0.85
@@ -308,8 +307,9 @@ func _roll_new_race() -> void:
 	rng.randomize()
 	_race_seed = rng.randi()
 
-	# Pick a track.
-	var track_id: String = RACE_TRACKS[rng.randi() % RACE_TRACKS.size()]
+	# Pick a random track from all available layouts.
+	var tracks: Array = RaceTrack.list_tracks()
+	var track_id: String = tracks[rng.randi() % tracks.size()].id if not tracks.is_empty() else "asteroid_sprint"
 	_track = RaceTrack.load_track(track_id)
 
 	# Determine field size.

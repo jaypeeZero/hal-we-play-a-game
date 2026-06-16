@@ -29,6 +29,25 @@ static func load_track(track_id: String) -> Dictionary:
 	return parsed
 
 
+## List available tracks as [{id, name}], sorted by name. Scans the track dir.
+static func list_tracks() -> Array:
+	"""Enumerate every track JSON under TRACKS_PATH for track-picker UIs."""
+	var out: Array = []
+	var dir := DirAccess.open(TRACKS_PATH)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var fname := dir.get_next()
+	while fname != "":
+		if fname.ends_with(".json"):
+			var id := fname.get_basename()
+			out.append({"id": id, "name": load_track(id).get("name", id)})
+		fname = dir.get_next()
+	dir.list_dir_end()
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.name < b.name)
+	return out
+
+
 ## Number of gate markers on this track.
 static func marker_count(track: Dictionary) -> int:
 	return track.get("markers", []).size()

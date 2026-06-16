@@ -1,0 +1,163 @@
+{
+  "track_id": "cylinder",
+  "name": "Cylinder",
+  "laps": 3,
+  "start": {
+    "position": [
+      1031.9,
+      2541.2
+    ],
+    "heading": 1.8737,
+    "grid_spacing": [
+      150,
+      120
+    ]
+  },
+  "markers": [
+    {
+      "id": 0,
+      "position": [
+        1700,
+        2750
+      ],
+      "gate_normal": [
+        1.0,
+        0.0
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 1,
+      "position": [
+        2900,
+        2750
+      ],
+      "gate_normal": [
+        1.0,
+        0.0
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 2,
+      "position": [
+        4100,
+        2750
+      ],
+      "gate_normal": [
+        0.9545,
+        -0.2983
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 3,
+      "position": [
+        4900,
+        2500
+      ],
+      "gate_normal": [
+        0.5145,
+        -0.8575
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 4,
+      "position": [
+        5200,
+        2000
+      ],
+      "gate_normal": [
+        -0.5145,
+        -0.8575
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 5,
+      "position": [
+        4900,
+        1500
+      ],
+      "gate_normal": [
+        -0.9545,
+        -0.2983
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 6,
+      "position": [
+        4100,
+        1250
+      ],
+      "gate_normal": [
+        -1.0,
+        0.0
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 7,
+      "position": [
+        2900,
+        1250
+      ],
+      "gate_normal": [
+        -1.0,
+        0.0
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 8,
+      "position": [
+        1700,
+        1250
+      ],
+      "gate_normal": [
+        -0.9545,
+        0.2983
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 9,
+      "position": [
+        900,
+        1500
+      ],
+      "gate_normal": [
+        -0.5145,
+        0.8575
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 10,
+      "position": [
+        600,
+        2000
+      ],
+      "gate_normal": [
+        0.5145,
+        0.8575
+      ],
+      "gate_width": 650.0
+    },
+    {
+      "id": 11,
+      "position": [
+        900,
+        2500
+      ],
+      "gate_normal": [
+        0.9545,
+        0.2983
+      ],
+      "gate_width": 650.0
+    }
+  ],
+  "checkpoint_radius": 280.0
+}
