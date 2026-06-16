@@ -165,6 +165,33 @@ func available_crew(role: int = -1) -> Array:
 	return available
 
 
+## Every crew member currently serving aboard the fleet, flattened across all
+## hulls. The read-only view of who has been hired/crewed this run.
+func fielded_crew() -> Array:
+	var crew: Array = []
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			crew.append(member)
+	return crew
+
+
+## The fleet assignment of crew member `crew_id`:
+## {hull_id, ship_name, ship_type, role} when serving aboard a hull, or {} when
+## not aboard any ship. `ship_name` is the player-facing ship name (renameable);
+## `role` is the serving-role int (the position held on that ship).
+func assignment_of(crew_id: String) -> Dictionary:
+	for hull in fleet_hulls:
+		for member in hull.get("crew", []):
+			if str(member.get("crew_id", "")) == crew_id:
+				return {
+					"hull_id": str(hull.get("hull_id", "")),
+					"ship_name": ShipData.hull_display_name(hull),
+					"ship_type": str(hull.get("ship_type", "")),
+					"role": int(member.get("role", -1)),
+				}
+	return {}
+
+
 ## Find one run-roster entry by id; falls back to CrewRosterManager so
 ## legacy or empty-roster saves still resolve.
 func crew_entry_by_id(roster_id: String) -> Dictionary:

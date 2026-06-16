@@ -19,10 +19,11 @@ func _on_edit_fleets_pressed() -> void:
 
 
 func _on_roguelite_pressed() -> void:
-	# Entering Roguelike mode starts the run, so crew and doctrine exist for
-	# the Edit Fleet / Fleet Management screens before the first battle.
+	# Entering Roguelike mode starts the run (fleet, crew, doctrine, campaign)
+	# and drops the player on the Campaign Map — the roguelike home. Fleet and
+	# crew are managed from there via the nav bar's Fleet Command / Crew tabs.
 	RoguelikeRun.start_run(FleetDataManager.load_fleet(0))
-	get_tree().change_scene_to_file("res://scenes/fleet_management.tscn")
+	get_tree().change_scene_to_file("res://scenes/campaign_map_3d.tscn")
 
 
 func _on_continue_pressed() -> void:

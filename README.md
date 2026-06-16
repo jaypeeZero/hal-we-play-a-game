@@ -150,6 +150,37 @@ and they issue posture (withdraw / hold / press), formation, and
 focus-fire orders that are absorbed into subordinates' blends rather
 than forcing discrete moves.
 
+### Roguelike meta-layer navigation
+
+A persistent top nav-bar gives every roguelike meta screen (Map, Fleet
+Command, Crew Manager, News, Pre/Post-Battle) a consistent way to move around.
+`NavGraph` (pure, `RefCounted`) holds the screen enum, scene paths and a
+**fixed Back hierarchy** (Fleet Command / Crew / News / Pre/Post-Battle → Map;
+the Campaign Map is the home/floor — Back never goes past it, and a new run
+starts there). The `Nav` autoload is a thin shim that turns that graph into
+`change_scene_to_file` calls. `NavBar` (built in code, `NavBar.attach(parent, screen)`) renders the
+icon tabs + Back button, plus a live **credits readout** (`RoguelikeRun.money`)
+on the right; `attach` is **run-scoped** — it adds nothing unless a roguelike
+run is active, so title-menu/skirmish entries keep their own navigation. Tabs
+jump straight to a screen; Back walks up the fixed hierarchy. Adding a new area
+= one `NavGraph.Screen` value + a `SCENE_PATHS`/`PARENTS` row + one
+`NavBar.TABS` entry.
+
+Screen specifics:
+- **Fleet Command** (the `fleet` tab) is the `FleetCommandScreen` fleet/crew/
+  tactics editor, hosted full-screen by `FleetCommandHost` in "done" mode over
+  the active run; Done or Back returns to the Map. (The old `fleet_management`
+  pre-launch hub is gone — its job is now the Map + this tab.)
+- **News** (`NewsScreen`) renders the campaign dispatch feed with the *same*
+  shared renderer as the map's side panel (`DispatchesPanel.populate_feed`), so
+  the two never diverge.
+- **Crew** is the shared `crew_manager` screen, which has two modes chosen by
+  `RoguelikeRun.active`: in a run (nav Crew tab) it is a **read-only** view of
+  the run's hired crew (`RoguelikeRun.fielded_crew`) that also reports each
+  selected member's ship assignment (which ship + position, via
+  `RoguelikeRun.assignment_of`); standalone from the title menu it stays the
+  editable global-roster editor.
+
 ### Key Classes
 
 #### Data Layer (RefCounted - Pure Data)

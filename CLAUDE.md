@@ -103,6 +103,31 @@ When working on this codebase:
 - Focus-fire: a designated target gets a targeting-weight boost so a wing concentrates
   fire without forcing every ship onto it
 
+**Roguelike meta-layer navigation:**
+- `NavGraph` (pure `RefCounted`) owns the screen enum, scene paths, and the
+  FIXED Back hierarchy (Fleet Command/Crew/News/Pre/Post-Battle→Map; the Campaign
+  Map is the home/floor — Back never goes past it, and a new run starts there).
+  All routing logic is here and unit-tested (`tests/test_nav_graph.gd`)
+- `Nav` autoload is a thin scene-switch shim over `NavGraph` (`goto`/`back`)
+- `NavBar` is built in code, not a scene. Use `NavBar.attach(parent, screen,
+  tabs_on, back_cb)` — it is RUN-SCOPED (adds nothing unless `RoguelikeRun.active`),
+  so title-menu/skirmish entries to Pre-Battle / the global roster editor keep
+  their own back. Attach it AFTER a screen's base UI so it draws on top; runtime
+  modals added later still cover it (you can't nav away mid-modal). The bar also
+  shows a live credits readout (`RoguelikeRun.money`) on the right
+- Tabs jump straight to a screen; Back walks the fixed parent. Adding an area =
+  one `NavGraph.Screen` value + a `SCENE_PATHS`/`PARENTS` row + one `NavBar.TABS` entry
+- `NewsScreen` and the map's `DispatchesPanel` render the feed through ONE shared
+  static renderer (`DispatchesPanel.populate_feed`) — don't reimplement dispatch
+  rows; reuse it
+- `crew_manager` is a shared dual-mode screen keyed on `RoguelikeRun.active`:
+  in-run (nav Crew tab) it is READ-ONLY over `RoguelikeRun.fielded_crew` and shows
+  each selected member's ship assignment (`RoguelikeRun.assignment_of`); standalone
+  from the title menu it edits the global crew-roster template
+- The Fleet Command tab is `FleetCommandHost` — a thin full-screen host that wraps
+  the `FleetCommandScreen` overlay ("done" mode) + nav bar; Done/Back return to the
+  Map. The old `fleet_management` pre-launch hub is deleted
+
 **Event logging and monitoring:**
 - `BattleEventLogger` - Centralized event stream logger that emits standardized events for all battle interactions
 - Event history tracking available for debugging, replay, and analysis

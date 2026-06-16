@@ -1,11 +1,17 @@
 extends OverlayScreen
 
-## Crew Manager: browse and edit the crew roster that the roguelite hiring
-## pool draws from. The list shows every entry in the active roster; the
-## selected entry is edited in place through an editable CrewMemberView.
-## Save writes the whole roster to user://crew_roster.json (the local
-## override); Reset deletes the override so the shipped roster applies again.
-## Lifecycle: standalone scene — Back calls change_scene_to_file.
+## Crew Manager: a master-detail crew browser with two modes.
+##
+## EDIT mode (standalone, from the title menu — no active run): edits the global
+## crew roster template the roguelite hiring pool draws from. Save writes the
+## whole roster to user://crew_roster.json; Reset deletes that override.
+##
+## READ-ONLY mode (inside a run — reached via the nav bar Crew tab): shows the
+## run's hired crew (RoguelikeRun.fielded_crew) with no editing, and reports each
+## selected member's ship assignment (which ship + position, or unassigned).
+##
+## The mode is chosen by RoguelikeRun.active — the only way each entry point is
+## reached — so no scene parameter is needed.
 
 const LIST_WIDTH := 320
 const CARD_PORTRAIT_SIZE := Vector2(72, 84)
@@ -13,17 +19,22 @@ const CARD_MIN_SIZE := Vector2(140, 0)
 const GALLERY_COLUMNS := 2
 const GALLERY_GAP := 8
 
+var _read_only := false
 var _entries: Array = []
 var _selected_index := -1
 var _dirty := false
 var _gallery: GridContainer
 var _detail: CrewMemberView
 var _subtitle: Label
+var _assignment_label: Label
 var _cards: Array = []
+var _nav_bar: NavBar
 
 
 func _ready() -> void:
-	_entries = CrewRosterManager.load_roster()
+	"""Build the Crew Manager screen in edit or read-only mode."""
+	_read_only = RoguelikeRun.active
+	_entries = _load_entries()
 	build_chrome()
 	var topbar := _build_topbar()
 	var body_node := _build_body()
@@ -32,6 +43,22 @@ func _ready() -> void:
 	_rebuild_list()
 	if not _entries.is_empty():
 		_select(0)
+	# In a run the nav bar carries Back (read-only mode); standalone the footer
+	# Back is used instead. attach() is a no-op when no run is active.
+	_nav_bar = NavBar.attach(self, NavGraph.Screen.CREW, true, _on_back)
+
+
+## Load the entries to display, in roster-entry shape (id, callsign, roles,
+## skills). Edit mode pulls the global roster; read-only mode pulls the run's
+## hired crew converted from hull-crew shape via CrewData.entry_from_crew.
+func _load_entries() -> Array:
+	"""Return roster-shape entries for the current mode."""
+	if not _read_only:
+		return CrewRosterManager.load_roster()
+	var entries: Array = []
+	for member in RoguelikeRun.fielded_crew():
+		entries.append(CrewData.entry_from_crew(member))
+	return entries
 
 
 # UI CONSTRUCTION
@@ -63,15 +90,32 @@ func _build_body() -> Control:
 	scroll.add_child(_gallery)
 	body_node.add_child(scroll)
 
+	var detail_col := VBoxContainer.new()
+	detail_col.add_theme_constant_override("separation", SECTION_GAP)
+	detail_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	# Ship-assignment status, shown only in read-only (in-run) mode.
+	_assignment_label = UiKit.label("", UiKit.ACCENT, 12)
+	_assignment_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_assignment_label.visible = false
+	detail_col.add_child(_assignment_label)
+
 	_detail = CrewMemberView.new()
 	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_detail.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_detail.entry_changed.connect(_on_entry_changed)
-	body_node.add_child(_detail)
+	detail_col.add_child(_detail)
+
+	body_node.add_child(detail_col)
 	return body_node
 
 
 func _build_footer_buttons() -> void:
+	# Read-only mode has no footer: the nav bar provides Back and there is
+	# nothing to save or reset.
+	if _read_only:
+		return
+
 	var back := UiKit.style_button(_make_button("Back"), "ghost")
 	back.pressed.connect(_on_back)
 	footer.add_child(back)
@@ -104,9 +148,25 @@ func _select(index: int) -> void:
 	if _selected_index == index:
 		return
 	_selected_index = index
-	_detail.setup(_entries[index], true)
+	_detail.setup(_entries[index], not _read_only)
+	if _read_only:
+		_update_assignment_label(_entries[index])
 	for i in _cards.size():
 		(_cards[i] as _CrewCard).set_selected(i == index)
+
+
+## Show which ship the selected crew member serves on and in what position,
+## or that they are not aboard any ship. Read-only mode only.
+func _update_assignment_label(entry: Dictionary) -> void:
+	"""Set the assignment status line for the selected crew member."""
+	var assignment: Dictionary = RoguelikeRun.assignment_of(str(entry.get("id", "")))
+	if assignment.is_empty():
+		_assignment_label.text = "Status: not assigned to a ship"
+	else:
+		var ship: String = str(assignment.get("ship_name", ""))
+		var position: String = CrewData.role_to_name(int(assignment.get("role", -1)))
+		_assignment_label.text = "Aboard %s — %s" % [ship, position]
+	_assignment_label.visible = true
 
 
 func _on_entry_changed(entry: Dictionary) -> void:
@@ -136,12 +196,22 @@ func _on_reset() -> void:
 
 
 func _on_back() -> void:
+	if _read_only:
+		# In-run view: Back follows the nav hierarchy (→ Map). Nothing to save.
+		Nav.back(NavGraph.Screen.CREW)
+		return
+	# Auto-save when dirty so edits are never silently lost on navigation.
+	if _dirty:
+		_on_save()
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 
 # HELPERS
 
 func _refresh_subtitle() -> void:
+	if _read_only:
+		_subtitle.text = "%d crew aboard the fleet" % _entries.size()
+		return
 	var source := "custom roster" if CrewRosterManager.has_user_override() else "default roster"
 	_subtitle.text = "%d crew · %s%s" % [
 		_entries.size(), source, " · unsaved changes" if _dirty else ""]

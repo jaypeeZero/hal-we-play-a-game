@@ -9,6 +9,27 @@ static var _templates: Dictionary = {}
 
 const TEMPLATES_PATH = "res://data/ship_templates/"
 
+## Human-readable name for a fleet hull. Uses the hull's explicit `name` when
+## the player has set one; otherwise derives a stable label from the ship type
+## and hull number, e.g. hull_0 fighter -> "Fighter 1" (1-based).
+static func hull_display_name(hull: Dictionary) -> String:
+	"""Return the player-set ship name, or a type+number fallback."""
+	var explicit: String = str(hull.get("name", "")).strip_edges()
+	if not explicit.is_empty():
+		return explicit
+	var type_label: String = str(hull.get("ship_type", "ship")).replace("_", " ").capitalize()
+	var hull_id: String = str(hull.get("hull_id", ""))
+	var digits: String = ""
+	for i in range(hull_id.length() - 1, -1, -1):
+		if hull_id[i] >= "0" and hull_id[i] <= "9":
+			digits = hull_id[i] + digits
+		elif not digits.is_empty():
+			break
+	if digits.is_empty():
+		return type_label
+	return "%s %d" % [type_label, int(digits) + 1]
+
+
 ## Get ship template by type (loads from JSON)
 static func get_ship_template(ship_type: String) -> Dictionary:
 	# Load templates if not already loaded

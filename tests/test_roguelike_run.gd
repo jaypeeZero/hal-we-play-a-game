@@ -719,3 +719,63 @@ func test_reconcile_keeps_callsigns_unique_after_adding():
 			unique.append(c)
 	assert_eq(unique.size(), callsigns.size(),
 		"Crew added by a reconcile must not reuse existing callsigns")
+
+
+# ============================================================================
+# FIELDED CREW (read-only run roster view)
+# ============================================================================
+
+func test_fielded_crew_flattens_every_hulls_crew():
+	RoguelikeRun.fleet_hulls = [
+		{"hull_id": "h1", "crew": [{"callsign": "A"}, {"callsign": "B"}]},
+		{"hull_id": "h2", "crew": [{"callsign": "C"}]},
+		{"hull_id": "h3", "crew": []},
+	]
+
+	var crew: Array = RoguelikeRun.fielded_crew()
+
+	assert_eq(crew.size(), 3,
+		"fielded_crew returns every crew member serving across all hulls")
+	var callsigns: Array = []
+	for member in crew:
+		callsigns.append(member.get("callsign"))
+	assert_true(callsigns.has("A") and callsigns.has("B") and callsigns.has("C"),
+		"fielded_crew includes crew drawn from every hull")
+
+
+func test_fielded_crew_is_empty_without_hulls():
+	RoguelikeRun.fleet_hulls = []
+	assert_eq(RoguelikeRun.fielded_crew().size(), 0,
+		"fielded_crew is empty when the fleet has no hulls")
+
+
+func test_assignment_of_reports_ship_name_and_position():
+	RoguelikeRun.fleet_hulls = [
+		{"hull_id": "hull_0", "ship_type": "corvette",
+			"crew": [{"crew_id": "c1", "role": CrewData.Role.PILOT}]},
+	]
+
+	var assignment: Dictionary = RoguelikeRun.assignment_of("c1")
+
+	assert_eq(str(assignment.get("ship_name")), "Corvette 1",
+		"assignment_of derives a ship name from type + hull number when unnamed")
+	assert_eq(int(assignment.get("role")), int(CrewData.Role.PILOT),
+		"assignment_of reports the serving position (role)")
+
+
+func test_assignment_of_uses_the_ships_explicit_name():
+	RoguelikeRun.fleet_hulls = [
+		{"hull_id": "hull_0", "ship_type": "corvette", "name": "Valiant",
+			"crew": [{"crew_id": "c1", "role": CrewData.Role.PILOT}]},
+	]
+
+	assert_eq(str(RoguelikeRun.assignment_of("c1").get("ship_name")), "Valiant",
+		"assignment_of reports the player-set ship name when one exists")
+
+
+func test_assignment_of_is_empty_when_not_aboard():
+	RoguelikeRun.fleet_hulls = [
+		{"hull_id": "h1", "ship_type": "corvette", "crew": [{"crew_id": "c1"}]},
+	]
+	assert_true(RoguelikeRun.assignment_of("ghost").is_empty(),
+		"assignment_of is empty for a crew member not aboard any hull")

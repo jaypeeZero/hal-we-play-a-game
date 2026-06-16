@@ -753,20 +753,7 @@ func on_assign_changed() -> void:
 ## set one; otherwise derives a real-sounding label from the ship type and the
 ## hull number, e.g. hull_0 fighter → "Fighter 1" (1-based). Never "Ship name".
 func _ship_display_name(hull: Dictionary) -> String:
-	var explicit: String = str(hull.get("name", "")).strip_edges()
-	if not explicit.is_empty():
-		return explicit
-	var type_label: String = str(hull.get("ship_type", "ship")).replace("_", " ").capitalize()
-	var hull_id: String = str(hull.get("hull_id", ""))
-	var digits: String = ""
-	for i in range(hull_id.length() - 1, -1, -1):
-		if hull_id[i] >= "0" and hull_id[i] <= "9":
-			digits = hull_id[i] + digits
-		elif not digits.is_empty():
-			break
-	if digits.is_empty():
-		return type_label
-	return "%s %d" % [type_label, int(digits) + 1]
+	return ShipData.hull_display_name(hull)
 
 
 func _hull_by_id(hull_id: String) -> Dictionary:
