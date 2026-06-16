@@ -3,9 +3,10 @@ extends Node2D
 ## Visible driver for RaceSimulator: watch a field of ships fly the track.
 ## Replays a (track, entrants, seed) tuple using the same step_one() path as the
 ## headless sim, reuses VisualBridgeAutoload / ShipEntity for the 3D ships, and
-## draws 2D overlays on top for legibility: a background grid, the track path,
-## big always-visible gates, and a heading arrow per ship (screen-constant size
-## so racers stay visible when zoomed out). A corner minimap shows everyone.
+## draws 2D overlays on top for legibility: a background grid, each racer's flown
+## line as coloured dots, big always-visible gates, and a heading arrow per ship
+## (screen-constant size so racers stay visible when zoomed out). A corner minimap
+## shows everyone.
 
 const FIXED_STEP := RaceSimulator.FIXED_STEP
 ## Playback speed multiplier — a real-time 3-lap race is minutes long.
@@ -17,18 +18,19 @@ var race_speed: float = DEFAULT_RACE_SPEED
 const SHIP_ARROW_PX := 16.0
 const GATE_LINE_PX := 5.0
 const GATE_DOT_PX := 7.0
-const TRACK_PATH_PX := 2.5
 const GRID_LINE_PX := 1.0
 const GATE_NUMBER_PX := 16.0
 ## Background grid spacing in world units.
 const GRID_SPACING := 500.0
+## Racing-line trail: dot size (screen px) and how often a point is sampled.
+const TRAIL_DOT_PX := 2.0
+const TRAIL_SAMPLE_STEPS := 9
 ## Minimap panel size + margin from the corner.
 const MINIMAP_W := 280.0
 const MINIMAP_H := 200.0
 const MINIMAP_MARGIN := 14.0
 
 const GRID_COL := Color(0.16, 0.18, 0.22, 0.6)
-const TRACK_PATH_COL := Color(0.5, 0.55, 0.62, 0.5)
 const GATE_COL := Color(1.0, 0.82, 0.25, 0.95)
 const GATE_START_COL := Color(0.35, 1.0, 0.45, 0.95)
 ## Ship-arrow outline thickness (screen px) and the zoom range over which the
@@ -55,6 +57,8 @@ var _states: Dictionary = {}
 var _ship_entities: Dictionary = {}
 var _session: Dictionary = {}
 var _colors: Dictionary = {}
+var _trails: Dictionary = {}      # ship_id -> PackedVector2Array of flown positions
+var _trail_tick: int = 0
 var _marker_points: Array = []
 var _gate_segments: Array = []   # [[post_a, post_b], ...]
 var _bounds: Dictionary = {}
@@ -109,6 +113,7 @@ func _setup_race() -> void:
 	for i in range(_ships.size()):
 		var ship: Dictionary = _ships[i]
 		_colors[ship.ship_id] = PALETTE[i % PALETTE.size()]
+		_trails[ship.ship_id] = PackedVector2Array()
 		var entity := ShipEntity.new()
 		entity.initialize(ship.ship_id, ship.get("team", 0), ship.get("collision_radius", 15.0), ship.get("type", "fighter"))
 		add_child(entity)
@@ -185,9 +190,14 @@ func _process(delta: float) -> void:
 
 
 func _tick_all() -> void:
-	"""Step every racer one fixed tick."""
+	"""Step every racer one fixed tick, sampling each one's flown line."""
 	for ship_ref in _ships:
 		RaceSimulator.step_one(ship_ref, _states, _ships, track, _time, _session)
+
+	_trail_tick += 1
+	if _trail_tick % TRAIL_SAMPLE_STEPS == 0:
+		for ship in _ships:
+			_trails[ship.ship_id].append(ship.position)
 
 	if _time >= _time_limit or RaceSimulator._all_finished(_states):
 		_end_race()
@@ -211,7 +221,7 @@ func _draw() -> void:
 	var zoom: float = _camera.zoom.x if _camera != null else 1.0
 	var inv: float = 1.0 / maxf(zoom, 0.001)  # px → world units at current zoom
 	_draw_grid(inv)
-	_draw_track_path(inv)
+	_draw_trails(inv)
 	_draw_gates(inv)
 	_draw_arrows(inv, zoom)
 
@@ -231,13 +241,15 @@ func _draw_grid(inv: float) -> void:
 		y += GRID_SPACING
 
 
-func _draw_track_path(inv: float) -> void:
-	"""Outline the circuit by connecting the gates in order."""
-	var pts: PackedVector2Array = PackedVector2Array()
-	for m in _marker_points:
-		pts.append(m)
-	pts.append(_marker_points[0])
-	draw_polyline(pts, TRACK_PATH_COL, TRACK_PATH_PX * inv)
+func _draw_trails(inv: float) -> void:
+	"""Each racer's actual flown line, as dots in its own colour — so you can see
+	who took the tighter/cleaner line."""
+	var r: float = TRAIL_DOT_PX * inv
+	for sid in _trails:
+		var col: Color = _colors.get(sid, Color.WHITE)
+		col.a = 0.7
+		for p in _trails[sid]:
+			draw_circle(p, r, col)
 
 
 func _draw_gates(inv: float) -> void:
