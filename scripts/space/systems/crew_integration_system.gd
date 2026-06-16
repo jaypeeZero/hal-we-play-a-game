@@ -212,14 +212,6 @@ static func apply_pilot_skill_modifiers(ship_data: Dictionary, crew_data: Dictio
 	var skills: Dictionary = crew_data.get("stats", {}).get("skills", {})
 	updated.crew_modifiers.pilot_aggression = float(skills.get("aggression", skill_factor))
 
-	# Anticipation: how fully a pilot flies the *ideal* aim point the nav brain
-	# computes (lead a moving target / clip the geometric apex through a gate)
-	# vs. just aiming at where the goal is right now. Read by MovementSystem's
-	# nav aim. Blend of piloting + awareness.
-	var piloting: float = float(skills.get("piloting", skill_factor))
-	var awareness: float = float(skills.get("awareness", skill_factor))
-	updated.crew_modifiers.pilot_anticipation = clampf(0.6 * piloting + 0.4 * awareness, 0.0, 1.0)
-
 	# Pilot-as-gunner fields for solo fighters. See function doc. Off-role
 	# pilots aim worse too — the penalty hits all areas, including the raw
 	# aim read that stress/fatigue deliberately leave alone.

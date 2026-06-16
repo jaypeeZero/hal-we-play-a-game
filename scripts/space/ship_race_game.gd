@@ -413,18 +413,17 @@ func _racer_name(ship_id: String) -> String:
 	return _session.get("per_racer", {}).get(ship_id, {}).get("callsign", ship_id)
 
 
-## F1 debug readout: per-racer speed and the nav governor's live turn-speed cap,
-## so you can see who is braking for what.
+## F1 debug readout: per-racer speed and current lap.
 func _update_debug_label() -> void:
 	"""Refresh the debug text from current flight state."""
 	if _debug_label == null:
 		return
+	var laps_total: int = track.get("laps", 3)
 	var lines: Array = ["— DEBUG [F1] —"]
 	for ship in _ships:
-		var cap: float = MovementSystem._turn_target_speed(ship, ship.orders)
-		var cap_s: String = "%.0f" % cap if cap >= 0.0 else "—"
-		lines.append("%-9s spd=%4.0f  brake_to=%s" % [
-			_racer_name(ship.ship_id), ship.velocity.length(), cap_s])
+		var st: Dictionary = _states[ship.ship_id]
+		lines.append("%-9s spd=%4.0f  lap %d/%d" % [
+			_racer_name(ship.ship_id), ship.velocity.length(), min(st.lap + 1, laps_total), laps_total])
 	_debug_label.text = "\n".join(lines)
 
 
