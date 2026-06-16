@@ -22,9 +22,13 @@ const GRID_LINE_PX := 1.0
 const GATE_NUMBER_PX := 16.0
 ## Background grid spacing in world units.
 const GRID_SPACING := 500.0
-## Racing-line trail: dot size (screen px) and how often a point is sampled.
-const TRAIL_DOT_PX := 2.0
-const TRAIL_SAMPLE_STEPS := 9
+## Motion tail (debug): a fading comet tail behind each ship. Sampled every N
+## fixed steps; a fixed sample count means a faster ship's tail covers more
+## ground (longer), and older samples fade out.
+const TAIL_SAMPLES := 22
+const TAIL_SAMPLE_STEPS := 2
+const TAIL_WIDTH_PX := 2.5
+const TAIL_MAX_ALPHA := 0.85
 ## Minimap panel size + margin from the corner.
 const MINIMAP_W := 280.0
 const MINIMAP_H := 200.0
@@ -57,8 +61,10 @@ var _states: Dictionary = {}
 var _ship_entities: Dictionary = {}
 var _session: Dictionary = {}
 var _colors: Dictionary = {}
-var _trails: Dictionary = {}      # ship_id -> PackedVector2Array of flown positions
-var _trail_tick: int = 0
+var _tails: Dictionary = {}       # ship_id -> Array[Vector2] recent positions (comet tail)
+var _tail_tick: int = 0
+var _debug_on: bool = false
+var _debug_label: Label = null
 var _marker_points: Array = []
 var _gate_segments: Array = []   # [[post_a, post_b], ...]
 var _bounds: Dictionary = {}
@@ -88,9 +94,27 @@ func _ready() -> void:
 	_setup_race()
 	_build_minimap()
 	_build_skip_button()
+	_build_debug_overlay()
 	_frame_camera()
 	_update_hud()
 	queue_redraw()
+
+
+func _ensure_action(action: String, key: int) -> void:
+	"""Register an input action if it doesn't already exist."""
+	if not InputMap.has_action(action):
+		InputMap.add_action(action)
+		var ev := InputEventKey.new()
+		ev.keycode = key
+		InputMap.action_add_event(action, ev)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("toggle_debug_panel"):
+		_debug_on = not _debug_on
+		if _debug_label != null:
+			_debug_label.visible = _debug_on
+		queue_redraw()
 
 
 func _cache_track_geometry() -> void:
@@ -113,7 +137,7 @@ func _setup_race() -> void:
 	for i in range(_ships.size()):
 		var ship: Dictionary = _ships[i]
 		_colors[ship.ship_id] = PALETTE[i % PALETTE.size()]
-		_trails[ship.ship_id] = PackedVector2Array()
+		_tails[ship.ship_id] = []
 		var entity := ShipEntity.new()
 		entity.initialize(ship.ship_id, ship.get("team", 0), ship.get("collision_radius", 15.0), ship.get("type", "fighter"))
 		add_child(entity)
@@ -157,6 +181,21 @@ func _build_skip_button() -> void:
 	ui.add_child(btn)
 
 
+func _build_debug_overlay() -> void:
+	"""F1 debug overlay (like the battle screen): a per-racer flight readout, plus
+	the motion tails + upcoming-line overlays drawn in _draw when enabled."""
+	_ensure_action("toggle_debug_panel", KEY_F1)
+	var ui: Node = get_node_or_null("../UI")
+	if ui == null:
+		return
+	_debug_label = Label.new()
+	_debug_label.add_theme_font_size_override("font_size", 12)
+	_debug_label.position = Vector2(12, 360)
+	_debug_label.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+	_debug_label.visible = false
+	ui.add_child(_debug_label)
+
+
 ## Fast-forward the simulation to the finish (no rendering), then settle.
 func _skip_to_finish() -> void:
 	"""Run remaining ticks immediately until the race ends."""
@@ -186,6 +225,8 @@ func _process(delta: float) -> void:
 	_sync_entities()
 	_update_hud()
 	_update_minimap()
+	if _debug_on:
+		_update_debug_label()
 	queue_redraw()
 
 
@@ -194,10 +235,13 @@ func _tick_all() -> void:
 	for ship_ref in _ships:
 		RaceSimulator.step_one(ship_ref, _states, _ships, track, _time, _session)
 
-	_trail_tick += 1
-	if _trail_tick % TRAIL_SAMPLE_STEPS == 0:
+	_tail_tick += 1
+	if _tail_tick % TAIL_SAMPLE_STEPS == 0:
 		for ship in _ships:
-			_trails[ship.ship_id].append(ship.position)
+			var buf: Array = _tails[ship.ship_id]
+			buf.append(ship.position)
+			if buf.size() > TAIL_SAMPLES:
+				buf.pop_front()
 
 	if _time >= _time_limit or RaceSimulator._all_finished(_states):
 		_end_race()
@@ -221,7 +265,9 @@ func _draw() -> void:
 	var zoom: float = _camera.zoom.x if _camera != null else 1.0
 	var inv: float = 1.0 / maxf(zoom, 0.001)  # px → world units at current zoom
 	_draw_grid(inv)
-	_draw_trails(inv)
+	if _debug_on:
+		_draw_tails(inv)
+		_draw_upcoming(inv)
 	_draw_gates(inv)
 	_draw_arrows(inv, zoom)
 
@@ -241,15 +287,32 @@ func _draw_grid(inv: float) -> void:
 		y += GRID_SPACING
 
 
-func _draw_trails(inv: float) -> void:
-	"""Each racer's actual flown line, as dots in its own colour — so you can see
-	who took the tighter/cleaner line."""
-	var r: float = TRAIL_DOT_PX * inv
-	for sid in _trails:
-		var col: Color = _colors.get(sid, Color.WHITE)
-		col.a = 0.7
-		for p in _trails[sid]:
-			draw_circle(p, r, col)
+func _draw_tails(inv: float) -> void:
+	"""Fading comet tail behind each ship (longer the faster it's going)."""
+	var w: float = TAIL_WIDTH_PX * inv
+	for sid in _tails:
+		var buf: Array = _tails[sid]
+		var base: Color = _colors.get(sid, Color.WHITE)
+		for i in range(1, buf.size()):
+			var col := base
+			col.a = TAIL_MAX_ALPHA * float(i) / float(buf.size())  # tail end faint
+			draw_line(buf[i - 1], buf[i], col, w)
+
+
+func _draw_upcoming(inv: float) -> void:
+	"""Where each ship is HEADED: a dotted line from the ship through its next two
+	gates — its planned upcoming line."""
+	for ship in _ships:
+		var st: Dictionary = _states[ship.ship_id]
+		if st.finished or st.dnf:
+			continue
+		var col: Color = _colors.get(ship.ship_id, Color.WHITE)
+		col.a = 0.6
+		var n: int = RaceTrack.marker_count(track)
+		var g1: Vector2 = RaceTrack.marker_position(track, st.next_marker)
+		var g2: Vector2 = RaceTrack.marker_position(track, (st.next_marker + 1) % n)
+		DottedDraw.draw_dotted_line(self, ship.position, g1, col, TAIL_WIDTH_PX * inv)
+		DottedDraw.draw_dotted_line(self, g1, g2, col, TAIL_WIDTH_PX * inv)
 
 
 func _draw_gates(inv: float) -> void:
@@ -348,6 +411,21 @@ func _update_hud() -> void:
 func _racer_name(ship_id: String) -> String:
 	"""Return the racer's callsign, falling back to the ship id."""
 	return _session.get("per_racer", {}).get(ship_id, {}).get("callsign", ship_id)
+
+
+## F1 debug readout: per-racer speed and the nav governor's live turn-speed cap,
+## so you can see who is braking for what.
+func _update_debug_label() -> void:
+	"""Refresh the debug text from current flight state."""
+	if _debug_label == null:
+		return
+	var lines: Array = ["— DEBUG [F1] —"]
+	for ship in _ships:
+		var cap: float = MovementSystem._turn_target_speed(ship, ship.orders)
+		var cap_s: String = "%.0f" % cap if cap >= 0.0 else "—"
+		lines.append("%-9s spd=%4.0f  brake_to=%s" % [
+			_racer_name(ship.ship_id), ship.velocity.length(), cap_s])
+	_debug_label.text = "\n".join(lines)
 
 
 func _end_race() -> void:

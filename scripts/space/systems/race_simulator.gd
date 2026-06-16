@@ -112,12 +112,13 @@ static func step_one(ship_ref: Dictionary, states: Dictionary,
 	var gate_mid: Vector2 = RaceTrack.marker_position(track, idx)
 	var prev_pos: Vector2 = ship_ref.position
 
-	# The race-specific part is only DEFINING THE GOAL: fly through this gate at the
-	# spot that sets up the next one. The shared nav brain + flight model do the rest.
-	ship_ref.orders["gate_a"] = RaceTrack.gate_post_a(track, idx)
-	ship_ref.orders["gate_b"] = RaceTrack.gate_post_b(track, idx)
-	ship_ref.orders["prev_objective"] = RaceTrack.marker_position(track, posmod(idx - 1, n))
-	ship_ref.orders["next_objective"] = RaceTrack.marker_position(track, posmod(idx + 1, n))
+	# The only race-specific part: DEFINE THE GOAL in the shared nav's generic terms
+	# — reach the next gate (destination), threading this gate's posts (the region).
+	# The shared nav brain + flight model do everything else.
+	ship_ref.orders["nav_via_a"] = RaceTrack.gate_post_a(track, idx)
+	ship_ref.orders["nav_via_b"] = RaceTrack.gate_post_b(track, idx)
+	ship_ref.orders["nav_to"] = RaceTrack.marker_position(track, posmod(idx + 1, n))
+	ship_ref.orders["nav_from"] = RaceTrack.marker_position(track, posmod(idx - 1, n))
 
 	var target := {"ship_id": GATE_TARGET_ID, "position": gate_mid, "velocity": Vector2.ZERO}
 	var pilot_control: Dictionary = MovementSystem.calculate_blended_control(

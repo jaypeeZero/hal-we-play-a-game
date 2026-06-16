@@ -2095,88 +2095,92 @@ const OBSTACLE_AVOID_WEIGHT       := 2.0
 #     geometric racing apex — straight section → centre, corner → inside — with no
 #     tuned fudge factor. Pilot skill (pilot_anticipation) scales how fully the
 #     pilot flies that ideal vs. aiming straight at the goal.
-## How far toward the geometric apex a fully-anticipating pilot aims (0 = centre).
-## Kept at 0: with finite-width gates a racer must pass BETWEEN the posts, so on a
-## sharp corner the efficient pass point is near centre — cutting to the inside
-## post makes a fast ship cross outside it and loop. The skill payoff comes from
-## the corner-speed governor (carry the right speed), not an aggressive line.
-const APEX_STRENGTH := 0.0
+# A ship goes from where it is to a destination Y, threading a rough pass-through
+# region Z on the way. Z is a corridor between two edge points (orders.nav_via_a /
+# nav_via_b); Y is orders.nav_to. NEITHER is gate-specific — the race fills them
+# from a gate (Z = the posts, Y = the next gate), battle leaves Z empty and just
+# flies to its target. If the ship's motion already threads Z comfortably, aim at
+# Y so it flows through; only steer back into Z when it would otherwise miss.
+const NAV_FLOW_MIN_SPEED := 10.0    # below this, use heading instead of velocity
+const NAV_EDGE_MARGIN := 0.12       # keep the aim at least this far from each edge of Z
 
 static func nav_aim_point(ship_data: Dictionary, target: Dictionary, orders: Dictionary) -> Vector2:
-	"""Aim point for the pursue goal, skill-scaled. Shared by race and battle."""
-	# Gate goal: aim at the geometric apex through this gate toward the next.
-	if orders.has("gate_a") and orders.has("gate_b"):
-		var pa: Vector2 = orders.gate_a
-		var pb: Vector2 = orders.gate_b
-		var centre: Vector2 = (pa + pb) * 0.5
-		var prev_obj = orders.get("prev_objective", null)
-		var next_obj = orders.get("next_objective", null)
-		if prev_obj == null or next_obj == null or APEX_STRENGTH <= 0.0:
-			return centre
-		var a: float = float(ship_data.get("crew_modifiers", {}).get("pilot_anticipation", 0.5))
-		var apex: Vector2 = _segment_point_nearest_chord(pa, pb, prev_obj, next_obj)
-		return centre.lerp(apex, a * APEX_STRENGTH)
+	"""Aim point: reach the goal, threading any pass-through region on the way."""
+	# Goal with a pass-through region Z: aim where the ship's CURRENT motion already
+	# crosses Z (so a ship arcing cleanly through doesn't get yanked toward a point);
+	# only nudge back when its line would clip an edge or miss entirely.
+	if orders.has("nav_via_a") and orders.has("nav_via_b"):
+		var pa: Vector2 = orders.nav_via_a
+		var pb: Vector2 = orders.nav_via_b
+		var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
+		var vel: Vector2 = ship_data.get("velocity", Vector2.ZERO)
+		var dir: Vector2 = vel.normalized() if vel.length() > NAV_FLOW_MIN_SPEED \
+			else get_visual_forward(ship_data.get("rotation", 0.0))
+		var t: float = _ray_segment_param(my_pos, dir, pa, pb)  # where motion crosses Z
+		if not is_nan(t):
+			return pa.lerp(pb, clampf(t, NAV_EDGE_MARGIN, 1.0 - NAV_EDGE_MARGIN))
+		return (pa + pb) * 0.5  # parallel / behind — aim at the region centre to acquire it
 
-	# Ship goal (battle): aim at the target. Target-leading is a deliberate combat
-	# change we'll turn on next and gate behind duel_sim — kept off here so dialing
-	# the race side leaves battle flight at exact baseline.
+	# Simple goal: aim at it (battle target, or any goal with no pass-through region).
 	return target.position
 
 
-## Point on segment a→b where the chord prev→next crosses it (clamped to the
-## segment). If the chord is parallel to the gate, return the midpoint.
-static func _segment_point_nearest_chord(a: Vector2, b: Vector2, prev: Vector2, next: Vector2) -> Vector2:
-	var r: Vector2 = b - a
-	var d: Vector2 = next - prev
-	var denom: float = r.x * d.y - r.y * d.x
+## Parameter t along segment a→b where the forward ray (origin + s·dir, s≥0)
+## crosses the segment's line. NAN when parallel or the segment is behind the motion.
+static func _ray_segment_param(origin: Vector2, dir: Vector2, a: Vector2, b: Vector2) -> float:
+	var e: Vector2 = b - a
+	var denom: float = dir.x * e.y - dir.y * e.x
 	if absf(denom) < 0.0001:
-		return (a + b) * 0.5
-	var t: float = ((prev - a).x * d.y - (prev - a).y * d.x) / denom
-	return a + r * clampf(t, 0.0, 1.0)
+		return NAN
+	var ap: Vector2 = a - origin
+	var s: float = (ap.x * e.y - ap.y * e.x) / denom      # distance along the ray
+	if s < 0.0:
+		return NAN
+	return (ap.x * dir.y - ap.y * dir.x) / denom          # param along the segment
 
 
-## Speed a hairpin corner is taken at, as a fraction of max speed.
-const CORNER_MIN_SPEED_FRAC := 0.32
-## Brake when current speed exceeds the corner target by this ratio.
-const CORNER_BRAKE_TRIGGER := 1.12
+## Speed a hairpin turn is taken at, as a fraction of max speed.
+const TURN_MIN_SPEED_FRAC := 0.32
+## Brake when current speed exceeds the turn target by this ratio.
+const TURN_BRAKE_TRIGGER := 1.12
 ## Braking lookahead time (s): low skill brakes late, high skill brakes early.
-const CORNER_BRAKE_LOOKAHEAD_MIN := 0.6
-const CORNER_BRAKE_LOOKAHEAD_MAX := 1.9
-## Below this corner sharpness the governor stays off (treat as a straight).
-const CORNER_STRAIGHT_THRESHOLD := 0.05
+const TURN_BRAKE_LOOKAHEAD_MIN := 0.6
+const TURN_BRAKE_LOOKAHEAD_MAX := 1.9
+## Below this turn sharpness the governor stays off (treat as a straight).
+const TURN_STRAIGHT_THRESHOLD := 0.05
 
 
-## Target speed for the upcoming gate corner, or -1 when the governor is off
-## (no gate goal / essentially straight / still too far to brake). Sharper the
-## prev→gate→next turn, the lower the speed; a more anticipating pilot starts
-## braking from further out. Shared by race and battle — battle goals carry no
-## next objective, so it never fires there.
-static func _corner_target_speed(ship_data: Dictionary, orders: Dictionary) -> float:
-	if not (orders.has("gate_a") and orders.has("gate_b") and orders.get("next_objective", null) != null):
+## Target speed for the turn out of the pass-through region toward the destination,
+## or -1 when the governor is off (no region+destination goal / essentially straight
+## / still too far to brake). The sharper the turn the ship must make to leave Z and
+## head to Y, the lower the speed; a more anticipating pilot starts braking earlier.
+## Generic — battle goals carry no pass-through region, so it simply never fires.
+static func _turn_target_speed(ship_data: Dictionary, orders: Dictionary) -> float:
+	if not (orders.has("nav_via_a") and orders.has("nav_via_b") and orders.get("nav_to", null) != null):
 		return -1.0
-	var gate_mid: Vector2 = ((orders.gate_a as Vector2) + (orders.gate_b as Vector2)) * 0.5
-	var next_v: Vector2 = (orders.next_objective as Vector2) - gate_mid
-	if next_v.length() < 1.0:
+	var via: Vector2 = ((orders.nav_via_a as Vector2) + (orders.nav_via_b as Vector2)) * 0.5
+	var out_v: Vector2 = (orders.nav_to as Vector2) - via
+	if out_v.length() < 1.0:
 		return -1.0
 	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
-	var dist: float = (gate_mid - my_pos).length()
-	# Corner angle from the track itself (prev → gate → next), independent of where
-	# the ship currently is.
-	var prev = orders.get("prev_objective", null)
-	var incoming: Vector2 = (gate_mid - (prev as Vector2)).normalized() if prev != null \
-		else (gate_mid - my_pos).normalized()
-	var sharpness: float = clampf((1.0 - incoming.dot(next_v.normalized())) * 0.5, 0.0, 1.0)
-	if sharpness < CORNER_STRAIGHT_THRESHOLD:
+	var dist: float = (via - my_pos).length()
+	# How hard a turn: the incoming leg (from where we came, nav_from) into the region
+	# vs the outgoing leg to the destination. Track-based so it's stable, not jittery.
+	var from = orders.get("nav_from", null)
+	var incoming: Vector2 = (via - (from as Vector2)).normalized() if from != null \
+		else (via - my_pos).normalized()
+	var sharpness: float = clampf((1.0 - incoming.dot(out_v.normalized())) * 0.5, 0.0, 1.0)
+	if sharpness < TURN_STRAIGHT_THRESHOLD:
 		return -1.0
 	var max_speed: float = float(ship_data.get("stats", {}).get("max_speed", 300.0))
-	var corner_speed: float = max_speed * lerpf(1.0, CORNER_MIN_SPEED_FRAC, sharpness)
-	# Only need corner_speed by the time we reach the gate; ramp up with distance.
+	var turn_speed: float = max_speed * lerpf(1.0, TURN_MIN_SPEED_FRAC, sharpness)
+	# Only need turn_speed by the time we reach the region; ramp up with distance.
 	var anticip: float = float(ship_data.get("crew_modifiers", {}).get("pilot_anticipation", 0.5))
 	var speed: float = ship_data.get("velocity", Vector2.ZERO).length()
-	var brake_dist: float = speed * lerpf(CORNER_BRAKE_LOOKAHEAD_MIN, CORNER_BRAKE_LOOKAHEAD_MAX, anticip)
+	var brake_dist: float = speed * lerpf(TURN_BRAKE_LOOKAHEAD_MIN, TURN_BRAKE_LOOKAHEAD_MAX, anticip)
 	if brake_dist < 1.0 or dist >= brake_dist:
 		return max_speed
-	return lerpf(corner_speed, max_speed, clampf(dist / brake_dist, 0.0, 1.0))
+	return lerpf(turn_speed, max_speed, clampf(dist / brake_dist, 0.0, 1.0))
 
 
 static func calculate_blended_control(
@@ -2442,17 +2446,17 @@ static func calculate_blended_control(
 		throttle = BLENDED_APPROACH_THROTTLE
 		lateral_thrust = 0.0
 
-	# --- 4. Corner-speed governor ---
-	# When the goal carries a next objective (e.g. the next gate), look ahead at the
-	# turn and brake to a speed the ship can actually carry through it. Skill sets
-	# how early braking starts. Goals without a next objective (a battle target)
-	# never trigger this, so combat flight is unchanged.
-	var corner_speed: float = _corner_target_speed(ship_data, orders)
-	if corner_speed >= 0.0:
+	# --- 4. Turn-speed governor ---
+	# When the goal has a pass-through region and a destination beyond it, look ahead
+	# at the turn out of the region and brake to a speed the ship can carry through
+	# it. Skill sets how early braking starts. Goals without that (a plain target)
+	# never trigger this — same logic, simpler goal.
+	var turn_speed: float = _turn_target_speed(ship_data, orders)
+	if turn_speed >= 0.0:
 		var speed: float = ship_data.get("velocity", Vector2.ZERO).length()
-		if speed > corner_speed:
+		if speed > turn_speed:
 			throttle = 0.0
-			if speed > corner_speed * CORNER_BRAKE_TRIGGER:
+			if speed > turn_speed * TURN_BRAKE_TRIGGER:
 				is_braking = true
 
 	return {
