@@ -15,6 +15,7 @@ const NPC_CALLSIGNS := [
 ]
 
 var _track: Dictionary = {}
+var _track_id: String = ""
 var _entrants: Array = []       # Array of {ship, crew, is_player_pilot}
 var _probs: Array = []          # Parallel implied probabilities
 var _race_seed: int = 0
@@ -102,10 +103,23 @@ func _rebuild() -> void:
 
 	_money_label.text = str(RoguelikeRun.money)
 
-	# Track header.
-	var track_name: String = _track.get("name", "Unknown Track")
+	# Track header / picker (the dropdown is shown before a race is run).
 	var laps: int = _track.get("laps", 3)
-	_content.add_child(UiKit.label("%s — %d laps" % [track_name, laps], UiKit.INK, 14))
+	if _results.is_empty():
+		var track_row := HBoxContainer.new()
+		track_row.add_child(UiKit.label("Track:", UiKit.INK, 13))
+		var picker := OptionButton.new()
+		var tracks: Array = RaceTrack.list_tracks()
+		for ti in range(tracks.size()):
+			picker.add_item(tracks[ti].name)
+			if tracks[ti].id == _track_id:
+				picker.select(ti)
+		picker.item_selected.connect(func(i: int) -> void: _on_track_picked(tracks[i].id))
+		track_row.add_child(picker)
+		track_row.add_child(UiKit.label("%d laps" % laps, UiKit.DIM, 11))
+		_content.add_child(track_row)
+	else:
+		_content.add_child(UiKit.label("%s — %d laps" % [_track.get("name", "?"), laps], UiKit.INK, 14))
 
 	# Field card.
 	_bet_buttons.clear()
@@ -291,6 +305,14 @@ func _settle(results: Dictionary) -> void:
 	_rebuild()
 
 
+func _on_track_picked(track_id: String) -> void:
+	"""Switch the race to the chosen track and recompute odds for it."""
+	_track_id = track_id
+	_track = RaceTrack.load_track(track_id)
+	_probs = RaceOdds.implied_probabilities(_entrants, _track)
+	_rebuild()
+
+
 func _on_new_field_pressed() -> void:
 	"""Roll a new race field and track."""
 	_results = {}
@@ -307,10 +329,11 @@ func _roll_new_race() -> void:
 	rng.randomize()
 	_race_seed = rng.randi()
 
-	# Pick a random track from all available layouts.
+	# Use the picked track (default to the first available the first time).
 	var tracks: Array = RaceTrack.list_tracks()
-	var track_id: String = tracks[rng.randi() % tracks.size()].id if not tracks.is_empty() else "asteroid_sprint"
-	_track = RaceTrack.load_track(track_id)
+	if _track_id == "" and not tracks.is_empty():
+		_track_id = tracks[0].id
+	_track = RaceTrack.load_track(_track_id)
 
 	# Determine field size.
 	var field_min: int = int(_racing_config("field_size_min", 4))

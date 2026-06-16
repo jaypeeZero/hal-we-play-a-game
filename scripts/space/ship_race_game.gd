@@ -31,7 +31,11 @@ const GRID_COL := Color(0.16, 0.18, 0.22, 0.6)
 const TRACK_PATH_COL := Color(0.5, 0.55, 0.62, 0.5)
 const GATE_COL := Color(1.0, 0.82, 0.25, 0.95)
 const GATE_START_COL := Color(0.35, 1.0, 0.45, 0.95)
-const ARROW_OUTLINE := Color(0.0, 0.0, 0.0, 0.9)
+## Ship-arrow outline thickness (screen px) and the zoom range over which the
+## arrows fade out — once you zoom in close you see the actual ships instead.
+const ARROW_OUTLINE_PX := 2.5
+const ARROW_FADE_START_ZOOM := 0.55
+const ARROW_FADE_END_ZOOM := 1.0
 ## Distinct racer colors (cycled).
 const PALETTE := [
 	Color(0.95, 0.30, 0.30), Color(0.30, 0.70, 1.0), Color(0.40, 0.95, 0.45),
@@ -52,6 +56,7 @@ var _ship_entities: Dictionary = {}
 var _session: Dictionary = {}
 var _colors: Dictionary = {}
 var _marker_points: Array = []
+var _gate_segments: Array = []   # [[post_a, post_b], ...]
 var _bounds: Dictionary = {}
 var _time: float = 0.0
 var _time_limit: float = 0.0
@@ -85,11 +90,13 @@ func _ready() -> void:
 
 
 func _cache_track_geometry() -> void:
-	"""Cache marker positions and padded bounds used by the overlays."""
+	"""Cache gate posts, midpoints and padded bounds used by the overlays."""
 	_bounds = RaceTrack.track_bounds(track)
 	_marker_points = []
+	_gate_segments = []
 	for i in range(RaceTrack.marker_count(track)):
 		_marker_points.append(RaceTrack.marker_position(track, i))
+		_gate_segments.append([RaceTrack.gate_post_a(track, i), RaceTrack.gate_post_b(track, i)])
 
 
 func _setup_race() -> void:
@@ -125,7 +132,7 @@ func _build_minimap() -> void:
 	_minimap.offset_right = -MINIMAP_MARGIN
 	_minimap.offset_bottom = -MINIMAP_MARGIN
 	ui.add_child(_minimap)
-	_minimap.setup(_bounds, _marker_points)
+	_minimap.setup(_bounds, _gate_segments)
 
 
 func _build_skip_button() -> void:
@@ -206,7 +213,7 @@ func _draw() -> void:
 	_draw_grid(inv)
 	_draw_track_path(inv)
 	_draw_gates(inv)
-	_draw_arrows(inv)
+	_draw_arrows(inv, zoom)
 
 
 func _draw_grid(inv: float) -> void:
@@ -234,21 +241,27 @@ func _draw_track_path(inv: float) -> void:
 
 
 func _draw_gates(inv: float) -> void:
-	"""Draw each gate as a wide line across its opening, with its number."""
-	for i in range(_marker_points.size()):
-		var center: Vector2 = _marker_points[i]
-		var tangent: Vector2 = RaceTrack.gate_tangent(track, i)
-		var half: float = RaceTrack.gate_half_width(track, i)
+	"""Draw each gate as two posts with the opening line between them, numbered."""
+	for i in range(_gate_segments.size()):
+		var a: Vector2 = _gate_segments[i][0]
+		var b: Vector2 = _gate_segments[i][1]
 		var col: Color = GATE_START_COL if i == 0 else GATE_COL
-		draw_line(center - tangent * half, center + tangent * half, col, GATE_LINE_PX * inv)
-		draw_circle(center, GATE_DOT_PX * inv, col)
+		# Opening line between the posts (dim) + a solid post at each end.
+		draw_line(a, b, Color(col.r, col.g, col.b, 0.35), GATE_LINE_PX * inv)
+		draw_circle(a, GATE_DOT_PX * inv, col)
+		draw_circle(b, GATE_DOT_PX * inv, col)
 		var fs: int = int(GATE_NUMBER_PX * inv)
-		draw_string(_font, center + Vector2(GATE_DOT_PX, -GATE_DOT_PX) * inv,
+		draw_string(_font, (a + b) * 0.5 + Vector2(GATE_DOT_PX, -GATE_DOT_PX) * inv,
 			str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
-func _draw_arrows(inv: float) -> void:
-	"""Draw a heading arrow per ship — screen-constant size, points along travel."""
+func _draw_arrows(inv: float, zoom: float) -> void:
+	"""Outline heading arrow per ship — points along travel, screen-constant size.
+	Fades out as you zoom in so the actual ships take over up close."""
+	var alpha: float = clampf(
+		(ARROW_FADE_END_ZOOM - zoom) / (ARROW_FADE_END_ZOOM - ARROW_FADE_START_ZOOM), 0.0, 1.0)
+	if alpha <= 0.01:
+		return
 	var s: float = SHIP_ARROW_PX * inv
 	for ship in _ships:
 		var pos: Vector2 = ship.position
@@ -257,8 +270,8 @@ func _draw_arrows(inv: float) -> void:
 		var left: Vector2 = pos + dir.rotated(2.5) * s * 0.72
 		var right: Vector2 = pos + dir.rotated(-2.5) * s * 0.72
 		var col: Color = _colors.get(ship.ship_id, Color.WHITE)
-		draw_colored_polygon(PackedVector2Array([tip, left, right]), col)
-		draw_polyline(PackedVector2Array([tip, left, right, tip]), ARROW_OUTLINE, 1.5 * inv)
+		col.a = alpha
+		draw_polyline(PackedVector2Array([tip, left, right, tip]), col, ARROW_OUTLINE_PX * inv)
 
 
 ## Direction a ship is travelling (velocity), falling back to its facing.

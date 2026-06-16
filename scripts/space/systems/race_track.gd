@@ -3,10 +3,12 @@ extends RefCounted
 
 ## Pure static helpers for race track data: load, gate detection, lap progress.
 ## All functions are stateless — the track Dictionary is the only shared state.
+##
+## A gate is a pair of posts {a, b}; a racer passes it by flying BETWEEN the two
+## posts (its path segment must cross the post-to-post segment). marker_position
+## returns the gate midpoint (the point a racer aims for).
 
 const TRACKS_PATH := "res://data/race_tracks/"
-const DEFAULT_CHECKPOINT_RADIUS := 250.0
-const DEFAULT_GATE_WIDTH := 500.0
 ## DNF cutoff: elapsed time limit = estimated ideal lap time × laps × this.
 const FINISH_TIME_LIMIT_MULT := 4.0
 ## Grid rows per column before wrapping to next column.
@@ -48,108 +50,94 @@ static func list_tracks() -> Array:
 	return out
 
 
-## Number of gate markers on this track.
+## Number of gates on this track.
 static func marker_count(track: Dictionary) -> int:
-	return track.get("markers", []).size()
+	return track.get("gates", []).size()
 
 
-## World position of marker at index.
-static func marker_position(track: Dictionary, index: int) -> Vector2:
-	var markers: Array = track.get("markers", [])
-	if index < 0 or index >= markers.size():
+## A gate's two posts (the points a racer flies between).
+static func gate_post_a(track: Dictionary, idx: int) -> Vector2:
+	return _read_point(track.get("gates", []), idx, "a")
+
+
+static func gate_post_b(track: Dictionary, idx: int) -> Vector2:
+	return _read_point(track.get("gates", []), idx, "b")
+
+
+static func _read_point(gates: Array, idx: int, key: String) -> Vector2:
+	"""Read post `key` of gate `idx` as a Vector2 (zero if out of range)."""
+	if idx < 0 or idx >= gates.size():
 		return Vector2.ZERO
-	var pos = markers[index].get("position", [0, 0])
-	return Vector2(float(pos[0]), float(pos[1]))
+	var p = gates[idx].get(key, [0, 0])
+	return Vector2(float(p[0]), float(p[1]))
 
 
-## Total gate crossings required to finish: laps × marker count.
+## Aim point for a gate: the midpoint between its two posts.
+static func marker_position(track: Dictionary, index: int) -> Vector2:
+	return (gate_post_a(track, index) + gate_post_b(track, index)) * 0.5
+
+
+## Total gate crossings required to finish: laps × gate count.
 static func total_markers_to_finish(track: Dictionary) -> int:
 	return track.get("laps", 1) * marker_count(track)
 
 
-## Unit tangent of marker[idx]'s gate (perpendicular to its normal — the axis
-## the gate opening spans). Used to draw the gate line across its width.
+## Unit vector along the gate opening (post a → post b).
 static func gate_tangent(track: Dictionary, idx: int) -> Vector2:
-	var markers: Array = track.get("markers", [])
-	if idx < 0 or idx >= markers.size():
-		return Vector2.UP
-	var norm_arr = markers[idx].get("gate_normal", [1, 0])
-	var n := Vector2(float(norm_arr[0]), float(norm_arr[1])).normalized()
-	return Vector2(-n.y, n.x)
+	var span: Vector2 = gate_post_b(track, idx) - gate_post_a(track, idx)
+	return span.normalized() if span.length() > 0.0 else Vector2.UP
 
 
-## Half-width of marker[idx]'s gate opening (world units).
+## Half the distance between a gate's posts (world units).
 static func gate_half_width(track: Dictionary, idx: int) -> float:
-	var markers: Array = track.get("markers", [])
-	if idx < 0 or idx >= markers.size():
-		return DEFAULT_GATE_WIDTH * 0.5
-	return float(markers[idx].get("gate_width", DEFAULT_GATE_WIDTH)) * 0.5
+	return gate_post_a(track, idx).distance_to(gate_post_b(track, idx)) * 0.5
 
 
-## Padding (world units) added around the marker AABB when framing a camera.
+## Padding (world units) added around the gate AABB when framing a camera.
 const TRACK_VIEW_PADDING := 700.0
 
 
-## Axis-aligned bounds of all markers, padded. Returns {center, size} for
-## framing an overview camera on the whole track.
+## Axis-aligned bounds covering every gate post, padded. Returns {center, size}
+## for framing an overview camera on the whole track.
 static func track_bounds(track: Dictionary) -> Dictionary:
-	"""Compute a padded {center, size} covering every gate marker."""
+	"""Compute a padded {center, size} covering every gate post."""
 	var n: int = marker_count(track)
 	if n == 0:
 		return {"center": Vector2.ZERO, "size": Vector2(2000, 2000)}
-	var lo: Vector2 = marker_position(track, 0)
+	var lo: Vector2 = gate_post_a(track, 0)
 	var hi: Vector2 = lo
-	for i in range(1, n):
-		var p: Vector2 = marker_position(track, i)
-		lo = Vector2(minf(lo.x, p.x), minf(lo.y, p.y))
-		hi = Vector2(maxf(hi.x, p.x), maxf(hi.y, p.y))
+	for i in range(n):
+		for p in [gate_post_a(track, i), gate_post_b(track, i)]:
+			lo = Vector2(minf(lo.x, p.x), minf(lo.y, p.y))
+			hi = Vector2(maxf(hi.x, p.x), maxf(hi.y, p.y))
 	lo -= Vector2(TRACK_VIEW_PADDING, TRACK_VIEW_PADDING)
 	hi += Vector2(TRACK_VIEW_PADDING, TRACK_VIEW_PADDING)
 	return {"center": (lo + hi) * 0.5, "size": hi - lo}
 
 
-## Gate-crossing check: did segment prev_pos→cur_pos cross marker[idx]'s gate?
-## Gate is defined by its center, normal, and width. A crossing counts when:
-##   1. The segment crosses the gate line (sign change along the normal axis).
-##   2. The crossing point is within gate_width / 2 of the gate center.
-## Direction-agnostic: a pass from either side counts (racers approach gates
-## from varying headings; the marker sequence already enforces lap order).
+## Did the racer fly BETWEEN gate idx's posts this tick? True when the movement
+## segment prev_pos→cur_pos crosses the post-to-post segment. Direction-agnostic
+## (a pass from either side counts); the gate sequence enforces lap order.
 static func crossed_gate(track: Dictionary, idx: int,
 		prev_pos: Vector2, cur_pos: Vector2) -> bool:
-	var markers: Array = track.get("markers", [])
-	if idx < 0 or idx >= markers.size():
+	if idx < 0 or idx >= marker_count(track):
 		return false
-	var m: Dictionary = markers[idx]
-	var center := marker_position(track, idx)
-	var norm_arr = m.get("gate_normal", [1, 0])
-	var normal := Vector2(float(norm_arr[0]), float(norm_arr[1])).normalized()
-	var width: float = float(m.get("gate_width", DEFAULT_GATE_WIDTH))
-
-	# Signed distances from the gate plane (normal dot (pos - center)).
-	var d_prev: float = normal.dot(prev_pos - center)
-	var d_cur: float = normal.dot(cur_pos - center)
-
-	# Must cross the plane (sign change or arrive exactly on it).
-	if d_prev * d_cur > 0.0:
-		return false
-
-	# Interpolate crossing point.
-	var t: float = 0.0
-	var denom: float = d_prev - d_cur
-	if abs(denom) > 0.0001:
-		t = d_prev / denom
-	var cross_point: Vector2 = prev_pos.lerp(cur_pos, t)
-
-	# Must be within gate half-width along the perpendicular axis.
-	var tangent: Vector2 = Vector2(-normal.y, normal.x)
-	var lateral: float = abs(tangent.dot(cross_point - center))
-	return lateral <= width * 0.5
+	return _segments_cross(prev_pos, cur_pos,
+		gate_post_a(track, idx), gate_post_b(track, idx))
 
 
-## Fallback: within checkpoint_radius of the marker center.
-static func within_checkpoint(track: Dictionary, idx: int, pos: Vector2) -> bool:
-	var radius: float = float(track.get("checkpoint_radius", DEFAULT_CHECKPOINT_RADIUS))
-	return pos.distance_to(marker_position(track, idx)) <= radius
+## True when open segments p1→p2 and p3→p4 properly intersect.
+static func _segments_cross(p1: Vector2, p2: Vector2, p3: Vector2, p4: Vector2) -> bool:
+	"""Standard orientation test for segment intersection."""
+	var d1: float = _cross(p4 - p3, p1 - p3)
+	var d2: float = _cross(p4 - p3, p2 - p3)
+	var d3: float = _cross(p2 - p1, p3 - p1)
+	var d4: float = _cross(p2 - p1, p4 - p1)
+	return ((d1 > 0.0) != (d2 > 0.0)) and ((d3 > 0.0) != (d4 > 0.0))
+
+
+static func _cross(u: Vector2, v: Vector2) -> float:
+	return u.x * v.y - u.y * v.x
 
 
 ## Compute starting grid positions for n_racers.

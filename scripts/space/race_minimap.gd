@@ -14,18 +14,17 @@ const START_COL := Color(0.35, 1.0, 0.45, 1.0)
 const FIT := 0.88
 ## Radius of a racer dot, in pixels.
 const SHIP_DOT := 5.5
-const MARKER_DOT := 3.5
 
 var _bounds: Dictionary = {"center": Vector2.ZERO, "size": Vector2(1000, 1000)}
-var _markers: Array = []   # Array[Vector2]
+var _gates: Array = []      # Array[[post_a: Vector2, post_b: Vector2]]
 var _racers: Array = []     # Array[{pos: Vector2, color: Color, dir: Vector2}]
 
 
-## One-time setup: the world bounds to frame and the gate marker positions.
-func setup(bounds: Dictionary, markers: Array) -> void:
-	"""Store the track framing and markers, then redraw."""
+## One-time setup: the world bounds to frame and the gate post segments.
+func setup(bounds: Dictionary, gates: Array) -> void:
+	"""Store the track framing and gate segments, then redraw."""
 	_bounds = bounds
-	_markers = markers
+	_gates = gates
 	queue_redraw()
 
 
@@ -50,18 +49,18 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), PANEL_BG, true)
 	draw_rect(Rect2(Vector2.ZERO, size), BORDER, false, 2.0)
 
-	# Track path: connect the gate markers in order, closing the loop.
-	if _markers.size() >= 2:
+	# Track path: connect the gate midpoints in order, closing the loop.
+	if _gates.size() >= 2:
 		var pts: PackedVector2Array = PackedVector2Array()
-		for m in _markers:
-			pts.append(_world_to_map(m))
-		pts.append(_world_to_map(_markers[0]))
+		for g in _gates:
+			pts.append(_world_to_map((g[0] + g[1]) * 0.5))
+		pts.append(_world_to_map((_gates[0][0] + _gates[0][1]) * 0.5))
 		draw_polyline(pts, TRACK_COL, 2.0)
 
-	# Gate markers (start/finish highlighted).
-	for i in range(_markers.size()):
-		var mp: Vector2 = _world_to_map(_markers[i])
-		draw_circle(mp, MARKER_DOT, START_COL if i == 0 else MARKER_COL)
+	# Gates: a short post-to-post line (start/finish highlighted).
+	for i in range(_gates.size()):
+		var col: Color = START_COL if i == 0 else MARKER_COL
+		draw_line(_world_to_map(_gates[i][0]), _world_to_map(_gates[i][1]), col, 2.0)
 
 	# Racers: bright filled dot + dark outline + a short heading tick.
 	for r in _racers:
