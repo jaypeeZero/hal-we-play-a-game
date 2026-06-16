@@ -7,6 +7,9 @@ extends OverlayScreen
 
 const RACE_TRACKS := ["asteroid_sprint", "nebula_circuit"]
 const NPC_SHIP_TYPES := ["fighter", "heavy_fighter", "corvette"]
+## Always keep at least this many NPC racers in the field so the player always
+## has someone to bet on (you cannot wager on your own pilots).
+const MIN_NPC_RACERS := 3
 const NPC_SKILL_MIN := 0.25
 const NPC_SKILL_MAX := 0.85
 ## Callsigns for NPC racers.
@@ -281,9 +284,11 @@ func _roll_new_race() -> void:
 
 	_entrants.clear()
 
-	# Add player's own pilots first.
+	# Add up to a capped number of the player's own pilots (for scouting), always
+	# leaving room for NPC racers — those are the ones you actually bet on.
+	var max_player: int = maxi(0, field_size - MIN_NPC_RACERS)
 	for hull in RoguelikeRun.fleet_hulls:
-		if _entrants.size() >= field_size:
+		if _entrants.size() >= max_player:
 			break
 		for crew_member in hull.get("crew", []):
 			if crew_member.get("role", -1) == CrewData.Role.PILOT:

@@ -74,3 +74,40 @@ func _first_npc(screen: RaceBettingScreen) -> int:
 		if not screen._entrants[i].get("is_player_pilot", false):
 			return i
 	return -1
+
+
+# ── Regression: a full player fleet must still leave NPCs to bet on ───────────
+# Previously the field added player pilots up to the WHOLE field size, so a real
+# run (fleet full of pilots) produced an all-"[YOURS]" field with no bet target.
+
+func test_full_player_fleet_still_has_bettable_npcs() -> void:
+	RoguelikeRun.fleet_hulls = _fleet_of_pilots(10)
+	var screen := _open_screen()
+	var bettable := 0
+	var mine := 0
+	for e in screen._entrants:
+		if e.get("is_player_pilot", false):
+			mine += 1
+		else:
+			bettable += 1
+	assert_gt(bettable, 0, "Even with a full fleet, there are NPC racers to bet on")
+	assert_lt(mine, screen._entrants.size(), "The field is not entirely the player's own pilots")
+
+
+func _fleet_of_pilots(n: int) -> Array:
+	var hulls: Array = []
+	for i in range(n):
+		hulls.append({
+			"hull_id": "h%d" % i,
+			"ship_type": "fighter",
+			"crew": [{
+				"crew_id": "p%d" % i,
+				"callsign": "Mine%d" % i,
+				"role": CrewData.Role.PILOT,
+				"qualified_roles": [CrewData.Role.PILOT],
+				"stats": {"stress": 0.0, "fatigue": 0.0, "reaction_time": 0.15,
+					"skills": {"piloting": 0.5, "awareness": 0.5, "composure": 0.5,
+						"aggression": 0.5, "aim": 0.5, "tactics": 0.5, "machinery": 0.5}},
+			}],
+		})
+	return hulls
