@@ -1,9 +1,9 @@
 extends GutTest
 
 ## Behavioral tests for racing flight. Racers fly via the REAL combat steering
-## (RaceMovementSystem → MovementSystem), so these assert capabilities, not
-## values: ships close on markers, skill and ship stats change outcomes, and the
-## sim is deterministic for a fixed field.
+## (MovementSystem.calculate_blended_control + apply_space_physics — the same path
+## battle uses), so these assert capabilities, not values: ships close on gates,
+## skill and ship stats change outcomes, and the sim is deterministic.
 
 const TICKS := 600
 const DELTA := RaceSimulator.FIXED_STEP
@@ -46,17 +46,23 @@ func _solo(piloting: float, ship_type: String = "fighter") -> Dictionary:
 func test_racer_closes_distance_to_marker() -> void:
 	var ship: Dictionary = ShipData.create_ship_instance("fighter", 0, Vector2(100, 100))
 	ship.erase("assigned_area")
-	ship["orders"] = RaceMovementSystem.pursuit_orders()
-	var marker: Vector2 = RaceTrack.marker_position(_track, 0)
-	var initial: float = ship.position.distance_to(marker)
+	ship["orders"] = RaceSimulator.pursuit_orders()
+	var gate_mid: Vector2 = RaceTrack.marker_position(_track, 0)
+	ship.orders["gate_a"] = RaceTrack.gate_post_a(_track, 0)
+	ship.orders["gate_b"] = RaceTrack.gate_post_b(_track, 0)
+	ship.orders["prev_objective"] = RaceTrack.marker_position(_track, 1)
+	ship.orders["next_objective"] = RaceTrack.marker_position(_track, 1)
+	var initial: float = ship.position.distance_to(gate_mid)
 
 	for _i in range(TICKS):
-		var updated: Dictionary = RaceMovementSystem.update_racer(ship, marker, [], DELTA)
+		var target := {"ship_id": "g", "position": gate_mid, "velocity": Vector2.ZERO}
+		var pc: Dictionary = MovementSystem.calculate_blended_control(ship, target, [], [], [], DELTA)
+		var updated: Dictionary = MovementSystem.apply_space_physics(ship, pc, DELTA)
 		ship.position = updated.position
 		ship.velocity = updated.velocity
 		ship.rotation = updated.rotation
 
-	assert_lt(ship.position.distance_to(marker), initial, "Racer closes on the marker over time")
+	assert_lt(ship.position.distance_to(gate_mid), initial, "Racer closes on the gate over time")
 
 
 # ── A racer progresses around the track ─────────────────────────────────────

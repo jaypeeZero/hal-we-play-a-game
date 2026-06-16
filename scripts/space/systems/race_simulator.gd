@@ -17,6 +17,26 @@ const FIXED_STEP := 1.0 / 60.0
 const MAX_SIM_SECONDS := 600.0
 ## Estimate one fast lap at this speed (units/sec) for the DNF time limit.
 const ESTIMATE_FAST_SPEED := 250.0
+## Synthetic target id for the gate a racer is currently flying through.
+const GATE_TARGET_ID := "__race_gate__"
+
+
+## Steering order block that drives pure waypoint pursuit through the shared
+## flight model: pursue-only weights, zero standoff = "fly through this point".
+## The per-tick goal (gate posts + prev/next) is stamped onto orders in step_one.
+static func pursuit_orders() -> Dictionary:
+	"""Return the steady steering order for a racer (goal points added per tick)."""
+	return {
+		"current_order": "tactical",
+		"engagement_target": GATE_TARGET_ID,
+		"target_id": GATE_TARGET_ID,
+		"goal_weights": {"pursue": 1.0, "keep_range": 0.0, "evade": 0.0, "formation": 0.0},
+		"preferred_range": 0.0,
+		"facing_mode": "auto",
+		"formation_slot": Vector2.ZERO,
+		"anchor_position": Vector2.ZERO,
+		"support_pos": null,
+	}
 
 
 ## Run a complete race headlessly. entrants is an Array of {ship, crew}.
@@ -66,7 +86,7 @@ static func setup_field(track: Dictionary, entrants: Array, seed: int) -> Dictio
 		# No operating area on a race track — let the racer roam the whole circuit.
 		ship.erase("assigned_area")
 		# Drive the racer like a ship pursuing a waypoint via the real steering.
-		ship["orders"] = RaceMovementSystem.pursuit_orders()
+		ship["orders"] = pursuit_orders()
 		ships.append(ship)
 		states[ship.ship_id] = RaceTrack.make_race_state(ship.ship_id, crew.get("crew_id", ""))
 		crews[ship.ship_id] = crew
@@ -87,23 +107,33 @@ static func step_one(ship_ref: Dictionary, states: Dictionary,
 	if state.finished or state.dnf:
 		return
 
-	var marker_pos: Vector2 = RaceTrack.marker_position(track, state.next_marker)
+	var idx: int = state.next_marker
+	var n: int = RaceTrack.marker_count(track)
+	var gate_mid: Vector2 = RaceTrack.marker_position(track, idx)
 	var prev_pos: Vector2 = ship_ref.position
 
-	# Fly toward the next marker via the real combat steering + physics.
-	var updated: Dictionary = RaceMovementSystem.update_racer(
-		ship_ref, marker_pos, all_ships, FIXED_STEP)
+	# The race-specific part is only DEFINING THE GOAL: fly through this gate at the
+	# spot that sets up the next one. The shared nav brain + flight model do the rest.
+	ship_ref.orders["gate_a"] = RaceTrack.gate_post_a(track, idx)
+	ship_ref.orders["gate_b"] = RaceTrack.gate_post_b(track, idx)
+	ship_ref.orders["prev_objective"] = RaceTrack.marker_position(track, posmod(idx - 1, n))
+	ship_ref.orders["next_objective"] = RaceTrack.marker_position(track, posmod(idx + 1, n))
+
+	var target := {"ship_id": GATE_TARGET_ID, "position": gate_mid, "velocity": Vector2.ZERO}
+	var pilot_control: Dictionary = MovementSystem.calculate_blended_control(
+		ship_ref, target, [], all_ships, [], FIXED_STEP)
+	var updated: Dictionary = MovementSystem.apply_space_physics(ship_ref, pilot_control, FIXED_STEP)
 	ship_ref.position = updated.position
 	ship_ref.velocity = updated.velocity
 	ship_ref.rotation = updated.rotation
 	ship_ref.brake_current_heat = updated.get("brake_current_heat", 0.0)
 	ship_ref.brake_overheated = updated.get("brake_overheated", false)
 
-	# Lap/marker progress, then telemetry.
+	# Lap/gate progress, then telemetry.
 	var new_state: Dictionary = RaceTrack.advance_progress(
 		state, track, prev_pos, ship_ref.position, time)
 	states[sid] = new_state
-	RaceTelemetry.sample(session, new_state, ship_ref, marker_pos, time, prev_pos)
+	RaceTelemetry.sample(session, new_state, ship_ref, gate_mid, time, prev_pos)
 
 
 ## Time limit for the race: estimated ideal lap time × laps × FINISH_TIME_LIMIT_MULT.

@@ -85,15 +85,17 @@ func test_results_contain_required_fields() -> void:
 
 
 # ── Skill signal in telemetry ───────────────────────────────────────────────
-# Piloting feeds the real flight model (turn/accel/lateral factors), so the
-# telemetry must reflect it: a better pilot sustains a higher average speed.
+# Piloting feeds the real flight model (turn/accel factors + the corner-speed
+# governor), so a better pilot flies a cleaner line: it overshoots gates less.
+# (Not "higher avg speed" — a good pilot brakes for corners, so it carries LESS
+# speed there, and wins on the line, not the straight-line top speed.)
 
-func test_higher_piloting_records_higher_avg_speed() -> void:
+func test_higher_piloting_overshoots_less() -> void:
 	var high: Dictionary = _run([{
 		"ship": ShipData.create_ship_instance("fighter", 0, Vector2.ZERO),
 		"crew": _make_crew(0.95, 0.7, "high")}], 77).standings[0]
 	var low: Dictionary = _run([{
 		"ship": ShipData.create_ship_instance("fighter", 0, Vector2.ZERO),
 		"crew": _make_crew(0.15, 0.7, "low")}], 77).standings[0]
-	assert_gt(float(high.avg_speed), float(low.avg_speed),
-		"Better pilot sustains a higher average speed via the real flight model")
+	assert_lte(int(high.overshoots), int(low.overshoots),
+		"Better pilot overshoots gates no more than a worse one (cleaner line)")
