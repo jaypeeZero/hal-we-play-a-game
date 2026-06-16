@@ -5,7 +5,9 @@ extends OverlayScreen
 ## Mirrors shop_screen.gd overlay pattern (build_chrome → setup → emit_closed).
 ## Money mutations and save use the exact same path as shop/battle.
 
-const NPC_SHIP_TYPES := ["fighter", "heavy_fighter", "corvette"]
+## Only fighter-class ships race (torpedo boat counts as a fighter); bigger hulls
+## like corvettes/capitals never enter, whether NPC or one of the player's own.
+const RACE_SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat"]
 const NPC_SKILL_MIN := 0.25
 const NPC_SKILL_MAX := 0.85
 ## Callsigns for NPC racers.
@@ -348,6 +350,8 @@ func _roll_new_race() -> void:
 	for hull in RoguelikeRun.fleet_hulls:
 		if _entrants.size() >= field_size:
 			break
+		if not RACE_SHIP_TYPES.has(hull.get("ship_type", "")):
+			continue  # only fighter-class hulls race
 		for crew_member in hull.get("crew", []):
 			if crew_member.get("role", -1) == CrewData.Role.PILOT:
 				var ship := ShipData.create_ship_instance(hull.ship_type, 0, Vector2.ZERO)
@@ -363,7 +367,7 @@ func _roll_new_race() -> void:
 	# Fill remaining slots with NPC racers.
 	var used_callsigns: Dictionary = {}
 	while _entrants.size() < field_size:
-		var stype: String = NPC_SHIP_TYPES[rng.randi() % NPC_SHIP_TYPES.size()]
+		var stype: String = RACE_SHIP_TYPES[rng.randi() % RACE_SHIP_TYPES.size()]
 		var ship := ShipData.create_ship_instance(stype, 1, Vector2.ZERO)
 		if ship.is_empty():
 			continue

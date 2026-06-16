@@ -81,7 +81,7 @@ func _demo_entrants() -> Array:
 		_entrant("fighter", "Ace", 0.95),
 		_entrant("fighter", "Rookie", 0.20),
 		_entrant("heavy_fighter", "Tank", 0.60),
-		_entrant("corvette", "Brick", 0.50),
+		_entrant("torpedo_boat", "Boomer", 0.50),
 		_entrant("fighter", "Vega", 0.75),
 		_entrant("heavy_fighter", "Hauler", 0.40),
 	]
