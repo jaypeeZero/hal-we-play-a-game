@@ -72,6 +72,17 @@ const ENGINES := {
 				"max_speed": 0.3
 			}
 		}
+	},
+	# Passive structural/utility internals — destroyable targets with no
+	# stat multiplier; their absence is handled by game logic (e.g. medbay
+	# disables rescue capability in Plan 04). Template may override max_health.
+	"medbay": {
+		"max_health": 30.0,
+		"effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}
+	},
+	"ammo": {
+		"max_health": 25.0,
+		"effect_on_ship": {"on_damaged": {}, "on_destroyed": {}}
 	}
 }
 

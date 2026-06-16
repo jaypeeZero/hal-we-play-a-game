@@ -8,16 +8,28 @@ extends RefCounted
 ## Gunner slots are matched by weapon_id; all other roles match by count only.
 
 
+## Key used to track whether a grouped-gunner slot is filled.
+## Joins weapon_ids with '|' for a stable dict key.
+static func _group_key(weapon_ids: Array) -> String:
+	var ids: Array = weapon_ids.duplicate()
+	ids.sort()
+	return "|".join(ids)
+
+
 ## Vacant complement slots on a hull — slots not currently filled by any crew member.
-## Gunner slots matched by weapon_id; non-gunner roles matched by remaining count.
+## Gunner slots matched by weapon binding (scalar weapon_id or grouped weapon_ids);
+## non-gunner roles matched by remaining count.
 ## Mirrors RoguelikeRun.hull_vacancies exactly.
 static func vacant_slots(hull: Dictionary) -> Array:
 	var filled_weapon_ids: Dictionary = {}
+	var filled_group_keys: Dictionary = {}
 	var remaining_role_counts: Dictionary = {}
 
 	for member in hull.get("crew", []):
 		var role: int = int(member.get("role", -1))
-		if role == CrewData.Role.GUNNER and member.has("weapon_id"):
+		if role == CrewData.Role.GUNNER and member.has("weapon_ids"):
+			filled_group_keys[_group_key(member["weapon_ids"])] = true
+		elif role == CrewData.Role.GUNNER and member.has("weapon_id"):
 			filled_weapon_ids[str(member["weapon_id"])] = true
 		else:
 			remaining_role_counts[role] = int(remaining_role_counts.get(role, 0)) + 1
@@ -25,7 +37,10 @@ static func vacant_slots(hull: Dictionary) -> Array:
 	var vacancies: Array = []
 	for slot in hull.get("complement", []):
 		var role: int = int(slot.get("role", -1))
-		if role == CrewData.Role.GUNNER and slot.has("weapon_id"):
+		if role == CrewData.Role.GUNNER and slot.has("weapon_ids"):
+			if not filled_group_keys.has(_group_key(slot["weapon_ids"])):
+				vacancies.append(slot)
+		elif role == CrewData.Role.GUNNER and slot.has("weapon_id"):
 			if not filled_weapon_ids.has(str(slot["weapon_id"])):
 				vacancies.append(slot)
 		elif int(remaining_role_counts.get(role, 0)) > 0:

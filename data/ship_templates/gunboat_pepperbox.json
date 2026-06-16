@@ -1,0 +1,130 @@
+{
+	"type": "gunboat_pepperbox",
+	"name": "Pepperbox",
+	"position": {"x": 0.0, "y": 0.0},
+	"velocity": {"x": 0.0, "y": 0.0},
+	"rotation": 0.0,
+	"angular_velocity": 0.0,
+	"ship_id": "ship_gunboat_pepperbox",
+	"team": 0,
+	"status": "operational",
+	"orders": {
+		"current_order": "engage",
+		"patrol_points": [],
+		"target_id": null
+	},
+	"stats": {
+		"max_speed": 170.0,
+		"acceleration": 45.0,
+		"turn_rate": 2.0,
+		"turn_speed_bleed": 0.1,
+		"mass": 150.0,
+		"size": 55.0,
+		"lateral_acceleration": 0.15,
+		"inertial_dampening": 0.6,
+		"brake_acceleration": 1.0,
+		"brake_heat_capacity": 140.0,
+		"brake_heat_dissipation": 8.0,
+		"brake_heat_per_second": 50.0
+	},
+	"armor_sections": [
+		{
+			"section_id": "front",
+			"arc": {"start": -70.0, "end": 70.0},
+			"current_armor": 50.0,
+			"max_armor": 50.0,
+			"position_offset": {"x": 0.0, "y": -12.0},
+			"size": 1.5
+		},
+		{
+			"section_id": "middle",
+			"arc": {"start": 70.0, "end": 290.0},
+			"current_armor": 60.0,
+			"max_armor": 60.0,
+			"position_offset": {"x": 0.0, "y": 0.0},
+			"size": 1.5
+		},
+		{
+			"section_id": "back",
+			"arc": {"start": 290.0, "end": 430.0},
+			"current_armor": 45.0,
+			"max_armor": 45.0,
+			"position_offset": {"x": 0.0, "y": 14.0},
+			"size": 1.5
+		}
+	],
+	"internals": [
+		{
+			"component_id": "engine",
+			"type": "engine",
+			"section_id": "back",
+			"position_offset": {"x": 0.0, "y": 12.0},
+			"max_health": 35.0,
+			"effect_on_ship": {
+				"on_damaged": {"max_speed": 0.8, "acceleration": 0.7},
+				"on_destroyed": {"max_speed": 0.5, "acceleration": 0.3}
+			}
+		},
+		{
+			"component_id": "ammo_bay",
+			"type": "ammo",
+			"section_id": "middle",
+			"position_offset": {"x": 0.0, "y": 0.0},
+			"max_health": 25.0,
+			"effect_on_ship": {
+				"on_damaged": {},
+				"on_destroyed": {}
+			}
+		}
+	],
+	"weapons": [
+		{
+			"weapon_id": "turret_1",
+			"type": "gatling_gun",
+			"section_id": "front",
+			"position_offset": {"x": -12.0, "y": -8.0},
+			"arc": {"min": -120.0, "max": 120.0},
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+		},
+		{
+			"weapon_id": "turret_2",
+			"type": "gatling_gun",
+			"section_id": "front",
+			"position_offset": {"x": 12.0, "y": -8.0},
+			"arc": {"min": -120.0, "max": 120.0},
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+		},
+		{
+			"weapon_id": "turret_3",
+			"type": "gatling_gun",
+			"section_id": "middle",
+			"position_offset": {"x": -14.0, "y": 0.0},
+			"arc": {"min": -120.0, "max": 120.0},
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+		},
+		{
+			"weapon_id": "turret_4",
+			"type": "gatling_gun",
+			"section_id": "middle",
+			"position_offset": {"x": 14.0, "y": 0.0},
+			"arc": {"min": -120.0, "max": 120.0},
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+		},
+		{
+			"weapon_id": "turret_5",
+			"type": "gatling_gun",
+			"section_id": "back",
+			"position_offset": {"x": -10.0, "y": 8.0},
+			"arc": {"min": -120.0, "max": 120.0},
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+		},
+		{
+			"weapon_id": "turret_6",
+			"type": "gatling_gun",
+			"section_id": "back",
+			"position_offset": {"x": 10.0, "y": 8.0},
+			"arc": {"min": -120.0, "max": 120.0},
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+		}
+	]
+}

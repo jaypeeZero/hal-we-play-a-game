@@ -299,6 +299,11 @@ func _process_weapons(delta: float) -> Array:
 		if ship.status in ["disabled", "destroyed"]:
 			continue
 
+		# Silence weapons whose operator is no longer alive before firing.
+		if ENABLE_CREW_AI:
+			ship = CrewIntegrationSystem.reconcile_weapon_intents(ship, _crew_list)
+			_ships[i] = ship
+
 		var result = WeaponSystem.update_weapons(ship, _ships, delta)
 		_ships[i] = result.ship_data  # Update ship with new weapon cooldowns
 		all_fire_commands.append_array(result.fire_commands)
@@ -558,7 +563,13 @@ func _execute_spawn(spawn_position: Vector2) -> void:
 			ship_position.y = clamp(ship_position.y, 50, _battlefield_size.y - 50)
 
 			var patrol_center := _battlefield_size * 0.5
-			var patrol_radius: float = BattlePlanner.LARGE_SHIP_PATROL_ZONE_RADIUS if FleetDataManager.is_large_ship(ship_type) else BattlePlanner.PATROL_ZONE_RADIUS
+			var patrol_radius: float
+			if FleetDataManager.is_large_ship(ship_type):
+				patrol_radius = BattlePlanner.LARGE_SHIP_PATROL_ZONE_RADIUS
+			elif FleetDataManager.is_gunboat(ship_type):
+				patrol_radius = BattlePlanner.GUNBOAT_PATROL_ZONE_RADIUS
+			else:
+				patrol_radius = BattlePlanner.PATROL_ZONE_RADIUS
 			spawn_ship(ship_type, team, ship_position, patrol_center, patrol_radius)
 
 	_pending_spawn = {}
@@ -1321,6 +1332,9 @@ func _create_crew_for_ship(ship_id: String, ship_type: String, team: int, hull_i
 	else:
 		new_crew = CrewData.create_crew_for_ship_type(ship_type, weapon_count, base_skill)
 		new_crew = CrewData.bind_gunners_to_weapons(new_crew, ship_data.get("weapons", []))
+
+	if new_crew.is_empty():
+		push_error("_create_crew_for_ship: no crew produced for ship_id=%s type=%s team=%d — ship will be uncrewed" % [ship_id, ship_type, team])
 
 	# Compile per-ship orders for player crew. Roguelike uses the run's saved
 	# doctrine + squadron mission; skirmish (Fleet Command) uses its doctrine +

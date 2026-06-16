@@ -55,7 +55,7 @@ const MISSION_ORDER := [
 	SquadronData.Mission.ASSAULT,
 ]
 
-const SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat", "corvette", "capital"]
+const SHIP_TYPES := FleetDataManager.SHIP_TYPES
 
 # Tactics dropdown sentinels. The empty-string value ("" = class default /
 # inherit preset) is surfaced to the player as a friendly label.

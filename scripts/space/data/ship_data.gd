@@ -122,7 +122,7 @@ static func _apply_base_stats(data: Dictionary) -> Dictionary:
 		var internals := []
 		for internal in data.internals:
 			internals.append(BaseStats.apply_internal_base_stats(internal))
-		if FleetDataManager.is_large_ship(data.get("type", "")):
+		if FleetDataManager.has_destroyable_mounts(data.get("type", "")):
 			for weapon in data.get("weapons", []):
 				var mount := _weapon_mount_for(weapon)
 				if not _has_component(internals, mount.component_id):
@@ -190,8 +190,13 @@ static func create_ship_instance(ship_type: String, team: int, position: Vector2
 
 ## Create crew for ship based on type
 static func create_crew_for_ship(ship_data: Dictionary, skill_level: float = 0.5) -> Array:
-	var weapon_count: int = ship_data.get("weapons", []).size()
-	var crew := CrewData.create_crew_for_ship_type(ship_data.type, weapon_count, skill_level)
+	var crew: Array
+	if FleetDataManager.is_gunboat(ship_data.get("type", "")):
+		# Gunboats need the live weapons array for correct gunner binding.
+		crew = CrewData.create_gunboat_crew(ship_data.type, ship_data.get("weapons", []), skill_level)
+	else:
+		var weapon_count: int = ship_data.get("weapons", []).size()
+		crew = CrewData.create_crew_for_ship_type(ship_data.type, weapon_count, skill_level)
 	for member in crew:
 		member.assigned_to = ship_data.ship_id
 	return crew

@@ -7,11 +7,18 @@ extends RefCounted
 const TEAM_0_FILE := "user://team_0_fleet.json"
 const TEAM_1_FILE := "user://team_1_fleet.json"
 
-const SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat", "corvette", "capital"]
+const SHIP_TYPES := [
+	"fighter", "heavy_fighter", "torpedo_boat", "corvette", "capital",
+	"gunboat_medic", "gunboat_pepperbox", "gunboat_firecracker",
+]
 
 ## Ship type categories - SINGLE SOURCE OF TRUTH
 ## All systems should use these instead of hardcoding ship type checks
-const FIGHTER_CLASS_TYPES := ["fighter", "heavy_fighter", "torpedo_boat"]
+const GUNBOAT_TYPES := ["gunboat_medic", "gunboat_pepperbox", "gunboat_firecracker"]
+## Fighter-class: small/medium hulls using Fighter Pilot AI with no captain.
+## Gunboats are fighter-class even though they have destroyable mounts.
+const FIGHTER_CLASS_TYPES := ["fighter", "heavy_fighter", "torpedo_boat",
+	"gunboat_medic", "gunboat_pepperbox", "gunboat_firecracker"]
 const LARGE_SHIP_TYPES := ["corvette", "capital"]
 
 ## Check if a ship type is fighter-class (small, agile craft)
@@ -22,6 +29,16 @@ static func is_fighter_class(ship_type: String) -> bool:
 static func is_large_ship(ship_type: String) -> bool:
 	return ship_type in LARGE_SHIP_TYPES
 
+## Check if a ship type is a gunboat variant.
+static func is_gunboat(ship_type: String) -> bool:
+	return ship_type in GUNBOAT_TYPES
+
+## Check if a ship type has individually destroyable weapon mounts.
+## Large ships and gunboats both carry destroyable turret mounts;
+## fighter-class (non-gunboat) weapons are integral to the hull.
+static func has_destroyable_mounts(ship_type: String) -> bool:
+	return is_large_ship(ship_type) or is_gunboat(ship_type)
+
 ## Default fleet when no save file exists
 static func get_default_fleet() -> Dictionary:
 	return {
@@ -29,7 +46,10 @@ static func get_default_fleet() -> Dictionary:
 		"heavy_fighter": 0,
 		"torpedo_boat": 0,
 		"corvette": 0,
-		"capital": 0
+		"capital": 0,
+		"gunboat_medic": 0,
+		"gunboat_pepperbox": 0,
+		"gunboat_firecracker": 0,
 	}
 
 

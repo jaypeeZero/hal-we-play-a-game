@@ -1,0 +1,38 @@
+{
+	"ship_type": "gunboat_firecracker",
+	"base_size": 50.0,
+	"description": "Long torpedo-boat profile with a wide tube array at the bow",
+	"sections": [
+		{
+			"section_id": "front",
+			"points": [
+				{"x": -14.0, "y": -20.0},
+				{"x": -18.0, "y": -40.0},
+				{"x": 0.0,   "y": -50.0},
+				{"x": 18.0,  "y": -40.0},
+				{"x": 14.0,  "y": -20.0},
+				{"x": -14.0, "y": -20.0}
+			]
+		},
+		{
+			"section_id": "middle",
+			"points": [
+				{"x": -14.0, "y": -20.0},
+				{"x": 14.0,  "y": -20.0},
+				{"x": 14.0,  "y": 18.0},
+				{"x": -14.0, "y": 18.0},
+				{"x": -14.0, "y": -20.0}
+			]
+		},
+		{
+			"section_id": "back",
+			"points": [
+				{"x": -22.0, "y": 50.0},
+				{"x": 22.0,  "y": 50.0},
+				{"x": 14.0,  "y": 18.0},
+				{"x": -14.0, "y": 18.0},
+				{"x": -22.0, "y": 50.0}
+			]
+		}
+	]
+}

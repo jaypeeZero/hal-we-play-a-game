@@ -11,6 +11,9 @@ const PATROL_ZONE_RADIUS: float = 700.0
 # to maneuver at range. A capital fenced into 700u can't actually orbit a
 # target without being yanked home by the area leash.
 const LARGE_SHIP_PATROL_ZONE_RADIUS: float = 1500.0
+# Gunboats are larger than fighters but not capital-class; they need a mid-size
+# operating radius so slow-moving hulls can still cycle on their patrol center.
+const GUNBOAT_PATROL_ZONE_RADIUS: float = 1000.0
 # Cardinal offsets used to spread squadrons into distinct quadrants
 const PATROL_QUADRANT_DIRS: Array = [
 	Vector2(0, -1),  # North
@@ -76,7 +79,13 @@ static func _plan_team(fleet: Dictionary, team: int, base_x: float, quadrant_off
 			squadron_count += 1
 		var dir: Vector2 = PATROL_QUADRANT_DIRS[squadron_quadrant[ship_type]]
 		var patrol_center: Vector2 = battlefield_center + dir * PATROL_ZONE_RADIUS
-		var patrol_radius: float = LARGE_SHIP_PATROL_ZONE_RADIUS if FleetDataManager.is_large_ship(ship_type) else PATROL_ZONE_RADIUS
+		var patrol_radius: float
+		if FleetDataManager.is_large_ship(ship_type):
+			patrol_radius = LARGE_SHIP_PATROL_ZONE_RADIUS
+		elif FleetDataManager.is_gunboat(ship_type):
+			patrol_radius = GUNBOAT_PATROL_ZONE_RADIUS
+		else:
+			patrol_radius = PATROL_ZONE_RADIUS
 		entries.append({
 			"ship_type": ship_type,
 			"team": team,

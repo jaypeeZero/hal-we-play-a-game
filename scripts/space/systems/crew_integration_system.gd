@@ -52,20 +52,22 @@ static func apply_crew_decisions_to_ships(ships: Array, crew_list: Array, decisi
 			var ship_index = find_ship_index(updated_ships, ship_id)
 			if ship_index >= 0:
 				var crew = find_crew_by_id(crew_list, decision.get("crew_id"))
-				updated_ships[ship_index] = apply_decision_to_ship(updated_ships[ship_index], decision, crew)
+				updated_ships[ship_index] = apply_decision_to_ship(updated_ships[ship_index], decision, crew, crew_list)
 
 	return {
 		"ships": updated_ships,
 		"actions": extract_immediate_actions(decisions)
 	}
 
-## Apply single decision to ship
-static func apply_decision_to_ship(ship_data: Dictionary, decision: Dictionary, crew_data: Dictionary) -> Dictionary:
+## Apply single decision to ship.
+## crew_list is the full live crew array; it is used to source gunner-claimed
+## weapon-id sets so the pilot only stamps weapons that no live gunner mans.
+static func apply_decision_to_ship(ship_data: Dictionary, decision: Dictionary, crew_data: Dictionary, crew_list: Array = []) -> Dictionary:
 	match decision.get("type"):
 		"maneuver":
-			return apply_maneuver_decision(ship_data, decision, crew_data)
+			return apply_maneuver_decision(ship_data, decision, crew_data, crew_list)
 		"fire":
-			return apply_fire_decision(ship_data, decision, crew_data)
+			return apply_fire_decision(ship_data, decision, crew_data, crew_list)
 		"tactical":
 			return apply_tactical_decision(ship_data, decision, crew_data)
 		"repair":
@@ -77,10 +79,11 @@ static func apply_decision_to_ship(ship_data: Dictionary, decision: Dictionary, 
 # MANEUVER DECISIONS (Pilot)
 # ============================================================================
 
-## Apply pilot's maneuver decision
-## All fighter maneuvers use "fight_" prefix and are handled generically
-## This prevents bugs when adding new maneuvers
-static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary, crew_data: Dictionary) -> Dictionary:
+## Apply pilot's maneuver decision.
+## All fighter maneuvers use "fight_" prefix and are handled generically.
+## crew_list is the full live crew array, used to determine which weapons
+## are gunner-owned so the pilot only stamps the remainder.
+static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary, crew_data: Dictionary, crew_list: Array = []) -> Dictionary:
 	var updated = ship_data.duplicate(true)
 	var subtype = decision.get("subtype", "")
 
@@ -156,6 +159,17 @@ static func apply_maneuver_decision(ship_data: Dictionary, decision: Dictionary,
 	updated.orders.flee_target = decision.get("flee_target",
 		ship_data.get("orders", {}).get("flee_target", Vector2.ZERO))
 
+	# Stamp fire intent on pilot-operated weapons.
+	# A live pilot always fires when the weapon arc/range allows — the weapon's own
+	# can_fire_at_target check is the gate, not the maneuver subtype. Pass the
+	# decision's target_id if present; an empty intent_target_id lets the weapon
+	# pick its best in-arc target automatically.
+	# crew_list is threaded in so we know which weapons live gunners own — the pilot
+	# only stamps weapons that no gunner is assigned to.
+	if crew_data and crew_data.get("role", -1) == CrewData.Role.PILOT:
+		var target_id: String = decision.get("target_id", "")
+		updated = _stamp_operator_intent(updated, crew_data, true, target_id, crew_list)
+
 	# Apply crew skill modifiers to ship stats
 	if crew_data and crew_data.has("stats"):
 		updated = apply_pilot_skill_modifiers(updated, crew_data)
@@ -219,12 +233,22 @@ static func apply_pilot_skill_modifiers(ship_data: Dictionary, crew_data: Dictio
 # FIRE DECISIONS (Gunner)
 # ============================================================================
 
-## Apply gunner's fire decision
-static func apply_fire_decision(ship_data: Dictionary, decision: Dictionary, crew_data: Dictionary) -> Dictionary:
+## Apply gunner's fire decision, stamping fire_intent onto the weapons this
+## operator mans (scalar weapon_id, list weapon_ids, or pilot forward weapons).
+## crew_list is the full live crew array; used when the caller is a pilot so
+## only unclaimed weapons are stamped.
+static func apply_fire_decision(ship_data: Dictionary, decision: Dictionary, crew_data: Dictionary, crew_list: Array = []) -> Dictionary:
 	var updated = ship_data.duplicate(true)
 
-	# Set target for weapon system
-	updated.orders.target_id = decision.get("target_id", "")
+	var subtype: String = decision.get("subtype", "fire")
+	var engaging: bool = subtype != "hold_fire"
+	var target_id: String = decision.get("target_id", "")
+
+	# Set ship-level target for fallback targeting.
+	updated.orders.target_id = target_id
+
+	# Stamp fire_intent onto every weapon this operator mans.
+	updated = _stamp_operator_intent(updated, crew_data, engaging, target_id, crew_list)
 
 	# Apply gunner skill to weapon accuracy
 	if crew_data and crew_data.has("stats"):
@@ -232,6 +256,160 @@ static func apply_fire_decision(ship_data: Dictionary, decision: Dictionary, cre
 		updated = AttributeModifierSystem.apply_for_crew(updated, crew_data)
 
 	return updated
+
+
+## Stamp fire_intent / intent_target_id onto all weapons operated by this crew member.
+## Returns the updated ship_data dictionary (pure function — does not mutate in place).
+## Handles all crew shapes: scalar weapon_id, list weapon_ids (pepperbox), and
+## pilot-operated forward weapons (solo fighter — no bound gunner on those weapons).
+##
+## crew_list: the full live crew array. Used for the PILOT branch to determine
+## which weapons are claimed by a live gunner so the pilot only stamps the rest.
+## For the GUNNER branch, only crew_data's own weapon bindings are used — the
+## gunner always stamps exactly their own weapon(s).
+static func _stamp_operator_intent(ship_data: Dictionary, crew_data: Dictionary,
+		engaging: bool, target_id: String, crew_list: Array = []) -> Dictionary:
+	var weapons: Array = ship_data.get("weapons", []).duplicate(true)
+	if weapons.is_empty():
+		return ship_data
+
+	var role: int = crew_data.get("role", -1)
+
+	if role == CrewData.Role.GUNNER:
+		if crew_data.has("weapon_ids"):
+			# Grouped pepperbox gunner: stamp every weapon in the group.
+			var ids: Array = crew_data.get("weapon_ids", []).map(func(x): return str(x))
+			for i in weapons.size():
+				if str(weapons[i].get("weapon_id", "")) in ids:
+					weapons[i] = _set_weapon_intent(weapons[i], engaging, target_id)
+		elif crew_data.has("weapon_id"):
+			# Standard 1:1 gunner.
+			var wid: String = str(crew_data.get("weapon_id", ""))
+			for i in weapons.size():
+				if str(weapons[i].get("weapon_id", "")) == wid:
+					weapons[i] = _set_weapon_intent(weapons[i], engaging, target_id)
+		# Gunner with no binding: no stamping — no weapon is theirs.
+	elif role == CrewData.Role.PILOT:
+		# Pilot operates all weapons that have no live gunner assigned.
+		# Source the claimed-id set from the LIVE crew_list so this is correct
+		# even when ship_data has no embedded "crew" key (the normal runtime case:
+		# ShipData.create_ship_instance is called with create_crew=false and crew
+		# lives in space_battle_game._crew_list instead).
+		var ship_id: String = ship_data.get("ship_id", "")
+		var gunner_claimed: Dictionary = _build_gunner_claimed_ids_from_crew_list(crew_list, ship_id)
+		for i in weapons.size():
+			var wid: String = str(weapons[i].get("weapon_id", ""))
+			if not gunner_claimed.has(wid):
+				weapons[i] = _set_weapon_intent(weapons[i], engaging, target_id)
+
+	var updated: Dictionary = ship_data.duplicate(true)
+	updated["weapons"] = weapons
+
+	# When a gunner stamps, persist their weapon claim set in ship_data so that
+	# reconcile_weapon_intents can detect dead-gunner weapons even after the gunner
+	# is removed from the live crew_list.  We merge into the existing set (never
+	# remove entries) so a second gunner stamping after the first gunner died still
+	# knows the first gunner's weapon was gunner-operated.
+	if role == CrewData.Role.GUNNER:
+		var all_claimed: Dictionary = updated.get("_gunner_weapon_ids", {}).duplicate()
+		if crew_data.has("weapon_ids"):
+			for wid in crew_data.get("weapon_ids", []):
+				all_claimed[str(wid)] = true
+		elif crew_data.has("weapon_id"):
+			all_claimed[str(crew_data.get("weapon_id", ""))] = true
+		updated["_gunner_weapon_ids"] = all_claimed
+
+	return updated
+
+
+## Build a set of weapon_ids claimed by any live gunner assigned to ship_id in crew_list.
+## This is the authoritative source for "which weapons does a pilot NOT operate":
+## it reads the LIVE crew list (not ship_data.crew, which is empty at runtime).
+static func _build_gunner_claimed_ids_from_crew_list(crew_list: Array, ship_id: String) -> Dictionary:
+	var claimed: Dictionary = {}
+	for member in crew_list:
+		if member.get("assigned_to", "") != ship_id:
+			continue
+		if int(member.get("role", -1)) != CrewData.Role.GUNNER:
+			continue
+		if member.has("weapon_ids"):
+			for wid in member.get("weapon_ids", []):
+				claimed[str(wid)] = true
+		elif member.has("weapon_id"):
+			claimed[str(member.get("weapon_id", ""))] = true
+	return claimed
+
+
+## Return a copy of a weapon dict with intent fields set.
+static func _set_weapon_intent(weapon: Dictionary, engaging: bool, target_id: String) -> Dictionary:
+	var w: Dictionary = weapon.duplicate()
+	w["fire_intent"] = engaging
+	w["intent_target_id"] = target_id if engaging else ""
+	return w
+
+
+## Clear fire_intent on any weapon whose bound gunner is no longer in crew_list.
+## Pilot-operated weapons (not claimed by any gunner in crew_list) are left
+## alone — a live pilot keeps them firing.
+## Call this before _process_weapons so dead-gunner weapons go silent.
+static func reconcile_weapon_intents(ship_data: Dictionary, crew_list: Array) -> Dictionary:
+	var weapons: Array = ship_data.get("weapons", [])
+	if weapons.is_empty():
+		return ship_data
+
+	var ship_id: String = ship_data.get("ship_id", "")
+
+	# Build sets of live crew on this ship.
+	var live_pilots: bool = false
+	var live_gunner_weapon_ids: Dictionary = {}
+	for crew in crew_list:
+		if crew.get("assigned_to", "") != ship_id:
+			continue
+		var role: int = int(crew.get("role", -1))
+		if role == CrewData.Role.PILOT:
+			live_pilots = true
+		elif role == CrewData.Role.GUNNER:
+			if crew.has("weapon_ids"):
+				for wid in crew.get("weapon_ids", []):
+					live_gunner_weapon_ids[str(wid)] = true
+			elif crew.has("weapon_id"):
+				live_gunner_weapon_ids[str(crew.get("weapon_id", ""))] = true
+
+	# Build the complete set of gunner-owned weapon ids.  Prefer the persistent
+	# cache stamped onto ship_data by _stamp_operator_intent each time a gunner
+	# fires — this survives crew death and does not rely on ship_data.crew (which
+	# is empty at runtime).  Fall back to the live crew_list if the cache is
+	# absent (e.g. first frame before any gunner decision has been applied).
+	var all_gunner_weapon_ids: Dictionary
+	if ship_data.has("_gunner_weapon_ids"):
+		all_gunner_weapon_ids = ship_data["_gunner_weapon_ids"]
+	else:
+		all_gunner_weapon_ids = _build_gunner_claimed_ids_from_crew_list(crew_list, ship_id)
+
+	var changed := false
+	var updated_weapons: Array = weapons.duplicate(true)
+	for i in updated_weapons.size():
+		var w: Dictionary = updated_weapons[i]
+		if not w.has("fire_intent"):
+			continue  # No intent stamped yet; compat default (fire) applies.
+		var wid: String = str(w.get("weapon_id", ""))
+		if all_gunner_weapon_ids.has(wid):
+			# This weapon belongs to a gunner; silence it if that gunner is gone.
+			if not live_gunner_weapon_ids.has(wid):
+				updated_weapons[i] = _set_weapon_intent(w, false, "")
+				changed = true
+		else:
+			# Pilot-operated weapon: keep intent as long as a pilot is alive.
+			if not live_pilots and w.get("fire_intent", false) != false:
+				updated_weapons[i] = _set_weapon_intent(w, false, "")
+				changed = true
+
+	if not changed:
+		return ship_data
+
+	var result: Dictionary = ship_data.duplicate(true)
+	result["weapons"] = updated_weapons
+	return result
 
 ## Apply gunner skill modifiers to weapons.
 ## Writes raw aim skill onto ship_data.crew_modifiers; WeaponSystem reads it

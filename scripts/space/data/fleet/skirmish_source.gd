@@ -92,11 +92,18 @@ func assign(crew_id: String, hull_id: String) -> void:
 	var slot: Dictionary = CrewFit.matching_vacancy(hull, crew)
 	if slot.is_empty():
 		return
-	# Rebind weapon_id if the slot is a gunner slot.
-	if int(slot.get("role", -1)) == CrewData.Role.GUNNER and slot.has("weapon_id"):
-		crew["weapon_id"] = str(slot["weapon_id"])
-	elif crew.has("weapon_id"):
-		crew.erase("weapon_id")
+	# Rebind weapon binding for gunner slots.
+	# Grouped slots (weapon_ids) take priority over scalar (weapon_id).
+	if int(slot.get("role", -1)) == CrewData.Role.GUNNER:
+		if slot.has("weapon_ids"):
+			crew["weapon_ids"] = slot["weapon_ids"].duplicate()
+			crew.erase("weapon_id")
+		elif slot.has("weapon_id"):
+			crew["weapon_id"] = str(slot["weapon_id"])
+			crew.erase("weapon_ids")
+		else:
+			crew.erase("weapon_id")
+			crew.erase("weapon_ids")
 	hull.get("crew", []).append(crew)
 	_pool.erase(crew)
 
@@ -134,17 +141,32 @@ func swap(crew_id_a: String, crew_id_b: String) -> void:
 		return
 
 	# Exchange weapon bindings for gunner slots (mirrors RoguelikeRun.swap_crew).
+	# Handles both scalar (weapon_id) and grouped (weapon_ids) bindings.
 	if int(member_a.get("role", -1)) == CrewData.Role.GUNNER:
+		var ids_a: Array = member_a.get("weapon_ids", []).duplicate()
+		var ids_b: Array = member_b.get("weapon_ids", []).duplicate()
 		var wid_a: String = str(member_a.get("weapon_id", ""))
 		var wid_b: String = str(member_b.get("weapon_id", ""))
-		if wid_b != "":
-			member_a["weapon_id"] = wid_b
-		elif member_a.has("weapon_id"):
+		# Swap grouped binding for member_a
+		if not ids_b.is_empty():
+			member_a["weapon_ids"] = ids_b
 			member_a.erase("weapon_id")
-		if wid_a != "":
-			member_b["weapon_id"] = wid_a
-		elif member_b.has("weapon_id"):
+		elif wid_b != "":
+			member_a["weapon_id"] = wid_b
+			member_a.erase("weapon_ids")
+		else:
+			member_a.erase("weapon_id")
+			member_a.erase("weapon_ids")
+		# Swap grouped binding for member_b
+		if not ids_a.is_empty():
+			member_b["weapon_ids"] = ids_a
 			member_b.erase("weapon_id")
+		elif wid_a != "":
+			member_b["weapon_id"] = wid_a
+			member_b.erase("weapon_ids")
+		else:
+			member_b.erase("weapon_id")
+			member_b.erase("weapon_ids")
 
 	hull_a.get("crew", []).erase(member_a)
 	hull_b.get("crew", []).erase(member_b)

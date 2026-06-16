@@ -85,10 +85,24 @@ static func try_fire_weapon(ship_data: Dictionary, weapon: Dictionary, targets: 
 	if not is_weapon_ready(weapon):
 		return create_no_fire_result(weapon)
 
+	# Operator intent gate: explicit false = hold; missing field = fire (compat default).
+	if weapon.get("fire_intent", true) == false:
+		return create_no_fire_result(weapon)
+
 	if targets.is_empty():
 		return create_no_fire_result(weapon)
 
-	var best_target = find_best_target_for_weapon(ship_data, weapon, targets)
+	# Prefer the operator's designated target; fall back to best-in-arc selection.
+	var intent_id: String = weapon.get("intent_target_id", "")
+	var best_target: Dictionary = {}
+	if intent_id != "":
+		for t in targets:
+			if t.get("ship_id", "") == intent_id:
+				best_target = t
+				break
+
+	if best_target.is_empty():
+		best_target = find_best_target_for_weapon(ship_data, weapon, targets)
 
 	if best_target.is_empty():
 		return create_no_fire_result(weapon)

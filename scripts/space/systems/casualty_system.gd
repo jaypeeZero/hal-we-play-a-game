@@ -55,7 +55,14 @@ static func resolve_hull_casualties(crew: Array, ship_before: Dictionary, ship_a
 static func _is_casualty(member: Dictionary, destroyed_mount_weapons: Dictionary, newly_destroyed_count: int, rng: RandomNumberGenerator) -> bool:
 	match member.get("role", -1):
 		CrewData.Role.GUNNER:
-			# A gunner dies with their weapon when its mount is shot off.
+			# A gunner dies when their mount is shot off. Pepperbox gunners carry
+			# a `weapon_ids` group; they die if ANY gun in the group loses its mount.
+			if member.has("weapon_ids"):
+				for wid in member.get("weapon_ids", []):
+					if destroyed_mount_weapons.has(str(wid)):
+						return true
+				return false
+			# Standard 1:1 binding
 			return destroyed_mount_weapons.has(member.get("weapon_id", ""))
 		CrewData.Role.ENGINEER:
 			return _engineer_dies(member, newly_destroyed_count, rng)
