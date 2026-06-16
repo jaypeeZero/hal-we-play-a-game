@@ -84,7 +84,7 @@
 			"section_id": "front",
 			"position_offset": {"x": -12.0, "y": -8.0},
 			"arc": {"min": -120.0, "max": 120.0},
-			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0}
 		},
 		{
 			"weapon_id": "turret_2",
@@ -92,7 +92,7 @@
 			"section_id": "front",
 			"position_offset": {"x": 12.0, "y": -8.0},
 			"arc": {"min": -120.0, "max": 120.0},
-			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0}
 		},
 		{
 			"weapon_id": "turret_3",
@@ -100,7 +100,7 @@
 			"section_id": "middle",
 			"position_offset": {"x": -14.0, "y": 0.0},
 			"arc": {"min": -120.0, "max": 120.0},
-			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0}
 		},
 		{
 			"weapon_id": "turret_4",
@@ -108,7 +108,7 @@
 			"section_id": "middle",
 			"position_offset": {"x": 14.0, "y": 0.0},
 			"arc": {"min": -120.0, "max": 120.0},
-			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0}
 		},
 		{
 			"weapon_id": "turret_5",
@@ -116,7 +116,7 @@
 			"section_id": "back",
 			"position_offset": {"x": -10.0, "y": 8.0},
 			"arc": {"min": -120.0, "max": 120.0},
-			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0}
 		},
 		{
 			"weapon_id": "turret_6",
@@ -124,7 +124,7 @@
 			"section_id": "back",
 			"position_offset": {"x": 10.0, "y": 8.0},
 			"arc": {"min": -120.0, "max": 120.0},
-			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0, "range": 320.0}
+			"stats": {"damage": 3.0, "rate_of_fire": 3.0, "size": 1.0}
 		}
 	]
 }

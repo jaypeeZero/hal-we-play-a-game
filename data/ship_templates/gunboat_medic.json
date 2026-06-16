@@ -84,7 +84,7 @@
 			"section_id": "front",
 			"position_offset": {"x": -8.0, "y": -8.0},
 			"arc": {"min": -130.0, "max": 130.0},
-			"stats": {"damage": 4.0, "rate_of_fire": 2.5, "size": 1.0, "range": 280.0}
+			"stats": {"damage": 4.0, "rate_of_fire": 2.5, "size": 1.0}
 		},
 		{
 			"weapon_id": "def_turret_2",
@@ -92,7 +92,7 @@
 			"section_id": "front",
 			"position_offset": {"x": 8.0, "y": -8.0},
 			"arc": {"min": -130.0, "max": 130.0},
-			"stats": {"damage": 4.0, "rate_of_fire": 2.5, "size": 1.0, "range": 280.0}
+			"stats": {"damage": 4.0, "rate_of_fire": 2.5, "size": 1.0}
 		}
 	]
 }

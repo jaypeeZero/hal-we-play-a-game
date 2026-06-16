@@ -84,7 +84,7 @@
 			"section_id": "front",
 			"position_offset": {"x": -8.0, "y": -10.0},
 			"arc": {"min": -25.0, "max": 25.0},
-			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0, "range": 650.0}
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
 		},
 		{
 			"weapon_id": "tube_2",
@@ -92,7 +92,7 @@
 			"section_id": "front",
 			"position_offset": {"x": -4.0, "y": -12.0},
 			"arc": {"min": -25.0, "max": 25.0},
-			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0, "range": 650.0}
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
 		},
 		{
 			"weapon_id": "tube_3",
@@ -100,7 +100,7 @@
 			"section_id": "front",
 			"position_offset": {"x": 0.0, "y": -13.0},
 			"arc": {"min": -25.0, "max": 25.0},
-			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0, "range": 650.0}
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
 		},
 		{
 			"weapon_id": "tube_4",
@@ -108,7 +108,7 @@
 			"section_id": "front",
 			"position_offset": {"x": 4.0, "y": -12.0},
 			"arc": {"min": -25.0, "max": 25.0},
-			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0, "range": 650.0}
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
 		},
 		{
 			"weapon_id": "tube_5",
@@ -116,7 +116,7 @@
 			"section_id": "front",
 			"position_offset": {"x": 8.0, "y": -10.0},
 			"arc": {"min": -25.0, "max": 25.0},
-			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0, "range": 650.0}
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
 		}
 	]
 }
