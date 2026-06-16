@@ -2,15 +2,40 @@ extends Node2D
 
 ## Visible driver for RaceSimulator: watch a field of ships fly the track.
 ## Replays a (track, entrants, seed) tuple using the same step_one() path as the
-## headless sim, and reuses VisualBridgeAutoload / ShipEntity for rendering
-## (same renderer as the battle scene). Frames an overview camera on the whole
-## track and shows a live standings HUD.
+## headless sim, reuses VisualBridgeAutoload / ShipEntity for the 3D ships, and
+## draws 2D overlays on top for legibility: a background grid, the track path,
+## big always-visible gates, and a heading arrow per ship (screen-constant size
+## so racers stay visible when zoomed out). A corner minimap shows everyone.
 
 const FIXED_STEP := RaceSimulator.FIXED_STEP
-## Pixel offset to center a marker's number label on the gate position.
-const MARKER_LABEL_OFFSET := 10.0
 
-# Set these before the scene enters the tree (betting replay / watch launcher).
+## On-screen sizes (pixels) for overlay elements — divided by camera zoom so they
+## stay a constant size on screen regardless of how far out you zoom.
+const SHIP_ARROW_PX := 16.0
+const GATE_LINE_PX := 5.0
+const GATE_DOT_PX := 7.0
+const TRACK_PATH_PX := 2.5
+const GRID_LINE_PX := 1.0
+const GATE_NUMBER_PX := 16.0
+## Background grid spacing in world units.
+const GRID_SPACING := 500.0
+## Minimap panel size + margin from the corner.
+const MINIMAP_W := 280.0
+const MINIMAP_H := 200.0
+const MINIMAP_MARGIN := 14.0
+
+const GRID_COL := Color(0.16, 0.18, 0.22, 0.6)
+const TRACK_PATH_COL := Color(0.5, 0.55, 0.62, 0.5)
+const GATE_COL := Color(1.0, 0.82, 0.25, 0.95)
+const GATE_START_COL := Color(0.35, 1.0, 0.45, 0.95)
+const ARROW_OUTLINE := Color(0.0, 0.0, 0.0, 0.9)
+## Distinct racer colors (cycled).
+const PALETTE := [
+	Color(0.95, 0.30, 0.30), Color(0.30, 0.70, 1.0), Color(0.40, 0.95, 0.45),
+	Color(1.0, 0.80, 0.25), Color(0.80, 0.45, 1.0), Color(0.30, 0.95, 0.90),
+]
+
+# Set these before the scene enters the tree (watch launcher / betting replay).
 ## Track to race.
 var track: Dictionary = {}
 ## Field of {ship, crew} entrants.
@@ -22,13 +47,22 @@ var _ships: Array = []
 var _states: Dictionary = {}
 var _ship_entities: Dictionary = {}
 var _session: Dictionary = {}
+var _colors: Dictionary = {}
+var _marker_points: Array = []
+var _bounds: Dictionary = {}
 var _time: float = 0.0
 var _time_limit: float = 0.0
 var _finished: bool = false
 var _accumulated_delta: float = 0.0
 
+# Preloaded (not referenced by class_name) so the scene loads even before the
+# global class cache knows RaceMinimap — e.g. a fresh headless run.
+const RaceMinimapScript := preload("res://scripts/space/race_minimap.gd")
+
 @onready var _camera: CameraController = $Camera
 @onready var _hud: Label = get_node_or_null("../UI/HUD")
+var _minimap = null
+var _font: Font = ThemeDB.fallback_font
 
 signal race_finished(results: Dictionary)
 
@@ -38,10 +72,20 @@ func _ready() -> void:
 	if track.is_empty() or entrants.is_empty():
 		push_error("ShipRaceGame requires `track` and `entrants` set before the scene loads.")
 		return
+	_cache_track_geometry()
 	_setup_race()
-	_spawn_marker_visuals()
+	_build_minimap()
 	_frame_camera()
 	_update_hud()
+	queue_redraw()
+
+
+func _cache_track_geometry() -> void:
+	"""Cache marker positions and padded bounds used by the overlays."""
+	_bounds = RaceTrack.track_bounds(track)
+	_marker_points = []
+	for i in range(RaceTrack.marker_count(track)):
+		_marker_points.append(RaceTrack.marker_position(track, i))
 
 
 func _setup_race() -> void:
@@ -51,7 +95,9 @@ func _setup_race() -> void:
 	_states = field.states
 	_session = field.session
 
-	for ship in _ships:
+	for i in range(_ships.size()):
+		var ship: Dictionary = _ships[i]
+		_colors[ship.ship_id] = PALETTE[i % PALETTE.size()]
 		var entity := ShipEntity.new()
 		entity.initialize(ship.ship_id, ship.get("team", 0), ship.get("collision_radius", 15.0), ship.get("type", "fighter"))
 		add_child(entity)
@@ -60,13 +106,30 @@ func _setup_race() -> void:
 	_time_limit = RaceSimulator._time_limit(track)
 
 
+func _build_minimap() -> void:
+	"""Create the corner minimap on the UI layer and seed it with the track."""
+	var ui: Node = get_node_or_null("../UI")
+	if ui == null:
+		return
+	_minimap = RaceMinimapScript.new()
+	_minimap.anchor_left = 1.0
+	_minimap.anchor_top = 1.0
+	_minimap.anchor_right = 1.0
+	_minimap.anchor_bottom = 1.0
+	_minimap.offset_left = -(MINIMAP_W + MINIMAP_MARGIN)
+	_minimap.offset_top = -(MINIMAP_H + MINIMAP_MARGIN)
+	_minimap.offset_right = -MINIMAP_MARGIN
+	_minimap.offset_bottom = -MINIMAP_MARGIN
+	ui.add_child(_minimap)
+	_minimap.setup(_bounds, _marker_points)
+
+
 ## Zoom/position the overview camera so the whole track is visible.
 func _frame_camera() -> void:
 	"""Frame the camera on the padded marker bounds of the track."""
 	if _camera == null:
 		return
-	var bounds: Dictionary = RaceTrack.track_bounds(track)
-	_camera.set_overview(bounds.center, bounds.size)
+	_camera.set_overview(_bounds.center, _bounds.size)
 
 
 func _process(delta: float) -> void:
@@ -81,6 +144,8 @@ func _process(delta: float) -> void:
 
 	_sync_entities()
 	_update_hud()
+	_update_minimap()
+	queue_redraw()
 
 
 func _tick_all() -> void:
@@ -102,17 +167,98 @@ func _sync_entities() -> void:
 			entity.emit_state(ship)
 
 
-func _spawn_marker_visuals() -> void:
-	"""Place a numbered label at each gate marker so the track is legible."""
-	for i in range(RaceTrack.marker_count(track)):
-		var lbl := Label.new()
-		lbl.text = str(i + 1)
-		lbl.position = RaceTrack.marker_position(track, i) - Vector2(MARKER_LABEL_OFFSET, MARKER_LABEL_OFFSET)
-		add_child(lbl)
+# ── 2D overlays (drawn in world space, on top of the 3D ships) ───────────────
+
+func _draw() -> void:
+	if _marker_points.is_empty():
+		return
+	var zoom: float = _camera.zoom.x if _camera != null else 1.0
+	var inv: float = 1.0 / maxf(zoom, 0.001)  # px → world units at current zoom
+	_draw_grid(inv)
+	_draw_track_path(inv)
+	_draw_gates(inv)
+	_draw_arrows(inv)
 
 
-## Live running-order HUD: sort racers by laps done, then by closeness to the
-## marker they're chasing (ahead = closer to the next gate).
+func _draw_grid(inv: float) -> void:
+	"""Faint world grid so motion is readable against the empty background."""
+	var lo: Vector2 = _bounds.center - _bounds.size * 0.5 - Vector2(GRID_SPACING, GRID_SPACING)
+	var hi: Vector2 = _bounds.center + _bounds.size * 0.5 + Vector2(GRID_SPACING, GRID_SPACING)
+	var w: float = GRID_LINE_PX * inv
+	var x: float = floorf(lo.x / GRID_SPACING) * GRID_SPACING
+	while x <= hi.x:
+		draw_line(Vector2(x, lo.y), Vector2(x, hi.y), GRID_COL, w)
+		x += GRID_SPACING
+	var y: float = floorf(lo.y / GRID_SPACING) * GRID_SPACING
+	while y <= hi.y:
+		draw_line(Vector2(lo.x, y), Vector2(hi.x, y), GRID_COL, w)
+		y += GRID_SPACING
+
+
+func _draw_track_path(inv: float) -> void:
+	"""Outline the circuit by connecting the gates in order."""
+	var pts: PackedVector2Array = PackedVector2Array()
+	for m in _marker_points:
+		pts.append(m)
+	pts.append(_marker_points[0])
+	draw_polyline(pts, TRACK_PATH_COL, TRACK_PATH_PX * inv)
+
+
+func _draw_gates(inv: float) -> void:
+	"""Draw each gate as a wide line across its opening, with its number."""
+	for i in range(_marker_points.size()):
+		var center: Vector2 = _marker_points[i]
+		var tangent: Vector2 = RaceTrack.gate_tangent(track, i)
+		var half: float = RaceTrack.gate_half_width(track, i)
+		var col: Color = GATE_START_COL if i == 0 else GATE_COL
+		draw_line(center - tangent * half, center + tangent * half, col, GATE_LINE_PX * inv)
+		draw_circle(center, GATE_DOT_PX * inv, col)
+		var fs: int = int(GATE_NUMBER_PX * inv)
+		draw_string(_font, center + Vector2(GATE_DOT_PX, -GATE_DOT_PX) * inv,
+			str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+
+
+func _draw_arrows(inv: float) -> void:
+	"""Draw a heading arrow per ship — screen-constant size, points along travel."""
+	var s: float = SHIP_ARROW_PX * inv
+	for ship in _ships:
+		var pos: Vector2 = ship.position
+		var dir: Vector2 = _travel_dir(ship)
+		var tip: Vector2 = pos + dir * s
+		var left: Vector2 = pos + dir.rotated(2.5) * s * 0.72
+		var right: Vector2 = pos + dir.rotated(-2.5) * s * 0.72
+		var col: Color = _colors.get(ship.ship_id, Color.WHITE)
+		draw_colored_polygon(PackedVector2Array([tip, left, right]), col)
+		draw_polyline(PackedVector2Array([tip, left, right, tip]), ARROW_OUTLINE, 1.5 * inv)
+
+
+## Direction a ship is travelling (velocity), falling back to its facing.
+func _travel_dir(ship: Dictionary) -> Vector2:
+	"""Unit travel direction: velocity if moving, else the ship's heading."""
+	var vel: Vector2 = ship.get("velocity", Vector2.ZERO)
+	if vel.length() > 5.0:
+		return vel.normalized()
+	var rot: float = ship.get("rotation", 0.0)
+	return Vector2(sin(rot), -cos(rot))
+
+
+# ── HUD + minimap ────────────────────────────────────────────────────────────
+
+func _update_minimap() -> void:
+	"""Feed current racer positions/colors/directions to the minimap."""
+	if _minimap == null:
+		return
+	var racers: Array = []
+	for ship in _ships:
+		racers.append({
+			"pos": ship.position,
+			"color": _colors.get(ship.ship_id, Color.WHITE),
+			"dir": _travel_dir(ship),
+		})
+	_minimap.update_racers(racers)
+
+
+## Live running-order HUD: sort by laps done, then closeness to the next gate.
 func _update_hud() -> void:
 	"""Refresh the standings overlay from current race state."""
 	if _hud == null:
@@ -151,11 +297,13 @@ func _racer_name(ship_id: String) -> String:
 
 
 func _end_race() -> void:
-	"""Mark remaining racers DNF, refresh the HUD a final time, and emit results."""
+	"""Mark remaining racers DNF, refresh overlays a final time, emit results."""
 	_finished = true
 	for sid in _states:
 		if not _states[sid].finished:
 			_states[sid].dnf = true
 	_update_hud()
+	_update_minimap()
+	queue_redraw()
 	var results: Dictionary = RaceTelemetry.finalize(_session, _states, _time)
 	race_finished.emit(results)

@@ -48,6 +48,25 @@ static func total_markers_to_finish(track: Dictionary) -> int:
 	return track.get("laps", 1) * marker_count(track)
 
 
+## Unit tangent of marker[idx]'s gate (perpendicular to its normal — the axis
+## the gate opening spans). Used to draw the gate line across its width.
+static func gate_tangent(track: Dictionary, idx: int) -> Vector2:
+	var markers: Array = track.get("markers", [])
+	if idx < 0 or idx >= markers.size():
+		return Vector2.UP
+	var norm_arr = markers[idx].get("gate_normal", [1, 0])
+	var n := Vector2(float(norm_arr[0]), float(norm_arr[1])).normalized()
+	return Vector2(-n.y, n.x)
+
+
+## Half-width of marker[idx]'s gate opening (world units).
+static func gate_half_width(track: Dictionary, idx: int) -> float:
+	var markers: Array = track.get("markers", [])
+	if idx < 0 or idx >= markers.size():
+		return DEFAULT_GATE_WIDTH * 0.5
+	return float(markers[idx].get("gate_width", DEFAULT_GATE_WIDTH)) * 0.5
+
+
 ## Padding (world units) added around the marker AABB when framing a camera.
 const TRACK_VIEW_PADDING := 700.0
 
