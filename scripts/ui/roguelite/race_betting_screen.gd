@@ -21,6 +21,8 @@ var _probs: Array = []          # Parallel implied probabilities
 var _race_seed: int = 0
 var _results: Dictionary = {}
 
+## When false (tests/preview), settling does NOT write the campaign save.
+var persist: bool = true
 var _wager_amount: int = 0
 var _bet_entrant_index: int = -1
 var _updating_buttons: bool = false
@@ -247,7 +249,8 @@ func _on_run_pressed() -> void:
 	else:
 		_status_message = "You lost %d cr. Better luck next time." % _wager_amount
 
-	RoguelikeRun.save_campaign_to_disk()
+	if persist:
+		RoguelikeRun.save_campaign_to_disk()
 	_rebuild()
 
 

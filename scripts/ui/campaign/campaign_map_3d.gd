@@ -318,13 +318,13 @@ func _open_rest_menu(node: Dictionary, repair_summary: Dictionary) -> void:
 	add_child(dialog)
 	dialog.confirmed.connect(func() -> void:
 		dialog.queue_free()
-		var screen := FleetCommandScreen.open_overlay(self)
+		var screen := FleetCommandScreen.open_overlay(_ui_layer)
 		screen.done.connect(func() -> void:
 			_fleet_panel.visible = true
 			_complete_node_visit(node, repair_summary)))
 	dialog.canceled.connect(func() -> void:
 		dialog.queue_free()
-		var betting := RaceBettingScreen.open_overlay(self)
+		var betting := RaceBettingScreen.open_overlay(_ui_layer)
 		betting.closed.connect(func() -> void:
 			betting.queue_free()
 			_fleet_panel.visible = true
