@@ -21,8 +21,8 @@ script = ExtResource("2_camera")
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="HUD" type="Label" parent="UI"]
-offset_left = 10.0
-offset_top = 10.0
-offset_right = 400.0
-offset_bottom = 40.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 380.0
+offset_bottom = 320.0
 text = "Ship Race"

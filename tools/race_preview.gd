@@ -1,44 +1,45 @@
 extends Control
 
-## Standalone launcher to preview the R&R "Go to the Races" betting screen
-## without playing through a campaign.
+## Standalone launcher to WATCH a ship race without playing through a campaign.
 ##
 ## Run it:
 ##   godot res://tools/race_preview.tscn
 ## or, in the editor, open this scene and press F6 (Play Scene).
 ##
-## Seeds demo credits and a tiny fleet (so your own pilots appear in the field
-## alongside generated NPCs) only when the run state is empty — it never clobbers
-## a real save.
+## Loads the visible race scene with a demo field of varied ships + pilots so you
+## can watch how they fly. Touches no run/save state — purely a preview.
 
-const DEMO_CREDITS := 2000
+const TRACK_ID := "asteroid_sprint"
+const RACE_SEED := 1
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	_seed_demo_state()
-	var screen := RaceBettingScreen.open_overlay(self)
-	screen.closed.connect(func() -> void: get_tree().quit())
+	var scene: Node = load("res://scenes/ship_race.tscn").instantiate()
+	var game: Node = scene.get_node("ShipRaceGame")
+	# Inject the field BEFORE the scene enters the tree so _ready() sees it.
+	game.track = RaceTrack.load_track(TRACK_ID)
+	game.entrants = _demo_entrants()
+	game.race_seed = RACE_SEED
+	add_child(scene)
 
 
-func _seed_demo_state() -> void:
-	"""Give the preview some credits and a couple of pilots if the run is empty."""
-	if RoguelikeRun.money < DEMO_CREDITS:
-		RoguelikeRun.money = DEMO_CREDITS
-	if RoguelikeRun.fleet_hulls.is_empty():
-		RoguelikeRun.fleet_hulls = [
-			_demo_hull("fighter", "Ace", 0.85),
-			_demo_hull("heavy_fighter", "Rook", 0.40),
-		]
+func _demo_entrants() -> Array:
+	"""A mixed field with a clear skill/ship spread, so the race is fun to watch."""
+	return [
+		_entrant("fighter", "Ace", 0.95),
+		_entrant("fighter", "Rookie", 0.20),
+		_entrant("heavy_fighter", "Tank", 0.60),
+		_entrant("corvette", "Brick", 0.50),
+	]
 
 
-func _demo_hull(ship_type: String, callsign: String, piloting: float) -> Dictionary:
-	"""Build a minimal fleet hull carrying one pilot, for the preview field."""
+func _entrant(ship_type: String, callsign: String, piloting: float) -> Dictionary:
+	"""Build one {ship, crew} entrant for the preview field."""
 	return {
-		"hull_id": "demo_%s" % callsign,
-		"ship_type": ship_type,
-		"crew": [{
-			"crew_id": "demo_crew_%s" % callsign,
+		"ship": ShipData.create_ship_instance(ship_type, 0, Vector2.ZERO),
+		"crew": {
+			"crew_id": "demo_%s" % callsign,
 			"callsign": callsign,
 			"role": CrewData.Role.PILOT,
 			"qualified_roles": [CrewData.Role.PILOT],
@@ -49,5 +50,5 @@ func _demo_hull(ship_type: String, callsign: String, piloting: float) -> Diction
 					"aggression": 0.5, "aim": 0.5, "tactics": 0.5, "machinery": 0.5,
 				},
 			},
-		}],
+		},
 	}

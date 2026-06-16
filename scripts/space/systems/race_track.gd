@@ -48,6 +48,28 @@ static func total_markers_to_finish(track: Dictionary) -> int:
 	return track.get("laps", 1) * marker_count(track)
 
 
+## Padding (world units) added around the marker AABB when framing a camera.
+const TRACK_VIEW_PADDING := 700.0
+
+
+## Axis-aligned bounds of all markers, padded. Returns {center, size} for
+## framing an overview camera on the whole track.
+static func track_bounds(track: Dictionary) -> Dictionary:
+	"""Compute a padded {center, size} covering every gate marker."""
+	var n: int = marker_count(track)
+	if n == 0:
+		return {"center": Vector2.ZERO, "size": Vector2(2000, 2000)}
+	var lo: Vector2 = marker_position(track, 0)
+	var hi: Vector2 = lo
+	for i in range(1, n):
+		var p: Vector2 = marker_position(track, i)
+		lo = Vector2(minf(lo.x, p.x), minf(lo.y, p.y))
+		hi = Vector2(maxf(hi.x, p.x), maxf(hi.y, p.y))
+	lo -= Vector2(TRACK_VIEW_PADDING, TRACK_VIEW_PADDING)
+	hi += Vector2(TRACK_VIEW_PADDING, TRACK_VIEW_PADDING)
+	return {"center": (lo + hi) * 0.5, "size": hi - lo}
+
+
 ## Gate-crossing check: did segment prev_pos→cur_pos cross marker[idx]'s gate?
 ## Gate is defined by its center, normal, and width. A crossing counts when:
 ##   1. The segment crosses the gate line (sign change along the normal axis).

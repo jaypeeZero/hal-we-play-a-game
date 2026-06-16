@@ -39,6 +39,26 @@ func _ready() -> void:
 	# Set up input actions
 	_setup_input_actions()
 
+## Frame an area (world center + size) so it fits the current viewport, and make
+## this the camera's reset target. Used by the race scene for a track overview.
+const OVERVIEW_FIT := 0.92
+func set_overview(center: Vector2, world_size: Vector2) -> void:
+	"""Position and zoom the camera so world_size fits the viewport."""
+	var vp: Vector2 = get_viewport_rect().size
+	var fit: float = 1.0
+	if world_size.x > 0.0 and world_size.y > 0.0:
+		fit = minf(vp.x / world_size.x, vp.y / world_size.y) * OVERVIEW_FIT
+	fit = clampf(fit, ZOOM_MIN, ZOOM_MAX)
+	var z := Vector2(fit, fit)
+	position = center
+	zoom = z
+	_initial_position = center
+	_initial_zoom = z
+	_target_position = center
+	_target_zoom = z
+	make_current()
+
+
 func _setup_input_actions() -> void:
 	"""Set up camera control input actions"""
 	_ensure_action("camera_zoom_in", KEY_EQUAL)  # + key
