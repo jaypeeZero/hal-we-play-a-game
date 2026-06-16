@@ -7,9 +7,6 @@ extends OverlayScreen
 
 const RACE_TRACKS := ["asteroid_sprint", "nebula_circuit"]
 const NPC_SHIP_TYPES := ["fighter", "heavy_fighter", "corvette"]
-## Always keep at least this many NPC racers in the field so the player always
-## has someone to bet on (you cannot wager on your own pilots).
-const MIN_NPC_RACERS := 3
 const NPC_SKILL_MIN := 0.25
 const NPC_SKILL_MAX := 0.85
 ## Callsigns for NPC racers.
@@ -26,6 +23,9 @@ var _results: Dictionary = {}
 
 ## When false (tests/preview), settling does NOT write the campaign save.
 var persist: bool = true
+## When true, pressing Run plays the race visibly before settling.
+var visual_replay: bool = true
+var _campaign_node: Node = null
 var _wager_amount: int = 0
 var _bet_entrant_index: int = -1
 var _updating_buttons: bool = false
@@ -126,19 +126,20 @@ func _rebuild() -> void:
 		row.add_child(UiKit.label(stype, UiKit.DIM, 11))
 		row.add_child(UiKit.label("%.2fx  (%d%%)" % [odds, win_pct], UiKit.GOLD, 12))
 
+		# Every racer is bettable — your own pilots just carry a "yours" tag.
 		if is_player:
-			row.add_child(UiKit.label("[YOURS]", UiKit.DIM, 10))
-		else:
-			var btn := Button.new()
-			btn.text = "Bet"
-			btn.toggle_mode = true
-			btn.button_pressed = (i == _bet_entrant_index)
-			UiKit.style_button(btn, "ghost")
-			btn.set_meta("entrant_idx", i)
-			var idx := i
-			btn.toggled.connect(func(on: bool) -> void: _on_bet_selected(idx, on))
-			_bet_buttons.append(btn)
-			row.add_child(btn)
+			row.add_child(UiKit.label("yours", UiKit.GOLD, 10))
+
+		var btn := Button.new()
+		btn.text = "Bet"
+		btn.toggle_mode = true
+		btn.button_pressed = (i == _bet_entrant_index)
+		UiKit.style_button(btn, "ghost")
+		btn.set_meta("entrant_idx", i)
+		var idx := i
+		btn.toggled.connect(func(on: bool) -> void: _on_bet_selected(idx, on))
+		_bet_buttons.append(btn)
+		row.add_child(btn)
 
 		_content.add_child(row)
 
@@ -232,26 +233,60 @@ func _on_run_pressed() -> void:
 		_status_label.text = "Select a racer to bet on."
 		return
 
-	# Deduct wager.
+	# Deduct the wager up-front, then play (or simulate) and settle.
 	RoguelikeRun.money -= _wager_amount
+	if visual_replay:
+		_start_replay()
+	else:
+		_settle(RaceSimulator.run(_track, _entrants, _race_seed))
 
-	# Run simulator (authoritative result).
-	_results = RaceSimulator.run(_track, _entrants, _race_seed)
 
-	# Settle.
-	var winner_id: String = _results.get("winner_ship_id", "")
+func _start_replay() -> void:
+	"""Play the race visibly as a top-level scene, then settle when it ends."""
+	var scene: Node = load("res://scenes/ship_race.tscn").instantiate()
+	var game: Node = scene.get_node("ShipRaceGame")
+	game.track = _track
+	game.entrants = _entrants
+	game.race_seed = _race_seed
+	game.race_finished.connect(func(results: Dictionary) -> void: _on_replay_done(scene, results))
+	# Hide the campaign + this screen so the race renders like the standalone watcher.
+	_campaign_node = _find_campaign_root()
+	if _campaign_node != null:
+		_campaign_node.visible = false
+	visible = false
+	get_tree().root.add_child(scene)
+
+
+func _on_replay_done(scene: Node, results: Dictionary) -> void:
+	"""Free the race scene, restore the UI, and settle from its result."""
+	scene.queue_free()
+	if _campaign_node != null:
+		_campaign_node.visible = true
+	visible = true
+	_settle(results)
+
+
+func _find_campaign_root() -> Node:
+	"""The campaign map (Node3D) is the parent of the UI layer we live on."""
+	var layer: Node = get_parent()
+	if layer != null and layer.get_parent() is Node3D:
+		return layer.get_parent()
+	return null
+
+
+func _settle(results: Dictionary) -> void:
+	"""Apply winnings/losses from the race result and refresh the screen."""
+	_results = results
+	var winner_id: String = results.get("winner_ship_id", "")
 	var bet_ship_id: String = _entrants[_bet_entrant_index].ship.ship_id
 	var house_edge: float = _racing_config("house_edge", 0.12)
-	var won: bool = winner_id == bet_ship_id
-
-	if won:
+	if winner_id == bet_ship_id:
 		var odds: float = RaceOdds.decimal_odds(_probs[_bet_entrant_index], house_edge)
 		var winnings: int = RaceOdds.payout(_wager_amount, odds)
 		RoguelikeRun.money += winnings
 		_status_message = "You won! +%d cr (paid %.2fx)" % [winnings - _wager_amount, odds]
 	else:
 		_status_message = "You lost %d cr. Better luck next time." % _wager_amount
-
 	if persist:
 		RoguelikeRun.save_campaign_to_disk()
 	_rebuild()
@@ -284,11 +319,11 @@ func _roll_new_race() -> void:
 
 	_entrants.clear()
 
-	# Add up to a capped number of the player's own pilots (for scouting), always
-	# leaving room for NPC racers — those are the ones you actually bet on.
-	var max_player: int = maxi(0, field_size - MIN_NPC_RACERS)
+	# Fill with the player's own pilots first (so at least half the field is yours
+	# whenever you have the pilots), then top up with NPC racers. You can bet on
+	# any racer, your own included.
 	for hull in RoguelikeRun.fleet_hulls:
-		if _entrants.size() >= max_player:
+		if _entrants.size() >= field_size:
 			break
 		for crew_member in hull.get("crew", []):
 			if crew_member.get("role", -1) == CrewData.Role.PILOT:
@@ -355,9 +390,8 @@ func _make_npc_pilot(rng: RandomNumberGenerator, skill: float,
 
 
 func _max_wager() -> int:
-	"""Maximum wager: min(money, money × max_wager_fraction)."""
-	var frac: float = _racing_config("max_wager_fraction", 0.5)
-	return max(0, min(RoguelikeRun.money, int(float(RoguelikeRun.money) * frac)))
+	"""Maximum wager is the player's full credit balance (no cap)."""
+	return RoguelikeRun.money
 
 
 func _racing_config(key: String, default_val) -> float:

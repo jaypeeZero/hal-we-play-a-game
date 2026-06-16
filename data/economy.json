@@ -33,9 +33,8 @@
 	},
 	"racing": {
 		"min_wager": 10,
-		"max_wager_fraction": 0.5,
 		"house_edge": 0.12,
-		"field_size_min": 4,
-		"field_size_max": 6
+		"field_size_min": 10,
+		"field_size_max": 10
 	}
 }

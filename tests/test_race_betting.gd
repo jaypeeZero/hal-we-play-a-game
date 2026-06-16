@@ -39,13 +39,11 @@ func test_wager_below_minimum_is_invalid() -> void:
 	assert_lt(wager_too_low, min_w, "Wager below minimum fails validation")
 
 
-func test_wager_above_fraction_cap_is_invalid() -> void:
-	var config: Dictionary = EconomySystem.config().get("racing", {})
-	var frac: float = float(config.get("max_wager_fraction", 0.5))
+func test_wager_above_balance_is_invalid() -> void:
+	# There is no cap fraction — you may bet your whole balance, but not more.
 	var money: int = 200
-	var cap: int = int(float(money) * frac)
-	var wager_too_high: int = cap + 1
-	assert_gt(wager_too_high, cap, "Wager above cap fails validation")
+	var wager_too_high: int = money + 1
+	assert_gt(wager_too_high, money, "Wager above the full balance is out of range")
 
 
 # ── Win settlement math ───────────────────────────────────────────────────────
@@ -96,6 +94,5 @@ func test_economy_config_has_racing_block() -> void:
 	assert_true(cfg.has("racing"), "economy.json has a 'racing' block")
 	var racing: Dictionary = cfg.racing
 	assert_true(racing.has("min_wager"), "racing block has min_wager")
-	assert_true(racing.has("max_wager_fraction"), "racing block has max_wager_fraction")
 	assert_true(racing.has("house_edge"), "racing block has house_edge")
 	assert_gt(float(racing.house_edge), 0.0, "house_edge is positive")

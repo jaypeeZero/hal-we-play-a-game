@@ -8,6 +8,9 @@ extends Node2D
 ## so racers stay visible when zoomed out). A corner minimap shows everyone.
 
 const FIXED_STEP := RaceSimulator.FIXED_STEP
+## Playback speed multiplier — a real-time 3-lap race is minutes long.
+const DEFAULT_RACE_SPEED := 4.0
+var race_speed: float = DEFAULT_RACE_SPEED
 
 ## On-screen sizes (pixels) for overlay elements — divided by camera zoom so they
 ## stay a constant size on screen regardless of how far out you zoom.
@@ -75,6 +78,7 @@ func _ready() -> void:
 	_cache_track_geometry()
 	_setup_race()
 	_build_minimap()
+	_build_skip_button()
 	_frame_camera()
 	_update_hud()
 	queue_redraw()
@@ -124,6 +128,31 @@ func _build_minimap() -> void:
 	_minimap.setup(_bounds, _marker_points)
 
 
+func _build_skip_button() -> void:
+	"""Add a top-right Skip button that fast-forwards to the finish."""
+	var ui: Node = get_node_or_null("../UI")
+	if ui == null:
+		return
+	var btn := Button.new()
+	btn.text = "Skip ▶▶"
+	btn.anchor_left = 1.0
+	btn.anchor_right = 1.0
+	btn.offset_left = -120.0
+	btn.offset_top = 12.0
+	btn.offset_right = -12.0
+	btn.offset_bottom = 44.0
+	btn.pressed.connect(_skip_to_finish)
+	ui.add_child(btn)
+
+
+## Fast-forward the simulation to the finish (no rendering), then settle.
+func _skip_to_finish() -> void:
+	"""Run remaining ticks immediately until the race ends."""
+	while not _finished:
+		_time += FIXED_STEP
+		_tick_all()
+
+
 ## Zoom/position the overview camera so the whole track is visible.
 func _frame_camera() -> void:
 	"""Frame the camera on the padded marker bounds of the track."""
@@ -136,7 +165,7 @@ func _process(delta: float) -> void:
 	if _finished:
 		return
 
-	_accumulated_delta += delta
+	_accumulated_delta += delta * race_speed
 	while _accumulated_delta >= FIXED_STEP and not _finished:
 		_accumulated_delta -= FIXED_STEP
 		_time += FIXED_STEP
