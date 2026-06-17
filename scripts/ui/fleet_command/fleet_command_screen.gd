@@ -55,7 +55,7 @@ const MISSION_ORDER := [
 	SquadronData.Mission.ASSAULT,
 ]
 
-const SHIP_TYPES := ["fighter", "heavy_fighter", "torpedo_boat", "corvette", "capital"]
+const SHIP_TYPES := FleetDataManager.SHIP_TYPES
 
 # Tactics dropdown sentinels. The empty-string value ("" = class default /
 # inherit preset) is surfaced to the player as a friendly label.
@@ -123,8 +123,11 @@ func _build_layout() -> void:
 	body.add_theme_constant_override("separation", 0)
 	root.add_child(body)
 
-	# Left — fleet roster
+	# Left — fleet roster. Expands so it shares the body ~50/50 with the detail
+	# panel; PANEL_LEFT_WIDTH is just a floor on narrow screens. (The add-ship
+	# row wraps via HFlowContainer so long type names never force it wider.)
 	var left := _build_left_panel()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(left)
 
 	# Right — selected ship detail
@@ -184,11 +187,13 @@ func _build_left_panel() -> Control:
 
 
 func _build_add_ship_row() -> Control:
-	var row := HBoxContainer.new()
+	# HFlowContainer (not HBox) so the add-ship buttons WRAP within the fixed left
+	# panel width instead of summing into one ever-wider row. With more ship types
+	# and longer names (e.g. gunboat variants) an HBox blew the panel/screen wide.
+	var row := HFlowContainer.new()
 	for ship_type in SHIP_TYPES:
 		var btn := Button.new()
 		btn.text = "+ %s" % ship_type.replace("_", " ")
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		UiKit.style_button(btn, "ghost")
 		var t: String = ship_type
 		btn.pressed.connect(func() -> void:
@@ -344,6 +349,7 @@ func _build_roster_card(hull: Dictionary) -> Control:
 	info.add_child(name_edit)
 
 	var type_lbl := UiKit.label(ship_type.replace("_", " ").capitalize(), UiKit.DIM, 11)
+	type_lbl.clip_text = true  # long type names (e.g. gunboat variants) must not widen the card
 	info.add_child(type_lbl)
 
 	var crew_count: int = hull.get("crew", []).size()

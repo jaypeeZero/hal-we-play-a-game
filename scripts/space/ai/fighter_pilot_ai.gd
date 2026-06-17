@@ -5,11 +5,12 @@ extends RefCounted
 ##
 ## Priority cascade:
 ##   1. Survival reflex (hull critical / outnumbered)      — unconditional
-##   2. Area-leash hard return (outside zone, no target)   — unconditional
-##   3. Pre-commit evasion (elite skill gate)              — unconditional
-##   4. Friendly collision avoidance (elite skill gate)    — unconditional
-##   5. Squadron-play waypoint (if play assigned)          — unconditional
-##   6. GOAP brain (FighterBrain.decide)                   — handles all tactics:
+##   2. Medic avoid-enemy reflex (gunboat_medic only)      — unconditional
+##   3. Area-leash hard return (outside zone, no target)   — unconditional
+##   4. Pre-commit evasion (elite skill gate)              — unconditional
+##   5. Friendly collision avoidance (elite skill gate)    — unconditional
+##   6. Squadron-play waypoint (if play assigned)          — unconditional
+##   7. GOAP brain (FighterBrain.decide)                   — handles all tactics:
 ##        EvadeOutnumbered, RejoinWing, PatrolReturn,
 ##        SupportUnderFire, CutOff, Flank, Attack
 
@@ -38,6 +39,10 @@ const PLAY_WAYPOINT_REACHED_DISTANCE     = 250.0
 const COLLISION_DETECTION_RANGE          = 2000.0
 ## Decision delay (s) for flee maneuvers — slow cadence; the steer target is stable.
 const FLEE_DECISION_DELAY                = 0.3
+## Medic: radius within which an enemy triggers the keep-distance reflex.
+const MEDIC_DANGER_RADIUS                = 1800.0
+## Medic: decision delay for avoid maneuvers — same cadence as survival reflexes.
+const MEDIC_AVOID_DECISION_DELAY         = 0.3
 
 
 ## Entry point — called by CrewAISystem every decision tick.
@@ -58,6 +63,9 @@ static func make_decision(
 	if not decision.is_empty(): return decision
 
 	decision = _reflex_survival(crew_data, ship_data, all_ships, game_time)
+	if not decision.is_empty(): return decision
+
+	decision = _reflex_medic_avoid(crew_data, ship_data, all_ships, game_time)
 	if not decision.is_empty(): return decision
 
 	decision = _reflex_area_leash(crew_data, ship_data, all_ships, game_time)
@@ -195,6 +203,50 @@ static func _assess_survival(
 	var ratio_thresh: float  = SURVIVAL_OUTNUMBERED_SUPPORT_RATIO * (1.0 - aggression * SURVIVAL_AGGRESSION_TOLERANCE)
 	if support_ratio < ratio_thresh: return "evade"
 	return ""
+
+
+## Medic avoid-enemy reflex — fires only for gunboat_medic ships.
+## When enemies are within MEDIC_DANGER_RADIUS the medic steers away from the
+## nearest threat. When no enemies are nearby it returns {} so the area-leash
+## and GOAP brain can produce a loiter/patrol decision instead.
+## This reflex fires BEFORE any attack/pursue logic, ensuring the medic never
+## chases an enemy — it may still defend itself via its short-range turrets,
+## which fire on whatever enters weapon range independently of this decision.
+static func _reflex_medic_avoid(
+	crew_data: Dictionary, ship_data: Dictionary, all_ships: Array, game_time: float
+) -> Dictionary:
+	if not FleetDataManager.is_gunboat_medic(ship_data.get("type", "")):
+		return {}
+	var threat_id := _closest_enemy_within(ship_data, all_ships, MEDIC_DANGER_RADIUS)
+	if threat_id == "":
+		return {}
+	var threat: Dictionary = _ship_by_id(threat_id, all_ships)
+	return {
+		"type": "maneuver",
+		"subtype": "fight_evasive_retreat",
+		"crew_id": crew_data.get("crew_id", ""),
+		"entity_id": ship_data.get("ship_id", ""),
+		"target_id": threat_id,
+		"skill_factor": crew_data.get("stats", {}).get("skills", {}).get("piloting", 0.5),
+		"delay": MEDIC_AVOID_DECISION_DELAY,
+		"timestamp": game_time,
+		"evasion_direction": 0 if threat.is_empty() else _evasion_dir(ship_data, threat),
+		"survival_mode": "retreat",
+	}
+
+
+## Return the ship_id of the closest operational enemy within `radius`, or "".
+static func _closest_enemy_within(ship: Dictionary, all_ships: Array, radius: float) -> String:
+	var my_team: int    = ship.get("team", -1)
+	var my_pos: Vector2 = ship.get("position", Vector2.ZERO)
+	var best := ""; var best_d := INF
+	for s in all_ships:
+		if s.get("team", -1) == my_team or s.get("status", "") != "operational": continue
+		var d: float = my_pos.distance_to(s.get("position", Vector2.ZERO))
+		if d < radius and d < best_d:
+			best_d = d
+			best = s.get("ship_id", "")
+	return best
 
 
 static func _reflex_area_leash(

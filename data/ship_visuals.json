@@ -23,5 +23,20 @@
 		"model": "res://assets/models/ships/Imperial.gltf",
 		"scale": 1.0,
 		"yaw_offset_deg": 180.0
+	},
+	"gunboat_medic": {
+		"model": "res://assets/models/ships/Omen.gltf",
+		"scale": 0.65,
+		"yaw_offset_deg": 180.0
+	},
+	"gunboat_pepperbox": {
+		"model": "res://assets/models/ships/Omen.gltf",
+		"scale": 0.65,
+		"yaw_offset_deg": 180.0
+	},
+	"gunboat_firecracker": {
+		"model": "res://assets/models/ships/Omen.gltf",
+		"scale": 0.65,
+		"yaw_offset_deg": 180.0
 	}
 }

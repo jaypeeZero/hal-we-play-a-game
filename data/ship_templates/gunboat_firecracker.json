@@ -1,0 +1,122 @@
+{
+	"type": "gunboat_firecracker",
+	"name": "Firecracker",
+	"position": {"x": 0.0, "y": 0.0},
+	"velocity": {"x": 0.0, "y": 0.0},
+	"rotation": 0.0,
+	"angular_velocity": 0.0,
+	"ship_id": "ship_gunboat_firecracker",
+	"team": 0,
+	"status": "operational",
+	"orders": {
+		"current_order": "engage",
+		"patrol_points": [],
+		"target_id": null
+	},
+	"stats": {
+		"max_speed": 175.0,
+		"acceleration": 48.0,
+		"turn_rate": 2.2,
+		"turn_speed_bleed": 0.12,
+		"mass": 140.0,
+		"size": 50.0,
+		"lateral_acceleration": 0.18,
+		"inertial_dampening": 0.7,
+		"brake_acceleration": 1.0,
+		"brake_heat_capacity": 130.0,
+		"brake_heat_dissipation": 8.0,
+		"brake_heat_per_second": 50.0
+	},
+	"armor_sections": [
+		{
+			"section_id": "front",
+			"arc": {"start": -70.0, "end": 70.0},
+			"current_armor": 45.0,
+			"max_armor": 45.0,
+			"position_offset": {"x": 0.0, "y": -12.0},
+			"size": 1.5
+		},
+		{
+			"section_id": "middle",
+			"arc": {"start": 70.0, "end": 290.0},
+			"current_armor": 40.0,
+			"max_armor": 40.0,
+			"position_offset": {"x": 0.0, "y": 0.0},
+			"size": 1.5
+		},
+		{
+			"section_id": "back",
+			"arc": {"start": 290.0, "end": 430.0},
+			"current_armor": 35.0,
+			"max_armor": 35.0,
+			"position_offset": {"x": 0.0, "y": 12.0},
+			"size": 1.5
+		}
+	],
+	"internals": [
+		{
+			"component_id": "engine",
+			"type": "engine",
+			"section_id": "back",
+			"position_offset": {"x": 0.0, "y": 10.0},
+			"max_health": 35.0,
+			"effect_on_ship": {
+				"on_damaged": {"max_speed": 0.8, "acceleration": 0.7},
+				"on_destroyed": {"max_speed": 0.5, "acceleration": 0.3}
+			}
+		},
+		{
+			"component_id": "torpedo_magazine",
+			"type": "ammo",
+			"section_id": "middle",
+			"position_offset": {"x": 0.0, "y": 2.0},
+			"max_health": 20.0,
+			"effect_on_ship": {
+				"on_damaged": {},
+				"on_destroyed": {}
+			}
+		}
+	],
+	"weapons": [
+		{
+			"weapon_id": "tube_1",
+			"type": "torpedo_launcher",
+			"section_id": "front",
+			"position_offset": {"x": -8.0, "y": -10.0},
+			"arc": {"min": -25.0, "max": 25.0},
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
+		},
+		{
+			"weapon_id": "tube_2",
+			"type": "torpedo_launcher",
+			"section_id": "front",
+			"position_offset": {"x": -4.0, "y": -12.0},
+			"arc": {"min": -25.0, "max": 25.0},
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
+		},
+		{
+			"weapon_id": "tube_3",
+			"type": "torpedo_launcher",
+			"section_id": "front",
+			"position_offset": {"x": 0.0, "y": -13.0},
+			"arc": {"min": -25.0, "max": 25.0},
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
+		},
+		{
+			"weapon_id": "tube_4",
+			"type": "torpedo_launcher",
+			"section_id": "front",
+			"position_offset": {"x": 4.0, "y": -12.0},
+			"arc": {"min": -25.0, "max": 25.0},
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
+		},
+		{
+			"weapon_id": "tube_5",
+			"type": "torpedo_launcher",
+			"section_id": "front",
+			"position_offset": {"x": 8.0, "y": -10.0},
+			"arc": {"min": -25.0, "max": 25.0},
+			"stats": {"damage": 60.0, "rate_of_fire": 0.18, "size": 2.0}
+		}
+	]
+}

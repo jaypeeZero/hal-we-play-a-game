@@ -257,12 +257,16 @@ static func _make_hull(
 	}
 
 
-## Build complement slots from template crew (role + optional weapon_id).
+## Build complement slots from template crew (role + optional weapon binding).
+## Scalar weapon_id (1:1) is preserved for standard gunners.
+## weapon_ids list (grouped) is preserved for pepperbox-style gunners.
 static func _complement_from_crew(template_crew: Array) -> Array:
 	var complement: Array = []
 	for member in template_crew:
 		var slot: Dictionary = {"role": int(member.get("role", CrewData.Role.PILOT))}
-		if member.has("weapon_id"):
+		if member.has("weapon_ids"):
+			slot["weapon_ids"] = member["weapon_ids"].duplicate()
+		elif member.has("weapon_id"):
 			slot["weapon_id"] = str(member["weapon_id"])
 		complement.append(slot)
 	return complement

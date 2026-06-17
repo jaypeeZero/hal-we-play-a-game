@@ -541,12 +541,16 @@ static func entry_from_crew(member: Dictionary) -> Dictionary:
 ## array backwards. This pairs partial complements correctly — a lone gunner
 ## takes the rear/secondary weapon (e.g. a heavy fighter's rear turret) while
 ## the pilot works the forward guns. Gunners with no weapon left stay unbound.
+## Skips gunners that already carry a weapon_ids group (pepperbox binding) so
+## callers do not need to guard against re-binding after create_gunboat_crew.
 ## Mutates the crew dicts in place and returns the array.
 static func bind_gunners_to_weapons(crew: Array, weapons: Array) -> Array:
 	var next := weapons.size() - 1
 	for member in crew:
 		if member.get("role", -1) != Role.GUNNER:
 			continue
+		if member.has("weapon_ids"):
+			continue  # Already group-bound (pepperbox); do not overwrite with scalar.
 		if next < 0:
 			member.erase("weapon_id")
 			continue
@@ -554,7 +558,91 @@ static func bind_gunners_to_weapons(crew: Array, weapons: Array) -> Array:
 		next -= 1
 	return crew
 
+
+## Bind gunners to weapon *groups* (pepperbox mechanic). Each group is an Array
+## of weapon dicts that fire together in sync. A gunner carries `weapon_ids`
+## (Array[String]) instead of a scalar `weapon_id`. The 1:1 path is untouched.
+## `weapon_groups` is an Array of Arrays — outer index = gunner slot (0..n-1).
+## Mutates the gunner dicts in place and returns the crew array.
+static func bind_gunner_groups(crew: Array, weapon_groups: Array) -> Array:
+	var group_idx := 0
+	for member in crew:
+		if member.get("role", -1) != Role.GUNNER:
+			continue
+		if group_idx >= weapon_groups.size():
+			push_error("bind_gunner_groups: more gunners than weapon groups — gunner '%s' has no group; erasing binding" % member.get("crew_id", "?"))
+			member.erase("weapon_ids")
+			continue
+		var group: Array = weapon_groups[group_idx]
+		var ids: Array[String] = []
+		for w in group:
+			ids.append(str(w.get("weapon_id", "")))
+		member["weapon_ids"] = ids
+		group_idx += 1
+	return crew
+
+
+## Create a gunboat crew (pilot-led, no captain). Composition depends on variant:
+##   gunboat_medic:       1 pilot + MEDIC_GUNNER_COUNT gunners (1:1 turrets) + MEDIC_ENGINEER_COUNT engineers
+##   gunboat_pepperbox:   1 pilot + (weapons.size() / PEPPERBOX_GUNS_PER_GUNNER) gunners, each
+##                        controlling PEPPERBOX_GUNS_PER_GUNNER guns in sync
+##   gunboat_firecracker: 1 pilot + FIRECRACKER_GUNNER_COUNT gunners (1:1 tubes)
+## Caller passes the template weapons array so gunner binding is correct.
+## Returns the crew array WITHOUT ship assignment — caller calls assign_crew_to_entity.
+static func create_gunboat_crew(ship_type: String, weapons: Array, skill_level: float) -> Array:
+	const MEDIC_GUNNER_COUNT: int = 2
+	const MEDIC_ENGINEER_COUNT: int = 2
+	const PEPPERBOX_GUNS_PER_GUNNER: int = 2
+	const FIRECRACKER_GUNNER_COUNT: int = 5
+
+	var crew: Array = []
+	var pilot := create_crew_member(Role.PILOT, skill_level)
+	crew.append(pilot)
+
+	match ship_type:
+		"gunboat_medic":
+			# 2 defensive turrets → 2 gunners (1:1); 2 engineers for hull repair
+			for _i in MEDIC_GUNNER_COUNT:
+				crew.append(create_crew_member(Role.GUNNER, skill_level * 0.9))
+			for _i in MEDIC_ENGINEER_COUNT:
+				crew.append(create_crew_member(Role.ENGINEER, skill_level * 0.9))
+			bind_gunners_to_weapons(crew, weapons)
+
+		"gunboat_pepperbox":
+			# Derive gunner count from the actual weapons array; each gunner controls
+			# PEPPERBOX_GUNS_PER_GUNNER guns in sync.
+			if weapons.is_empty():
+				push_error("create_gunboat_crew: pepperbox requires a non-empty weapons array")
+				return crew
+			if weapons.size() % PEPPERBOX_GUNS_PER_GUNNER != 0:
+				push_error("create_gunboat_crew: pepperbox weapon count (%d) must be divisible by PEPPERBOX_GUNS_PER_GUNNER (%d)" % [weapons.size(), PEPPERBOX_GUNS_PER_GUNNER])
+			var gunner_count: int = weapons.size() / PEPPERBOX_GUNS_PER_GUNNER
+			for _i in gunner_count:
+				crew.append(create_crew_member(Role.GUNNER, skill_level * 0.9))
+			# Build groups: [[w0,w1], [w2,w3], ...]
+			var groups: Array = []
+			for gi in gunner_count:
+				var start: int = gi * PEPPERBOX_GUNS_PER_GUNNER
+				var group: Array = []
+				for wi in PEPPERBOX_GUNS_PER_GUNNER:
+					var idx: int = start + wi
+					if idx < weapons.size():
+						group.append(weapons[idx])
+				groups.append(group)
+			bind_gunner_groups(crew, groups)
+
+		"gunboat_firecracker":
+			# 5 torpedo tubes → 5 gunners (1:1)
+			for _i in FIRECRACKER_GUNNER_COUNT:
+				crew.append(create_crew_member(Role.GUNNER, skill_level * 0.9))
+			bind_gunners_to_weapons(crew, weapons)
+
+	return crew
+
+
 ## Create the crew complement for one hull of the given ship type.
+## For gunboat variants, fetches the ship template weapons and delegates to
+## create_gunboat_crew — all call sites can use this single function.
 static func create_crew_for_ship_type(ship_type: String, weapon_count: int, skill_level: float) -> Array:
 	match ship_type:
 		"fighter":
@@ -565,6 +653,14 @@ static func create_crew_for_ship_type(ship_type: String, weapon_count: int, skil
 			return create_torpedo_boat_crew(skill_level)
 		"corvette", "capital":
 			return create_ship_crew(weapon_count, skill_level, roll_engineer_count(ship_type))
+		"gunboat_medic", "gunboat_pepperbox", "gunboat_firecracker":
+			# Fetch template weapons so create_gunboat_crew can bind gunners correctly.
+			# weapon_count alone is insufficient for grouped/pepperbox binding.
+			var template_weapons: Array = ShipData.get_ship_template(ship_type).get("weapons", [])
+			if template_weapons.is_empty():
+				push_error("create_crew_for_ship_type: no template weapons for %s" % ship_type)
+				return []
+			return create_gunboat_crew(ship_type, template_weapons, skill_level)
 		_:
 			return []
 

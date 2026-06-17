@@ -1,21 +1,27 @@
 {
 	"ships": {
-		"fighter":       {"purchase_price": 100,  "per_battle_cost": 5},
-		"heavy_fighter": {"purchase_price": 150,  "per_battle_cost": 8},
-		"torpedo_boat":  {"purchase_price": 180,  "per_battle_cost": 10},
-		"corvette":      {"purchase_price": 400,  "per_battle_cost": 20},
-		"capital":       {"purchase_price": 1000, "per_battle_cost": 50}
+		"fighter":             {"purchase_price": 100,  "per_battle_cost": 5},
+		"heavy_fighter":       {"purchase_price": 150,  "per_battle_cost": 8},
+		"torpedo_boat":        {"purchase_price": 180,  "per_battle_cost": 10},
+		"corvette":            {"purchase_price": 400,  "per_battle_cost": 20},
+		"capital":             {"purchase_price": 1000, "per_battle_cost": 50},
+		"gunboat_medic":       {"purchase_price": 220,  "per_battle_cost": 15},
+		"gunboat_pepperbox":   {"purchase_price": 260,  "per_battle_cost": 16},
+		"gunboat_firecracker": {"purchase_price": 280,  "per_battle_cost": 16}
 	},
 	"crew": {
 		"salary_per_battle": 5,
 		"insurance_payout": 30
 	},
 	"battle_rewards": {
-		"fighter":       20,
-		"heavy_fighter": 30,
-		"torpedo_boat":  35,
-		"corvette":      80,
-		"capital":       200
+		"fighter":             20,
+		"heavy_fighter":       30,
+		"torpedo_boat":        35,
+		"corvette":            80,
+		"capital":             200,
+		"gunboat_medic":       45,
+		"gunboat_pepperbox":   50,
+		"gunboat_firecracker": 55
 	},
 	"starting_money": {
 		"min_upkeep_battles": 3,

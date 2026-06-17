@@ -39,12 +39,16 @@ const CLOSEST_TARGET_BIAS := 0.7
 const ENEMY_COUNT_JITTER := 1
 
 ## Per-sector enemy fleet compositions (ship type → base count).
+## Gunboats appear from sector C onward (mid-tier threat introduction).
 const SECTOR_FLEET_COUNTS := {
 	"E": {"fighter": 3},
 	"D": {"fighter": 3, "heavy_fighter": 2},
-	"C": {"fighter": 4, "heavy_fighter": 2, "torpedo_boat": 2, "corvette": 1},
-	"B": {"fighter": 4, "heavy_fighter": 3, "torpedo_boat": 2, "corvette": 2, "capital": 1},
-	"A": {"fighter": 5, "heavy_fighter": 4, "torpedo_boat": 3, "corvette": 2, "capital": 2},
+	"C": {"fighter": 4, "heavy_fighter": 2, "torpedo_boat": 2, "corvette": 1,
+		"gunboat_pepperbox": 1},
+	"B": {"fighter": 4, "heavy_fighter": 3, "torpedo_boat": 2, "corvette": 2, "capital": 1,
+		"gunboat_pepperbox": 1, "gunboat_firecracker": 1},
+	"A": {"fighter": 5, "heavy_fighter": 4, "torpedo_boat": 3, "corvette": 2, "capital": 2,
+		"gunboat_pepperbox": 2, "gunboat_firecracker": 1},
 }
 
 ## Concentric shell layout: sector E is the outermost shell, sector A the

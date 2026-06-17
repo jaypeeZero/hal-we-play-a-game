@@ -15,5 +15,9 @@ func precondition(ws: GunnerWorldState) -> bool:
 	return ws.knowledge_action == "suppressive_fire" and not ws.opportunities.is_empty()
 
 func execute(ws: GunnerWorldState) -> Dictionary:
-	var target_id: String = ws.opportunities[0].get("id", "") if not ws.opportunities.is_empty() else ""
+	# Suppressive fire deliberately spreads across targets — let each weapon
+	# self-select the best in-arc target rather than forcing a shared one.
+	# A fleet focus-fire designation still overrides when present.
+	var focus: String = ws.crew_data.get("focus_assignment", "")
+	var target_id: String = focus if focus != "" else ""
 	return GunnerAction.make_fire_decision(ws, target_id, "suppressive_fire")

@@ -348,9 +348,6 @@ const SECTOR_CENTER_HALF_WIDTH := 100.0
 ## Ship types that count as "capital-class" for priority matching.
 const CAPITAL_CLASS_TYPES: Array = ["capital", "corvette"]
 
-## Ship types that count as "fighter-class" for priority matching.
-const FIGHTER_CLASS_TYPES: Array = ["fighter", "heavy_fighter", "torpedo_boat"]
-
 ## Pure function: returns a multiplier (1.0 = neutral) that scales a raw
 ## threat/opportunity score according to the crew's resolved tactics dict.
 ##
@@ -385,11 +382,11 @@ static func targeting_weight(
 			# even when a fighter happens to be closer.
 			if ship_type in CAPITAL_CLASS_TYPES:
 				weight *= PRIORITY_BOOST
-			elif ship_type in FIGHTER_CLASS_TYPES:
+			elif FleetDataManager.is_fighter_class(ship_type):
 				weight *= PRIORITY_PENALTY
 
 		"fighters_first":
-			if ship_type in FIGHTER_CLASS_TYPES:
+			if FleetDataManager.is_fighter_class(ship_type):
 				weight *= PRIORITY_BOOST
 			elif ship_type in CAPITAL_CLASS_TYPES:
 				weight *= PRIORITY_PENALTY
@@ -410,7 +407,7 @@ static func targeting_weight(
 			# for the vast majority of battles where the capital IS the command ship).
 			if ship_type in CAPITAL_CLASS_TYPES:
 				weight *= PRIORITY_BOOST
-			elif ship_type in FIGHTER_CLASS_TYPES:
+			elif FleetDataManager.is_fighter_class(ship_type):
 				weight *= PRIORITY_PENALTY
 
 		"nearest":

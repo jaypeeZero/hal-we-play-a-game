@@ -14,6 +14,9 @@ const KNOWN_TYPES: Array[String] = [
 	"torpedo_boat",
 	"corvette",
 	"capital",
+	"gunboat_medic",
+	"gunboat_pepperbox",
+	"gunboat_firecracker",
 ]
 
 ## Team tint colours (alpha intentionally opaque — apply via TextureRect.modulate).

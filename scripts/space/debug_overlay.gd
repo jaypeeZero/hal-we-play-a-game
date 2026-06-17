@@ -362,9 +362,14 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 	var block_y: float = crew_anchor.y
 
 	var orders: Dictionary = ship.get("orders", {})
-	var current_order: String = orders.get("current_order", "")
-	var maneuver_subtype: String = orders.get("maneuver_subtype", "")
-	var engagement_target: String = orders.get("engagement_target", orders.get("target_id", ""))
+	# orders fields can be null (e.g. templates seed target_id = null), and
+	# dict.get returns the stored null rather than the default — coerce to "".
+	var co: Variant = orders.get("current_order", "")
+	var current_order: String = co if co is String else ""
+	var ms: Variant = orders.get("maneuver_subtype", "")
+	var maneuver_subtype: String = ms if ms is String else ""
+	var et: Variant = orders.get("engagement_target", orders.get("target_id", ""))
+	var engagement_target: String = et if et is String else ""
 
 	# Find pilot crew for this ship.
 	var pilot_tactics: Dictionary = {}
@@ -406,7 +411,8 @@ func _draw_tactics_state(ship: Dictionary) -> void:
 		var reason: String = diag.get("reason", "")
 		fire_label = "FIRE: %s" % reason
 		match reason:
-			WeaponSystem.DIAG_OUT_OF_RANGE, WeaponSystem.DIAG_OUT_OF_ARC:
+			WeaponSystem.DIAG_OUT_OF_RANGE, WeaponSystem.DIAG_OUT_OF_ARC, \
+			WeaponSystem.DIAG_TOO_FAR, WeaponSystem.DIAG_HOLDING, WeaponSystem.DIAG_COOLDOWN:
 				fire_color = TACTICS_FIRE_WARN_COLOR
 			_:
 				fire_color = TACTICS_FIRE_BAD_COLOR

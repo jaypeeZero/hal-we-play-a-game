@@ -1134,3 +1134,90 @@ func test_tactical_order_drives_movement():
 
 	assert_ne(result.position, my_ship.position,
 		"Tactical order should cause the ship to move toward target")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MEDIC GUNBOAT — avoid-enemy reflex
+# ──────────────────────────────────────────────────────────────────────────────
+
+func _make_gunboat_medic(id: String, pos: Vector2, team: int) -> Dictionary:
+	## Build a minimal gunboat_medic ship dictionary suitable for AI tests.
+	return TestFactories.make_ship(id, "gunboat_medic", team, pos)
+
+
+func test_medic_evades_when_enemy_is_close() -> void:
+	# BEHAVIOR: A gunboat_medic with an enemy within danger radius must produce
+	# an evasive-retreat decision — never a pursue/attack decision.
+	var medic  = _make_gunboat_medic("medic1", Vector2(0, 0), 0)
+	var enemy  = TestFactories.make_fighter("enemy1", Vector2(500, 0), 1)
+	var crew   = TestFactories.make_pilot("pilot1", "medic1")
+
+	var decision = FighterPilotAI.make_decision(
+		crew, medic, [medic, enemy], [crew], game_time
+	)
+
+	assert_eq(decision.get("type", ""), "maneuver",
+		"Medic should produce a maneuver decision when threatened")
+	assert_eq(decision.get("subtype", ""), "fight_evasive_retreat",
+		"Medic must evade, not pursue, when an enemy is within danger radius")
+	assert_eq(decision.get("target_id", ""), "enemy1",
+		"Evasion decision should name the threat it is fleeing from")
+
+
+func test_medic_does_not_pursue_distant_enemy() -> void:
+	# BEHAVIOR: A gunboat_medic must NOT emit a pursue/attack decision even
+	# when an enemy exists but is outside the danger radius; it should produce
+	# a non-pursuit decision (area-leash, patrol, or loiter) instead.
+	var danger_radius: float = FighterPilotAI.MEDIC_DANGER_RADIUS
+	var medic = _make_gunboat_medic("medic1", Vector2(0, 0), 0)
+	var enemy = TestFactories.make_fighter(
+		"enemy1", Vector2(danger_radius * 1.5, 0), 1
+	)
+	var crew = TestFactories.make_pilot("pilot1", "medic1")
+
+	var decision = FighterPilotAI.make_decision(
+		crew, medic, [medic, enemy], [crew], game_time
+	)
+
+	# The medic reflex must not fire — the decision must not be an avoid-retreat
+	# triggered by the medic path (the GOAP brain may still produce other decisions).
+	assert_ne(decision.get("subtype", ""), "fight_evasive_retreat",
+		"Medic reflex should not fire when enemy is outside danger radius")
+
+
+func test_medic_reflex_takes_priority_over_attack_brain() -> void:
+	# BEHAVIOR: Even if the GOAP brain would normally produce an attack
+	# decision (awareness has a threat), the medic reflex fires first and
+	# overrides with evasion.
+	var medic = _make_gunboat_medic("medic1", Vector2(0, 0), 0)
+	var enemy = TestFactories.make_fighter("enemy1", Vector2(300, 0), 1)
+	var crew  = TestFactories.make_pilot("pilot1", "medic1")
+	crew.awareness.threats = ["enemy1"]  # GOAP brain would normally pursue this
+
+	var decision = FighterPilotAI.make_decision(
+		crew, medic, [medic, enemy], [crew], game_time
+	)
+
+	assert_ne(decision.get("subtype", ""), "tactical",
+		"Medic reflex must short-circuit any pursue/attack intent from the GOAP brain")
+	assert_eq(decision.get("subtype", ""), "fight_evasive_retreat",
+		"Medic must evade regardless of GOAP brain attack intent")
+
+
+func test_normal_fighter_not_affected_by_medic_reflex() -> void:
+	# BEHAVIOR: The medic reflex must only fire for gunboat_medic; a normal
+	# fighter with an enemy nearby must still get a regular combat decision.
+	var fighter = TestFactories.make_fighter("f1", Vector2(0, 0), 0)
+	var enemy   = TestFactories.make_fighter("e1", Vector2(500, 0), 1)
+	var crew    = TestFactories.make_pilot("pilot1", "f1")
+	crew.awareness.threats = ["e1"]
+
+	var decision = FighterPilotAI.make_decision(
+		crew, fighter, [fighter, enemy], [crew], game_time
+	)
+
+	# Fighter should NOT get fight_evasive_retreat from the medic reflex path.
+	# It may get survival evasion at this distance but must not be blocked from
+	# combat by the medic reflex.
+	assert_ne(decision.get("subtype", ""), "fight_evasive_retreat",
+		"Normal fighter should not be routed through the medic avoid reflex")
