@@ -36,7 +36,7 @@ godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gfile=test_damage
 |-------|--------------|
 | **Campaign** | Starts a new campaign run and drops you on the Campaign Map (the run's home screen). |
 | **Continue Campaign** | Resumes a saved run (shown only when a save exists). |
-| **New Game** | A one-off **skirmish**: go straight to the Pre-Battle deployment screen, then fight a single battle. |
+| **One-off Skirmish** | Go straight to the Pre-Battle deployment screen, then fight a single battle. |
 | **Edit Fleets** | The Fleet Command editor over the saved skirmish fleets (ships, crew assignments, tactics). |
 | **Ship Editor** | Tool for authoring/tuning ship templates (`tools/ship_editor.tscn`). |
 | **Crew Manager** | Edit the global crew-roster template. |
