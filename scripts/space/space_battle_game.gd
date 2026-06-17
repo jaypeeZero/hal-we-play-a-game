@@ -53,6 +53,12 @@ var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 var _pending_spawn: Dictionary = {}
 var _battlefield_size: Vector2 = Vector2(5000, 3500)
 
+## Set once the win condition resolves, so the battle ends exactly once: the
+## simulation freezes and the outcome is handled (roguelike scene swap, or a
+## skirmish end banner) rather than re-firing every frame.
+var _game_over: bool = false
+const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
+
 const CAMPAIGN_MAP_SCENE := "res://scenes/campaign_map_3d.tscn"
 const POST_BATTLE_SCENE := "res://scenes/post_battle.tscn"
 
@@ -161,6 +167,11 @@ func _ensure_action(action_name: String, key: int) -> void:
 # ============================================================================
 
 func _process(delta: float) -> void:
+	# Once the battle is decided, freeze the simulation so ships stop drifting
+	# while the outcome is shown (or the scene swaps in a roguelike run).
+	if _game_over:
+		return
+
 	# 0. CREW AI SYSTEMS - Update crew awareness, tactical memory, and decisions
 	if ENABLE_CREW_AI:
 		var pre_movement_ship_grid = SpatialGridSystem.build(_ships, GRID_CELL_SIZE)
@@ -837,6 +848,11 @@ func _check_win_condition() -> void:
 		_end_game(0)
 
 func _end_game(winner: int) -> void:
+	# The win condition is polled every frame; resolve the battle only once.
+	if _game_over:
+		return
+	_game_over = true
+
 	game_ended.emit(winner)
 
 	if BattleEventLoggerAutoload.service:
@@ -844,6 +860,37 @@ func _end_game(winner: int) -> void:
 
 	if RoguelikeRun.active:
 		_handle_roguelike_battle_end(winner)
+	else:
+		_show_skirmish_end_banner(winner)
+
+
+## Skirmish (non-roguelike) has no campaign to return to, so the battle scene
+## owns its own ending: a centered VICTORY/DEFEAT banner over the frozen field
+## with a button back to the main menu.
+func _show_skirmish_end_banner(winner: int) -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 100
+	add_child(layer)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(center)
+
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 24)
+	center.add_child(box)
+
+	var banner := Label.new()
+	banner.text = "VICTORY" if winner == 0 else "DEFEAT"
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.add_theme_font_size_override("font_size", 96)
+	box.add_child(banner)
+
+	var button := Button.new()
+	button.text = "Return to Main Menu"
+	button.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
+	box.add_child(button)
 
 
 ## The campaign map owns all campaign branching; the battle scene only records
