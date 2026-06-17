@@ -12,7 +12,7 @@ env:
   GODOT_VERSION: "4.5"
   # itch.io target in the form <user>/<game> (the game's URL slug).
   ITCH_TARGET: ${{ vars.ITCH_TARGET }}
-  EXPORT_NAME: WizardBattleArena
+  EXPORT_NAME: SpaceFleetManager
 
 permissions:
   contents: read
