@@ -67,13 +67,24 @@ func test_starting_money_is_positive():
 
 func test_starting_money_grows_with_fleet_upkeep():
 	# Same seed => same number of battles-worth, so a costlier fleet yields more
-	# starting money.
-	var lean := EconomySystem.roll_starting_money([_hull("fighter", 1)], _seeded_rng(7))
+	# starting money. Crews are large enough that rolled upkeep clears the floor,
+	# so the proportional behavior is what's under test (not the minimum).
+	var lean := EconomySystem.roll_starting_money([_hull("fighter", 80)], _seeded_rng(7))
 	var rich := EconomySystem.roll_starting_money(
-		[_hull("fighter", 1), _hull("capital", 5)], _seeded_rng(7))
+		[_hull("fighter", 80), _hull("capital", 50)], _seeded_rng(7))
 
 	assert_gt(rich, lean,
 		"A fleet with higher upkeep should start with proportionally more money")
+
+
+func test_starting_money_respects_minimum_floor():
+	# A tiny fleet's rolled upkeep is well below the floor, so the run still
+	# begins with a usable bankroll.
+	var money := EconomySystem.roll_starting_money([_hull("fighter", 1)], _seeded_rng())
+	var floor_value := int(EconomySystem.config().get("starting_money", {}).get("minimum", 0))
+
+	assert_gte(money, floor_value,
+		"Starting money never drops below the configured minimum")
 
 
 # ============================================================================

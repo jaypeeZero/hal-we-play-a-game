@@ -46,7 +46,7 @@ static func has_destroyable_mounts(ship_type: String) -> bool:
 ## Default fleet when no save file exists
 static func get_default_fleet() -> Dictionary:
 	return {
-		"fighter": 1,
+		"fighter": 5,
 		"heavy_fighter": 0,
 		"torpedo_boat": 0,
 		"corvette": 0,

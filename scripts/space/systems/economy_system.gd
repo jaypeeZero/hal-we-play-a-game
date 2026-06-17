@@ -69,13 +69,16 @@ static func per_battle_upkeep(hulls: Array) -> Dictionary:
 
 
 ## Random starting money: enough to cover the current fleet's upkeep for a
-## random number of battles (config starting_money.{min,max}_upkeep_battles).
+## random number of battles (config starting_money.{min,max}_upkeep_battles),
+## but never below the config floor (starting_money.minimum) so a small starting
+## fleet still has a usable bankroll.
 static func roll_starting_money(hulls: Array, rng: RandomNumberGenerator) -> int:
 	var cfg: Dictionary = config().get("starting_money", {})
 	var battles := rng.randi_range(
 		int(cfg.get("min_upkeep_battles", 0)),
 		int(cfg.get("max_upkeep_battles", 0)))
-	return per_battle_upkeep(hulls).total * battles
+	var rolled: int = per_battle_upkeep(hulls).total * battles
+	return maxi(rolled, int(cfg.get("minimum", 0)))
 
 
 ## Reward for the enemies destroyed this battle, keyed by ship type.

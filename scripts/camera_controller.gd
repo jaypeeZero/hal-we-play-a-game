@@ -11,6 +11,8 @@ class_name CameraController
 const ZOOM_MIN: float = 0.05
 const ZOOM_MAX: float = 2.0
 const ZOOM_STEP: float = 0.1
+## Multiplicative step per mouse-wheel notch (feels even across zoom levels).
+const WHEEL_ZOOM_FACTOR: float = 1.1
 const PAN_SPEED: float = 500.0
 const SMOOTH_SPEED: float = 5.0
 
@@ -87,6 +89,23 @@ func _process(delta: float) -> void:
 	# Smooth interpolation
 	zoom = zoom.lerp(_target_zoom, SMOOTH_SPEED * delta)
 	position = position.lerp(_target_position, SMOOTH_SPEED * delta)
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Mouse-wheel zoom for both the battle and race views. Up = zoom in,
+	# down = zoom out; clamped to the same range as keyboard zoom.
+	if LogConsole.capturing_input:
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_apply_wheel_zoom(WHEEL_ZOOM_FACTOR)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_apply_wheel_zoom(1.0 / WHEEL_ZOOM_FACTOR)
+
+func _apply_wheel_zoom(factor: float) -> void:
+	_target_zoom = (_target_zoom * factor).clamp(
+		Vector2.ONE * ZOOM_MIN,
+		Vector2.ONE * ZOOM_MAX
+	)
 
 func _handle_zoom_input() -> void:
 	"""Handle zoom in/out with -/+ keys"""
