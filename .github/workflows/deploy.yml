@@ -10,9 +10,10 @@ on:
 
 env:
   GODOT_VERSION: "4.5"
-  # itch.io target in the form <user>/<game> (the game's URL slug).
-  ITCH_TARGET: ${{ vars.ITCH_TARGET }}
   EXPORT_NAME: SpaceFleetManager
+  # itch.io publish target (the game at https://jpzer0.itch.io/sfm).
+  ITCH_USER: jpzer0
+  ITCH_GAME: sfm
 
 permissions:
   contents: read
@@ -69,8 +70,6 @@ jobs:
     name: Publish to itch.io
     needs: export
     runs-on: ubuntu-latest
-    # Skip if no itch.io target is configured.
-    if: ${{ vars.ITCH_TARGET != '' }}
     strategy:
       matrix:
         include:
@@ -83,21 +82,28 @@ jobs:
           - channel: mac
             path: build/macos
     steps:
+      - name: Verify itch.io credentials are present
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          if [ -z "$BUTLER_API_KEY" ]; then
+            echo "::error::Secret BUTLER_API_KEY is not set. Create it at"
+            echo "::error::https://github.com/jaypeeZero/hal-we-play-a-game/settings/secrets/actions"
+            echo "::error::with an itch.io API key from https://itch.io/user/settings/api-keys"
+            exit 1
+          fi
+
       - name: Download builds
         uses: actions/download-artifact@v4
         with:
           name: builds
           path: build
 
-      - name: Install butler
-        run: |
-          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
-          unzip butler.zip
-          chmod +x butler
-          ./butler -V
-
       - name: Push to itch.io (${{ matrix.channel }})
+        uses: yeslayla/butler-publish-itchio-action@v1.0.3
         env:
-          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
-        run: |
-          ./butler push "${{ matrix.path }}" "${ITCH_TARGET}:${{ matrix.channel }}"
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_API_KEY }}
+          CHANNEL: ${{ matrix.channel }}
+          ITCH_USER: ${{ env.ITCH_USER }}
+          ITCH_GAME: ${{ env.ITCH_GAME }}
+          PACKAGE: ${{ matrix.path }}
