@@ -1,0 +1,124 @@
+name: Deploy
+
+# Builds the game for Web, Linux, Windows and macOS on every push to the
+# default branch, publishes the Web build to GitHub Pages, and pushes every
+# platform build to itch.io via butler.
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.5"
+  # itch.io target in the form <user>/<game> (the game's URL slug).
+  ITCH_TARGET: ${{ vars.ITCH_TARGET }}
+  EXPORT_NAME: WizardBattleArena
+
+# Allow the Pages deploy job to publish.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; cancel an in-flight one if a new push lands.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export:
+    name: Export builds
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install export templates
+        run: |
+          mkdir -v -p ~/.local/share/godot/export_templates/
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Web build
+        run: |
+          mkdir -v -p build/web
+          godot --headless --verbose --export-release "Web" build/web/index.html
+
+      - name: Linux build
+        run: |
+          mkdir -v -p build/linux
+          godot --headless --verbose --export-release "Linux" build/linux/$EXPORT_NAME.x86_64
+
+      - name: Windows build
+        run: |
+          mkdir -v -p build/windows
+          godot --headless --verbose --export-release "Windows Desktop" build/windows/$EXPORT_NAME.exe
+
+      - name: macOS build
+        run: |
+          mkdir -v -p build/macos
+          godot --headless --verbose --export-release "macOS" build/macos/$EXPORT_NAME.zip
+
+      - name: Upload Web artifact (for Pages)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Upload all builds (for itch.io job)
+        uses: actions/upload-artifact@v4
+        with:
+          name: builds
+          path: build/
+
+  deploy-pages:
+    name: Deploy Web to GitHub Pages
+    needs: export
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-itch:
+    name: Publish to itch.io
+    needs: export
+    runs-on: ubuntu-latest
+    # Skip if no itch.io target is configured.
+    if: ${{ vars.ITCH_TARGET != '' }}
+    strategy:
+      matrix:
+        include:
+          - channel: web
+            path: build/web
+          - channel: linux
+            path: build/linux
+          - channel: windows
+            path: build/windows
+          - channel: mac
+            path: build/macos
+    steps:
+      - name: Download builds
+        uses: actions/download-artifact@v4
+        with:
+          name: builds
+          path: build
+
+      - name: Install butler
+        run: |
+          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip
+          chmod +x butler
+          ./butler -V
+
+      - name: Push to itch.io (${{ matrix.channel }})
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          ./butler push "${{ matrix.path }}" "${ITCH_TARGET}:${{ matrix.channel }}"
