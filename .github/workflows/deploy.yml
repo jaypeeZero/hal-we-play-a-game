@@ -101,8 +101,9 @@ jobs:
 
       - name: Push to itch.io (${{ matrix.channel }})
         env:
-          # butler reads BUTLER_API_KEY; the repo secret is named BUTLER_CREDENTIALS.
-          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
+          # butler reads BUTLER_API_KEY. Accept the key under either secret
+          # name (BUTLER_CREDENTIALS as in the other repo, or BUTLER_API_KEY).
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS || secrets.BUTLER_API_KEY }}
           ITCH_TARGET: ${{ vars.ITCH_USER }}/${{ vars.ITCH_GAME }}
         run: |
           ./butler push "${{ matrix.path }}" "${ITCH_TARGET}:${{ matrix.channel }}"
