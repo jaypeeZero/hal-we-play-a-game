@@ -53,7 +53,7 @@ text = "Edit Fleets"
 
 [node name="RogueliteButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
 layout_mode = 2
-text = "Roguelite Mode"
+text = "Campaign"
 
 [node name="ContinueButton" type="Button" parent="HBoxContainer/MenuSide/Container"]
 visible = false

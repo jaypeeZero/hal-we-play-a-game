@@ -1,10 +1,11 @@
 # Space Battle
 
-A tactical space-combat **roguelike** built in Godot 4 with functional-programming
-principles and data-driven systems. You command a persistent fleet across a
-multi-sector campaign: hire and grow a crew, choose where to jump, and fight
-real-time tactical battles where your ships are flown by an event-driven crew AI
-rather than micromanaged unit-by-unit.
+A tactical space-combat game built in Godot 4 with functional-programming
+principles and data-driven systems. Battles are fought in real time, where your
+ships are flown by an event-driven crew AI rather than micromanaged
+unit-by-unit. Play one-off skirmishes, or take a fleet through the **Campaign**
+mode: a multi-sector run where you hire and grow a crew, manage an economy,
+choose where to jump, and carry damage and experience between fights.
 
 > This README is the gameplay/orientation guide. For the deep technical design
 > see **`ARCHITECTURE_AND_FLOW.md`** (system responsibilities and the per-tick
@@ -33,7 +34,7 @@ godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gfile=test_damage
 
 | Entry | What it does |
 |-------|--------------|
-| **Roguelite Mode** | Starts a new campaign run and drops you on the Campaign Map (the run's home screen). |
+| **Campaign** | Starts a new campaign run and drops you on the Campaign Map (the run's home screen). |
 | **Continue Campaign** | Resumes a saved run (shown only when a save exists). |
 | **New Game** | A one-off **skirmish**: go straight to the Pre-Battle deployment screen, then fight a single battle. |
 | **Edit Fleets** | The Fleet Command editor over the saved skirmish fleets (ships, crew assignments, tactics). |
@@ -41,7 +42,7 @@ godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gfile=test_damage
 | **Crew Manager** | Edit the global crew-roster template. |
 | **Settings / About / Quit** | Standard. |
 
-## The Campaign Loop (Roguelite Mode)
+## The Campaign Loop
 
 A run lives in the `RoguelikeRun` autoload (persistent fleet, crew, economy,
 doctrine, and the generated star chart). The **Campaign Map** is the home base;
@@ -135,7 +136,7 @@ Full detail lives in `ARCHITECTURE_AND_FLOW.md` and `CLAUDE.md`; the essentials:
   Leader hats onto the best-fit existing crew each tick; their brains issue
   posture, formation, and focus-fire orders that are *absorbed* into
   subordinates' steering blends rather than forcing discrete moves.
-- **Roguelike navigation.** `NavGraph` (pure `RefCounted`, unit-tested) owns the
+- **Campaign navigation.** `NavGraph` (pure `RefCounted`, unit-tested) owns the
   screen enum and fixed Back hierarchy (everything bottoms out at the Map). The
   `Nav` autoload is a thin scene-switch shim; `NavBar` (built in code, run-scoped
   via `NavBar.attach`) renders the tabs, Back, and credits readout.
