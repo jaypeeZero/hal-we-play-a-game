@@ -1,8 +1,7 @@
 name: Deploy
 
 # Builds the game for Web, Linux, Windows and macOS on every push to the
-# default branch, publishes the Web build to GitHub Pages, and pushes every
-# platform build to itch.io via butler.
+# default branch and pushes every platform build to itch.io via butler.
 
 on:
   push:
@@ -15,11 +14,8 @@ env:
   ITCH_TARGET: ${{ vars.ITCH_TARGET }}
   EXPORT_NAME: WizardBattleArena
 
-# Allow the Pages deploy job to publish.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Never run two deploys at once; cancel an in-flight one if a new push lands.
 concurrency:
@@ -63,28 +59,11 @@ jobs:
           mkdir -v -p build/macos
           godot --headless --verbose --export-release "macOS" build/macos/$EXPORT_NAME.zip
 
-      - name: Upload Web artifact (for Pages)
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/web
-
       - name: Upload all builds (for itch.io job)
         uses: actions/upload-artifact@v4
         with:
           name: builds
           path: build/
-
-  deploy-pages:
-    name: Deploy Web to GitHub Pages
-    needs: export
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
 
   deploy-itch:
     name: Publish to itch.io
