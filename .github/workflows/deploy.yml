@@ -10,8 +10,6 @@ on:
 
 env:
   GODOT_VERSION: "4.5"
-  # itch.io target in the form <user>/<game> (the game's URL slug).
-  ITCH_TARGET: ${{ vars.ITCH_TARGET }}
   EXPORT_NAME: SpaceFleetManager
 
 permissions:
@@ -70,7 +68,7 @@ jobs:
     needs: export
     runs-on: ubuntu-latest
     # Skip if no itch.io target is configured.
-    if: ${{ vars.ITCH_TARGET != '' }}
+    if: ${{ vars.ITCH_USER != '' && vars.ITCH_GAME != '' }}
     strategy:
       matrix:
         include:
@@ -89,15 +87,11 @@ jobs:
           name: builds
           path: build
 
-      - name: Install butler
-        run: |
-          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
-          unzip butler.zip
-          chmod +x butler
-          ./butler -V
-
       - name: Push to itch.io (${{ matrix.channel }})
+        uses: yeslayla/butler-publish-itchio-action@v1.0.3
         env:
-          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
-        run: |
-          ./butler push "${{ matrix.path }}" "${ITCH_TARGET}:${{ matrix.channel }}"
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_API_KEY }}
+          CHANNEL: ${{ matrix.channel }}
+          ITCH_USER: ${{ vars.ITCH_USER }}
+          ITCH_GAME: ${{ vars.ITCH_GAME }}
+          PACKAGE: ${{ matrix.path }}
