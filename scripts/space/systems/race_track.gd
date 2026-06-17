@@ -11,10 +11,11 @@ extends RefCounted
 const TRACKS_PATH := "res://data/race_tracks/"
 ## DNF cutoff: elapsed time limit = estimated ideal lap time × laps × this.
 const FINISH_TIME_LIMIT_MULT := 4.0
-## Grid rows per column before wrapping to next column.
-const GRID_ROWS_PER_COLUMN := 4
-## Stagger offset between even/odd grid rows (fraction of lateral spacing).
-const GRID_STAGGER_FRACTION := 0.5
+## Starting line: the field forms up abreast in a single straight row this far
+## OUTSIDE the first gate (back along the approach), then charges it together.
+const START_LINE_SETBACK := 1875.0
+## Lateral gap between racers on the starting line (world units).
+const START_LINE_SPACING := 170.0
 
 
 ## Load a track dict from data/race_tracks/<track_id>.json.
@@ -140,30 +141,27 @@ static func _cross(u: Vector2, v: Vector2) -> float:
 	return u.x * v.y - u.y * v.x
 
 
-## Compute starting grid positions for n_racers.
+## Starting positions for n_racers: a single straight line, abreast, set back
+## OUTSIDE the first gate and all facing it — so the field charges gate 1 together.
 ## Returns Array of {position: Vector2, heading: float}.
 static func starting_grid(track: Dictionary, n_racers: int) -> Array:
+	var gate0: Vector2 = marker_position(track, 0)
 	var start: Dictionary = track.get("start", {})
-	var base_pos_arr: Array = start.get("position", [0, 0])
-	var base_pos: Vector2 = Vector2(float(base_pos_arr[0]), float(base_pos_arr[1]))
-	var heading: float = float(start.get("heading", 0.0))
-	var spacing_arr = start.get("grid_spacing", [120, 90])
-	var lon_step: float = float(spacing_arr[0])  # along heading axis
-	var lat_step: float = float(spacing_arr[1])  # perpendicular
+	var sp_arr: Array = start.get("position", [gate0.x, gate0.y])
+	var start_pos: Vector2 = Vector2(float(sp_arr[0]), float(sp_arr[1]))
 
-	# Forward and right vectors derived from heading.
-	var fwd := Vector2(sin(heading), -cos(heading))
-	var right := Vector2(fwd.y, -fwd.x)
+	# Approach axis: from the designer's start point toward the first gate.
+	var approach: Vector2 = gate0 - start_pos
+	approach = approach.normalized() if approach.length() > 1.0 else Vector2(0.0, -1.0)
+	var heading: float = atan2(approach.x, -approach.y)   # face the first gate
+	var right: Vector2 = Vector2(approach.y, -approach.x)  # lateral (abreast) axis
 
+	# One straight row, centred on a point set back outside the first gate.
+	var line_centre: Vector2 = gate0 - approach * START_LINE_SETBACK
 	var result: Array = []
 	for i in range(n_racers):
-		var row: int = i % GRID_ROWS_PER_COLUMN
-		var col: int = i / GRID_ROWS_PER_COLUMN
-		var stagger: float = lat_step * GRID_STAGGER_FRACTION if row % 2 == 1 else 0.0
-		var pos: Vector2 = base_pos \
-			- fwd * lon_step * float(col) \
-			+ right * (lat_step * float(row - (GRID_ROWS_PER_COLUMN - 1) * 0.5) + stagger)
-		result.append({ "position": pos, "heading": heading })
+		var offset: float = (float(i) - float(n_racers - 1) * 0.5) * START_LINE_SPACING
+		result.append({ "position": line_centre + right * offset, "heading": heading })
 	return result
 
 

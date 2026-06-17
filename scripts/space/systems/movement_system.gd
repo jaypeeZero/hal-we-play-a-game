@@ -26,7 +26,6 @@ extends RefCounted
 # At close/combat range: Face target, use lateral thrust for all positioning
 # At far range: Face movement direction, use main thrust to close distance
 
-const LATERAL_THRUST_RANGE = 1500.0  # Use lateral thrust when closer than this to target
 
 # ============================================================================
 # COMBAT MOVEMENT TUNING
@@ -2025,10 +2024,7 @@ static func update_all_obstacles(obstacles: Array, delta: float) -> Array:
 ## Avoids oscillation when the ship is already near its desired orbit radius.
 const BLENDED_RANGE_DEADBAND_FRACTION := 0.15
 
-## Throttle used when closing distance at far range (facing move direction).
-const BLENDED_APPROACH_THROTTLE := 0.5
-
-## Throttle used while in close-range combat (facing target, using lateral thrust).
+## Throttle used while holding a weapon-facing (broadside/nose_on) at range.
 const BLENDED_COMBAT_THROTTLE := 0.3
 
 ## When the blended move vector is this short we treat it as "no meaningful
@@ -2070,12 +2066,6 @@ const SEPARATION_WEIGHT           := 10.0
 ## (a damped spring), letting crowded ships ease apart instead of ping-ponging.
 const SEPARATION_DAMPING          := 0.22
 
-## How strongly the separation push along the target-bearing axis modulates
-## close-range throttle. Lets ships stacked in front of / behind each other on
-## the run-in separate via throttle, the only axis available once they face the
-## target (lateral thrust handles the perpendicular axis).
-const SEPARATION_THROTTLE_FACTOR  := 0.22
-
 ## Detection lookahead distance for obstacle avoidance in blended mode.
 ## Ships start reacting to obstacles within this many pixels of their centre.
 const OBSTACLE_AVOID_MARGIN       := 200.0
@@ -2096,42 +2086,104 @@ const OBSTACLE_AVOID_WEIGHT       := 2.0
 const NAV_FLOW_MIN_SPEED := 10.0    # below this, use heading instead of velocity
 const NAV_EDGE_MARGIN := 0.12       # keep the aim at least this far from each edge of Z
 
+## Pure-pursuit lookahead (seconds of travel, scaled by speed), clamped. Long
+## enough to be stable at speed; tuned with the flight-line analyzer.
+const NAV_LOOKAHEAD_TIME := 0.7
+const NAV_LOOKAHEAD_MIN := 250.0
+const NAV_LOOKAHEAD_MAX := 550.0
+
+## How far the aim may reach PAST the current waypoint toward the next one. This is
+## the anticipation that smooths the line: the nose starts swinging toward the next
+## gate before this one is crossed, so there's no post-gate snap. Too large and on a
+## tight/spur gate the aim is tugged off this gate before the ship crosses it (stuck
+## oscillating), so it's bounded — and made safe by only engaging once the ship is
+## genuinely committed to the crossing (see nav_aim_point). Overridable for tuning.
+static var nav_anticipation_margin: float = 350.0
+
+## Anticipation ramps in within this distance of the waypoint (0 beyond it).
+const NAV_COMMIT_DIST := 700.0
+
+## Side-thruster arc response. The ship steers by firing maneuvering jets toward the
+## inside of a turn to correct the part of its velocity that points off the aim — full
+## lateral command when that cross-velocity reaches NAV_ARC_RESPONSE × max_speed. Lower
+## = more eager side-thrust = tighter arcs. The jets are weaker than the main engine
+## (lateral_acceleration stat), so they shape the line; they don't fly it.
+const NAV_ARC_RESPONSE := 0.50
+
 static func nav_aim_point(ship_data: Dictionary, target: Dictionary, orders: Dictionary) -> Vector2:
-	"""Aim point: reach the goal, threading any pass-through region on the way.
+	"""The ONE nav routine for race AND battle: follow the goal as a path with a rolling
+	lookahead, so the aim glides along the upcoming waypoints and the ship arcs from one
+	toward the next (driving-in-space) instead of going straight then snapping. The only
+	thing that differs is the goal's CONTENTS — race fills orders.nav_path with gate
+	centres; battle's goal is its target/tactical point — never the code path itself.
+	A single-waypoint goal (battle) just yields the aim along the line to that point."""
+	var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
 
-	With a pass-through region Z (nav_via_a/b), aim where the ship's CURRENT motion
-	already crosses Z — so a ship arcing cleanly through is never yanked toward a
-	point, and a fast ship is never asked to cut inside (which would overshoot a
-	post and miss). Only nudge back when its line would clip an edge or miss. Generic
-	— race fills Z from a gate's posts, battle from a tactical corridor."""
-	if orders.has("nav_via_a") and orders.has("nav_via_b"):
-		var pa: Vector2 = orders.nav_via_a
-		var pb: Vector2 = orders.nav_via_b
-		var my_pos: Vector2 = ship_data.get("position", Vector2.ZERO)
-		var vel: Vector2 = ship_data.get("velocity", Vector2.ZERO)
-		var dir: Vector2 = vel.normalized() if vel.length() > NAV_FLOW_MIN_SPEED \
-			else get_visual_forward(ship_data.get("rotation", 0.0))
-		var t: float = _ray_segment_param(my_pos, dir, pa, pb)  # where motion crosses Z
-		if not is_nan(t):
-			return pa.lerp(pb, clampf(t, NAV_EDGE_MARGIN, 1.0 - NAV_EDGE_MARGIN))
-		return (pa + pb) * 0.5  # parallel / behind — aim at the region centre to acquire it
+	# Build the waypoint list from the goal: an explicit route if given, else the
+	# target point. Same list shape feeds the same follower below.
+	var path = orders.get("nav_path", null)
+	if not (path is Array and not path.is_empty()):
+		if target.has("position"):
+			path = [target.position]
+		else:
+			return my_pos
 
-	# Simple goal: aim at it (battle target, or any goal with no pass-through region).
-	return target.position
+	var full: Array = [my_pos]
+	full.append_array(path)
+	var vel: Vector2 = ship_data.get("velocity", Vector2.ZERO)
+	var speed: float = vel.length()
+	var lookahead: float = clampf(speed * NAV_LOOKAHEAD_TIME, NAV_LOOKAHEAD_MIN, NAV_LOOKAHEAD_MAX)
+	# Anticipation, made safe. The aim may reach PAST the current waypoint toward the
+	# next — that pre-swings the nose so there's no post-gate snap — but only as the
+	# ship COMMITS to the crossing: close to the waypoint AND already flying toward it.
+	# Far out or off-angle (overshooting / looping back), commitment falls to zero so
+	# the aim drops onto the waypoint, guaranteeing it registers and an overshoot
+	# self-corrects instead of being tugged past. (With a single-waypoint battle goal
+	# there is nothing beyond it, so the aim simply settles on the target.)
+	var to_wp: Vector2 = path[0] - my_pos
+	var dist_to_wp: float = to_wp.length()
+	var closeness: float = clampf(1.0 - dist_to_wp / NAV_COMMIT_DIST, 0.0, 1.0)
+	var alignment: float = 0.0
+	if speed > 1.0 and dist_to_wp > 1.0:
+		alignment = clampf(vel.normalized().dot(to_wp / dist_to_wp), 0.0, 1.0)
+	var commit: float = closeness * alignment
+	# Straightness: anticipate fully through a gentle bend, but back off toward a
+	# sharp/spur waypoint (where reaching past it would tug the ship off the crossing).
+	if path.size() >= 2 and dist_to_wp > 1.0:
+		var seg_next: Vector2 = path[1] - path[0]
+		if seg_next.length() > 1.0:
+			commit *= clampf((to_wp / dist_to_wp).dot(seg_next.normalized()), 0.0, 1.0)
+	lookahead = minf(lookahead, dist_to_wp + nav_anticipation_margin * commit)
+	return _lookahead_on_path(my_pos, full, lookahead)
 
 
-## Parameter t along region edge a→b where the forward ray (origin + s·dir, s≥0)
-## crosses it. NAN when parallel or the region is behind the ship's motion.
-static func _ray_segment_param(origin: Vector2, dir: Vector2, a: Vector2, b: Vector2) -> float:
-	var e: Vector2 = b - a
-	var denom: float = dir.x * e.y - dir.y * e.x
-	if absf(denom) < 0.0001:
-		return NAN
-	var ap: Vector2 = a - origin
-	var s: float = (ap.x * e.y - ap.y * e.x) / denom      # distance along the ray
-	if s < 0.0:
-		return NAN
-	return (ap.x * dir.y - ap.y * dir.x) / denom          # param along the region
+## Point `lookahead` ahead of `pos` along polyline `path`: closest point, then walk
+## forward. Returns the path end if the lookahead runs past it.
+static func _lookahead_on_path(pos: Vector2, path: Array, lookahead: float) -> Vector2:
+	var best_seg: int = 0
+	var best_point: Vector2 = path[0]
+	var best_d: float = INF
+	for i in range(path.size() - 1):
+		var a: Vector2 = path[i]
+		var ab: Vector2 = path[i + 1] - a
+		var len2: float = ab.length_squared()
+		var u: float = clampf((pos - a).dot(ab) / len2, 0.0, 1.0) if len2 > 0.0001 else 0.0
+		var p: Vector2 = a + ab * u
+		var dd: float = pos.distance_squared_to(p)
+		if dd < best_d:
+			best_d = dd
+			best_seg = i
+			best_point = p
+	var remaining: float = lookahead
+	var cur: Vector2 = best_point
+	for seg in range(best_seg, path.size() - 1):
+		var seg_end: Vector2 = path[seg + 1]
+		var to_end: float = cur.distance_to(seg_end)
+		if remaining <= to_end:
+			return cur.lerp(seg_end, remaining / to_end) if to_end > 0.0 else seg_end
+		remaining -= to_end
+		cur = seg_end
+	return path[path.size() - 1]
 
 
 
@@ -2330,8 +2382,6 @@ static func calculate_blended_control(
 	var is_braking: bool = false
 	var lateral_thrust: float = 0.0
 
-	var at_close_range: bool = has_target and dist_to_target < LATERAL_THRUST_RANGE
-
 	if facing_mode == "broadside" and has_target:
 		# Artillery orbit: face perpendicular to the target bearing so side
 		# batteries bear. Movement (throttle/lateral) still comes from blended
@@ -2364,40 +2414,28 @@ static func calculate_blended_control(
 			is_braking = true
 			throttle   = 0.0
 
-	elif at_close_range:
-		# "auto" close-range: face the target, use lateral thrust for positioning.
-		var to_target: Vector2 = target.position - my_pos
-		desired_heading = direction_to_heading(to_target.normalized())
-
-		# Project move direction onto the lateral axis (perpendicular to facing).
-		var facing: Vector2 = get_visual_forward(desired_heading)
-		var right: Vector2  = Vector2(facing.y, -facing.x)  # 90° clockwise = strafe right
-		var lateral_component: float = move.dot(right)
-		lateral_thrust = clampf(lateral_component, -1.0, 1.0)
-
-		# Throttle is the combat press, modulated by separation along the facing
-		# (bearing) axis. At close range lateral thrust can only separate ships
-		# side-to-side; ships stacked along the bearing line must separate via
-		# throttle. A friendly dead ahead (negative forward push) backs us off;
-		# one behind (positive) pulls us ahead, so the column strings out instead
-		# of piling onto the same point in front of the target.
-		var fwd_sep: float = goal_separation.dot(facing)
-		throttle = clampf(BLENDED_COMBAT_THROTTLE + fwd_sep * SEPARATION_THROTTLE_FACTOR, 0.0, 1.0)
-
-		# Brake if inside preferred_range — keep_range is pushing us out but we
-		# overshot; the physical brake stops the inward drift. Skip the brake
-		# when separation is pushing us forward (a friendly behind) so we can
-		# still pull ahead to clear them.
-		var deadband: float = preferred_range * BLENDED_RANGE_DEADBAND_FRACTION
-		if has_target and dist_to_target < preferred_range - deadband and fwd_sep <= 0.0:
-			is_braking = true
-			throttle = 0.0
-
 	else:
-		# "auto" far-range (or no target): face the blended move direction, main throttle.
+		# Driving in space (the one, universal flight). A ship has thrusters on every
+		# side, so it arcs the way a real craft does: point the nose at the goal and run
+		# the main engine (the strongest thruster) toward it, while the maneuvering jets
+		# fire sideways to bend the velocity back onto the aim. Without the side jets a
+		# ship can only rotate-then-thrust, so it coasts wide and snaps round after the
+		# fact; with them it curves continuously into the turn.
+		#
+		# This is steer-to-velocity (Reynolds seek) decomposed onto the hull axes:
+		# steering = where we want to be going (aim × cruise) − where we are going now.
+		# The forward part is main throttle; the perpendicular part is lateral thrust.
+		# On a straight the cross term is ~0 (no needless side-thrust); into a corner it
+		# grows and the jets pull the arc round. Same logic for a race gate or a combat
+		# aim point — no orbit, no strafe-to-face-target, no race/battle special-case.
 		desired_heading = direction_to_heading(move)
-		throttle = BLENDED_APPROACH_THROTTLE
-		lateral_thrust = 0.0
+		var facing: Vector2 = get_visual_forward(ship_data.get("rotation", 0.0))
+		var perp: Vector2 = Vector2(-facing.y, facing.x)
+		var cruise: float = ship_data.stats.get("max_speed", 0.0)
+		var steering: Vector2 = move * cruise - ship_data.get("velocity", Vector2.ZERO)
+		throttle = 1.0
+		lateral_thrust = clampf(
+			steering.dot(perp) / maxf(cruise * NAV_ARC_RESPONSE, 1.0), -1.0, 1.0)
 
 	return {
 		"desired_heading": desired_heading,

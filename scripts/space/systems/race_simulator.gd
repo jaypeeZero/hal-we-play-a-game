@@ -108,14 +108,17 @@ static func step_one(ship_ref: Dictionary, states: Dictionary,
 		return
 
 	var idx: int = state.next_marker
+	var n: int = RaceTrack.marker_count(track)
 	var gate_mid: Vector2 = RaceTrack.marker_position(track, idx)
 	var prev_pos: Vector2 = ship_ref.position
 
-	# The only race-specific part: DEFINE THE GOAL in the shared nav's generic terms
-	# — thread this gate's posts (the pass-through region). The shared nav brain +
-	# flight model do everything else.
-	ship_ref.orders["nav_via_a"] = RaceTrack.gate_post_a(track, idx)
-	ship_ref.orders["nav_via_b"] = RaceTrack.gate_post_b(track, idx)
+	# The only race-specific part: DEFINE THE GOAL as a path of upcoming gate centres.
+	# The shared driving-in-space follower threads it. Cyclic so it never runs out.
+	ship_ref.orders["nav_path"] = [
+		gate_mid,
+		RaceTrack.marker_position(track, posmod(idx + 1, n)),
+		RaceTrack.marker_position(track, posmod(idx + 2, n)),
+	]
 
 	var target := {"ship_id": GATE_TARGET_ID, "position": gate_mid, "velocity": Vector2.ZERO}
 	var pilot_control: Dictionary = MovementSystem.calculate_blended_control(

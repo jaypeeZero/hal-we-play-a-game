@@ -29,13 +29,14 @@ func _build_controls() -> void:
 	layer.layer = 3
 	add_child(layer)
 
+	# Top-center, just below the neon race timer, so it's easy to find.
 	var bar := HBoxContainer.new()
 	bar.anchor_left = 0.5
 	bar.anchor_right = 0.5
 	bar.offset_left = -190.0
-	bar.offset_top = 10.0
+	bar.offset_top = 80.0
 	bar.offset_right = 190.0
-	bar.offset_bottom = 44.0
+	bar.offset_bottom = 116.0
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	layer.add_child(bar)
 
