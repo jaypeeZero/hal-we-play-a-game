@@ -125,6 +125,11 @@ func _on_entity_animation_requested(request: AnimationRequest, entity_id: String
 func _on_entity_destroyed(entity: IRenderable) -> void:
 	unregister_entity(entity)
 
+## Render all projectiles in one batched pass (no per-projectile entities).
+func update_projectiles(projectiles: Array) -> void:
+	if active_renderer:
+		active_renderer.update_projectiles(projectiles)
+
 ## Get registered entity count (for debugging)
 func get_entity_count() -> int:
 	return _entity_registry.size()
