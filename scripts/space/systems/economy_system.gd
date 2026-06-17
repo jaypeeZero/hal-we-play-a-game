@@ -77,7 +77,7 @@ static func roll_starting_money(hulls: Array, rng: RandomNumberGenerator) -> int
 	var battles := rng.randi_range(
 		int(cfg.get("min_upkeep_battles", 0)),
 		int(cfg.get("max_upkeep_battles", 0)))
-	var rolled := per_battle_upkeep(hulls).total * battles
+	var rolled: int = per_battle_upkeep(hulls).total * battles
 	return maxi(rolled, int(cfg.get("minimum", 0)))
 
 
