@@ -19,7 +19,6 @@ const GRID_CELL_SIZE: float = 256.0
 
 # Preload entity classes
 const ShipEntity = preload("res://scripts/space/entities/ship_entity.gd")
-const ProjectileEntity = preload("res://scripts/space/entities/projectile_entity.gd")
 const VisualEffectEntity = preload("res://scripts/space/entities/visual_effect_entity.gd")
 const ObstacleEntity = preload("res://scripts/space/entities/obstacle_entity.gd")
 
@@ -44,7 +43,6 @@ var _obstacles: Array = []  # Array of obstacle_data Dictionaries
 # ============================================================================
 
 var _ship_entities: Dictionary = {}  # ship_id -> ShipEntity
-var _projectile_entities: Dictionary = {}  # projectile_id -> ProjectileEntity
 var _effect_entities: Dictionary = {}  # effect_id -> VisualEffectEntity
 var _obstacle_entities: Dictionary = {}  # obstacle_id -> ObstacleEntity
 
@@ -213,9 +211,7 @@ func _process(delta: float) -> void:
 	# same dicts but with updated position/lifetime.
 	var projectile_result = ProjectileSystem.advance_all_projectiles_in_place(_projectiles, delta)
 
-	# Remove expired projectiles (entity cleanup + array filter)
-	for expired_id in projectile_result.expired_ids:
-		_remove_projectile(expired_id)
+	# Remove expired projectiles (data filter; the renderer reads the array directly)
 	if not projectile_result.expired_ids.is_empty():
 		var expired_set = {}
 		for id in projectile_result.expired_ids:
@@ -237,10 +233,8 @@ func _process(delta: float) -> void:
 		for effect_data in collision_result.visual_effects:
 			_spawn_visual_effect(effect_data)
 
-	# Remove all destroyed projectile entities (ship hits and obstacle hits)
-	if collision_result.has("destroyed_projectile_ids"):
-		for projectile_id in collision_result.destroyed_projectile_ids:
-			_remove_projectile(projectile_id)
+	# Hit projectiles are already dropped from _projectiles by process_collisions;
+	# nothing to free now that projectiles carry no per-entity node.
 
 	# Notify crew that their ship took damage (posts to mailbox).
 	if ENABLE_CREW_AI and not collision_result.hits.is_empty():
@@ -315,15 +309,10 @@ func _spawn_projectiles(fire_commands: Array) -> void:
 
 		var team = source_ship.team
 
-		# Create projectile data
+		# Create projectile data (projectiles are pure data; the renderer draws
+		# them in one batched MultiMesh pass — no per-projectile node).
 		var projectile_data = ProjectileSystem.create_projectile(fire_command, team)
 		_projectiles.append(projectile_data)
-
-		# Create entity
-		var entity = ProjectileEntity.new()
-		entity.initialize(projectile_data.projectile_id, team, projectile_data.get("projectile_type", "standard"))
-		add_child(entity)
-		_projectile_entities[projectile_data.projectile_id] = entity
 
 		# Log event
 		if BattleEventLoggerAutoload.service:
@@ -411,13 +400,6 @@ func _remove_ship(ship_id: String) -> void:
 	if BattleEventLoggerAutoload.service:
 		BattleEventLoggerAutoload.service.log_event("ship_destroyed", {"ship_id": ship_id})
 
-## Remove projectile entity
-func _remove_projectile(projectile_id: String) -> void:
-	if _projectile_entities.has(projectile_id):
-		var entity = _projectile_entities[projectile_id]
-		entity.queue_free()
-		_projectile_entities.erase(projectile_id)
-
 ## Spawn visual effect
 func _spawn_visual_effect(effect_data: Dictionary) -> void:
 	_visual_effects.append(effect_data)
@@ -448,14 +430,9 @@ func _sync_all_entities() -> void:
 			entity.sync_transform(ship)
 			entity.emit_state(ship)
 
-	# Sync projectiles
-	for projectile in _projectiles:
-		if projectile == null:
-			continue
-		if _projectile_entities.has(projectile.projectile_id):
-			var entity = _projectile_entities[projectile.projectile_id]
-			entity.sync_transform(projectile)
-			entity.emit_state(projectile)
+	# Projectiles draw as one batched MultiMesh straight from the data array.
+	if VisualBridgeAutoload.bridge:
+		VisualBridgeAutoload.bridge.update_projectiles(_projectiles)
 
 	# Sync visual effects
 	for effect in _visual_effects:

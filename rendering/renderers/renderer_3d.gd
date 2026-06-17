@@ -89,6 +89,11 @@ var _smoke_quad: QuadMesh
 var _smoke_material: StandardMaterial3D
 var _fire_material: StandardMaterial3D
 
+# Projectiles render as two batched MultiMeshes (standard + torpedo) instead of
+# one node per projectile — a single draw call each, refilled from data per frame.
+var _projectile_multimesh: MultiMesh
+var _torpedo_multimesh: MultiMesh
+
 func initialize() -> void:
 	name = "Renderer3D"
 	_ship_visual_config = _load_ship_visual_config()
@@ -113,10 +118,6 @@ func attach_to_entity(entity: IRenderable) -> void:
 
 	if visual_type.begins_with("ship_"):
 		_build_ship_visual(root, entity, visual_type)
-	elif visual_type == "space_projectile":
-		_build_projectile_visual(root, _projectile_mesh, PROJECTILE_COLOR)
-	elif visual_type == "space_torpedo":
-		_build_projectile_visual(root, _torpedo_mesh, TORPEDO_COLOR)
 	elif visual_type.begins_with("effect_"):
 		pass  # Mesh added below; needs the per-instance material recorded
 	else:
@@ -211,6 +212,8 @@ func _build_view() -> void:
 	_world = Node3D.new()
 	_world.name = "BattleWorld3D"
 	_viewport.add_child(_world)
+
+	_build_projectile_batches()
 
 	_camera_3d = Camera3D.new()
 	_camera_3d.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -472,11 +475,62 @@ func _play_destruction(visual: Dictionary) -> void:
 # PROJECTILES, EFFECTS, FALLBACK
 # ============================================================================
 
-func _build_projectile_visual(root: Node3D, mesh: SphereMesh, color: Color) -> void:
-	var body := MeshInstance3D.new()
-	body.mesh = mesh
-	body.material_override = _make_emissive_material(color, PROJECTILE_EMISSION_ENERGY)
-	root.add_child(body)
+## Build the two projectile MultiMeshes (standard + torpedo) and their instances
+## in the 3D world. Each is a single draw call; per-frame work is just writing
+## instance transforms in update_projectiles().
+func _build_projectile_batches() -> void:
+	_projectile_multimesh = _make_projectile_multimesh(_projectile_mesh)
+	_torpedo_multimesh = _make_projectile_multimesh(_torpedo_mesh)
+	_add_multimesh_instance(_projectile_multimesh, PROJECTILE_COLOR, "Projectiles")
+	_add_multimesh_instance(_torpedo_multimesh, TORPEDO_COLOR, "Torpedoes")
+
+func _make_projectile_multimesh(mesh: Mesh) -> MultiMesh:
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = mesh
+	multimesh.instance_count = 0
+	return multimesh
+
+func _add_multimesh_instance(multimesh: MultiMesh, color: Color, node_name: String) -> void:
+	var instance := MultiMeshInstance3D.new()
+	instance.name = node_name
+	instance.multimesh = multimesh
+	instance.material_override = _make_emissive_material(color, PROJECTILE_EMISSION_ENERGY)
+	_world.add_child(instance)
+
+## Refill both projectile MultiMeshes from the live projectile data each frame.
+func update_projectiles(projectiles: Array) -> void:
+	var standard_count := 0
+	var torpedo_count := 0
+	for projectile in projectiles:
+		if projectile == null:
+			continue
+		if projectile.get("projectile_type", "standard") == "explosive":
+			torpedo_count += 1
+		else:
+			standard_count += 1
+
+	# Grow the instance buffer only when needed; visible_instance_count caps what
+	# actually draws this frame, so shrinking never reallocates.
+	if _projectile_multimesh.instance_count < standard_count:
+		_projectile_multimesh.instance_count = standard_count
+	if _torpedo_multimesh.instance_count < torpedo_count:
+		_torpedo_multimesh.instance_count = torpedo_count
+	_projectile_multimesh.visible_instance_count = standard_count
+	_torpedo_multimesh.visible_instance_count = torpedo_count
+
+	var standard_index := 0
+	var torpedo_index := 0
+	for projectile in projectiles:
+		if projectile == null:
+			continue
+		var xform := Transform3D(Basis(), Space3DMapping.to_3d_position(projectile.position))
+		if projectile.get("projectile_type", "standard") == "explosive":
+			_torpedo_multimesh.set_instance_transform(torpedo_index, xform)
+			torpedo_index += 1
+		else:
+			_projectile_multimesh.set_instance_transform(standard_index, xform)
+			standard_index += 1
 
 func _build_effect_visual(root: Node3D, effect_type: String) -> Material:
 	var style: Array = EFFECT_STYLES.get(effect_type, [EFFECT_DEFAULT_RADIUS, EFFECT_DEFAULT_COLOR])

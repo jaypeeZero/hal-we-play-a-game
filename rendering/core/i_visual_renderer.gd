@@ -25,6 +25,11 @@ func update_state(entity_id: String, state: EntityState) -> void:
 func play_animation(entity_id: String, request: AnimationRequest) -> void:
 	assert(false, "IVisualRenderer.play_animation() must be implemented")
 
+## Render all projectiles in one batched pass from their data dicts.
+## Default no-op: renderers that draw projectiles per-entity ignore this.
+func update_projectiles(_projectiles: Array) -> void:
+	pass
+
 ## Clean up all renderer resources
 ## Called when renderer is being deactivated
 func cleanup() -> void:
