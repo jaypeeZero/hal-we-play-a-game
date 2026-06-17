@@ -33,6 +33,10 @@ static func is_large_ship(ship_type: String) -> bool:
 static func is_gunboat(ship_type: String) -> bool:
 	return ship_type in GUNBOAT_TYPES
 
+## Check if a ship type is the medical gunboat variant.
+static func is_gunboat_medic(ship_type: String) -> bool:
+	return ship_type == "gunboat_medic"
+
 ## Check if a ship type has individually destroyable weapon mounts.
 ## Large ships and gunboats both carry destroyable turret mounts;
 ## fighter-class (non-gunboat) weapons are integral to the hull.

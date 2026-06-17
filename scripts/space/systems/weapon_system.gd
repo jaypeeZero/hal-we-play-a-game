@@ -19,6 +19,17 @@ const DIAG_NO_TARGET     := "no_target"
 const DIAG_OUT_OF_RANGE  := "out_of_range"
 const DIAG_OUT_OF_ARC    := "out_of_arc"
 const DIAG_CAN_FIRE      := "can_fire"
+const DIAG_COOLDOWN      := "cooldown"
+const DIAG_TOO_FAR       := "holding_too_far"
+const DIAG_HOLDING       := "holding"
+
+# Firing-gate depth ranks for diagnose_firing: higher = closer to firing and a
+# more persistent/informative blocker. Used to report the deepest blocker.
+const FIRE_RANK_RANGE    := 1
+const FIRE_RANK_ARC      := 2
+const FIRE_RANK_COOLDOWN := 3
+const FIRE_RANK_TOO_FAR  := 4
+const FIRE_RANK_HOLDING  := 5
 
 ## Fallback range used when a ship has no operational weapons.
 ## Conservative close-quarters distance: too far to ram, too close to orbit uselessly.
@@ -92,7 +103,10 @@ static func try_fire_weapon(ship_data: Dictionary, weapon: Dictionary, targets: 
 	if targets.is_empty():
 		return create_no_fire_result(weapon)
 
-	# Prefer the operator's designated target; fall back to best-in-arc selection.
+	# When a forced target is designated (fleet focus-fire), attempt it first.
+	# If it is out of arc or out of preferred range, fall back to per-weapon
+	# best-in-arc selection rather than returning no-fire — a narrow-arc weapon
+	# must not be permanently blocked by a shared target outside its cone.
 	var intent_id: String = weapon.get("intent_target_id", "")
 	var best_target: Dictionary = {}
 	if intent_id != "":
@@ -101,7 +115,14 @@ static func try_fire_weapon(ship_data: Dictionary, weapon: Dictionary, targets: 
 				best_target = t
 				break
 
-	if best_target.is_empty():
+	# Forced target unresolvable, out of arc, or outside preferred range — fall
+	# back to the weapon's own best-in-arc selection.
+	var forced_target_viable: bool = (
+		not best_target.is_empty()
+		and can_fire_at_target(ship_data, weapon, best_target)
+		and is_within_preferred_range(ship_data, weapon, best_target)
+	)
+	if not forced_target_viable:
 		best_target = find_best_target_for_weapon(ship_data, weapon, targets)
 
 	if best_target.is_empty():
@@ -209,21 +230,32 @@ static func calculate_distance(from: Vector2, to: Vector2) -> float:
 # ============================================================================
 
 static func find_best_target_for_weapon(ship_data: Dictionary, weapon: Dictionary, targets: Array) -> Dictionary:
-	# Filter by range, then prioritize good targets over poor ones
-	var in_range_targets = filter_targets_in_range(targets, ship_data.position, weapon.stats.range)
+	## Select the best target this weapon can actually shoot at.
+	## Arc-aware: among in-range targets, prefer those inside the weapon's firing
+	## arc so narrow-arc weapons (torpedo tubes, fixed guns) consistently engage
+	## targets they can hit.  Falls back to any in-range target only when no in-arc
+	## targets exist — ensuring wide-arc turrets still act on distant enemies.
+	var in_range_targets: Array = filter_targets_in_range(targets, ship_data.position, weapon.stats.range)
 
-	# Try to find a good target (effective damage)
-	var good_targets = in_range_targets \
+	# Partition in-arc vs out-of-arc within range.
+	var in_arc_targets: Array = in_range_targets.filter(
+		func(t): return is_in_firing_arc(ship_data, weapon, t)
+	)
+
+	# Prefer the in-arc pool; fall back to all-in-range only when arc yields nothing.
+	var candidate_pool: Array = in_arc_targets if not in_arc_targets.is_empty() else in_range_targets
+
+	# Within the candidate pool, prefer targets we can damage effectively.
+	var good_targets: Dictionary = candidate_pool \
 		.filter(func(t): return can_weapon_damage_target(weapon, t)) \
 		.map(func(t): return add_priority(t, ship_data.position)) \
 		.reduce(select_higher_priority, {})
 
-	# If we found a good target, use it
 	if not good_targets.is_empty():
 		return good_targets
 
-	# Otherwise, target anything in range (reduced effectiveness is better than nothing)
-	return in_range_targets \
+	# Otherwise, best of the candidate pool (reduced effectiveness beats nothing).
+	return candidate_pool \
 		.map(func(t): return add_priority(t, ship_data.position)) \
 		.reduce(select_higher_priority, {})
 
@@ -326,6 +358,11 @@ static func can_fire_at_target(ship_data: Dictionary, weapon: Dictionary, target
 ## Velocity is intentionally excluded: including it would prevent elite gunners
 ## from ever engaging fast-moving targets (velocity_factor caps at 0.5).
 static func is_within_preferred_range(ship_data: Dictionary, weapon: Dictionary, target: Dictionary) -> bool:
+	# AOE/standoff weapons (torpedoes carry an explosion_radius) are built to fire
+	# at long range; the "hold fire until closer" accuracy rule is for direct-fire
+	# guns only. Exempt them — otherwise a slow standoff platform never shoots.
+	if float(weapon.get("stats", {}).get("explosion_radius", 0.0)) > 0.0:
+		return true
 	var min_rf: float = ship_data.get("crew_modifiers", {}).get("min_range_factor", 0.0)
 	if min_rf <= 0.0:
 		return true
@@ -582,8 +619,11 @@ static func calculate_velocity_factor(target: Dictionary) -> float:
 ## Pure: reads ship_data and targets only, never mutates.
 ## Returns { "firing": bool, "reason": String } where reason is one of the DIAG_* consts.
 ##
-## Walk order: no weapons → all destroyed → no enemy targets → out of range → out of arc → can fire.
-## Stops at the first failing gate so the reason is always the shallowest blocker.
+## Walks the SAME gates as try_fire_weapon (range → arc → preferred-range →
+## cooldown → fire_intent) so the overlay never claims "can fire" while the real
+## path holds. Reports the deepest (most informative/persistent) blocker found
+## across all weapon/enemy pairs — e.g. a standoff weapon held by the
+## hold-fire-until-closer rule reports "holding_too_far", not "out_of_range".
 static func diagnose_firing(ship_data: Dictionary, targets: Array) -> Dictionary:
 	var weapons: Array = ship_data.get("weapons", [])
 
@@ -598,23 +638,32 @@ static func diagnose_firing(ship_data: Dictionary, targets: Array) -> Dictionary
 	if enemies.is_empty():
 		return { "firing": false, "reason": DIAG_NO_TARGET }
 
-	# Find nearest enemy and check range against any operational weapon.
-	var any_in_range := false
-	var any_in_arc  := false
+	var deepest := 0
 	for weapon in operational:
 		var weapon_range: float = float(weapon.get("stats", {}).get("range", 0.0))
+		var ready: bool = is_weapon_ready(weapon)
+		var intent_ok: bool = weapon.get("fire_intent", true) != false
 		for enemy in enemies:
 			if not is_in_range(ship_data.get("position", Vector2.ZERO), enemy.get("position", Vector2.ZERO), weapon_range):
+				deepest = max(deepest, FIRE_RANK_RANGE)
 				continue
-			any_in_range = true
-			if is_in_firing_arc(ship_data, weapon, enemy):
-				any_in_arc = true
-				break
-		if any_in_arc:
-			break
+			if not is_in_firing_arc(ship_data, weapon, enemy):
+				deepest = max(deepest, FIRE_RANK_ARC)
+				continue
+			if not is_within_preferred_range(ship_data, weapon, enemy):
+				deepest = max(deepest, FIRE_RANK_TOO_FAR)
+				continue
+			if not ready:
+				deepest = max(deepest, FIRE_RANK_COOLDOWN)
+				continue
+			if not intent_ok:
+				deepest = max(deepest, FIRE_RANK_HOLDING)
+				continue
+			return { "firing": true, "reason": DIAG_CAN_FIRE }
 
-	if not any_in_range:
-		return { "firing": false, "reason": DIAG_OUT_OF_RANGE }
-	if not any_in_arc:
-		return { "firing": false, "reason": DIAG_OUT_OF_ARC }
-	return { "firing": true, "reason": DIAG_CAN_FIRE }
+	match deepest:
+		FIRE_RANK_HOLDING:  return { "firing": false, "reason": DIAG_HOLDING }
+		FIRE_RANK_TOO_FAR:  return { "firing": false, "reason": DIAG_TOO_FAR }
+		FIRE_RANK_COOLDOWN: return { "firing": false, "reason": DIAG_COOLDOWN }
+		FIRE_RANK_ARC:      return { "firing": false, "reason": DIAG_OUT_OF_ARC }
+		_:                  return { "firing": false, "reason": DIAG_OUT_OF_RANGE }

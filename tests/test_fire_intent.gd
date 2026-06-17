@@ -448,3 +448,125 @@ func test_bug1_pilot_weapon_still_fires_on_solo_ship_no_crew_key() -> void:
 
 	assert_ne(result.weapons[0].get("fire_intent", true), false,
 		"Solo fighter forward weapon must be stamped engage when no gunners in crew_list")
+
+
+# --- Target-selection bug fixes ---
+
+func _make_narrow_arc_weapon(weapon_id: String = "tube_1") -> Dictionary:
+	"""A torpedo-launcher-style weapon with a very narrow ±10° arc."""
+	var w := TestFactories.make_weapon("torpedo_launcher", weapon_id)
+	return w
+
+
+func _make_wide_arc_weapon(weapon_id: String = "turret_1") -> Dictionary:
+	"""A light-cannon weapon with a wide ±45° arc."""
+	var w := TestFactories.make_weapon("light_cannon", weapon_id)
+	return w
+
+
+func test_multi_weapon_ship_selects_different_best_targets_per_weapon() -> void:
+	"""A ship with two weapons and several enemies spread around it selects the
+	best in-arc target for EACH weapon independently — not the same shared target."""
+	# Ship at origin, facing up (rotation 0).
+	var ship := TestFactories.make_ship("s1", "fighter", 0, Vector2.ZERO)
+
+	# Weapon 0: left turret, faces left (-90°), wide arc.
+	var left_weapon := TestFactories.make_weapon("light_cannon", "w_left")
+	left_weapon["facing"] = deg_to_rad(-90.0)
+
+	# Weapon 1: right turret, faces right (+90°), wide arc.
+	var right_weapon := TestFactories.make_weapon("light_cannon", "w_right")
+	right_weapon["facing"] = deg_to_rad(90.0)
+
+	ship["weapons"] = [left_weapon, right_weapon]
+	ship.weapons[0]["fire_intent"] = true
+	ship.weapons[0]["intent_target_id"] = ""  # No forced target.
+	ship.weapons[1]["fire_intent"] = true
+	ship.weapons[1]["intent_target_id"] = ""  # No forced target.
+
+	# Enemy A is to the LEFT of the ship — in arc of left turret, not right.
+	var enemy_a := TestFactories.make_fighter("enemy_a", Vector2(-300, 0), 1)
+	# Enemy B is to the RIGHT of the ship — in arc of right turret, not left.
+	var enemy_b := TestFactories.make_fighter("enemy_b", Vector2(300, 0), 1)
+
+	var result := WeaponSystem.update_weapons(ship, [enemy_a, enemy_b], 0.1)
+
+	assert_eq(result.fire_commands.size(), 2,
+		"Both turrets should fire when each has an in-arc target")
+	# Commands are emitted in weapon order: [0] = left, [1] = right.
+	assert_eq(result.fire_commands[0].target_id, "enemy_a",
+		"Left turret must engage enemy_a (left-side target)")
+	assert_eq(result.fire_commands[1].target_id, "enemy_b",
+		"Right turret must engage enemy_b (right-side target)")
+
+
+func test_narrow_arc_weapon_prefers_in_arc_target_over_closer_out_of_arc() -> void:
+	"""A narrow-arc weapon (torpedo tube ±10°) picks an in-arc target even when
+	a closer enemy is outside the arc — fixes the Firecracker never-fires bug."""
+	var ship := TestFactories.make_ship("s1", "fighter", 0, Vector2.ZERO)
+	# Torpedo tube, facing forward (default facing 0 = forward on rotation-0 ship).
+	var tube := _make_narrow_arc_weapon("tube_1")
+	ship["weapons"] = [tube]
+	ship.weapons[0]["fire_intent"] = true
+	ship.weapons[0]["intent_target_id"] = ""
+
+	# Closer enemy is directly to the side (90° off) — outside the ±10° arc.
+	var side_enemy := TestFactories.make_fighter("side_e", Vector2(200, 0), 1)
+	# Further enemy is directly ahead — inside the ±10° arc.
+	var front_enemy := TestFactories.make_fighter("front_e", Vector2(0, -400), 1)
+
+	var result := WeaponSystem.update_weapons(ship, [side_enemy, front_enemy], 0.1)
+
+	assert_gt(result.fire_commands.size(), 0,
+		"Narrow-arc weapon must fire at the in-arc target")
+	assert_eq(result.fire_commands[0].target_id, "front_e",
+		"Narrow-arc weapon must pick the in-arc target over the closer out-of-arc one")
+
+
+func test_forced_out_of_arc_target_falls_back_to_in_arc_target() -> void:
+	"""When a forced intent_target_id is outside the weapon arc, the weapon falls
+	back to the best in-arc target and fires — no dead-end no-fire."""
+	var ship := TestFactories.make_ship("s1", "fighter", 0, Vector2.ZERO)
+	# Narrow arc tube, facing forward.
+	var tube := _make_narrow_arc_weapon("tube_1")
+	ship["weapons"] = [tube]
+	ship.weapons[0]["fire_intent"] = true
+	# Force a target that is to the side — out of the ±10° arc.
+	ship.weapons[0]["intent_target_id"] = "side_e"
+
+	var side_enemy := TestFactories.make_fighter("side_e", Vector2(200, 0), 1)
+	var front_enemy := TestFactories.make_fighter("front_e", Vector2(0, -300), 1)
+
+	var result := WeaponSystem.update_weapons(ship, [side_enemy, front_enemy], 0.1)
+
+	assert_gt(result.fire_commands.size(), 0,
+		"Weapon must not dead-end when forced target is out of arc; fall back to in-arc target")
+	assert_eq(result.fire_commands[0].target_id, "front_e",
+		"Fallback must select the in-arc target")
+
+
+func test_focus_fire_order_converges_weapons_on_designated_target() -> void:
+	"""An explicit fleet focus-fire designation (focus_assignment on crew) still
+	converges fire on the designated target when it is reachable."""
+	# Ship with two forward-facing wide-arc weapons.
+	var ship := TestFactories.make_ship("s1", "fighter", 0, Vector2.ZERO)
+	var w1 := TestFactories.make_weapon("light_cannon", "w1")
+	var w2 := TestFactories.make_weapon("light_cannon", "w2")
+	ship["weapons"] = [w1, w2]
+	# Stamp both weapons with the focus target.
+	ship.weapons[0]["fire_intent"] = true
+	ship.weapons[0]["intent_target_id"] = "focus_target"
+	ship.weapons[1]["fire_intent"] = true
+	ship.weapons[1]["intent_target_id"] = "focus_target"
+
+	# Focus target is in arc; a second enemy is also in arc but should not be chosen.
+	var focus := TestFactories.make_fighter("focus_target", Vector2(0, -300), 1)
+	var other := TestFactories.make_fighter("other_target", Vector2(0, -400), 1)
+
+	var result := WeaponSystem.update_weapons(ship, [focus, other], 0.1)
+
+	assert_eq(result.fire_commands.size(), 2,
+		"Both weapons should fire when focus target is in arc")
+	for cmd in result.fire_commands:
+		assert_eq(cmd.target_id, "focus_target",
+			"Both weapons must engage the fleet focus-fire designated target")

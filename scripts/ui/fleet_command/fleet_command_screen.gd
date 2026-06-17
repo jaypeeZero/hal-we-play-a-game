@@ -123,8 +123,11 @@ func _build_layout() -> void:
 	body.add_theme_constant_override("separation", 0)
 	root.add_child(body)
 
-	# Left — fleet roster
+	# Left — fleet roster. Expands so it shares the body ~50/50 with the detail
+	# panel; PANEL_LEFT_WIDTH is just a floor on narrow screens. (The add-ship
+	# row wraps via HFlowContainer so long type names never force it wider.)
 	var left := _build_left_panel()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(left)
 
 	# Right — selected ship detail

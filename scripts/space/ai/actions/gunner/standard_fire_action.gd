@@ -13,5 +13,9 @@ func precondition(ws: GunnerWorldState) -> bool:
 	return not ws.opportunities.is_empty()
 
 func execute(ws: GunnerWorldState) -> Dictionary:
-	var target_id: String = ws.priority_target.get("id", "") if not ws.priority_target.is_empty() else ""
+	# Default: leave target_id empty so each weapon self-selects the best in-arc
+	# target via WeaponSystem.find_best_target_for_weapon.
+	# Only force a target when fleet command has designated an explicit focus.
+	var focus: String = ws.crew_data.get("focus_assignment", "")
+	var target_id: String = focus if focus != "" else ""
 	return GunnerAction.make_fire_decision(ws, target_id, "fire")
