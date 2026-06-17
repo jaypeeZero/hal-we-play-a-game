@@ -62,6 +62,10 @@ func _chase_weights() -> Dictionary:
 func _evade_weights() -> Dictionary:
 	return {"pursue": 0.05, "keep_range": 0.1, "evade": 1.0, "formation": 0.0}
 
+## Range-keeping (kite) weights: keep_range dominates pursue.
+func _kite_weights() -> Dictionary:
+	return {"pursue": 0.2, "keep_range": 1.0, "evade": 0.0, "formation": 0.0}
+
 ## Returns the angle (radians) a ship with heading `h` is visually facing.
 func _heading_to_dir(h: float) -> Vector2:
 	return Vector2(sin(h), -cos(h))
@@ -115,22 +119,22 @@ func test_distant_target_is_not_braking():
 
 
 # ---------------------------------------------------------------------------
-# 3. Range-keeping behavior: close target with large preferred_range → brakes / backs off
+# 3. Range-keeping behavior: a kite ship too close to its target backs off
 # ---------------------------------------------------------------------------
 
-func test_target_inside_preferred_range_triggers_braking_or_backoff():
-	# preferred_range is large; target is very close (inside range).
-	# keep_range pushes outward; within LATERAL_THRUST_RANGE the ship faces target
-	# and brakes to stop the inward drift.
+func test_target_inside_preferred_range_backs_off():
+	# A range-keeping (kite) ship that finds itself well inside its preferred range
+	# must back off. There is no dedicated close-range brake — range-keeping is just
+	# the keep_range goal in the unified flight: too close → the blended move turns
+	# AWAY from the target, so the ship heads (and thrusts) outward.
 	var large_range: float = 3000.0
 	var close_pos: Vector2 = Vector2(100, 0)   # well inside preferred_range
-	var ship := _make_ship(Vector2.ZERO, large_range, _balanced_weights())
+	var ship := _make_ship(Vector2.ZERO, large_range, _kite_weights())
 	var target := _make_target(close_pos)
 	var ctrl := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
-	# At close range (inside LATERAL_THRUST_RANGE) braking or lateral correction
-	# must apply. Either is acceptable — both express "back off."
-	assert_true(ctrl["is_braking"] or ctrl["throttle"] == 0.0,
-		"Ship with target inside preferred_range must brake or cut throttle")
+	var facing: Vector2 = _heading_to_dir(ctrl["desired_heading"])
+	assert_lt(facing.x, 0.0,
+		"A kite ship too close to its target must head away from it (back off)")
 
 
 # ---------------------------------------------------------------------------
@@ -153,35 +157,34 @@ func test_dominant_evade_weight_faces_away_from_threat():
 
 
 # ---------------------------------------------------------------------------
-# 5. Facing decouples from move at close range: faces target while strafing
+# 5. Driving flight: the ship faces where it is going (toward a target it is closing on)
 # ---------------------------------------------------------------------------
 
 func test_close_range_target_produces_heading_toward_target():
-	# Target is to the right (+X) at close range (< LATERAL_THRUST_RANGE).
-	# Ship must face the target regardless of the blended move direction.
+	# Target to the right (+X), pursue-weighted so the blended move points at it.
+	# The ship faces its move direction, so it heads toward the target.
 	var target_pos: Vector2 = Vector2(500, 0)   # close range
-	var ship   := _make_ship(Vector2.ZERO, OPTIMAL_RANGE, _balanced_weights())
+	var ship   := _make_ship(Vector2.ZERO, OPTIMAL_RANGE, _chase_weights())
 	var target := _make_target(target_pos)
 	var ctrl   := MovementSystem.calculate_blended_control(ship, target, [], [], [], 0.016)
 	var facing: Vector2 = _heading_to_dir(ctrl["desired_heading"])
 	assert_gt(facing.x, 0.0,
-		"At close range the ship must face the target (rightward heading) regardless of move blend")
+		"Closing on a target to the right, the ship must head toward it (rightward heading)")
 
 
-func test_close_range_can_produce_nonzero_lateral_thrust():
-	# With a blended move that has a perpendicular component to facing,
-	# lateral_thrust should be non-zero when close to the target.
-	# Use an evade threat from below and target to the right.
+func test_blended_move_produces_nonzero_lateral_thrust():
+	# The maneuvering jets fire to bend velocity onto the aim: when the blended move
+	# has a component perpendicular to the ship's facing, lateral_thrust is non-zero.
+	# Target to the right, threat below (evade pushes up) → the move is off-axis from
+	# the ship's initial facing, so the arc thrusters engage.
 	var target_pos: Vector2  = Vector2(500, 0)
 	var threat_pos: Vector2  = Vector2(0, -500)   # threat below → evade pushes up (+Y)
 	var ship   := _make_ship(Vector2.ZERO, OPTIMAL_RANGE, _balanced_weights())
 	var target := _make_target(target_pos)
 	var threats := [_make_threat(threat_pos)]
 	var ctrl := MovementSystem.calculate_blended_control(ship, target, threats, [], [], 0.016)
-	# When the ship faces the target (right) and evade pushes up, the perpendicular
-	# component is non-zero → lateral_thrust should be non-zero.
 	assert_ne(ctrl["lateral_thrust"], 0.0,
-		"Close-range with a perpendicular threat must produce non-zero lateral_thrust")
+		"A blended move off the ship's facing axis must produce non-zero lateral_thrust")
 
 
 # ---------------------------------------------------------------------------

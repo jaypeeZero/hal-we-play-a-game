@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3 uid="uid://ship_race_scene"]
+
+[ext_resource type="Script" path="res://scripts/space/ship_race_game.gd" id="1_race_game"]
+[ext_resource type="Script" path="res://scripts/camera_controller.gd" id="2_camera"]
+
+[node name="ShipRace" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ShipRaceGame" type="Node2D" parent="."]
+script = ExtResource("1_race_game")
+
+[node name="Camera" type="Camera2D" parent="ShipRaceGame"]
+position = Vector2(3000, 2000)
+script = ExtResource("2_camera")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="HUD" type="Label" parent="UI"]
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 380.0
+offset_bottom = 320.0
+text = "Ship Race"

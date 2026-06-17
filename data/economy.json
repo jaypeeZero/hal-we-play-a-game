@@ -30,5 +30,11 @@
 	"shop_stock": {
 		"min_ships": 1,
 		"max_ships": 3
+	},
+	"racing": {
+		"min_wager": 10,
+		"house_edge": 0.12,
+		"field_size_min": 10,
+		"field_size_max": 10
 	}
 }
