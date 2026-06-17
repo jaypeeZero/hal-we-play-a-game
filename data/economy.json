@@ -25,7 +25,8 @@
 	},
 	"starting_money": {
 		"min_upkeep_battles": 3,
-		"max_upkeep_battles": 6
+		"max_upkeep_battles": 6,
+		"minimum": 1000
 	},
 	"shop_stock": {
 		"min_ships": 1,
