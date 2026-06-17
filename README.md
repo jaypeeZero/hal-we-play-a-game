@@ -1,368 +1,193 @@
-# Space Battle Tactics
+# Space Battle
 
-A scifi battle tactics game built using the signal-based architecture from Wizard Battle Arena, designed with functional programming principles and data-driven systems.
+A tactical space-combat game built in Godot 4 with functional-programming
+principles and data-driven systems. Battles are fought in real time, where your
+ships are flown by an event-driven crew AI rather than micromanaged
+unit-by-unit. Play one-off skirmishes, or take a fleet through the **Campaign**
+mode: a multi-sector run where you hire and grow a crew, manage an economy,
+choose where to jump, and carry damage and experience between fights.
+
+> This README is the gameplay/orientation guide. For the deep technical design
+> see **`ARCHITECTURE_AND_FLOW.md`** (system responsibilities and the per-tick
+> game loop) and **`CLAUDE.md`** (architecture conventions and contribution
+> rules).
 
 ## Quick Start
 
-**Running the game:**
+**Requirements**
+- Godot 4 (`brew install godot`)
+- GUT testing framework (bundled in `addons/gut/`)
+
+**Run the game** (launches the main menu):
 ```bash
-godot scenes/space_battle.tscn
+godot scenes/main_menu.tscn
 ```
 
-**Running tests:**
+**Run the tests:**
 ```bash
 ./test.sh
+# or a single suite:
+godot --headless --script addons/gut/gut_cmdln.gd -gdir=tests -gfile=test_damage_resolver.gd -gexit
 ```
 
-## Game Overview
+## Main Menu
 
-Space Battle Tactics is a real-time tactical combat game where you command fleets of spaceships. Each ship has:
-- **Sectional Armor**: Armor that can be destroyed piece by piece, allowing projectiles to penetrate
-- **Internal Components**: Engines that affect ship performance when damaged
-- **Projectile Weapons**: Realistic ballistic weapons with human reaction times
-- **Realistic Physics**: Ships have mass, acceleration, and turn rates
+| Entry | What it does |
+|-------|--------------|
+| **Campaign** | Starts a new campaign run and drops you on the Campaign Map (the run's home screen). |
+| **Continue Campaign** | Resumes a saved run (shown only when a save exists). |
+| **One-off Skirmish** | Go straight to the Pre-Battle deployment screen, then fight a single battle. |
+| **Edit Fleets** | The Fleet Command editor over the saved skirmish fleets (ships, crew assignments, tactics). |
+| **Ship Editor** | Tool for authoring/tuning ship templates (`tools/ship_editor.tscn`). |
+| **Crew Manager** | Edit the global crew-roster template. |
+| **Settings / About / Quit** | Standard. |
 
-## Controls
+## The Campaign Loop
 
-### Spawning Ships
-- **1** - Spawn fighter squadron of 6 in V-formation (Player Team)
-- **2** - Spawn 1 Corvette (Player Team)
-- **3** - Spawn 1 Capital Ship (Player Team)
-- **4** - Spawn fighter squadron of 6 in V-formation (Enemy Team)
-- **5** - Spawn 1 Corvette (Enemy Team)
-- **6** - Spawn 1 Capital Ship (Enemy Team)
+A run lives in the `RoguelikeRun` autoload (persistent fleet, crew, economy,
+doctrine, and the generated star chart). The **Campaign Map** is the home base;
+a persistent top **nav bar** (with a live credits readout) moves you between the
+meta screens:
 
-After pressing a spawn key, click on the battlefield to place the ship(s).
-Squadron-spawned fighters share a command chain (Alpha leads, Beta–Zeta
-follow); single-spawn fighters fly solo.
+- **Campaign Map** — the multi-sector star chart. Pick a destination to jump to;
+  jumps advance the star date and repair ships over the downtime. Battle nodes
+  set up the next engagement. A side panel shows campaign **dispatches** (news).
+- **Fleet Command** — manage your fleet: ship roster, crew assignments, and the
+  fleet **tactics/doctrine** preset for the next battle.
+- **Crew** — a read-only view of your hired crew and each member's ship
+  assignment during a run (the same screen edits the global roster outside a run).
+- **News** — the full campaign dispatch feed.
+- **Pre-Battle** — deploy/position your ships before an engagement.
+- **Battle** — the real-time tactical fight (see below).
+- **Post-Battle** — outcome summary: rewards, casualties, insurance, and crew
+  progression. Survivors carry their damage and experience back into the run.
 
-### Debug Visualization
-- **F1** - Toggle debug visualizer (armor sections, internals, weapon arcs, velocity,
-  crew stats, formation links, and the Tactics State / Tactics Telemetry layers showing
-  each ship's resolved doctrine and steering blend). Layers are individually gated in settings.
+Between battles you spend credits in the **shop** (buy hulls, hire and dismiss
+crew) and can wager on the **ship race** minigame. Crew can be killed or hired,
+ships can be lost, mothballed ("iced"), or repaired; everything persists for the
+run and is saved via `CampaignSaveManager`.
 
-## Ship Types
+## Battle Controls
 
-### Fighter
-- **Role**: Fast attack craft
-- **Size**: Small (15 units)
-- **Speed**: 300 units/sec
-- **Armor**: Light (3 sections, total ~65 HP)
-- **Weapons**: 1x Light Cannon (5 damage, 5 shots/sec)
-- **Crew**: 1 pilot
-- **Strategy**: Hit and run, swarm tactics
+Battles run in real time. Ships are flown by their crew AI — you shape behaviour
+through fleet tactics/doctrine and commander orders rather than driving each ship.
 
-### Corvette
-- **Role**: Medium combat vessel
-- **Size**: Medium (25 units)
-- **Speed**: 150 units/sec
-- **Armor**: Heavy (4 sections, total ~320 HP)
-- **Weapons**: 2x Medium Cannons (15 damage, 2 shots/sec)
-- **Crew**: 3-5 personnel
-- **Strategy**: Frontline combat, anti-fighter
+The skirmish battle scene also supports manual spawning for testing:
 
-### Capital Ship
-- **Role**: Heavy battleship
-- **Size**: Large (50 units)
-- **Speed**: 80 units/sec
-- **Armor**: Very Heavy (7 sections, total ~1050 HP)
-- **Weapons**: 2x Heavy Cannons (50 damage, 0.5 shots/sec) + 2x Medium Cannons
-- **Crew**: 10+ personnel
-- **Strategy**: Anchor, long-range fire support
+| Key | Action |
+|-----|--------|
+| **1 / 2 / 3** | Spawn player fighter squadron (6, V-formation) / corvette / capital ship |
+| **4 / 5 / 6** | Spawn enemy fighter squadron / corvette / capital ship |
+| **7 / 8 / 9** | Spawn small / medium / large asteroid |
+| **0** | Spawn a platform |
+| **F1** | Toggle the debug visualizer |
 
-## Game Mechanics
+After a spawn key, click the battlefield to place the ship(s). Squadron-spawned
+fighters share a command chain (lead + wingmen); single-spawn fighters fly solo.
+The camera supports free pan/zoom (`camera_controller.gd`).
 
-### Damage System
+**Debug visualizer (F1)** overlays armor sections, internals, weapon arcs,
+velocity, crew stats, formation links, flee boundaries, and the Tactics State /
+Tactics Telemetry layers (each ship's resolved doctrine and steering blend).
+Individual layers are gated in the Settings menu.
 
-#### Armor Penetration
-1. Projectile hits ship → angle calculated
-2. Armor section determined by hit angle
-3. Damage applied to armor
-4. If armor destroyed, remaining damage penetrates to internals
+## Ships
 
-#### Internal Components
-- **Engines** (Rear): Propulsion. Damaged = 60% speed/accel. Destroyed = 10% speed (drifting)
+Ship definitions are **data-driven** — each type is a JSON template in
+`data/ship_templates/` (armor sections with arcs, internal components, weapons,
+and physics stats), so concrete numbers live in the data, not in this document.
+Eight types ship today:
 
-### Weapon System
+- **Fighter** — fast, lightly armored attack craft; swarm and hit-and-run.
+- **Heavy Fighter** — tougher, harder-hitting interceptor.
+- **Torpedo Boat** — light hull built around heavy anti-capital ordnance.
+- **Gunboat (Medic / Pepperbox / Firecracker)** — three specialist gunboat
+  variants (support/repair, sustained autocannon, burst) on a shared hull.
+- **Corvette** — frontline medium combatant; anti-fighter and line-holding.
+- **Capital Ship** — heavy battleship; long-range fire support and anchor.
 
-#### Firing Logic
-1. Weapons update every 0.1 seconds
-2. Calculates lead position for moving targets
-3. Checks if target is in firing arc
-4. Applies accuracy spread based on ship damage
-5. Adds human reaction delay (100-300ms)
+Each type maps to a 3D model in `data/ship_visuals.json`.
 
-#### Accuracy Factors
-- Base weapon accuracy
-- Distance penalty (up to 30% at max range)
-- Target velocity penalty (up to 50% for fast targets)
+## How It Works (Architecture Summary)
 
-### Realistic Speeds
+Full detail lives in `ARCHITECTURE_AND_FLOW.md` and `CLAUDE.md`; the essentials:
 
-All combat happens at human-speed reactions:
-- Weapon reaction times: 100-300ms (simulating human gunners)
-- Projectile speeds: 450-600 units/sec
-- Ship speeds: 80-300 units/sec
-- Turn rates: 0.5-3.0 radians/sec
+- **Functional + data-driven.** Pure-function systems (`DamageResolver`,
+  `WeaponSystem`, `CollisionSystem`, `MovementSystem`, the crew/tactics systems,
+  …) take state in and return state out. Game-loop state is owned by
+  `SpaceBattleGame` and passed through each tick. Entities (ships, weapons, crew)
+  are dictionaries built from JSON.
+- **Event-driven crew AI.** Crew aren't polled every frame. A crew member wakes
+  only when its `next_decision_time` is due or an event lands in its mailbox
+  (`sensor_contact`, `ship_damaged`, `threat_appeared`, …). On waking the
+  scheduler drains events, applies side effects (tactical memory, order
+  delivery), refreshes awareness, and runs the role's decision. Sleeping crew
+  cost almost nothing. Each role (pilot, gunner, captain, engineer, squadron
+  leader, commander) has its own brain/action/world-state set under
+  `scripts/space/ai/`.
+- **Blended combat, not discrete modes.** `TacticsSystem` resolves
+  fleet → squadron → ship/role doctrine into a per-crew tactics block;
+  `SteeringBlender` turns that plus the live situation into weighted steering
+  goals (pursue / keep_range / evade / formation / separation / support);
+  `MovementSystem` re-blends them each frame. Reflexes (evasion, collision,
+  area leash) stay hard overrides. Postures ride one channel —
+  withdraw / hold / press.
+- **Command as hats.** `CommandDesignationSystem` stamps Commander / Squadron
+  Leader hats onto the best-fit existing crew each tick; their brains issue
+  posture, formation, and focus-fire orders that are *absorbed* into
+  subordinates' steering blends rather than forcing discrete moves.
+- **Campaign navigation.** `NavGraph` (pure `RefCounted`, unit-tested) owns the
+  screen enum and fixed Back hierarchy (everything bottoms out at the Map). The
+  `Nav` autoload is a thin scene-switch shim; `NavBar` (built in code, run-scoped
+  via `NavBar.attach`) renders the tabs, Back, and credits readout.
+- **Rendering.** `VisualBridge` drives an `IVisualRenderer`. The active renderer
+  is `Renderer3D` — top-down 3D ship models (CC0 Quaternius pack, mapped in
+  `data/ship_visuals.json`) drawn beneath the 2D world, with team tints, engine
+  flames, and damage smoke/fire. `78_renderer` (line-based hull outlines from
+  `data/hull_shapes/`) is retained, unwired, for A/B comparison.
 
-This creates realistic engagement times and allows for tactical maneuvering.
+## Project Layout
 
-## Architecture
+```
+scenes/                 Godot scenes (main_menu, campaign_map_3d, pre/post_battle,
+                        fleet_command, crew_manager, news, space_battle, ship_race, …)
 
-### Core Principles
-1. **Signal-Based**: No direct coupling between systems
-2. **Data-Driven**: Ships defined by JSON-like dictionaries
-3. **Functional**: Pure functions process state (DamageResolver, WeaponSystem, CrewSchedulerSystem, ...)
-4. **Event-driven NPCs**: Crew don't tick every frame — they wake on schedule or when an event lands in their mailbox
-5. **Blended combat**: Engagement is a weighted steering blend driven by resolved tactics, not discrete engage modes
+scripts/
+  core/
+    autoload/           GameSettings, UiTheme, HullShapes, VisualBridge,
+                        BattleEventLogger, RoguelikeRun, BattlePlan, Nav
+    systems/            Campaign/meta: campaign_generator, campaign_system,
+                        campaign_save_manager, crew_generator, event_system,
+                        nav_graph, scout_report_system, hull_condition_system, …
+  space/
+    data/               Ship/crew/fleet data factories and loaders
+    systems/            Battle ECS systems (damage, weapons, movement, crew
+                        scheduler/mailbox, tactics, steering, economy, repair,
+                        squadron, race, …)
+    ai/                 Per-role brains, actions, and world-state
+    entities/           ShipEntity, ProjectileEntity, VisualEffectEntity
+    space_battle_game.gd  Battle orchestrator (the per-tick loop)
+    ship_race_game.gd     Ship-race minigame
+  ui/
+    campaign/ menus/ fleet_command/ pre_battle/ post_battle/ roguelite/ components/
 
-### Crew AI flow
+rendering/              VisualBridge, renderers (renderer_3d active, 78 legacy),
+                        shared 2D overlays and 3D camera mapping
 
-NPCs (pilots, gunners, captains, squadron leaders) are processed by an
-event-driven scheduler.  A crew member is only updated when:
+data/                   JSON: ship_templates/, hull_shapes/, ship_visuals.json,
+                        crew/, events/, knowledge/, tactics/, race_tracks/, …
 
-- their `next_decision_time` has been reached, **or**
-- their mailbox has pending events posted by another system
-  (`sensor_contact`, `target_lost`, `ship_damaged`, `threat_appeared`, ...)
-
-Per tick, the scheduler drains a waking crew's events, applies the
-side effects (tactical-memory recording, current-target clearing, order
-processing), refreshes their awareness against the current world, and
-runs the role-specific decision (pilot / gunner / captain / squadron
-leader).  Sleeping crew with no events cost essentially nothing.
-
-Urgent events (fresh threat, damage taken) for a pilot with known
-threats short-circuit to an evasive maneuver, so reactions don't wait
-for the next scheduled wake.
-
-### Combat AI
-
-Engagement behaviour is a continuous steering blend rather than fixed
-modes. `TacticsSystem` resolves fleet → squadron → ship/role doctrine
-into a per-crew `tactics` block; `SteeringBlender` turns it plus the
-live situation into weighted goals (pursue / keep_range / evade /
-formation / separation / support) with a preferred range and facing
-mode; `MovementSystem` re-blends those goals each frame from current
-positions. Reflexes (evasion, collision, area leash) stay hard
-overrides. Command roles are hats on existing crew — the best ship's
-captain is also Commander, the best wing pilot is also Squadron Leader —
-and they issue posture (withdraw / hold / press), formation, and
-focus-fire orders that are absorbed into subordinates' blends rather
-than forcing discrete moves.
-
-### Roguelike meta-layer navigation
-
-A persistent top nav-bar gives every roguelike meta screen (Map, Fleet
-Command, Crew Manager, News, Pre/Post-Battle) a consistent way to move around.
-`NavGraph` (pure, `RefCounted`) holds the screen enum, scene paths and a
-**fixed Back hierarchy** (Fleet Command / Crew / News / Pre/Post-Battle → Map;
-the Campaign Map is the home/floor — Back never goes past it, and a new run
-starts there). The `Nav` autoload is a thin shim that turns that graph into
-`change_scene_to_file` calls. `NavBar` (built in code, `NavBar.attach(parent, screen)`) renders the
-icon tabs + Back button, plus a live **credits readout** (`RoguelikeRun.money`)
-on the right; `attach` is **run-scoped** — it adds nothing unless a roguelike
-run is active, so title-menu/skirmish entries keep their own navigation. Tabs
-jump straight to a screen; Back walks up the fixed hierarchy. Adding a new area
-= one `NavGraph.Screen` value + a `SCENE_PATHS`/`PARENTS` row + one
-`NavBar.TABS` entry.
-
-Screen specifics:
-- **Fleet Command** (the `fleet` tab) is the `FleetCommandScreen` fleet/crew/
-  tactics editor, hosted full-screen by `FleetCommandHost` in "done" mode over
-  the active run; Done or Back returns to the Map. (The old `fleet_management`
-  pre-launch hub is gone — its job is now the Map + this tab.)
-- **News** (`NewsScreen`) renders the campaign dispatch feed with the *same*
-  shared renderer as the map's side panel (`DispatchesPanel.populate_feed`), so
-  the two never diverge.
-- **Crew** is the shared `crew_manager` screen, which has two modes chosen by
-  `RoguelikeRun.active`: in a run (nav Crew tab) it is a **read-only** view of
-  the run's hired crew (`RoguelikeRun.fielded_crew`) that also reports each
-  selected member's ship assignment (which ship + position, via
-  `RoguelikeRun.assignment_of`); standalone from the title menu it stays the
-  editable global-roster editor.
-
-### Key Classes
-
-#### Data Layer (RefCounted - Pure Data)
-- `ShipData` — Ship templates and factory methods
-- `CrewData` — Crew templates (pilot, gunner, captain, squadron leader) and command-chain helpers
-
-#### Pure-function Systems
-- `DamageResolver` — Damage and armor-penetration calculations
-- `WeaponSystem` — Weapon firing logic
-- `ProjectileSystem` — Projectile movement (mutates in place; one-owner state)
-- `CollisionSystem` — Hit detection and damage application
-- `MovementSystem` — Ship motion and obstacle avoidance
-- `InformationSystem` — Per-crew awareness (visible entities, threats, opportunities)
-- `CommandChainSystem` — Order distribution down the chain, awareness merge up
-- `CrewAISystem` — Role-specific decision functions (pilot, gunner, captain, squadron leader); dispatches command brains via crew hats
-- `TacticsSystem` — Resolves fleet/squadron/ship doctrine into each crew's `tactics` block
-- `SteeringBlender` — Builds the weighted steering directive from tactics + live situation
-- `CommandDesignationSystem` — Stamps Commander / Squadron Leader hats onto the best-fit crew each tick
-- `CrewMailboxSystem` — Per-crew event queue (10-event cap, oldest dropped)
-- `CrewSchedulerSystem` — Wakes crew on time-or-event, applies event side effects, drives the decision
-- `WingFormationSystem` — Dynamic wing pairing for fighters
-- `TacticalMemorySystem` — Recent-events log on each crew member
-
-#### Entity Layer (Node2D - Scene Tree)
-- `ShipEntity` — Main ship entity, extends IRenderable
-- `ProjectileEntity` — Projectile entity
-
-#### Orchestration
-- `SpaceBattleGame` — Game loop; calls the systems in order each frame
-- `ShipDebugVisualizer` — Debug overlay (armor sections, weapon arcs, velocity)
-
-#### Rendering Layer (IVisualRenderer)
-- `Renderer3D` (active) — 3D models (CC0 Quaternius pack) rendered top-down in a
-  SubViewport beneath the 2D world; ship type → model mapping in `data/ship_visuals.json`
-- `Renderer78` — line-based hull outlines drawn from `data/hull_shapes/` JSON
-  (kept for A/B comparison until the 3D migration completes)
-
-### Data Structure Example
-
-```gdscript
-{
-    "ship_id": "ship_0",
-    "type": "corvette",
-    "team": 0,
-    "position": Vector2(500, 500),
-    "rotation": 0.0,
-    "velocity": Vector2(100, 0),
-    "status": "operational",
-
-    "stats": {
-        "max_speed": 150.0,
-        "acceleration": 50.0,
-        "turn_rate": 1.5,
-        "mass": 200.0
-    },
-
-    "armor_sections": [
-        {
-            "section_id": "front",
-            "arc": {"start": -45, "end": 45},
-            "max_armor": 100,
-            "current_armor": 100
-        }
-    ],
-
-    "internals": [
-        {
-            "component_id": "engine",
-            "type": "engine",
-            "max_health": 60,
-            "current_health": 60,
-            "status": "operational"
-        }
-    ],
-
-    "weapons": [
-        {
-            "weapon_id": "turret_1",
-            "stats": {
-                "damage": 15,
-                "rate_of_fire": 2.0,
-                "range": 1000
-            },
-            "cooldown_remaining": 0.0
-        }
-    ]
-}
+assets/                 3D models, crew portraits, icons, sprites
+tools/                  ship_editor, duel_sim, race tools, screenshot/visual harnesses
+tests/                  GUT tests (one suite per system)
 ```
 
-## Visual Theme
+## Contributing
 
-### Matrix Color Palette
-- **Primary Glow**: `#00FF41` - Signature Matrix green for active elements
-- **Soft Glow**: `#36BA01` - Edge highlights and outlines
-- **Dim**: `#009A22` - Inactive UI elements
-- **Highlight**: `#80CE87` - Cursor trails, sparks, projectiles
-- **Error**: `#FF003C` - Damage indicators, enemy team
-- **Background**: `#0D0D0D` - Deep black space
-
-### Visual Style
-- Stylized pixelated top-down 2D graphics
-- Geometric ship shapes (triangles, diamonds, hexagons)
-- Glowing outlines and particle effects
-- Color-coded team indicators
-
-## Development
-
-### File Structure
-```
-scripts/space/
-  ├── data/
-  │   ├── ship_data.gd                # Ship templates and factories
-  │   └── crew_data.gd                # Crew templates + command-chain helpers
-  ├── systems/
-  │   ├── damage_resolver.gd          # Damage / armor-penetration math
-  │   ├── weapon_system.gd            # Weapon firing logic
-  │   ├── projectile_system.gd        # Projectile movement (in-place)
-  │   ├── collision_system.gd         # Hit detection
-  │   ├── movement_system.gd          # Ship motion
-  │   ├── information_system.gd       # Per-crew awareness
-  │   ├── command_chain_system.gd     # Orders down, awareness up
-  │   ├── crew_ai_system.gd           # Role-specific decisions
-  │   ├── crew_mailbox_system.gd      # Per-crew event queue
-  │   ├── crew_scheduler_system.gd    # Event-driven crew tick
-  │   ├── crew_integration_system.gd  # Apply decisions to ships
-  │   ├── wing_formation_system.gd    # Dynamic wing pairing
-  │   └── tactical_memory_system.gd   # Recent-events log
-  ├── ai/
-  │   ├── fighter_pilot_ai.gd         # Fighter wing/lead/wingman tactics
-  │   └── large_ship_pilot_ai.gd      # Corvette/capital tactics
-  ├── entities/
-  │   ├── ship_entity.gd              # Main ship entity
-  │   └── projectile_entity.gd        # Projectile entity
-  └── space_battle_game.gd            # Game orchestrator
-
-tests/
-  └── test_<system>.gd                # GUT tests, one file per system
-```
-
-### Testing
-
-All core systems have comprehensive test coverage:
-
-```bash
-# Run all tests
-./test.sh
-
-# Test coverage:
-# - ShipData template creation and validation
-# - DamageResolver armor penetration and internal damage
-# - WeaponSystem firing logic and accuracy
-```
-
-### Adding New Ship Types
-
-1. Add a template JSON to `data/ship_templates/`
-2. Define armor sections (with arcs)
-3. Define internal components (with effects)
-4. Define weapons (with stats)
-5. Add a hull shape JSON to `data/hull_shapes/`
-
-Example:
-```gdscript
-static func _create_destroyer_template() -> Dictionary:
-    return {
-        "type": "destroyer",
-        "stats": {"max_speed": 120.0, ...},
-        "armor_sections": [...],
-        "internals": [...],
-        "weapons": [...]
-    }
-```
-
-## Future Expansion
-
-### Sub-Ships (Recursive)
-```gdscript
-{
-    "sub_ships": [{
-        // Fighters carried by capital ships
-        // Drones launched from corvettes
-        // Full recursive ship definition
-    }]
-}
-```
+- Keep code simple and data-driven; prefer deleting code to adding it.
+- Tests verify **behaviour, not data values** (e.g. "armor penetrates when
+  damage exceeds armor", not "fighter has 20 nose armor"). See `CLAUDE.md` for
+  the full conventions and the testing philosophy.
+- Adding a ship type: add a template to `data/ship_templates/`, register it in
+  `fleet_data_manager.gd`, map a model in `data/ship_visuals.json`, and (for the
+  legacy renderer) add a `data/hull_shapes/` entry.
